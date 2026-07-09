@@ -1,0 +1,6 @@
+{
+  "name": "Quick Schools",
+  "description": "Enterprise-grade School Management System SaaS",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

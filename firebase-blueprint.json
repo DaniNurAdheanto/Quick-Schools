@@ -1,0 +1,19 @@
+{
+  "project_id": "gen-lang-client-0267237773",
+  "database_id": "ai-studio-quickschools-fd7528ca-df66-4c9d-8f69-8872b0f1bc9b",
+  "collections": [
+    {
+      "name": "users",
+      "description": "Store user profiles",
+      "fields": [
+        { "name": "uid", "type": "string", "description": "Auth UID" },
+        { "name": "email", "type": "string" },
+        { "name": "role", "type": "string", "description": "admin, teacher, student" }
+      ],
+      "rules": [
+        { "type": "read", "condition": "request.auth != null" },
+        { "type": "write", "condition": "request.auth != null && request.auth.uid == document" }
+      ]
+    }
+  ]
+}

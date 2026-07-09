@@ -1,0 +1,168 @@
+// This file provides Prisma schema for Quick Schools
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -----------------------------------------------------------------------------
+// USER & AUTHENTICATION
+// -----------------------------------------------------------------------------
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  role          UserRole  @default(STUDENT)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Multi-tenancy
+  schoolId      String?   @map("school_id")
+  school        School?   @relation(fields: [schoolId], references: [id])
+
+  // Profile Relations
+  studentProfile Student?
+  teacherProfile Teacher?
+  parentProfile  Parent?
+
+  @@map("users")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  SCHOOL_ADMIN
+  TEACHER
+  HOMEROOM_TEACHER
+  STUDENT
+  PARENT
+}
+
+// -----------------------------------------------------------------------------
+// CORE DOMAIN: Multi-tenant School Management
+// -----------------------------------------------------------------------------
+model School {
+  id          String   @id @default(cuid())
+  name        String
+  subdomain   String   @unique
+  address     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users           User[]
+  academicYears   AcademicYear[]
+  students        Student[]
+  teachers        Teacher[]
+  classes         Class[]
+
+  @@map("schools")
+}
+
+model AcademicYear {
+  id          String   @id @default(cuid())
+  name        String   // e.g., "2025-2026"
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  isActive    Boolean  @default(false) @map("is_active")
+
+  schoolId    String   @map("school_id")
+  school      School   @relation(fields: [schoolId], references: [id])
+
+  classes     Class[]
+
+  @@unique([name, schoolId])
+  @@map("academic_years")
+}
+
+// -----------------------------------------------------------------------------
+// PROFILES
+// -----------------------------------------------------------------------------
+model Student {
+  id              String   @id @default(cuid())
+  studentCode     String   @unique @map("student_code")
+  dateOfBirth     DateTime @map("date_of_birth")
+
+  userId          String   @unique @map("user_id")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  schoolId        String   @map("school_id")
+  school          School   @relation(fields: [schoolId], references: [id])
+
+  parentId        String?  @map("parent_id")
+  parent          Parent?  @relation(fields: [parentId], references: [id])
+
+  enrollments     Enrollment[]
+
+  @@map("students")
+}
+
+model Teacher {
+  id              String   @id @default(cuid())
+  expertise       String?
+
+  userId          String   @unique @map("user_id")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  schoolId        String   @map("school_id")
+  school          School   @relation(fields: [schoolId], references: [id])
+
+  homeroomClasses Class[]  @relation("HomeroomTeacher")
+  teachingClasses Class[]  @relation("SubjectTeacher")
+
+  @@map("teachers")
+}
+
+model Parent {
+  id              String   @id @default(cuid())
+  phoneNumber     String?  @map("phone_number")
+
+  userId          String   @unique @map("user_id")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  children        Student[]
+
+  @@map("parents")
+}
+
+// -----------------------------------------------------------------------------
+// ACADEMICS
+// -----------------------------------------------------------------------------
+model Class {
+  id                String   @id @default(cuid())
+  name              String   // e.g., "10A Mathematics"
+  
+  schoolId          String   @map("school_id")
+  school            School   @relation(fields: [schoolId], references: [id])
+
+  academicYearId    String   @map("academic_year_id")
+  academicYear      AcademicYear @relation(fields: [academicYearId], references: [id])
+
+  homeroomTeacherId String?  @map("homeroom_teacher_id")
+  homeroomTeacher   Teacher? @relation("HomeroomTeacher", fields: [homeroomTeacherId], references: [id])
+
+  subjectTeacherId  String?  @map("subject_teacher_id")
+  subjectTeacher    Teacher? @relation("SubjectTeacher", fields: [subjectTeacherId], references: [id])
+
+  enrollments       Enrollment[]
+
+  @@map("classes")
+}
+
+model Enrollment {
+  id              String   @id @default(cuid())
+
+  studentId       String   @map("student_id")
+  student         Student  @relation(fields: [studentId], references: [id])
+
+  classId         String   @map("class_id")
+  class           Class    @relation(fields: [classId], references: [id])
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  
+  @@unique([studentId, classId])
+  @@map("enrollments")
+}
