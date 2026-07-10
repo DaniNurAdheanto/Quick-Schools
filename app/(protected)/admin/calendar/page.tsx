@@ -108,27 +108,11 @@ export default function CalendarPage() {
   });
 
   const eventFields = [
-    { name: "title", label: "Nama Kegiatan / Agenda", placeholder: "Contoh: Ujian Tengah Semester" },
-    { 
-      name: "category", 
-      label: "Kategori", 
-      type: "select",
-      placeholder: "Pilih Kategori",
-      options: [
-        { label: "Akademik", value: "Akademik" },
-        { label: "Ujian", value: "Ujian" },
-        { label: "Libur Nasional", value: "Libur Nasional" },
-        { label: "Event Sekolah", value: "Event Sekolah" },
-        { label: "Ekstrakurikuler", value: "Ekstrakurikuler" },
-        { label: "Lainnya", value: "Lainnya" }
-      ]
-    },
-    { name: "startDate", label: "Tanggal Mulai", type: "date" },
-    { name: "endDate", label: "Tanggal Selesai", type: "date" },
-    { name: "startTime", label: "Waktu Mulai (Opsional)", type: "time" },
-    { name: "endTime", label: "Waktu Selesai (Opsional)", type: "time" },
-    { name: "location", label: "Lokasi", placeholder: "Contoh: Aula Utama" },
-    { name: "description", label: "Keterangan", type: "textarea", placeholder: "Keterangan tambahan terkait agenda" },
+    { name: "title", label: "Nama Kegiatan" },
+    { name: "date", label: "Tanggal Pelaksanaan" },
+    { name: "category", label: "Kategori (Akademik, Ujian, dll)" },
+    { name: "location", label: "Lokasi" },
+    { name: "description", label: "Keterangan" },
   ];
 
   return (
@@ -499,6 +483,130 @@ export default function CalendarPage() {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1">
+             {/* Timeline Card */}
+             <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] p-6 flex flex-col justify-between h-full">
+               <div className="flex items-center justify-between mb-8">
+                 <div className="flex items-center gap-3">
+                   <h2 className="text-[16px] font-bold text-gray-900">Timeline Tahun Ajaran 2026 / 2027</h2>
+                   <span className="bg-green-50 text-green-600 px-2 py-0.5 rounded text-[10px] font-bold">Semester 1</span>
+                 </div>
+                 <button className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600">
+                   <ChevronRight className="w-4 h-4" />
+                 </button>
+               </div>
+               
+               <div className="relative pt-4 pb-2">
+                 <div className="absolute top-[21px] left-0 right-0 h-[2px] bg-gray-100 rounded-full z-0"></div>
+                 <div className="absolute top-[21px] left-0 w-[40%] h-[2px] bg-[#531FFF] rounded-full z-0"></div>
+                 
+                 <div className="flex justify-between relative z-10">
+                    <div className="flex flex-col items-center gap-3 relative">
+                      <div className="w-3 h-3 rounded-full bg-[#531FFF] ring-4 ring-white"></div>
+                      <div className="text-center">
+                        <p className="text-[10px] font-semibold text-gray-500 mb-1">Jul 2026</p>
+                        <p className="text-[12px] font-bold text-gray-900 leading-tight">MPLS</p>
+                        <p className="text-[10px] text-gray-400">14 - 16 Jul</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col items-center gap-3 relative">
+                      <div className="w-3 h-3 rounded-full bg-[#531FFF] ring-4 ring-white"></div>
+                      <div className="text-center">
+                        <p className="text-[10px] font-semibold text-gray-500 mb-1">Agu 2026</p>
+                        <p className="text-[12px] font-bold text-gray-900 leading-tight">Hari Kemerdekaan</p>
+                        <p className="text-[10px] text-gray-400">17 Agu</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-3 relative">
+                      <div className="w-4 h-4 rounded-full bg-[#531FFF] border-[3px] border-white shadow-sm flex items-center justify-center translate-y-[-2px]">
+                         <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] font-semibold text-gray-500 mb-1 mt-[-2px]">Sep 2026</p>
+                        <p className="text-[12px] font-bold text-gray-900 leading-tight">UTS</p>
+                        <p className="text-[10px] text-gray-400">12 - 16 Sep</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-3 relative">
+                      <div className="w-3 h-3 rounded-full bg-gray-200 ring-4 ring-white"></div>
+                      <div className="text-center">
+                        <p className="text-[10px] font-semibold text-gray-500 mb-1">Okt 2026</p>
+                        <p className="text-[12px] font-bold text-gray-900 leading-tight">Kelas Inspirasi</p>
+                        <p className="text-[10px] text-gray-400">18 Okt</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-3 relative">
+                      <div className="w-3 h-3 rounded-full bg-gray-200 ring-4 ring-white"></div>
+                      <div className="text-center">
+                        <p className="text-[10px] font-semibold text-gray-500 mb-1">Des 2026</p>
+                        <p className="text-[12px] font-bold text-gray-900 leading-tight">UAS</p>
+                        <p className="text-[10px] text-gray-400">28 Nov - 4 Des</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-3 relative">
+                      <div className="w-3 h-3 rounded-full bg-gray-200 ring-4 ring-white"></div>
+                      <div className="text-center">
+                        <p className="text-[10px] font-semibold text-gray-500 mb-1">Des 2026</p>
+                        <p className="text-[12px] font-bold text-gray-900 leading-tight">Pembagian Rapor</p>
+                        <p className="text-[10px] text-gray-400">20 Des</p>
+                      </div>
+                    </div>
+                 </div>
+               </div>
+             </div>
+
+             {/* Progress Card */}
+             <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] p-6 flex flex-col justify-between h-full">
+               <h2 className="text-[16px] font-bold text-gray-900 mb-6">Progress Tahun Ajaran</h2>
+               <div className="flex items-center gap-8">
+                  <div className="w-[120px] h-[120px] relative shrink-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[{ value: 65 }, { value: 35 }]}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={45}
+                          outerRadius={55}
+                          dataKey="value"
+                          startAngle={90}
+                          endAngle={-270}
+                          stroke="none"
+                        >
+                           <Cell fill="#531FFF" />
+                           <Cell fill="#F3F4F6" />
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-2xl font-bold text-gray-900 leading-none">65%</span>
+                      <span className="text-[10px] font-medium text-gray-500">Berjalan</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4">
+                     <div>
+                       <p className="text-[11px] font-medium text-gray-500 mb-0.5">Hari Efektif Berjalan</p>
+                       <p className="text-[14px] font-bold text-gray-900">142 Hari</p>
+                     </div>
+                     <div>
+                       <p className="text-[11px] font-medium text-gray-500 mb-0.5">Sisa Hari Efektif</p>
+                       <p className="text-[14px] font-bold text-gray-900">76 Hari</p>
+                     </div>
+                     <div>
+                       <p className="text-[11px] font-medium text-gray-500 mb-0.5">Semester</p>
+                       <p className="text-[14px] font-bold text-gray-900">Semester 1</p>
+                     </div>
+                  </div>
+               </div>
+               <p className="text-[10px] text-gray-400 mt-4 pt-4 border-t border-gray-100">Periode: 14 Juli 2026 - 30 Juni 2027</p>
+             </div>
+          </div>
         </div>
 
         {/* Sidebar Space (Right) */}
