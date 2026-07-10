@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { 
   Calendar as CalendarIcon, 
   ChevronLeft, 
@@ -26,7 +26,7 @@ import {
   Cell
 } from "recharts";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
-import { useState } from "react";
+import { AddAgendaModal } from "./components/AddAgendaModal";
 
 const sparklineDataBlue = [
   { value: 10 }, { value: 25 }, { value: 15 }, { value: 30 }, { value: 20 }, { value: 40 }, { value: 35 }
@@ -106,6 +106,7 @@ export default function CalendarPage() {
     open: false,
     mode: "create"
   });
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const eventFields = [
     { name: "title", label: "Nama Kegiatan" },
@@ -125,6 +126,10 @@ export default function CalendarPage() {
         fields={eventFields}
         initialData={crudState.data}
       />
+      <AddAgendaModal 
+        isOpen={isAddModalOpen} 
+        onClose={() => setIsAddModalOpen(false)} 
+      />
       
       {/* Header View */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -143,7 +148,7 @@ export default function CalendarPage() {
             Export PDF
           </button>
           <button 
-            onClick={() => setCrudState({ open: true, mode: "create" })}
+            onClick={() => setIsAddModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-[#531FFF] text-white rounded-xl text-sm font-semibold hover:bg-[#531FFF]/90 transition-colors shadow-sm shadow-[#531FFF]/20"
           >
             <Plus className="w-4 h-4" />
