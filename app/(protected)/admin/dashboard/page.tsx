@@ -63,6 +63,9 @@ const DISTRIBUTION_DATA = [
 export default function DashboardPage() {
   const [userName, setUserName] = useState("Adiratna");
   const [greeting, setGreeting] = useState("Selamat pagi");
+  const [academicYear, setAcademicYear] = useState("2026 / 2027");
+  const [currentDate, setCurrentDate] = useState("");
+  const [currentDay, setCurrentDay] = useState("");
 
   useEffect(() => {
     const updateGreeting = () => {
@@ -78,6 +81,23 @@ export default function DashboardPage() {
       } else {
         setGreeting("Selamat malam");
       }
+
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const startYear = month >= 6 ? year : year - 1;
+      setAcademicYear(`${startYear} / ${startYear + 1}`);
+
+      const dateFormatter = new Intl.DateTimeFormat('id-ID', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+      setCurrentDate(dateFormatter.format(now));
+
+      const dayFormatter = new Intl.DateTimeFormat('id-ID', {
+        weekday: 'long'
+      });
+      setCurrentDay(dayFormatter.format(now));
     };
     
     updateGreeting();
@@ -86,14 +106,14 @@ export default function DashboardPage() {
       if (user) {
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            setUserName(userDoc.data().name || user.email?.split('@')[0] || "User");
+          if (userDoc.exists() && userDoc.data().name) {
+            setUserName(userDoc.data().name);
           } else {
-            setUserName(user.email?.split('@')[0] || "User");
+            setUserName(user.displayName || user.email?.split('@')[0] || "User");
           }
         } catch (error) {
           console.error("Error fetching user data:", error);
-          setUserName(user.email?.split('@')[0] || "User");
+          setUserName(user.displayName || user.email?.split('@')[0] || "User");
         }
       }
     });
@@ -121,7 +141,7 @@ export default function DashboardPage() {
               </div>
               <div className="flex flex-col">
                 <span className="text-xs text-white/80 font-medium">Tahun Ajaran</span>
-                <span className="text-lg font-bold">2026 / 2027</span>
+                <span className="text-lg font-bold">{academicYear}</span>
               </div>
             </div>
 
@@ -133,8 +153,8 @@ export default function DashboardPage() {
               </div>
               <div className="flex flex-col">
                 <span className="text-xs text-white/80 font-medium">Hari ini</span>
-                <span className="text-lg font-bold">22 Mei 2026</span>
-                <span className="text-[11px] text-white/80 mt-[-2px]">Senin</span>
+                <span className="text-lg font-bold">{currentDate || "Memuat..."}</span>
+                <span className="text-[11px] text-white/80 mt-[-2px]">{currentDay}</span>
               </div>
             </div>
 

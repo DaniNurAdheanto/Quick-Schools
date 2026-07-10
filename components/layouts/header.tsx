@@ -84,7 +84,7 @@ export function Header() {
   const breadcrumbs = generateBreadcrumbs();
 
   return (
-    <header className="h-[72px] bg-[#F8F9FC] flex items-center px-8 shrink-0 sticky top-0 z-10 w-full mb-2">
+    <header className="h-[72px] bg-[#F8F9FC] flex items-center px-8 shrink-0 sticky top-0 z-50 w-full mb-2">
       {/* Left - Breadcrumbs */}
       <div className="flex-1 min-w-0 flex justify-start items-center">
         <nav aria-label="Breadcrumb" className="max-w-full overflow-hidden">
