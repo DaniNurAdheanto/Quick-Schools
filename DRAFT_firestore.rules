@@ -21,17 +21,12 @@ service cloud.firestore {
       return resource.data;
     }
     
-    match /users/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.auth.uid == userId;
-    }
-    
     function isValidStudent(data) {
       return data.keys().hasAll(['id', 'name', 'classId', 'status'])
         && data.id is string && data.id.size() > 0 && data.id.size() <= 100
         && data.name is string && data.name.size() > 0 && data.name.size() <= 100
         && data.classId is string && data.classId.size() > 0 && data.classId.size() <= 50
-        && data.status is string && data.status in ['Aktif', 'Nonaktif', 'Lulus', 'Pindah']
+        && data.status is string && data.status in ['Aktif', 'Lulus', 'Pindah']
         && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 500));
     }
     
@@ -46,21 +41,6 @@ service cloud.firestore {
                     && isValidStudent(incoming())
                     && incoming().diff(existing()).affectedKeys().hasOnly(['id', 'name', 'classId', 'status', 'imageUrl']);
       allow delete: if isSignedIn() && isValidId(studentId);
-    }
-
-    match /classes/{classId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
-    }
-
-    match /teachers/{teacherId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
-    }
-
-    match /subjects/{subjectId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
     }
   }
 }

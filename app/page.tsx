@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 
 import Link from "next/link";
 import { 
@@ -119,7 +120,7 @@ export default function LandingPage() {
                   <div className="flex -space-x-3">
                     {[1,2,3].map((i) => (
                       <div key={i} className="w-10 h-10 rounded-full border-2 border-white overflow-hidden shadow-sm">
-                        <img src={`https://i.pravatar.cc/100?img=${i+20}`} alt="avatar" className="w-full h-full object-cover" />
+                         <Image src={`https://i.pravatar.cc/100?img=${i+20}`} alt="avatar" className="w-full h-full object-cover" fill referrerPolicy="no-referrer" />
                       </div>
                     ))}
                   </div>
@@ -518,7 +519,7 @@ export default function LandingPage() {
                      <div key={i} className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
                         <p className="text-[15px] font-medium text-gray-600 leading-relaxed italic mb-8">&quot;{t.quote}&quot;</p>
                         <div className="flex items-center gap-4">
-                           <img src={`https://i.pravatar.cc/100?img=${t.avatar}`} alt={t.name} className="w-12 h-12 rounded-full object-cover bg-gray-100" />
+                            <Image src={`https://i.pravatar.cc/100?img=${t.avatar}`} alt={t.name} className="w-12 h-12 rounded-full object-cover bg-gray-100" fill referrerPolicy="no-referrer" />
                            <div>
                              <div className="font-bold text-[14px] text-gray-900">{t.name}</div>
                              <div className="text-[12px] text-gray-500 font-medium">{t.role}</div>

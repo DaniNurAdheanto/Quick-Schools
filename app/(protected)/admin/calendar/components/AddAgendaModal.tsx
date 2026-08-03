@@ -16,8 +16,8 @@ export function AddAgendaModal({ isOpen, onClose }: AddAgendaModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl w-full max-w-[500px] max-h-[95vh] shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200 relative">
+    <div className="fixed inset-0 z-50 flex justify-end p-4 bg-gray-900/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl w-full max-w-[500px] h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 relative">
         
         {/* Header */}
         <div className="relative p-6 text-center border-b border-gray-100 bg-[#FAFAFA] rounded-t-2xl shrink-0">

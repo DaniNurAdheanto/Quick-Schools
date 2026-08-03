@@ -1,35 +1,133 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
-  Users, Plus, Search, Filter, MoreHorizontal, GraduationCap, ChevronDown, PenTool, Trash2, ArrowUp, Briefcase
+  Users, Plus, Search, Filter, MoreHorizontal, GraduationCap, ChevronDown, PenTool, Trash2, ArrowUp, Briefcase, Loader2, LayoutGrid, List
 } from "lucide-react";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
-
-const TEACHERS_DATA = [
-  { id: "T001", name: "Budi Santoso, S.Pd", role: "Guru Matematika", status: "Aktif", classes: "10A, 10B", contact: "081234567890" },
-  { id: "T002", name: "Siti Amelia, S.E", role: "Guru Ekonomi", status: "Aktif", classes: "11 IPS 1, 12 IPS 1", contact: "082345678901" },
-  { id: "T003", name: "Drs. Ahmad Yani", role: "Guru Fisika", status: "Aktif", classes: "11 MIPA 1, 12 MIPA 1", contact: "083456789012" },
-  { id: "T004", name: "Ratna Sari, M.Pd", role: "Guru Biologi", status: "Aktif", classes: "11 MIPA 2", contact: "084567890123" },
-  { id: "T005", name: "Hendro Wibowo, S.Pd", role: "Guru Sejarah", status: "Aktif", classes: "10A, 11 IPS 1", contact: "085678901234" },
-  { id: "T006", name: "Linda Kusuma, M.Si", role: "Guru Kimia", status: "Cuti", classes: "12 MIPA 1", contact: "086789012345" },
-  { id: "T007", name: "Eko Prasetyo, S.Pd", role: "Guru Geografi", status: "Aktif", classes: "12 IPS 1", contact: "087890123456" },
-];
+import { db, auth } from "@/lib/firebase";
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function TeachersPage() {
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [teachers, setTeachers] = useState<any[]>([]);
+  const [classesList, setClassesList] = useState<any[]>([]);
+  const [subjectsList, setSubjectsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete"; data?: any }>({
     open: false,
     mode: "create"
   });
 
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        const q = query(collection(db, "teachers"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const teachersData = snapshot.docs.map(doc => ({
+            _firestoreId: doc.id,
+            ...doc.data()
+          }));
+          setTeachers(teachersData);
+          setLoading(false);
+        }, (error) => {
+          console.error("Error fetching teachers:", error);
+          setLoading(false);
+        });
+
+        const qClasses = query(collection(db, "classes"));
+        const unsubClasses = onSnapshot(qClasses, (snapshot) => {
+          setClassesList(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
+        });
+
+        const qSubjects = query(collection(db, "subjects"));
+        const unsubSubjects = onSnapshot(qSubjects, (snapshot) => {
+          setSubjectsList(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
+        });
+        
+        return () => {
+          unsubscribe();
+          unsubClasses();
+          unsubSubjects();
+        };
+      } else {
+        setTeachers([]);
+        setClassesList([]);
+        setSubjectsList([]);
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribeAuth();
+  }, []);
+
   const teacherFields = [
     { name: "name", label: "Nama Guru" },
     { name: "id", label: "NIP" },
-    { name: "role", label: "Posisi / Mapel" },
-    { name: "classes", label: "Kelas yang Diajar" },
+    { 
+      name: "role", 
+      label: "Mata Pelajaran",
+      type: "select",
+      placeholder: "Pilih Mata Pelajaran",
+      options: subjectsList.map(s => ({ label: s.name, value: s.name }))
+    },
+    { 
+      name: "classes", 
+      label: "Kelas yang Diajar",
+      type: "select",
+      placeholder: "Pilih Kelas",
+      options: classesList.map(c => ({ label: c.name, value: c.name }))
+    },
     { name: "contact", label: "Kontak" },
-    { name: "status", label: "Status" }
+    { 
+      name: "status", 
+      label: "Status",
+      type: "select",
+      placeholder: "Pilih Status",
+      options: [
+        { label: "Aktif", value: "Aktif" },
+        { label: "Cuti", value: "Cuti" },
+        { label: "Nonaktif", value: "Nonaktif" }
+      ]
+    }
   ];
+
+  const handleCrudSubmit = async (data: any) => {
+    try {
+      if (crudState.mode === "create") {
+        await addDoc(collection(db, "teachers"), {
+          id: data.id || `T${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+          name: data.name || "",
+          role: data.role || "",
+          classes: data.classes || "",
+          contact: data.contact || "",
+          status: data.status || "Aktif"
+        });
+      } else if (crudState.mode === "edit" && data._firestoreId) {
+        await updateDoc(doc(db, "teachers", data._firestoreId), {
+          id: data.id || "",
+          name: data.name || "",
+          role: data.role || "",
+          classes: data.classes || "",
+          contact: data.contact || "",
+          status: data.status || "Aktif"
+        });
+      } else if (crudState.mode === "delete" && data._firestoreId) {
+        await deleteDoc(doc(db, "teachers", data._firestoreId));
+      }
+    } catch (error) {
+      console.error("Error saving teacher data:", error);
+      alert("Gagal menyimpan data.");
+    }
+  };
+
+  const totalTeachers = teachers.length;
+  const activeTeachers = teachers.filter(t => t.status === "Aktif").length;
+  const inactiveTeachers = teachers.filter(t => t.status !== "Aktif").length;
+  const activePercentage = totalTeachers > 0 ? Math.round((activeTeachers / totalTeachers) * 100) : 0;
+  const inactivePercentage = totalTeachers > 0 ? Math.round((inactiveTeachers / totalTeachers) * 100) : 0;
 
   return (
     <div className="p-8 pb-12 max-w-[1600px] mx-auto w-full h-full flex flex-col space-y-8">
@@ -40,6 +138,7 @@ export default function TeachersPage() {
         entityName="Guru"
         fields={teacherFields}
         initialData={crudState.data}
+        onSubmit={handleCrudSubmit}
       />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -73,10 +172,10 @@ export default function TeachersPage() {
             <div className="flex-1">
               <p className="text-[12px] font-semibold text-gray-500 mb-0.5">Total Guru</p>
               <div className="flex items-end gap-2 justify-between w-full">
-                <span className="text-[28px] leading-none font-bold text-gray-900 tracking-tight">86</span>
+                <span className="text-[28px] leading-none font-bold text-gray-900 tracking-tight">{totalTeachers}</span>
                 <div className="flex flex-col items-end gap-0.5 mb-1">
                   <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded flex items-center gap-0.5">
-                    <ArrowUp className="w-2.5 h-2.5" /> 5
+                    <ArrowUp className="w-2.5 h-2.5" /> 0
                   </span>
                   <span className="text-[8px] text-gray-400">dari bulan lalu</span>
                 </div>
@@ -104,19 +203,19 @@ export default function TeachersPage() {
             <div className="flex-1">
               <p className="text-[12px] font-semibold text-gray-500 mb-0.5">Guru Aktif</p>
               <div className="flex items-end gap-2 justify-between w-full">
-                <span className="text-[28px] leading-none font-bold text-gray-900 tracking-tight">82</span>
+                <span className="text-[28px] leading-none font-bold text-gray-900 tracking-tight">{activeTeachers}</span>
                 <div className="flex flex-col items-end gap-0.5 mb-1">
                   <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded flex items-center gap-0.5">
-                    95%
+                    {activePercentage}%
                   </span>
-                  <span className="text-[8px] text-gray-400">hadir hari ini</span>
+                  <span className="text-[8px] text-gray-400">dari total</span>
                 </div>
               </div>
             </div>
           </div>
           <svg className="absolute bottom-0 left-0 w-full h-8 opacity-20" viewBox="0 0 100 20" preserveAspectRatio="none">
-             <path d="M0,20 L15,10 L35,16 L55,5 L75,10 L100,2 L100,20 Z" fill="url(#grad_aktif)" />
-             <polyline points="0,10 15,10 35,16 55,5 75,10 100,2" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+             <path d="M0,20 L15,10 L35,16 L50,5 L70,8 L85,2 L100,5 L100,20 Z" fill="url(#grad_aktif)" />
+             <polyline points="0,10 15,10 35,16 50,5 70,8 85,2 100,5" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
              <defs>
                <linearGradient id="grad_aktif" x1="0%" y1="0%" x2="0%" y2="100%">
                  <stop offset="0%" stopColor="#10B981" stopOpacity="0.5" />
@@ -135,10 +234,10 @@ export default function TeachersPage() {
             <div className="flex-1">
               <p className="text-[12px] font-semibold text-gray-500 mb-0.5">Guru Cuti/Izin</p>
               <div className="flex items-end gap-2 justify-between w-full">
-                <span className="text-[28px] leading-none font-bold text-gray-900 tracking-tight">4</span>
+                <span className="text-[28px] leading-none font-bold text-gray-900 tracking-tight">{inactiveTeachers}</span>
                 <div className="flex flex-col items-end gap-0.5 mb-1">
                   <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1 rounded flex items-center gap-0.5">
-                    5%
+                    {inactivePercentage}%
                   </span>
                   <span className="text-[8px] text-gray-400">dari total</span>
                 </div>
@@ -177,86 +276,171 @@ export default function TeachersPage() {
                <button className="flex items-center gap-2 px-3 py-2 text-[13px] font-bold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 w-full sm:w-auto justify-center">
                  Status <ChevronDown className="w-4 h-4" />
                </button>
+               <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0 ml-2">
+                 <button 
+                   onClick={() => setViewMode("grid")}
+                   className={`p-1.5 rounded-lg transition-colors ${viewMode === "grid" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-900"}`}
+                 >
+                   <LayoutGrid className="w-4 h-4" />
+                 </button>
+                 <button 
+                   onClick={() => setViewMode("list")}
+                   className={`p-1.5 rounded-lg transition-colors ${viewMode === "list" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-900"}`}
+                 >
+                   <List className="w-4 h-4" />
+                 </button>
+               </div>
             </div>
          </div>
 
-         {/* Table container for scrolling */}
-         <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-               <thead>
-                 <tr className="bg-gray-50/50 border-b border-gray-100">
-                   <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Nama Guru</th>
-                   <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Posisi / Mapel</th>
-                   <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Kelas yang Diajar</th>
-                   <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Kontak</th>
-                   <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
-                   <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider text-center">Aksi</th>
-                 </tr>
-               </thead>
-               <tbody className="divide-y divide-gray-50">
-                 {TEACHERS_DATA.map((item, i) => (
-                   <tr key={i} className="hover:bg-gray-50/50 transition-colors group">
-                     <td className="py-4 px-6">
-                        <div className="flex items-center gap-4">
-                           <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-[14px] font-bold text-blue-700 shrink-0">
-                             {item.name.charAt(0)}
-                           </div>
-                           <div>
-                             <div className="font-bold text-[14px] text-gray-900 leading-none mb-1">{item.name}</div>
-                             <div className="text-[12px] font-medium text-gray-500">NIP: {item.id}</div>
-                           </div>
-                        </div>
-                     </td>
-                     <td className="py-4 px-6 text-[13px] font-semibold text-gray-700">
-                        {item.role}
-                     </td>
-                     <td className="py-4 px-6 text-[13px] font-semibold text-gray-700">
-                        {item.classes}
-                     </td>
-                     <td className="py-4 px-6 text-[13px] font-semibold text-gray-700">
-                        {item.contact}
-                     </td>
-                     <td className="py-4 px-6 text-center">
-                        <span className={`inline-flex py-1 px-2.5 border rounded-md text-[11px] font-bold uppercase tracking-wider ${
-                          item.status === 'Aktif' 
-                            ? 'bg-emerald-50 border-emerald-100 text-emerald-600' 
-                            : 'bg-amber-50 border-amber-100 text-amber-600'
-                        }`}>
-                           {item.status}
-                        </span>
-                     </td>
-                     <td className="py-4 px-6">
-                        <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                           <button 
-                             onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                             className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded-md transition-colors" title="Edit">
-                             <PenTool className="w-4 h-4" />
-                           </button>
-                           <button 
-                             onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
-                             className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors" title="Hapus">
-                             <Trash2 className="w-4 h-4" />
-                           </button>
-                        </div>
-                     </td>
+         {/* Content container */}
+         <div className="overflow-y-auto min-h-[300px] p-4 custom-scrollbar flex-1 bg-gray-50/30">
+           {loading ? (
+             <div className="h-full flex flex-col items-center justify-center py-20 text-gray-500">
+               <Loader2 className="w-8 h-8 animate-spin text-[#531FFF] mb-4" />
+               <p className="text-sm font-medium">Memuat data guru...</p>
+             </div>
+           ) : teachers.length === 0 ? (
+             <div className="h-full flex flex-col items-center justify-center py-20">
+               <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                 <Users className="w-8 h-8 text-gray-300" />
+               </div>
+               <h3 className="text-gray-900 font-bold mb-1">Belum ada data guru</h3>
+               <p className="text-gray-500 text-sm mb-4">Klik tambah guru untuk memasukkan data guru baru.</p>
+               <button 
+                 onClick={() => setCrudState({ open: true, mode: "create" })}
+                 className="bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-all"
+               >
+                 Tambah Guru
+               </button>
+             </div>
+           ) : viewMode === "grid" ? (
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+               {teachers.map((item, i) => (
+                 <div key={item._firestoreId || i} className="group bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all relative">
+                   <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                     <button 
+                       onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
+                       className="p-1.5 bg-gray-50 text-gray-500 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded-lg transition-colors"
+                     >
+                       <PenTool className="w-4 h-4" />
+                     </button>
+                     <button 
+                       onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
+                       className="p-1.5 bg-gray-50 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                     >
+                       <Trash2 className="w-4 h-4" />
+                     </button>
+                   </div>
+                   
+                   <div className="flex flex-col items-center text-center">
+                     <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center text-[24px] font-bold text-blue-600 mb-3 border-2 border-white shadow-sm ring-1 ring-gray-100">
+                       {item.name ? item.name.charAt(0) : "G"}
+                     </div>
+                     <h3 className="font-bold text-gray-900 text-[15px] mb-1">{item.name}</h3>
+                     <p className="text-[#531FFF] text-[13px] font-bold mb-1">{item.role}</p>
+                     <p className="text-gray-500 text-[12px] font-medium mb-3">NIP: {item.id}</p>
+                     
+                     <span className={`inline-flex py-1 px-3 border rounded-md text-[11px] font-bold uppercase tracking-wider mb-4 ${
+                       item.status === 'Aktif' 
+                          ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                          : 'bg-amber-50 border-amber-100 text-amber-600'
+                     }`}>
+                        {item.status || "Aktif"}
+                     </span>
+                     
+                     <div className="w-full pt-4 border-t border-gray-100 flex flex-col gap-2 text-left">
+                       <div className="flex justify-between items-center text-[12px]">
+                         <span className="text-gray-500">Kelas:</span>
+                         <span className="font-semibold text-gray-900 truncate max-w-[120px]">{item.classes || "-"}</span>
+                       </div>
+                       <div className="flex justify-between items-center text-[12px]">
+                         <span className="text-gray-500">Kontak:</span>
+                         <span className="font-semibold text-gray-900">{item.contact || "-"}</span>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+               ))}
+             </div>
+           ) : (
+            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+              <table className="w-full text-left border-collapse">
+                 <thead>
+                   <tr className="bg-gray-50/50 border-b border-gray-100">
+                     <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Nama Guru</th>
+                     <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Mata Pelajaran</th>
+                     <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Kelas yang Diajar</th>
+                     <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Kontak</th>
+                     <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
+                     <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider text-center">Aksi</th>
                    </tr>
-                 ))}
-               </tbody>
-            </table>
-         </div>
-         {/* Pagination mockup */}
-         <div className="p-4 border-t border-gray-100 flex items-center justify-between text-[13px] font-medium text-gray-500 bg-gray-50/50 mt-auto">
-            <div>Menampilkan 1 hingga 7 dari 86 guru</div>
-            <div className="flex gap-1">
-               <button className="px-3 py-1.5 border border-gray-200 bg-white text-gray-400 rounded-md cursor-not-allowed">Halaman Sebelumnya</button>
-               <button className="px-3 py-1.5 bg-[#531FFF] text-white rounded-md font-bold shadow-sm">1</button>
-               <button className="px-3 py-1.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-md transition-colors">2</button>
-               <button className="px-3 py-1.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-md transition-colors">3</button>
-               <span className="px-2 py-1.5 text-gray-400">...</span>
-               <button className="px-3 py-1.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-md transition-colors">13</button>
-               <button className="px-3 py-1.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-md transition-colors">Halaman Selanjutnya</button>
+                 </thead>
+                 <tbody className="divide-y divide-gray-50">
+                   {teachers.map((item, i) => (
+                     <tr key={item._firestoreId || i} className="hover:bg-gray-50/50 transition-colors group">
+                       <td className="py-4 px-6">
+                          <div className="flex items-center gap-4">
+                             <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-[14px] font-bold text-blue-700 shrink-0">
+                               {item.name ? item.name.charAt(0) : "G"}
+                             </div>
+                             <div>
+                               <div className="font-bold text-[14px] text-gray-900 leading-none mb-1">{item.name}</div>
+                               <div className="text-[12px] font-medium text-gray-500">NIP: {item.id}</div>
+                             </div>
+                          </div>
+                       </td>
+                       <td className="py-4 px-6 text-[13px] font-semibold text-gray-700">
+                          {item.role || "-"}
+                       </td>
+                       <td className="py-4 px-6 text-[13px] font-semibold text-gray-700">
+                          {item.classes || "-"}
+                       </td>
+                       <td className="py-4 px-6 text-[13px] font-semibold text-gray-700">
+                          {item.contact || "-"}
+                       </td>
+                       <td className="py-4 px-6 text-center">
+                          <span className={`inline-flex py-1 px-2.5 border rounded-md text-[11px] font-bold uppercase tracking-wider ${
+                            item.status === 'Aktif' 
+                               ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                               : 'bg-amber-50 border-amber-100 text-amber-600'
+                          }`}>
+                             {item.status || "Aktif"}
+                          </span>
+                       </td>
+                       <td className="py-4 px-6">
+                          <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                             <button 
+                               onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
+                               className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded-md transition-colors" title="Edit">
+                               <PenTool className="w-4 h-4" />
+                             </button>
+                             <button 
+                               onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
+                               className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors" title="Hapus">
+                               <Trash2 className="w-4 h-4" />
+                             </button>
+                          </div>
+                       </td>
+                     </tr>
+                   ))}
+                 </tbody>
+              </table>
             </div>
+           )}
          </div>
+
+         {/* Pagination mockup */}
+         {teachers.length > 0 && (
+           <div className="p-4 border-t border-gray-100 flex items-center justify-between text-[13px] font-medium text-gray-500 bg-white mt-auto">
+              <div>Menampilkan 1 hingga {teachers.length} dari {teachers.length} guru</div>
+              <div className="flex gap-1">
+                 <button className="px-3 py-1.5 border border-gray-200 bg-white text-gray-400 rounded-md cursor-not-allowed">Halaman Sebelumnya</button>
+                 <button className="px-3 py-1.5 bg-[#531FFF] text-white rounded-md font-bold shadow-sm">1</button>
+                 <button className="px-3 py-1.5 border border-gray-200 bg-white text-gray-400 rounded-md cursor-not-allowed">Halaman Selanjutnya</button>
+              </div>
+           </div>
+         )}
       </div>
     </div>
   );

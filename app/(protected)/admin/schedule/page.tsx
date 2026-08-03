@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 
 import React, { useState } from "react";
 import {
@@ -434,7 +435,7 @@ export default function SchedulePage() {
              ].map((t, i) => (
                <div key={i} className="flex items-center gap-4">
                   <div className="w-8 h-8 rounded-full bg-gray-100 overflow-hidden shrink-0">
-                    <img src={`https://ui-avatars.com/api/?name=${t.name}&background=EDEBFE&color=531FFF&bold=true`} alt={t.name} className="w-full h-full object-cover" />
+                     <Image src={`https://ui-avatars.com/api/?name=${t.name}&background=EDEBFE&color=531FFF&bold=true`} alt={t.name} className="w-full h-full object-cover" fill referrerPolicy="no-referrer" />
                   </div>
                   <div className="w-[120px] shrink-0">
                     <p className="text-[13px] font-bold text-gray-900 truncate">{t.name}</p>
@@ -481,7 +482,7 @@ export default function SchedulePage() {
                      <div className="flex items-start gap-3 flex-1">
                         <div className="w-8 h-8 rounded-full bg-gray-100 overflow-hidden shrink-0 mt-0.5">
                            {c.conflictType === "Bentrok Guru" ? (
-                             <img src={`https://ui-avatars.com/api/?name=${c.title}&background=EDEBFE&color=531FFF&bold=true`} alt={c.title} className="w-full h-full object-cover" />
+                              <Image src={`https://ui-avatars.com/api/?name=${c.title}&background=EDEBFE&color=531FFF&bold=true`} alt={c.title} className="w-full h-full object-cover" fill referrerPolicy="no-referrer" />
                            ) : (
                              <div className="w-full h-full flex items-center justify-center text-gray-500 bg-gray-100"><School className="w-4 h-4" /></div>
                            )}
@@ -498,7 +499,7 @@ export default function SchedulePage() {
                      <div className="flex items-start gap-3 flex-1">
                         <div className="w-8 h-8 rounded-full bg-gray-100 overflow-hidden shrink-0 mt-0.5">
                            {c.conflictType === "Bentrok Guru" ? (
-                             <img src={`https://ui-avatars.com/api/?name=${c.title2}&background=EDEBFE&color=531FFF&bold=true`} alt={c.title2} className="w-full h-full object-cover" />
+                              <Image src={`https://ui-avatars.com/api/?name=${c.title2}&background=EDEBFE&color=531FFF&bold=true`} alt={c.title2} className="w-full h-full object-cover" fill referrerPolicy="no-referrer" />
                            ) : (
                              <div className="w-full h-full flex items-center justify-center text-gray-500 bg-gray-100"><School className="w-4 h-4" /></div>
                            )}
