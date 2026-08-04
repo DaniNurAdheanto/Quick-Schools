@@ -1,6 +1,6 @@
 "use client";
-import Image from "next/image";
 
+import Image from "next/image";
 import Link from "next/link";
 import { 
   ArrowRight, Sparkles, CheckCircle2, ChevronRight, Menu, Play, Star,
@@ -10,10 +10,69 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
+import { useEffect, useState } from "react";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { useRouter } from "next/navigation";
 
 const STAGGER_DELAY = 0.1;
 
 export default function LandingPage() {
+  const [user, setUser] = useState<any>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    let inactivityTimer: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(inactivityTimer);
+      // 5 minutes timer
+      inactivityTimer = setTimeout(async () => {
+        if (auth.currentUser) {
+          try {
+            await signOut(auth);
+            setUser(null);
+            console.log("Logged out due to 5 minutes of inactivity on landing page");
+          } catch (error) {
+            console.error("Error signing out:", error);
+          }
+        }
+      }, 5 * 60 * 1000);
+    };
+
+    const handleUserActivity = () => {
+      if (auth.currentUser) {
+        resetTimer();
+      }
+    };
+
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        resetTimer();
+        window.addEventListener("mousemove", handleUserActivity);
+        window.addEventListener("keydown", handleUserActivity);
+        window.addEventListener("click", handleUserActivity);
+        window.addEventListener("scroll", handleUserActivity);
+      } else {
+        clearTimeout(inactivityTimer);
+        window.removeEventListener("mousemove", handleUserActivity);
+        window.removeEventListener("keydown", handleUserActivity);
+        window.removeEventListener("click", handleUserActivity);
+        window.removeEventListener("scroll", handleUserActivity);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      clearTimeout(inactivityTimer);
+      window.removeEventListener("mousemove", handleUserActivity);
+      window.removeEventListener("keydown", handleUserActivity);
+      window.removeEventListener("click", handleUserActivity);
+      window.removeEventListener("scroll", handleUserActivity);
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-white font-sans text-gray-900 selection:bg-[#531FFF]/20 overflow-x-hidden">
       {/* Navbar */}
@@ -44,12 +103,20 @@ export default function LandingPage() {
            </nav>
            
            <div className="hidden lg:flex items-center gap-6">
-             <Link href="/login" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors">
-               Sign In
-             </Link>
-             <Link href="/register" className="px-6 py-2.5 bg-[#531FFF] text-white rounded-full text-[14px] font-semibold hover:bg-[#4314E5] transition-colors shadow-lg shadow-[#531FFF]/25">
-               Get Started Free
-             </Link>
+             {user ? (
+               <Link href="/admin/dashboard" className="px-6 py-2.5 bg-[#531FFF] text-white rounded-full text-[14px] font-semibold hover:bg-[#4314E5] transition-colors shadow-lg shadow-[#531FFF]/25">
+                 Go to Dashboard
+               </Link>
+             ) : (
+               <>
+                 <Link href="/login" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors">
+                   Sign In
+                 </Link>
+                 <Link href="/register" className="px-6 py-2.5 bg-[#531FFF] text-white rounded-full text-[14px] font-semibold hover:bg-[#4314E5] transition-colors shadow-lg shadow-[#531FFF]/25">
+                   Get Started
+                 </Link>
+               </>
+             )}
            </div>
            
            <button className="lg:hidden text-gray-900">

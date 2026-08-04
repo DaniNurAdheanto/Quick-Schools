@@ -11,21 +11,6 @@ import { CrudSheet } from "@/components/layouts/crud-sheet";
 import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-const METRICS = [
-  { label: "Total Pengumuman", value: 48, desc: "Semua waktu", icon: Megaphone, color: "text-[#531FFF]", bgColor: "bg-[#531FFF]/10", iconBg: "bg-[#531FFF]" },
-  { label: "Pengumuman Aktif", value: 12, desc: "Sedang berjalan", icon: Send, color: "text-emerald-500", bgColor: "bg-emerald-50", iconBg: "bg-emerald-500" },
-  { label: "Terjadwal", value: 5, desc: "Akan tayang", icon: Clock, color: "text-amber-500", bgColor: "bg-amber-50", iconBg: "bg-amber-500" },
-  { label: "Berakhir", value: 31, desc: "Selesai", icon: CheckCircle2, color: "text-blue-500", bgColor: "bg-blue-50", iconBg: "bg-blue-500" },
-];
-
-const CATEGORIES = [
-  { label: "Penting", count: 12, icon: AlertCircle, color: "text-red-500", bgColor: "bg-red-50" },
-  { label: "Akademik", count: 16, icon: BookOpen, color: "text-blue-500", bgColor: "bg-blue-50" },
-  { label: "Keuangan", count: 8, icon: CreditCard, color: "text-emerald-500", bgColor: "bg-emerald-50" },
-  { label: "Kegiatan", count: 7, icon: Activity, color: "text-amber-500", bgColor: "bg-amber-50" },
-  { label: "Informasi", count: 5, icon: Info, color: "text-blue-400", bgColor: "bg-blue-50" },
-];
-
 const POPULAR_ANNOUNCEMENTS = [
   { title: "Libur Idul Fitri 1447 H", views: "1.245", date: "10 Apr 2026", color: "text-[#531FFF]", bgColor: "bg-[#531FFF]/10" },
   { title: "Pembayaran SPP Bulan Mei 2026", views: "987", date: "28 Apr 2026", color: "text-[#531FFF]", bgColor: "bg-[#531FFF]/10" },
@@ -140,6 +125,21 @@ export default function AnnouncementsPage() {
     ] }
   ];
 
+  const metrics = [
+    { label: "Total Pengumuman", value: announcements.length, desc: "Semua waktu", icon: Megaphone, color: "text-[#531FFF]", bgColor: "bg-[#531FFF]/10", iconBg: "bg-[#531FFF]" },
+    { label: "Pengumuman Aktif", value: announcements.filter(a => a.status === 'Aktif').length, desc: "Sedang berjalan", icon: Send, color: "text-emerald-500", bgColor: "bg-emerald-50", iconBg: "bg-emerald-500" },
+    { label: "Terjadwal", value: announcements.filter(a => a.status === 'Terjadwal').length, desc: "Akan tayang", icon: Clock, color: "text-amber-500", bgColor: "bg-amber-50", iconBg: "bg-amber-500" },
+    { label: "Berakhir", value: announcements.filter(a => a.status === 'Berakhir').length, desc: "Selesai", icon: CheckCircle2, color: "text-blue-500", bgColor: "bg-blue-50", iconBg: "bg-blue-500" },
+  ];
+
+  const categories = [
+    { label: "Penting", count: announcements.filter(a => a.tag === 'PENTING').length, icon: AlertCircle, color: "text-red-500", bgColor: "bg-red-50" },
+    { label: "Akademik", count: announcements.filter(a => a.tag === 'AKADEMIK').length, icon: BookOpen, color: "text-blue-500", bgColor: "bg-blue-50" },
+    { label: "Keuangan", count: announcements.filter(a => a.tag === 'KEUANGAN').length, icon: CreditCard, color: "text-emerald-500", bgColor: "bg-emerald-50" },
+    { label: "Kegiatan", count: announcements.filter(a => a.tag === 'KEGIATAN').length, icon: Activity, color: "text-amber-500", bgColor: "bg-amber-50" },
+    { label: "Informasi", count: announcements.filter(a => a.tag === 'INFORMASI').length, icon: Info, color: "text-blue-400", bgColor: "bg-blue-50" },
+  ];
+
   return (
     <div className="p-8 pb-12 max-w-[1600px] mx-auto w-full h-full flex flex-col space-y-6">
       <CrudSheet 
@@ -175,7 +175,7 @@ export default function AnnouncementsPage() {
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        {METRICS.map((m, i) => (
+        {metrics.map((m, i) => (
           <div key={i} className="bg-white border border-gray-100 rounded-[24px] p-5 flex items-center justify-between shadow-sm">
              <div className="flex items-center gap-4">
                <div className={cn("w-14 h-14 rounded-full flex items-center justify-center", m.bgColor)}>
@@ -318,7 +318,7 @@ export default function AnnouncementsPage() {
                  <button className="text-[11px] font-bold text-[#531FFF] hover:underline">Kelola Kategori</button>
                </div>
                <div className="flex flex-col gap-3">
-                 {CATEGORIES.map((c, i) => (
+                 {categories.map((c, i) => (
                    <div key={i} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-xl transition-colors cursor-pointer group">
                      <div className="flex items-center gap-3">
                        <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", c.bgColor)}>

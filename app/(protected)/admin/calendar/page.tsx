@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Calendar as CalendarIcon, 
   ChevronLeft, 
@@ -26,7 +26,25 @@ import {
   Cell
 } from "recharts";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
-import { AddAgendaModal } from "./components/AddAgendaModal";
+import { 
+  format, 
+  addMonths, 
+  subMonths, 
+  startOfMonth, 
+  endOfMonth, 
+  startOfWeek, 
+  endOfWeek, 
+  isSameMonth, 
+  isSameDay, 
+  addDays, 
+  parseISO,
+  isToday
+} from 'date-fns';
+import { id as idLocale } from 'date-fns/locale';
+
+
+import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 const sparklineDataBlue = [
   { value: 10 }, { value: 25 }, { value: 15 }, { value: 30 }, { value: 20 }, { value: 40 }, { value: 35 }
@@ -41,77 +59,159 @@ const sparklineDataGreen = [
   { value: 15 }, { value: 20 }, { value: 18 }, { value: 25 }, { value: 22 }, { value: 30 }, { value: 28 }
 ];
 
-const UpcomingEvents = [
-  {
-    title: "Masa Pengenalan Lingkungan Sekolah (MPLS)",
-    date: "22 - 24 Juli 2026",
-    category: "Akademik",
-    color: "blue",
-    icon: CalendarIcon,
-    bgClass: "bg-blue-50",
-    textClass: "text-blue-600",
-    borderClass: "border-blue-100",
-  },
-  {
-    title: "Ujian Tengah Semester (UTS)",
-    date: "12 - 16 September 2026",
-    category: "Ujian",
-    color: "orange",
-    icon: ClipboardCheck,
-    bgClass: "bg-orange-50",
-    textClass: "text-orange-600",
-    borderClass: "border-orange-100",
-  },
-  {
-    title: "Pentas Seni & Budaya",
-    date: "20 September 2026",
-    category: "Event Sekolah",
-    color: "green",
-    icon: Flag,
-    bgClass: "bg-green-50",
-    textClass: "text-green-600",
-    borderClass: "border-green-100",
-  },
-  {
-    title: "Ujian Akhir Semester (UAS)",
-    date: "28 Nov - 4 Des 2026",
-    category: "Ujian",
-    color: "orange",
-    icon: ClipboardCheck,
-    bgClass: "bg-orange-50",
-    textClass: "text-orange-600",
-    borderClass: "border-orange-100",
-  },
-  {
-    title: "Pembagian Rapor Semester 1",
-    date: "20 Desember 2026",
-    category: "Akademik",
-    color: "blue",
-    icon: CalendarIcon,
-    bgClass: "bg-blue-50",
-    textClass: "text-blue-600",
-    borderClass: "border-blue-100",
-  }
-];
-
-const AgendaToday = [
-  { time: "07:00 - 08:00", title: "Upacara Bendera", location: "Lapangan Utama", colorClass: "bg-green-500 shadow-green-500/30" },
-  { time: "09:00 - 11:00", title: "Rapat Guru", location: "Ruang Guru", colorClass: "bg-blue-500 shadow-blue-500/30" },
-  { time: "13:00 - 15:00", title: "Pembagian Rapor", location: "Aula Sekolah", colorClass: "bg-orange-500 shadow-orange-500/30" },
-  { time: "15:30 - 17:00", title: "Ekstrakurikuler Pramuka", location: "Lapangan Sekolah", colorClass: "bg-purple-500 shadow-purple-500/30" },
-];
-
 export default function CalendarPage() {
   const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete"; data?: any }>({
     open: false,
     mode: "create"
   });
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
+  const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
+  const goToToday = () => setCurrentDate(new Date());
+
+  const renderCalendarCells = () => {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(monthStart);
+    const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
+
+    const rows = [];
+    let days = [];
+    let day = startDate;
+    let formattedDate = '';
+
+    while (day <= endDate) {
+      for (let i = 0; i < 7; i++) {
+        formattedDate = format(day, 'd');
+        const cloneDay = day;
+        
+        // Find events for this day
+        const dayEvents = events.filter(e => {
+          if (!e.date) return false;
+          try {
+            return e.date === format(cloneDay, 'yyyy-MM-dd');
+          } catch(err) { return false; }
+        });
+
+        days.push(
+          <div 
+            key={day.toISOString()} 
+            className={`p-2 border-b border-r border-gray-100 min-h-[96px] cursor-pointer hover:bg-gray-50 transition-colors ${!isSameMonth(day, monthStart) ? 'bg-gray-50/30' : ''}`}
+            onClick={() => {
+              setCrudState({ open: true, mode: 'create', data: { date: format(cloneDay, 'yyyy-MM-dd') } });
+            }}
+          >
+            <div className="flex justify-between items-start mb-1">
+              <span className={`text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-full ${
+                isSameDay(day, new Date()) ? 'bg-[#531FFF] text-white' :
+                !isSameMonth(day, monthStart) ? 'text-gray-400' :
+                (i === 6) ? 'text-red-500' : 'text-gray-900'
+              }`}>
+                {formattedDate}
+              </span>
+            </div>
+            <div className="mt-1 space-y-1">
+              {dayEvents.map((evt, idx) => {
+                const details = getCategoryDetails(evt.category);
+                return (
+                  <div key={idx} 
+                    className={`text-[10px] font-semibold px-2 py-1 rounded truncate border flex items-center gap-1.5 ${details.bgClass} ${details.textClass} ${details.borderClass}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCrudState({ open: true, mode: 'edit', data: evt });
+                    }}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${details.bgClass.replace('bg-', 'bg-').replace('-50', '-500')}`}></span> 
+                    {evt.title}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+        day = addDays(day, 1);
+      }
+      rows.push(
+        <div className="grid grid-cols-7" key={day.toISOString()}>
+          {days}
+        </div>
+      );
+      days = [];
+    }
+    return rows;
+  };
+
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "calendar_events"), (snap) => {
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setEvents(data);
+      setLoading(false);
+    }, (error) => {
+      console.error(error);
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  const handleCrudSubmit = async (data: any) => {
+    try {
+      if (crudState.mode === "create") {
+        const id = crypto.randomUUID();
+        await setDoc(doc(db, "calendar_events", id), {
+          title: data.title || "Agenda Baru",
+          date: data.date || "Belum ditentukan",
+          category: data.category || "Akademik",
+          location: data.location || "-",
+          description: data.description || "-",
+          time: data.time || "",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      } else if (crudState.mode === "edit" && crudState.data?.id) {
+        await updateDoc(doc(db, "calendar_events", crudState.data.id), {
+          title: data.title || crudState.data.title,
+          date: data.date || crudState.data.date,
+          category: data.category || crudState.data.category,
+          location: data.location || crudState.data.location,
+          description: data.description || crudState.data.description,
+          time: data.time !== undefined ? data.time : crudState.data.time,
+          updatedAt: serverTimestamp()
+        });
+      } else if (crudState.mode === "delete" && crudState.data?.id) {
+        await deleteDoc(doc(db, "calendar_events", crudState.data.id));
+      }
+      setCrudState({ open: false, mode: "create" });
+    } catch (error) {
+      console.error("Error saving agenda", error);
+      alert("Terjadi kesalahan: " + (error as Error).message);
+    }
+  };
+
+  const getCategoryDetails = (category: string) => {
+    switch(category) {
+      case 'Akademik': return { color: 'blue', icon: CalendarIcon, bgClass: 'bg-blue-50', textClass: 'text-blue-600', borderClass: 'border-blue-100' };
+      case 'Ujian': return { color: 'orange', icon: ClipboardCheck, bgClass: 'bg-orange-50', textClass: 'text-orange-600', borderClass: 'border-orange-100' };
+      case 'Event Sekolah': return { color: 'green', icon: Flag, bgClass: 'bg-green-50', textClass: 'text-green-600', borderClass: 'border-green-100' };
+      case 'Ekstrakurikuler': return { color: 'purple', icon: BookOpen, bgClass: 'bg-purple-50', textClass: 'text-purple-600', borderClass: 'border-purple-100' };
+      default: return { color: 'gray', icon: CalendarIcon, bgClass: 'bg-gray-50', textClass: 'text-gray-600', borderClass: 'border-gray-100' };
+    }
+  };
 
   const eventFields = [
     { name: "title", label: "Nama Kegiatan" },
     { name: "date", label: "Tanggal Pelaksanaan" },
-    { name: "category", label: "Kategori (Akademik, Ujian, dll)" },
+    { name: "time", label: "Waktu (Opsional, cth: 07:00 - 08:00)" },
+    { name: "category", label: "Kategori", type: "select", options: [
+      {label: "Akademik", value: "Akademik"},
+      {label: "Ujian", value: "Ujian"},
+      {label: "Event Sekolah", value: "Event Sekolah"},
+      {label: "Ekstrakurikuler", value: "Ekstrakurikuler"},
+      {label: "Libur Nasional", value: "Libur Nasional"}
+    ] },
     { name: "location", label: "Lokasi" },
     { name: "description", label: "Keterangan" },
   ];
@@ -125,10 +225,7 @@ export default function CalendarPage() {
         entityName="Agenda"
         fields={eventFields}
         initialData={crudState.data}
-      />
-      <AddAgendaModal 
-        isOpen={isAddModalOpen} 
-        onClose={() => setIsAddModalOpen(false)} 
+        onSubmit={handleCrudSubmit}
       />
       
       {/* Header View */}
@@ -148,7 +245,7 @@ export default function CalendarPage() {
             Export PDF
           </button>
           <button 
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={() => setCrudState({ open: true, mode: "create" })}
             className="flex items-center gap-2 px-4 py-2 bg-[#531FFF] text-white rounded-xl text-sm font-semibold hover:bg-[#531FFF]/90 transition-colors shadow-sm shadow-[#531FFF]/20"
           >
             <Plus className="w-4 h-4" />
@@ -167,8 +264,8 @@ export default function CalendarPage() {
              </div>
              <div>
                <p className="text-[11px] font-medium text-gray-500 mb-0.5">Hari Efektif</p>
-               <h3 className="text-xl font-bold text-gray-900 leading-none mb-1">218 Hari</h3>
-               <p className="text-[10px] text-gray-500">80.3% dari total tahun ajaran</p>
+               <h3 className="text-xl font-bold text-gray-900 leading-none mb-1">{218 - events.filter(e => e.category === 'Libur Nasional').length} Hari</h3>
+               <p className="text-[10px] text-gray-500">Estimasi aktif belajar</p>
              </div>
            </div>
            <div className="absolute bottom-0 left-0 right-0 h-10 opacity-30">
@@ -188,7 +285,7 @@ export default function CalendarPage() {
              </div>
              <div>
                <p className="text-[11px] font-medium text-gray-500 mb-0.5">Libur Nasional</p>
-               <h3 className="text-xl font-bold text-gray-900 leading-none mb-1">17 Hari</h3>
+               <h3 className="text-xl font-bold text-gray-900 leading-none mb-1">{events.filter(e => e.category === 'Libur Nasional').length} Event</h3>
                <p className="text-[10px] text-gray-500">Termasuk hari besar nasional</p>
              </div>
            </div>
@@ -209,7 +306,7 @@ export default function CalendarPage() {
              </div>
              <div>
                <p className="text-[11px] font-medium text-gray-500 mb-0.5">Ujian</p>
-               <h3 className="text-xl font-bold text-gray-900 leading-none mb-1">8 Event</h3>
+               <h3 className="text-xl font-bold text-gray-900 leading-none mb-1">{events.filter(e => e.category === 'Ujian').length} Event</h3>
                <p className="text-[10px] text-gray-500">UTS, UAS & lainnya</p>
              </div>
            </div>
@@ -230,7 +327,7 @@ export default function CalendarPage() {
              </div>
              <div>
                <p className="text-[11px] font-medium text-gray-500 mb-0.5">Event Sekolah</p>
-               <h3 className="text-xl font-bold text-gray-900 leading-none mb-1">24 Event</h3>
+               <h3 className="text-xl font-bold text-gray-900 leading-none mb-1">{events.filter(e => e.category === 'Event Sekolah').length} Event</h3>
                <p className="text-[10px] text-gray-500">Kegiatan sekolah</p>
              </div>
            </div>
@@ -251,7 +348,7 @@ export default function CalendarPage() {
              </div>
              <div>
                <p className="text-[11px] font-medium text-gray-500 mb-0.5">Ekstrakurikuler</p>
-               <h3 className="text-xl font-bold text-gray-900 leading-none mb-1">15 Event</h3>
+               <h3 className="text-xl font-bold text-gray-900 leading-none mb-1">{events.filter(e => e.category === 'Ekstrakurikuler').length} Event</h3>
                <p className="text-[10px] text-gray-500">Kegiatan siswa</p>
              </div>
            </div>
@@ -273,21 +370,22 @@ export default function CalendarPage() {
           <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] p-6">
             
             {/* Calendar Header */}
+            
             <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <div className="flex items-center bg-gray-50 rounded-lg p-1 border border-gray-100">
-                  <button className="p-1 px-2.5 hover:bg-white rounded shadow-sm text-gray-500 hover:text-gray-900 transition-all font-semibold">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center bg-gray-50 border border-gray-100 rounded-lg p-1">
+                  <button onClick={prevMonth} className="p-1 px-2.5 hover:bg-white rounded shadow-sm text-gray-500 hover:text-gray-900 transition-all font-semibold">
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <button className="p-1 px-2.5 hover:bg-white rounded shadow-sm text-gray-500 hover:text-gray-900 transition-all font-semibold">
+                  <button onClick={nextMonth} className="p-1 px-2.5 hover:bg-white rounded shadow-sm text-gray-500 hover:text-gray-900 transition-all font-semibold">
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
-                <button className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">
+                <button onClick={goToToday} className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">
                   Today
                 </button>
               </div>
-              <h2 className="text-xl font-bold text-gray-900">Mei 2026</h2>
+              <h2 className="text-xl font-bold text-gray-900 capitalize">{format(currentDate, 'MMMM yyyy', { locale: idLocale })}</h2>
               <div className="flex items-center gap-2">
                 <button className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
                   Month
@@ -301,161 +399,16 @@ export default function CalendarPage() {
             </div>
 
             {/* Calendar Grid */}
-            <div className="border border-gray-100 rounded-xl overflow-hidden">
-              <div className="grid grid-cols-7 border-b border-gray-100 bg-gray-50/50">
+            <div className="border-t border-l border-gray-100 rounded-xl overflow-hidden">
+              <div className="grid grid-cols-7 bg-gray-50/50 border-b border-gray-100">
                 {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map((day) => (
-                  <div key={day} className="py-3 text-center text-[12px] font-bold text-gray-500 border-r border-gray-100 last:border-r-0">
+                  <div key={day} className="py-3 text-center text-[12px] font-bold text-gray-500 border-r border-gray-100">
                     {day}
                   </div>
                 ))}
               </div>
-              
-              {/* Row 1 */}
-              <div className="grid grid-cols-7 border-b border-gray-100 h-24">
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-400">27</span></div>
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-400">28</span></div>
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-400">29</span></div>
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-400">30</span></div>
-                 <div className="p-2 border-r border-gray-100 ">
-                   <span className="text-sm font-semibold text-gray-900">1</span>
-                   <div className="mt-1 bg-blue-50 text-blue-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-blue-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0"></span> Hari Buruh
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-900">2</span></div>
-                 <div className="p-2 "><span className="text-sm font-semibold text-gray-900">3</span></div>
-              </div>
-              
-              {/* Row 2 */}
-              <div className="grid grid-cols-7 border-b border-gray-100 h-24">
-                 <div className="p-2 border-r border-gray-100 ">
-                   <span className="text-sm font-semibold text-gray-900">4</span>
-                   <div className="mt-1 bg-green-50 text-green-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-green-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-green-600 shrink-0"></span> Upacara Bendera
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 ">
-                   <span className="text-sm font-semibold text-gray-900">5</span>
-                   <div className="mt-1 bg-purple-50 text-purple-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-purple-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-purple-600 shrink-0"></span> Ekstrakurikuler
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-900">6</span></div>
-                 <div className="p-2 border-r border-gray-100 ">
-                   <span className="text-sm font-semibold text-gray-900">7</span>
-                   <div className="mt-1 bg-blue-50 text-blue-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-blue-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0"></span> Rapat Guru
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 ">
-                   <span className="text-sm font-semibold text-gray-900">8</span>
-                   <div className="mt-1 bg-orange-50 text-orange-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-orange-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-orange-600 shrink-0"></span> Ujian Harian
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-900">9</span></div>
-                 <div className="p-2 ">
-                   <span className="text-sm font-semibold text-red-500">10</span>
-                   <div className="mt-1 bg-red-50 text-red-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-red-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0"></span> Hari Raya Waisak
-                   </div>
-                 </div>
-              </div>
-
-              {/* Row 3 */}
-              <div className="grid grid-cols-7 border-b border-gray-100 h-24">
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-900">11</span></div>
-                 <div className="p-2 border-r border-gray-100 ">
-                   <span className="text-sm font-semibold text-gray-900">12</span>
-                   <div className="mt-1 bg-orange-50 text-orange-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-orange-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-orange-600 shrink-0"></span> UTS Dimulai
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 ">
-                   <span className="text-sm font-semibold text-gray-900">13</span>
-                   <div className="mt-1 bg-blue-50 text-blue-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-blue-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0"></span> Literasi Sekolah
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-900">14</span></div>
-                 <div className="p-2 border-r border-gray-100 ">
-                   <span className="text-sm font-semibold text-gray-900">15</span>
-                   <div className="mt-1 bg-purple-50 text-purple-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-purple-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-purple-600 shrink-0"></span> Kelas Inspirasi
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-900">16</span></div>
-                 <div className="p-2 ">
-                   <span className="text-sm font-semibold text-red-500">17</span>
-                   <div className="mt-1 bg-red-50 text-red-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-red-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0"></span> Libur Nasional
-                   </div>
-                 </div>
-              </div>
-
-               {/* Row 4 */}
-               <div className="grid grid-cols-7 border-b border-gray-100 h-24">
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-900">18</span></div>
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-900">19</span></div>
-                 <div className="p-2 border-r border-gray-100 ">
-                   <span className="text-sm font-semibold text-gray-900">20</span>
-                   <div className="mt-1 bg-green-50 text-green-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-green-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-green-600 shrink-0"></span> Pentas Seni
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 ">
-                   <span className="text-sm font-semibold text-gray-900">21</span>
-                   <div className="mt-1 bg-blue-50 text-blue-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-blue-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0"></span> Rapat Komite
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 ">
-                   <span className="text-sm font-semibold text-gray-900">22</span>
-                   <div className="mt-1 bg-purple-50 text-purple-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-purple-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-purple-600 shrink-0"></span> Jumat Bersih
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-900">23</span></div>
-                 <div className="p-2 "><span className="text-sm font-semibold text-gray-900">24</span></div>
-              </div>
-
-               {/* Row 5 */}
-               <div className="grid grid-cols-7 h-24">
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-900">25</span></div>
-                 <div className="p-2 border-r border-gray-100 ">
-                   <span className="text-sm font-semibold text-gray-900">26</span>
-                   <div className="mt-1 bg-blue-50 text-blue-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-blue-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0"></span> Ujian Praktek
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 ">
-                   <span className="text-sm font-semibold text-gray-900">27</span>
-                   <div className="mt-1 bg-blue-50 text-blue-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-blue-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0"></span> Ujian Praktek
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 ">
-                   <span className="text-sm font-semibold text-gray-900">28</span>
-                   <div className="mt-1 bg-orange-50 text-orange-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-orange-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-orange-600 shrink-0"></span> UAS Dimulai
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 relative">
-                   <div className="w-6 h-6 bg-[#531FFF] text-white rounded-full flex items-center justify-center text-sm font-bold absolute top-1 left-2">29</div>
-                   <div className="mt-6 bg-green-50 text-green-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-green-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-green-600 shrink-0"></span> Pembagian Rapor
-                   </div>
-                 </div>
-                 <div className="p-2 border-r border-gray-100 "><span className="text-sm font-semibold text-gray-900">30</span></div>
-                 <div className="p-2 ">
-                   <span className="text-sm font-semibold text-red-500">31</span>
-                   <div className="mt-1 bg-red-50 text-red-600 text-[10px] font-semibold px-2 py-1 rounded truncate border border-red-100 flex items-center gap-1.5">
-                     <span className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0"></span> Hari Lahir Pancasila
-                   </div>
-                 </div>
-              </div>
+              {renderCalendarCells()}
             </div>
-
             {/* Tags Legenda */}
             <div className="mt-6 flex items-center gap-6">
               <span className="text-sm font-bold text-gray-900">Legenda</span>
@@ -626,17 +579,24 @@ export default function CalendarPage() {
               </button>
             </div>
             <div className="space-y-4">
-               {UpcomingEvents.map((event, idx) => (
-                 <div key={idx} className="flex gap-4 group items-center">
-                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${event.bgClass} ${event.borderClass}`}>
-                     <event.icon className={`w-5 h-5 ${event.textClass}`} />
+               {loading ? (
+                 <div className="text-center py-4 text-gray-500 text-sm">Memuat data...</div>
+               ) : events.length === 0 ? (
+                 <div className="text-center py-4 text-gray-500 text-sm">Belum ada agenda</div>
+               ) : events.slice(0, 5).map((event, idx) => {
+                 const details = getCategoryDetails(event.category);
+                 const Icon = details.icon;
+                 return (
+                 <div key={event.id || idx} className="flex gap-4 group items-center">
+                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${details.bgClass} ${details.borderClass}`}>
+                     <Icon className={`w-5 h-5 ${details.textClass}`} />
                    </div>
                    <div className="flex-1 min-w-0 flex flex-col justify-center">
                      <h3 className="text-[13px] font-bold text-gray-900 leading-tight mb-1 truncate">{event.title}</h3>
                      <p className="text-[11px] text-gray-500">{event.date}</p>
                    </div>
                    <div className="shrink-0 flex items-center gap-2">
-                      <span className={`px-2 py-1 text-[9px] font-bold rounded ${event.bgClass} ${event.textClass}`}>
+                      <span className={`px-2 py-1 text-[9px] font-bold rounded ${details.bgClass} ${details.textClass}`}>
                         {event.category}
                       </span>
                       <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
@@ -653,7 +613,7 @@ export default function CalendarPage() {
                       </div>
                    </div>
                  </div>
-               ))}
+               )})}
             </div>
           </div>
 
@@ -665,13 +625,19 @@ export default function CalendarPage() {
                 Lihat Semua
               </button>
             </div>
-            <p className="text-[12px] text-gray-500 mb-6">Jumat, 29 Mei 2026</p>
+            <p className="text-[12px] text-gray-500 mb-6">Agenda Berdasarkan Waktu</p>
             
             <div className="space-y-4">
-              {AgendaToday.map((agenda, idx) => (
-                 <div key={idx} className="flex items-center gap-4 group">
+              {loading ? (
+                <div className="text-center py-4 text-gray-500 text-sm">Memuat data...</div>
+              ) : events.filter(e => e.time).length === 0 ? (
+                <div className="text-center py-4 text-gray-500 text-sm">Tidak ada agenda hari ini</div>
+              ) : events.filter(e => e.time).map((agenda, idx) => {
+                 const details = getCategoryDetails(agenda.category);
+                 return (
+                 <div key={agenda.id || idx} className="flex items-center gap-4 group">
                     <div className="flex items-center gap-3 w-[100px] shrink-0">
-                       <span className={`w-2 h-2 rounded-full shadow-sm ${agenda.colorClass}`}></span>
+                       <span className={`w-2 h-2 rounded-full shadow-sm ${details.bgClass.replace('bg-', 'bg-').replace('-50', '-500')} shadow-${details.color}-500/30`}></span>
                        <span className="text-[12px] font-semibold text-gray-600">{agenda.time}</span>
                     </div>
                     <div className="flex-1 min-w-0 group-hover:bg-gray-50 p-2 -my-2 rounded-lg transition-colors cursor-pointer flex justify-between items-center">
@@ -679,7 +645,7 @@ export default function CalendarPage() {
                        <p className="text-[11px] font-medium text-gray-400 shrink-0">{agenda.location}</p>
                     </div>
                  </div>
-              ))}
+              )})}
             </div>
           </div>
 
