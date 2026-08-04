@@ -11,6 +11,7 @@ import { onAuthStateChanged } from "firebase/auth";
 
 export default function ClassesPage() {
   const [classes, setClasses] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete"; data?: any }>({
@@ -33,10 +34,22 @@ export default function ClassesPage() {
           console.error("Error fetching classes:", error);
           setLoading(false);
         });
+
+        const qTeachers = query(collection(db, "teachers"));
+        const unsubTeachers = onSnapshot(qTeachers, (snapshot) => {
+          setTeachers(snapshot.docs.map(doc => ({
+            _firestoreId: doc.id,
+            ...doc.data()
+          })));
+        });
         
-        return () => unsubscribe();
+        return () => {
+          unsubscribe();
+          unsubTeachers();
+        };
       } else {
         setClasses([]);
+        setTeachers([]);
         setLoading(false);
       }
     });
@@ -69,7 +82,16 @@ export default function ClassesPage() {
         { label: "Kejuruan", value: "Kejuruan" }
       ]
     },
-    { name: "homeroom", label: "Wali Kelas", placeholder: "Nama Wali Kelas" },
+    { 
+      name: "homeroom", 
+      label: "Wali Kelas",
+      type: "select",
+      placeholder: "Pilih Wali Kelas (Opsional)",
+      options: [
+        { label: "-- Tanpa Wali Kelas --", value: "" },
+        ...teachers.map(t => ({ label: t.name, value: t.name }))
+      ]
+    },
     { name: "students", label: "Kapasitas Siswa Saat Ini (Opsional)", type: "number", placeholder: "0" },
     {
       name: "status",

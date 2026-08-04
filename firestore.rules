@@ -34,7 +34,22 @@ service cloud.firestore {
         && data.status is string && data.status in ['Aktif', 'Nonaktif', 'Lulus', 'Pindah']
         && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 500));
     }
-    
+
+    function isValidAnnouncement(data) {
+      return data.keys().hasAll(['title', 'desc', 'target', 'tag', 'author', 'status', 'tagColor', 'theme', 'date', 'createdAt', 'updatedAt'])
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 200
+        && data.desc is string && data.desc.size() > 0 && data.desc.size() <= 2000
+        && data.target is string && data.target.size() > 0 && data.target.size() <= 100
+        && data.tag is string && data.tag.size() > 0 && data.tag.size() <= 50
+        && data.author is string && data.author.size() > 0 && data.author.size() <= 100
+        && data.status is string && data.status in ['Aktif', 'Terjadwal', 'Berakhir']
+        && data.tagColor is string && data.tagColor.size() > 0 && data.tagColor.size() <= 100
+        && data.theme is string && data.theme.size() > 0 && data.theme.size() <= 50
+        && data.date is string && data.date.size() > 0 && data.date.size() <= 50
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
     match /students/{studentId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() 
@@ -46,6 +61,23 @@ service cloud.firestore {
                     && isValidStudent(incoming())
                     && incoming().diff(existing()).affectedKeys().hasOnly(['id', 'name', 'classId', 'status', 'imageUrl']);
       allow delete: if isSignedIn() && isValidId(studentId);
+    }
+    
+    match /announcements/{announcementId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && isValidId(announcementId)
+                    && isValidAnnouncement(incoming())
+                    && incoming().keys().size() == 11
+                    && incoming().createdAt == request.time
+                    && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+                    && isValidId(announcementId)
+                    && isValidAnnouncement(incoming())
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'desc', 'target', 'tag', 'author', 'status', 'tagColor', 'theme', 'date', 'updatedAt'])
+                    && incoming().createdAt == existing().createdAt
+                    && incoming().updatedAt == request.time;
+      allow delete: if isSignedIn() && isValidId(announcementId);
     }
 
     match /classes/{classId} {

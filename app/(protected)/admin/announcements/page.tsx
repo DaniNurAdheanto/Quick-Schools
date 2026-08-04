@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Megaphone, Plus, Filter, Grid, Search, MoreHorizontal, Calendar, User, Users, 
   Eye, Zap, AlertCircle, BookOpen, CreditCard, Activity, Info, Clock, CheckCircle2,
@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 const METRICS = [
   { label: "Total Pengumuman", value: 48, desc: "Semua waktu", icon: Megaphone, color: "text-[#531FFF]", bgColor: "bg-[#531FFF]/10", iconBg: "bg-[#531FFF]" },
@@ -32,75 +34,110 @@ const POPULAR_ANNOUNCEMENTS = [
   { title: "Daftar Ulang Tahun Ajaran Baru", views: "654", date: "15 Jun 2025", color: "text-emerald-500", bgColor: "bg-emerald-50" },
 ];
 
-const MAIN_ANNOUNCEMENTS = [
-  {
-    tag: "PENTING",
-    title: "Libur Kenaikan Isa Almasih",
-    desc: "Diberitahukan kepada seluruh siswa, guru dan staff bahwa sekolah akan libur pada hari Kamis, 29 Mei 2026 dalam rangka memperingati Kenaikan Isa Almasih.",
-    date: "18 Mei 2026",
-    author: "Super Admin",
-    target: "Semua Siswa, Guru & Staff",
-    status: "Aktif",
-    tagColor: "text-red-500 bg-red-50",
-    theme: "purple"
-  },
-  {
-    tag: "AKADEMIK",
-    title: "Ujian Akhir Semester Genap 2025/2026",
-    desc: "Ujian Akhir Semester Genap akan dilaksanakan mulai tanggal 2 - 10 Juni 2026. Pastikan semua siswa mempersiapkan diri dengan baik.",
-    date: "17 Mei 2026",
-    author: "Waka Kurikulum",
-    target: "Siswa Kelas 7-12",
-    status: "Aktif",
-    tagColor: "text-blue-500 bg-blue-50",
-    theme: "orange"
-  },
-  {
-    tag: "KEUANGAN",
-    title: "Pembayaran SPP Bulan Juni 2026",
-    desc: "Diharapkan kepada seluruh orang tua/wali siswa untuk melakukan pembayaran SPP paling lambat tanggal 10 Juni 2026.",
-    date: "16 Mei 2026",
-    author: "Bagian Keuangan",
-    target: "Orang Tua/Wali",
-    status: "Aktif",
-    tagColor: "text-emerald-500 bg-emerald-50",
-    theme: "green"
-  },
-  {
-    tag: "KEGIATAN",
-    title: "Kegiatan Ekstrakurikuler Pramuka",
-    desc: "Kegiatan pramuka rutin akan diadakan setiap hari Sabtu pukul 13.00 - 15.00 WIB di lapangan sekolah. Semua anggota wajib hadir.",
-    date: "15 Mei 2026",
-    author: "Pembina Pramuka",
-    target: "Anggota Pramuka",
-    status: "Aktif",
-    tagColor: "text-[#531FFF] bg-[#531FFF]/10",
-    theme: "purple"
-  },
-  {
-    tag: "INFORMASI",
-    title: "Rapat Komite Sekolah",
-    desc: "Rapat komite sekolah akan dilaksanakan pada hari Jumat, 30 Mei 2026 pukul 09.00 WIB di ruang rapat utama.",
-    date: "14 Mei 2026",
-    author: "Ketua Komite",
-    target: "Komite Sekolah",
-    status: "Terjadwal",
-    tagColor: "text-blue-500 bg-blue-50",
-    theme: "teal"
-  }
-];
-
 export default function AnnouncementsPage() {
   const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete"; data?: any }>({
     open: false,
     mode: "create"
   });
+  
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "announcements"), (snap) => {
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAnnouncements(data);
+      setLoading(false);
+    }, (error) => {
+      console.error(error);
+      setLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  const getTheme = (tag: string) => {
+    switch (tag) {
+      case 'PENTING': return 'purple';
+      case 'AKADEMIK': return 'orange';
+      case 'KEUANGAN': return 'green';
+      case 'KEGIATAN': return 'purple';
+      case 'INFORMASI': return 'teal';
+      default: return 'purple';
+    }
+  };
+
+  const getTagColor = (tag: string) => {
+    switch (tag) {
+      case 'PENTING': return 'text-red-500 bg-red-50';
+      case 'AKADEMIK': return 'text-blue-500 bg-blue-50';
+      case 'KEUANGAN': return 'text-emerald-500 bg-emerald-50';
+      case 'KEGIATAN': return 'text-[#531FFF] bg-[#531FFF]/10';
+      case 'INFORMASI': return 'text-blue-500 bg-blue-50';
+      default: return 'text-gray-500 bg-gray-50';
+    }
+  };
+
+  const handleCrudSubmit = async (data: any) => {
+    try {
+      if (crudState.mode === "create") {
+        const id = crypto.randomUUID();
+        const tag = data.tag || "INFORMASI";
+        await setDoc(doc(db, "announcements", id), {
+          title: data.title || "Pengumuman Baru",
+          desc: data.desc || "-",
+          target: data.target || "Semua",
+          tag: tag,
+          author: "Admin",
+          status: data.status || "Aktif",
+          tagColor: getTagColor(tag),
+          theme: getTheme(tag),
+          date: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      } else if (crudState.mode === "edit" && crudState.data?.id) {
+        const tag = data.tag || crudState.data.tag;
+        await updateDoc(doc(db, "announcements", crudState.data.id), {
+          title: data.title || crudState.data.title,
+          desc: data.desc || crudState.data.desc,
+          target: data.target || crudState.data.target,
+          tag: tag,
+          status: data.status || crudState.data.status,
+          tagColor: getTagColor(tag),
+          theme: getTheme(tag),
+          updatedAt: serverTimestamp()
+        });
+      } else if (crudState.mode === "delete" && crudState.data?.id) {
+        await deleteDoc(doc(db, "announcements", crudState.data.id));
+      }
+      setCrudState({ open: false, mode: "create" });
+    } catch (error) {
+      console.error("Error saving announcement", error);
+      alert("Terjadi kesalahan: " + (error as Error).message);
+    }
+  };
 
   const announcementFields = [
     { name: "title", label: "Judul Pengumuman" },
     { name: "desc", label: "Deskripsi" },
-    { name: "target", label: "Target Penerima" },
-    { name: "tag", label: "Kategori" }
+    { name: "target", label: "Target Penerima", type: "select", options: [
+      { label: "Semua", value: "Semua" },
+      { label: "Siswa Kelas 7-12", value: "Siswa Kelas 7-12" },
+      { label: "Orang Tua/Wali", value: "Orang Tua/Wali" },
+      { label: "Guru & Staff", value: "Guru & Staff" }
+    ] },
+    { name: "tag", label: "Kategori", type: "select", options: [
+      { label: "PENTING", value: "PENTING" },
+      { label: "AKADEMIK", value: "AKADEMIK" },
+      { label: "KEUANGAN", value: "KEUANGAN" },
+      { label: "KEGIATAN", value: "KEGIATAN" },
+      { label: "INFORMASI", value: "INFORMASI" }
+    ] },
+    { name: "status", label: "Status", type: "select", options: [
+      { label: "Aktif", value: "Aktif" },
+      { label: "Terjadwal", value: "Terjadwal" },
+      { label: "Berakhir", value: "Berakhir" }
+    ] }
   ];
 
   return (
@@ -112,6 +149,7 @@ export default function AnnouncementsPage() {
         entityName="Pengumuman"
         fields={announcementFields}
         initialData={crudState.data}
+        onSubmit={handleCrudSubmit}
       />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -186,8 +224,15 @@ export default function AnnouncementsPage() {
 
             {/* Announcements List */}
             <div className="flex flex-col gap-4">
-              {MAIN_ANNOUNCEMENTS.map((item, i) => (
-                <div key={i} className="flex flex-col sm:flex-row bg-white border border-gray-100 rounded-3xl p-3 shadow-sm hover:shadow-md transition-all gap-4 items-stretch group">
+              {loading ? (
+                <div className="py-12 flex justify-center text-gray-400">Loading...</div>
+              ) : announcements.length === 0 ? (
+                <div className="py-12 flex flex-col items-center justify-center text-gray-400 bg-white border border-gray-100 rounded-3xl border-dashed">
+                  <Megaphone className="w-12 h-12 mb-3 text-gray-200" />
+                  <p className="text-sm font-medium">Belum ada pengumuman.</p>
+                </div>
+              ) : announcements.map((item, i) => (
+                <div key={item.id} className="flex flex-col sm:flex-row bg-white border border-gray-100 rounded-3xl p-3 shadow-sm hover:shadow-md transition-all gap-4 items-stretch group">
                    {/* Illustration Thumbnail */}
                    <div className={cn(
                      "w-full sm:w-[220px] h-[140px] sm:h-auto rounded-2xl relative overflow-hidden shrink-0 flex items-center justify-center p-4",

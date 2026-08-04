@@ -59,9 +59,10 @@ export default function LandingPage() {
       </motion.header>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 lg:pt-40 lg:pb-32 overflow-hidden bg-[#F8F9FE] relative">
-         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-gradient-to-b from-[#531FFF]/10 to-transparent rounded-full blur-3xl opacity-50 translate-x-1/3 -translate-y-1/2 pointer-events-none"></div>
-         <div className="absolute top-40 left-0 w-[500px] h-[500px] bg-gradient-to-b from-purple-200/50 to-transparent rounded-full blur-3xl opacity-50 -translate-x-1/2 pointer-events-none"></div>
+      <section className="pt-32 pb-20 lg:pt-40 lg:pb-32 overflow-hidden bg-[#531FFF] relative">
+         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-gradient-to-br from-white/20 to-transparent rounded-full blur-3xl opacity-50 translate-x-1/3 -translate-y-1/2 pointer-events-none"></div>
+         <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-gradient-to-tr from-black/20 to-transparent rounded-full blur-3xl opacity-30 -translate-x-1/3 translate-y-1/3 pointer-events-none"></div>
+         
 
          <div className="max-w-[1400px] mx-auto px-6 relative z-10 flex flex-col xl:flex-row items-center gap-16">
             
@@ -71,7 +72,7 @@ export default function LandingPage() {
                  initial={{ opacity: 0, y: 20 }}
                  animate={{ opacity: 1, y: 0 }}
                  transition={{ delay: 0.1, duration: 0.5 }}
-                 className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-[#531FFF]/20 text-[#531FFF] text-[13px] font-bold mb-6 shadow-sm"
+                 className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/20 text-white text-[13px] font-bold mb-6 shadow-sm"
                >
                  <Star className="w-4 h-4 fill-current" />
                  Nest-Gen School Management System
@@ -81,18 +82,18 @@ export default function LandingPage() {
                  initial={{ opacity: 0, y: 20 }}
                  animate={{ opacity: 1, y: 0 }}
                  transition={{ delay: 0.2, duration: 0.5 }}
-                 className="text-5xl lg:text-[64px] font-extrabold tracking-tight text-gray-900 mb-6 leading-[1.1]"
+                 className="text-5xl lg:text-[64px] font-extrabold tracking-tight text-white mb-6 leading-[1.1]"
                >
                  Manage Your School<br/>
                  Smarter, Faster, and<br/>
-                 <span className="text-[#531FFF]">Future-Ready</span>
+                 <span className="text-[#FFB800]">Future-Ready</span>
                </motion.h1>
                
                <motion.p 
                  initial={{ opacity: 0, y: 20 }}
                  animate={{ opacity: 1, y: 0 }}
                  transition={{ delay: 0.3, duration: 0.5 }}
-                 className="text-[18px] text-gray-500 mb-10 leading-relaxed max-w-xl mx-auto xl:mx-0 font-medium"
+                 className="text-[18px] text-white/80 mb-10 leading-relaxed max-w-xl mx-auto xl:mx-0 font-medium"
                >
                  All-in-one platform to manage attendance, academics, schedules, communication, payments, and more. Designed for modern schools.
                </motion.p>
@@ -103,10 +104,10 @@ export default function LandingPage() {
                  transition={{ delay: 0.4, duration: 0.5 }}
                  className="flex flex-col sm:flex-row items-center justify-center xl:justify-start gap-4 mb-12"
                >
-                 <Link href="/register" className="w-full sm:w-auto px-8 py-4 bg-[#531FFF] text-white rounded-full text-[15px] font-bold hover:bg-[#4314E5] transition-all shadow-lg shadow-[#531FFF]/25 flex items-center justify-center gap-2 group">
+                 <Link href="/register" className="w-full sm:w-auto px-8 py-4 bg-white text-[#531FFF] rounded-full text-[15px] font-bold hover:bg-gray-50 transition-all shadow-lg flex items-center justify-center gap-2 group">
                    Get Started Free <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                  </Link>
-                 <Link href="#demo" className="w-full sm:w-auto px-8 py-4 bg-white border border-gray-200 text-[#531FFF] rounded-full text-[15px] font-bold hover:bg-gray-50 transition-all flex items-center justify-center gap-2 shadow-sm">
+                 <Link href="#demo" className="w-full sm:w-auto px-8 py-4 bg-white/10 border border-white/20 text-white rounded-full text-[15px] font-bold hover:bg-white/20 transition-all flex items-center justify-center gap-2 backdrop-blur-sm">
                    Request Demo
                  </Link>
                </motion.div>
@@ -118,9 +119,9 @@ export default function LandingPage() {
                  className="flex items-center justify-center xl:justify-start gap-6"
                >
                   <div className="flex -space-x-3">
-                    {[1,2,3].map((i) => (
-                      <div key={i} className="w-10 h-10 rounded-full border-2 border-white overflow-hidden shadow-sm">
-                         <Image src={`https://i.pravatar.cc/100?img=${i+20}`} alt="avatar" className="w-full h-full object-cover" fill referrerPolicy="no-referrer" />
+                    {['A','B','C'].map((initial, i) => (
+                      <div key={i} className="w-10 h-10 rounded-full border-2 border-[#531FFF] bg-white/20 backdrop-blur-sm flex items-center justify-center text-white text-[13px] font-bold shadow-sm">
+                         {initial}
                       </div>
                     ))}
                   </div>
@@ -128,7 +129,7 @@ export default function LandingPage() {
                     <div className="flex text-[#FFB800] gap-0.5">
                       {[1,2,3,4,5].map(i => <Star key={i} className="w-4 h-4 fill-current" />)}
                     </div>
-                    <span className="text-[13px] font-semibold text-gray-600">Trusted by 500+ schools in Indonesia</span>
+                    <span className="text-[13px] font-semibold text-white/90">Trusted by 500+ schools in Indonesia</span>
                   </div>
                </motion.div>
             </div>
@@ -141,7 +142,7 @@ export default function LandingPage() {
               className="flex-1 w-full relative h-[450px] lg:h-[650px] hidden lg:block"
             >
                {/* Main Application Window Mockup */}
-               <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[850px] bg-white rounded-2xl shadow-[0_20px_50px_-12px_rgba(83,31,255,0.15)] border border-gray-100 overflow-hidden transform perspective-1000 rotate-y-[-5deg] rotate-x-[2deg]">
+               <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[850px] bg-white rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-white/20 overflow-hidden transform perspective-1000 rotate-y-[-5deg] rotate-x-[2deg]">
                  {/* Mock Content area representing the dashboard */}
                  <div className="flex h-[550px]">
                     {/* Mock Sidebar */}
