@@ -5,9 +5,11 @@ import Image from "next/image";
 import { 
   MapPin, ScanFace, CheckCircle2, XCircle, Clock, 
   Search, Filter, AlertTriangle, Map, Calendar, User,
-  MoreVertical, RefreshCcw, List
+  MoreVertical, RefreshCcw, List, Download
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import dynamic from "next/dynamic";
+const MapComponent = dynamic(() => import("./MapComponent"), { ssr: false });
 
 const MOCK_ATTENDANCE = [
   {
@@ -122,6 +124,38 @@ export default function AttendancePage() {
     return matchesSearch && matchesStatus;
   });
 
+  
+  const handleExportCSV = () => {
+    const headers = ["ID Presensi", "Nama Siswa", "NISN", "Kelas", "Waktu", "Tanggal", "Status", "Lokasi Lintang", "Lokasi Bujur", "Dalam Radius"];
+    const csvContent = [
+      headers.join(","),
+      ...filteredData.map(row => 
+        [
+          row.id, 
+          "\"" + row.studentName + "\"", 
+          row.studentId, 
+          "\"" + row.className + "\"", 
+          row.timestamp, 
+          "\"" + row.date + "\"", 
+          "\"" + row.status + "\"", 
+          row.location.lat, 
+          row.location.lng, 
+          row.location.inRadius ? "Ya" : "Tidak"
+        ].join(",")
+      )
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Laporan_Presensi_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="p-8 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
       {/* Header */}
@@ -132,7 +166,14 @@ export default function AttendancePage() {
             Monitoring kehadiran siswa dengan verifikasi wajah (AI) dan geolokasi radius sekolah.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button 
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium shadow-sm"
+          >
+            <Download className="w-4 h-4" />
+            Ekspor CSV
+          </button>
           <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium shadow-sm">
             <RefreshCcw className="w-4 h-4" />
             Sinkronisasi Data
