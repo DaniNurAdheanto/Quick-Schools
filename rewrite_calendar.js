@@ -1,5 +1,5 @@
-
-"use client";
+const fs = require('fs');
+const content = `"use client";
 
 import React, { useState, useEffect } from "react";
 import { 
@@ -78,7 +78,7 @@ export default function CalendarPage() {
   const progressPercent = Math.max(0, Math.min(100, Math.round((passedDays / totalDays) * 100)));
   
   const currentSemester = today.getMonth() < 6 ? "Semester 2" : "Semester 1";
-  const academicYearText = today.getMonth() < 6 ? `${currentYear - 1} / ${currentYear}` : `${currentYear} / ${currentYear + 1}`;
+  const academicYearText = today.getMonth() < 6 ? \`\${currentYear - 1} / \${currentYear}\` : \`\${currentYear} / \${currentYear + 1}\`;
 
   const upcomingEvents = events
     .filter(e => e.date && new Date(e.date) >= new Date(new Date().setHours(0,0,0,0)))
@@ -116,24 +116,24 @@ export default function CalendarPage() {
         days.push(
           <div
             key={day.toString()}
-            className={`min-h-[120px] p-2 border-b border-r border-gray-100 transition-colors cursor-pointer group hover:bg-gray-50/50 ${
+            className={\`min-h-[120px] p-2 border-b border-r border-gray-100 transition-colors cursor-pointer group hover:bg-gray-50/50 \${
               !isSameMonth(day, monthStart)
                 ? 'bg-gray-50/30'
                 : isSameDay(day, new Date())
                 ? 'bg-blue-50/20'
                 : 'bg-white'
-            }`}
+            }\`}
             onClick={() => setCrudState({ open: true, mode: "create", data: { date: format(cloneDay, 'yyyy-MM-dd') } })}
           >
             <div className="flex justify-between items-start mb-2">
               <span
-                className={`w-7 h-7 flex items-center justify-center rounded-full text-[13px] font-bold ${
+                className={\`w-7 h-7 flex items-center justify-center rounded-full text-[13px] font-bold \${
                   isSameDay(day, new Date())
                     ? 'bg-[#531FFF] text-white shadow-md shadow-[#531FFF]/20'
                     : !isSameMonth(day, monthStart)
                     ? 'text-gray-400'
                     : 'text-gray-700 group-hover:text-gray-900'
-                }`}
+                }\`}
               >
                 {formattedDate}
               </span>
@@ -154,10 +154,10 @@ export default function CalendarPage() {
                       e.stopPropagation();
                       setCrudState({ open: true, mode: "edit", data: event });
                     }}
-                    className={`text-[11px] font-bold px-2 py-1.5 rounded-md truncate transition-all hover:opacity-80 flex items-center gap-1.5 ${details.bgClass} ${details.textClass} ${details.borderClass} border shadow-sm`}
+                    className={\`text-[11px] font-bold px-2 py-1.5 rounded-md truncate transition-all hover:opacity-80 flex items-center gap-1.5 \${details.bgClass} \${details.textClass} \${details.borderClass} border shadow-sm\`}
                     title={event.title}
                   >
-                    <div className={`w-1.5 h-1.5 rounded-full ${details.indicatorClass}`}></div>
+                    <div className={\`w-1.5 h-1.5 rounded-full \${details.indicatorClass}\`}></div>
                     {event.title}
                   </div>
                 );
@@ -286,7 +286,7 @@ export default function CalendarPage() {
                      <div className="text-sm text-gray-500 text-center w-full py-4">Tidak ada agenda mendatang</div>
                    ) : upcomingEvents.map((evt, idx) => (
                     <div key={evt.id || idx} className="flex flex-col items-center gap-3 relative flex-1 max-w-[80px]">
-                      <div className={`w-3 h-3 rounded-full ${idx === 0 ? 'bg-[#531FFF] ring-4 ring-[#531FFF]/20' : 'bg-gray-300 ring-4 ring-white'} z-10`}></div>
+                      <div className={\`w-3 h-3 rounded-full \${idx === 0 ? 'bg-[#531FFF] ring-4 ring-[#531FFF]/20' : 'bg-gray-300 ring-4 ring-white'} z-10\`}></div>
                       <div className="text-center px-1">
                         <p className="text-[10px] font-semibold text-gray-500 mb-1 capitalize">{format(new Date(evt.date), 'MMM yyyy', { locale: idLocale })}</p>
                         <p className="text-[12px] font-bold text-gray-900 leading-tight line-clamp-2" title={evt.title}>{evt.title}</p>
@@ -447,8 +447,8 @@ export default function CalendarPage() {
                  const Icon = details.icon;
                  return (
                  <div key={event.id || idx} className="flex gap-4 group items-center">
-                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${details.bgClass} ${details.borderClass}`}>
-                     <Icon className={`w-5 h-5 ${details.textClass}`} />
+                   <div className={\`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border \${details.bgClass} \${details.borderClass}\`}>
+                     <Icon className={\`w-5 h-5 \${details.textClass}\`} />
                    </div>
                    <div className="flex-1 min-w-0 flex flex-col justify-center">
                      <h3 className="text-[13px] font-bold text-gray-900 leading-tight mb-1 truncate">{event.title}</h3>
@@ -520,3 +520,6 @@ export default function CalendarPage() {
     </div>
   );
 }
+`;
+fs.writeFileSync('app/(protected)/admin/calendar/page-content.tsx', content);
+console.log("Calendar successfully rebuilt.");

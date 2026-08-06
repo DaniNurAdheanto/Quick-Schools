@@ -19,6 +19,7 @@ interface CrudSheetProps {
   fields: CrudField[];
   initialData?: any;
   onSubmit?: (data: any) => void;
+  onDataChange?: (data: any) => void;
 }
 
 export function CrudSheet({
@@ -28,14 +29,17 @@ export function CrudSheet({
   entityName,
   fields,
   initialData,
-  onSubmit
+  onSubmit,
+  onDataChange
 }: CrudSheetProps) {
   const [formData, setFormData] = useState<any>({});
 
   useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setFormData(initialData || {});
+      const data = initialData || {};
+      setFormData(data);
+      if (onDataChange) onDataChange(data);
     }
   }, [open, initialData]);
 
@@ -56,7 +60,11 @@ export function CrudSheet({
   };
 
   const handleChange = (name: string, value: string | File) => {
-    setFormData((prev: any) => ({ ...prev, [name]: value }));
+    setFormData((prev: any) => {
+      const next = { ...prev, [name]: value };
+      if (onDataChange) onDataChange(next);
+      return next;
+    });
   };
 
   const handleSubmit = () => {

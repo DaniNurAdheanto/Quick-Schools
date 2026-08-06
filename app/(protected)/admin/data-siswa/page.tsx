@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -22,6 +23,8 @@ import { db, auth, storage } from "@/lib/firebase";
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
+
 
 export default function DataSiswaPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");

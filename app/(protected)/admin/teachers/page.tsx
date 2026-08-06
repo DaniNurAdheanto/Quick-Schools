@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -8,6 +9,8 @@ import { CrudSheet } from "@/components/layouts/crud-sheet";
 import { db, auth } from "@/lib/firebase";
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+
+
 
 export default function TeachersPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -73,13 +76,7 @@ export default function TeachersPage() {
       placeholder: "Pilih Mata Pelajaran",
       options: subjectsList.map(s => ({ label: s.name, value: s.name }))
     },
-    { 
-      name: "classes", 
-      label: "Kelas yang Diajar",
-      type: "select",
-      placeholder: "Pilih Kelas",
-      options: classesList.map(c => ({ label: c.name, value: c.name }))
-    },
+
     { name: "contact", label: "Kontak" },
     { 
       name: "status", 
@@ -350,10 +347,7 @@ export default function TeachersPage() {
                      </span>
                      
                      <div className="w-full pt-4 border-t border-gray-100 flex flex-col gap-2 text-left">
-                       <div className="flex justify-between items-center text-[12px]">
-                         <span className="text-gray-500">Kelas:</span>
-                         <span className="font-semibold text-gray-900 truncate max-w-[120px]">{item.classes || "-"}</span>
-                       </div>
+
                        <div className="flex justify-between items-center text-[12px]">
                          <span className="text-gray-500">Kontak:</span>
                          <span className="font-semibold text-gray-900">{item.contact || "-"}</span>
@@ -370,7 +364,7 @@ export default function TeachersPage() {
                    <tr className="bg-gray-50/50 border-b border-gray-100">
                      <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Nama Guru</th>
                      <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Mata Pelajaran</th>
-                     <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Kelas yang Diajar</th>
+
                      <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider">Kontak</th>
                      <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
                      <th className="py-3 px-6 text-[12px] font-bold text-gray-500 uppercase tracking-wider text-center">Aksi</th>
@@ -393,9 +387,7 @@ export default function TeachersPage() {
                        <td className="py-4 px-6 text-[13px] font-semibold text-gray-700">
                           {item.role || "-"}
                        </td>
-                       <td className="py-4 px-6 text-[13px] font-semibold text-gray-700">
-                          {item.classes || "-"}
-                       </td>
+
                        <td className="py-4 px-6 text-[13px] font-semibold text-gray-700">
                           {item.contact || "-"}
                        </td>

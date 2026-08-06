@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -18,6 +19,8 @@ const POPULAR_ANNOUNCEMENTS = [
   { title: "Pengumuman Kelulusan Kelas 12", views: "765", date: "20 Mei 2025", color: "text-amber-500", bgColor: "bg-amber-50" },
   { title: "Daftar Ulang Tahun Ajaran Baru", views: "654", date: "15 Jun 2025", color: "text-emerald-500", bgColor: "bg-emerald-50" },
 ];
+
+
 
 export default function AnnouncementsPage() {
   const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete"; data?: any }>({
