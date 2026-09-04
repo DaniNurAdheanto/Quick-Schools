@@ -98,10 +98,9 @@ export default function AnnouncementsPage() {
       } else if (crudState.mode === "delete" && crudState.data?.id) {
         await deleteDoc(doc(db, "announcements", crudState.data.id));
       }
-      setCrudState({ open: false, mode: "create" });
     } catch (error) {
       console.error("Error saving announcement", error);
-      alert("Terjadi kesalahan: " + (error as Error).message);
+      throw error;
     }
   };
 
@@ -270,7 +269,7 @@ export default function AnnouncementsPage() {
                            )}>
                              {item.status}
                            </span>
-                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                           <div className="flex items-center gap-1">
                              <button 
                                onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
                                className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded-md transition-colors" title="Edit">

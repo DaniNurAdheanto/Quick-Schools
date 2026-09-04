@@ -75,10 +75,9 @@ export default function GradesPage() {
       } else if (crudState.mode === "delete" && crudState.data?.id) {
         await deleteDoc(doc(db, "grades", crudState.data.id));
       }
-      setCrudState({ open: false, mode: "create" });
     } catch (error) {
       console.error("Error saving grade", error);
-      alert("Terjadi kesalahan: " + (error as Error).message);
+      throw error;
     }
   };
 
@@ -282,7 +281,7 @@ export default function GradesPage() {
                           </div>
                        </td>
                        <td className="px-6 py-4">
-                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-end gap-1">
                              <button 
                                onClick={() => {
                                  const student = students.find(s => s.id === grade.studentId);

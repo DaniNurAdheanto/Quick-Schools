@@ -82,7 +82,7 @@ export default function SubjectsPage() {
       }
     } catch (error) {
       console.error("Error saving subject data:", error);
-      alert("Gagal menyimpan data.");
+      throw error;
     }
   };
 
@@ -214,7 +214,7 @@ export default function SubjectsPage() {
                         </span>
                      </td>
                      <td className="py-4 px-6">
-                        <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center justify-center gap-2">
                            <button 
                              onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
                              className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded-md transition-colors" title="Edit">

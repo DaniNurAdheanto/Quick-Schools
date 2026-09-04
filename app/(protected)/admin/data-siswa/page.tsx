@@ -1,10 +1,9 @@
-
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { 
-  User,
+  User, 
   Download, 
   MoreHorizontal, 
   TrendingUp, 
@@ -14,7 +13,15 @@ import {
   List,
   Edit2,
   Trash2,
-  Loader2
+  Loader2,
+  X,
+  Filter,
+  RefreshCw,
+  Users,
+  GraduationCap,
+  CheckCircle2,
+  XCircle,
+  Plus
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
@@ -23,13 +30,16 @@ import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from
 import { onAuthStateChanged } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-
-
 export default function DataSiswaPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [students, setStudents] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Filter & Search states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedClass, setSelectedClass] = useState("All");
+  const [selectedStatus, setSelectedStatus] = useState("All");
 
   const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete"; data?: any }>({
     open: false,
@@ -140,19 +150,73 @@ export default function DataSiswaPage() {
       }
     } catch (error) {
       console.error("Error saving student data:", error);
-      alert("Gagal menyimpan data.");
+      throw error;
     }
   };
 
+  // Filtered Students List
+  const filteredStudents = useMemo(() => {
+    return students.filter(student => {
+      const matchSearch = !searchQuery || 
+        (student.name && student.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (student.id && student.id.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (student.classId && student.classId.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      const matchClass = selectedClass === "All" || student.classId === selectedClass;
+      const matchStatus = selectedStatus === "All" || (student.status || "Aktif") === selectedStatus;
+
+      return matchSearch && matchClass && matchStatus;
+    });
+  }, [students, searchQuery, selectedClass, selectedStatus]);
+
+  // Dynamic Statistics
   const dynamicStats = [
-    { label: "Total Siswa", value: students.length.toString(), trend: "+ 0%", isPositive: true },
-    { label: "Siswa Aktif", value: students.filter(s => s.status === "Aktif").length.toString(), trend: "+ 0%", isPositive: true },
-    { label: "Siswa Baru", value: "0", trend: "+ 0%", isPositive: true },
-    { label: "Pertumbuhan Siswa", value: "0", trend: "+ 0%", isPositive: true },
+    { label: "Total Siswa", value: students.length.toString(), icon: Users, color: "text-[#531FFF] bg-[#531FFF]/10" },
+    { label: "Siswa Aktif", value: students.filter(s => (s.status || "Aktif") === "Aktif").length.toString(), icon: CheckCircle2, color: "text-emerald-600 bg-emerald-100" },
+    { label: "Siswa Nonaktif", value: students.filter(s => s.status === "Nonaktif").length.toString(), icon: XCircle, color: "text-rose-600 bg-rose-100" },
+    { label: "Total Kelas", value: classes.length.toString(), icon: GraduationCap, color: "text-amber-600 bg-amber-100" },
   ];
 
+  // Unique classes options for filter
+  const classOptions = useMemo(() => {
+    const list = Array.from(new Set(students.map(s => s.classId).filter(Boolean)));
+    classes.forEach(c => {
+      const name = c.name || c.id;
+      if (name && !list.includes(name)) list.push(name);
+    });
+    return list.sort();
+  }, [students, classes]);
+
+  // CSV Export Handler
+  const handleExportCSV = () => {
+    if (filteredStudents.length === 0) return;
+    const headers = ["NIS/NISN", "Nama Lengkap", "Kelas", "Status"];
+    const rows = filteredStudents.map(s => [
+      `"${s.id || ""}"`,
+      `"${s.name || ""}"`,
+      `"${s.classId || ""}"`,
+      `"${s.status || "Aktif"}"`
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `data_siswa_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const isFiltered = searchQuery !== "" || selectedClass !== "All" || selectedStatus !== "All";
+
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setSelectedClass("All");
+    setSelectedStatus("All");
+  };
+
   return (
-    <div className="p-8 pb-12 max-w-[1600px] mx-auto w-full h-full">
+    <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full h-full space-y-6 animate-in fade-in duration-300">
       <CrudSheet 
         open={crudState.open} 
         onOpenChange={(open) => setCrudState(s => ({ ...s, open }))}
@@ -162,189 +226,360 @@ export default function DataSiswaPage() {
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
       />
-      <div className="bg-white rounded-2xl shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] border border-gray-100 p-8 space-y-8">
-        
-        {/* Page Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-[#531FFF]/10 flex items-center justify-center text-[#531FFF]">
-              <User className="w-5 h-5 fill-current" />
-            </div>
-            <h1 className="text-[22px] font-bold text-gray-900 tracking-tight">Data Siswa</h1>
+
+      {/* Page Header Card */}
+      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-[#531FFF]/10 flex items-center justify-center text-[#531FFF] shrink-0 font-bold">
+            <User className="w-6 h-6 fill-current" />
           </div>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setCrudState({ open: true, mode: "create" })}
-              className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm"
-            >
-              <span className="text-lg leading-none">+</span>
-              Tambah Data Siswa
-            </button>
-            <button className="flex items-center justify-center gap-2 bg-[#531FFF]/5 hover:bg-[#531FFF]/10 text-[#531FFF] px-5 py-2.5 rounded-lg text-sm font-semibold transition-all border border-[#531FFF]/10">
-              <Download className="w-4 h-4" />
-              Download CSV
-            </button>
+          <div>
+            <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Data Siswa</h1>
+            <p className="text-gray-500 text-xs md:text-sm font-medium mt-0.5">
+              Manajemen direktori peserta didik, pencarian NISN, dan pengelompokan kelas.
+            </p>
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {dynamicStats.map((stat, i) => (
-            <div key={i} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.02)] flex flex-col justify-between h-[150px]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#531FFF]/5 flex items-center justify-center text-[#531FFF]">
-                    <User className="w-4 h-4 fill-current opacity-80" />
-                  </div>
-                  <span className="text-[13px] font-semibold text-gray-900">{stat.label}</span>
-                </div>
-                <button className="text-gray-400 hover:text-gray-600">
-                  <MoreHorizontal className="w-5 h-5" />
-                </button>
-              </div>
-              
-              <div className="flex items-end justify-between">
-                <span className="text-[32px] font-bold text-gray-900 tracking-tight leading-none">{stat.value}</span>
-                <div className="flex items-center gap-1.5 text-emerald-500 text-[11px] font-bold pb-1">
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  <span>{stat.trend}</span>
-                  <span className="text-gray-400 font-medium ml-0.5">vs last month</span>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setCrudState({ open: true, mode: "create" })}
+            className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Tambah Siswa</span>
+          </button>
+          
+          <button 
+            onClick={handleExportCSV}
+            disabled={filteredStudents.length === 0}
+            className="flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-bold border border-gray-200 shadow-xs transition-colors disabled:opacity-50"
+          >
+            <Download className="w-4 h-4 text-[#531FFF]" />
+            <span className="hidden sm:inline">Export CSV</span>
+          </button>
         </div>
+      </div>
 
-        {/* Filters Toolbar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2">
-          <div className="flex items-center gap-3 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 hide-scrollbar">
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input 
-                type="text" 
-                placeholder="Search Siswa" 
-                className="pl-9 pr-4 py-2 w-[240px] bg-white border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
-              />
+      {/* Stats Overview */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {dynamicStats.map((stat, i) => {
+          const IconComp = stat.icon;
+          return (
+            <div key={i} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">{stat.label}</p>
+                <h3 className="text-2xl md:text-3xl font-black text-gray-900 mt-1 tracking-tight">{stat.value}</h3>
+              </div>
+              <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center font-bold", stat.color)}>
+                <IconComp className="w-6 h-6" />
+              </div>
             </div>
-            <div className="h-6 w-px bg-gray-200 shrink-0 mx-1" />
-            {["Kelas", "Status Siswa", "Tahun Ajaran", "Jurusan"].map((filter) => (
-              <button key={filter} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 whitespace-nowrap">
-                {filter}
-                <ChevronDown className="w-4 h-4 text-gray-400" />
+          );
+        })}
+      </div>
+
+      {/* Interactive Filter & Toolbar Bar */}
+      <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        {/* Search & Filters Left Group */}
+        <div className="flex flex-wrap items-center gap-3 flex-1">
+          {/* Search Box */}
+          <div className="relative flex-1 min-w-[240px] max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input 
+              type="text" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari berdasarkan nama, NISN, atau kelas..." 
+              className="w-full pl-9 pr-9 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-full"
+              >
+                <X className="w-3.5 h-3.5" />
               </button>
-            ))}
+            )}
           </div>
 
-          <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0">
+          {/* Filter by Kelas Dropdown */}
+          <div className="relative min-w-[150px]">
+            <select
+              value={selectedClass}
+              onChange={(e) => setSelectedClass(e.target.value)}
+              className="w-full pl-4 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] appearance-none cursor-pointer"
+            >
+              <option value="All">Semua Kelas</option>
+              {classOptions.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          </div>
+
+          {/* Filter by Status Dropdown */}
+          <div className="relative min-w-[140px]">
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full pl-4 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] appearance-none cursor-pointer"
+            >
+              <option value="All">Semua Status</option>
+              <option value="Aktif">Aktif</option>
+              <option value="Nonaktif">Nonaktif</option>
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          </div>
+
+          {/* Reset Filters Button */}
+          {isFiltered && (
+            <button
+              onClick={handleResetFilters}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors"
+              title="Reset Filter"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Reset</span>
+            </button>
+          )}
+        </div>
+
+        {/* View Mode Switcher Right */}
+        <div className="flex items-center justify-between md:justify-end gap-3">
+          <span className="text-xs font-bold text-gray-400">
+            {filteredStudents.length} dari {students.length} Siswa
+          </span>
+
+          <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0 border border-gray-200">
             <button 
               onClick={() => setViewMode("grid")}
               className={cn(
-                "p-1.5 rounded-lg transition-colors", 
-                viewMode === "grid" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-900"
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5", 
+                viewMode === "grid" ? "bg-white text-gray-900 shadow-xs" : "text-gray-500 hover:text-gray-900"
               )}
             >
               <LayoutGrid className="w-4 h-4" />
+              <span className="hidden sm:inline">Grid</span>
             </button>
             <button 
               onClick={() => setViewMode("list")}
               className={cn(
-                "p-1.5 rounded-lg transition-colors", 
-                viewMode === "list" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-900"
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5", 
+                viewMode === "list" ? "bg-white text-gray-900 shadow-xs" : "text-gray-500 hover:text-gray-900"
               )}
             >
               <List className="w-4 h-4" />
+              <span className="hidden sm:inline">Tabel</span>
             </button>
           </div>
         </div>
+      </div>
 
-        {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center gap-4 text-gray-500">
-            <Loader2 className="w-8 h-8 animate-spin text-[#531FFF]" />
-            <p className="text-sm font-medium">Memuat data siswa...</p>
-          </div>
-        ) : (
-          <>
-            {/* Grid View */}
-            {viewMode === "grid" && students.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
-                {students.map((student, i) => (
-                  <div key={student._firestoreId || i} className="group relative bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col border border-gray-100">
-                    {/* Active Badge */}
-                    <div className="absolute top-3 left-3 z-20 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      {/* Main Content Area */}
+      {loading ? (
+        <div className="py-24 bg-white rounded-2xl border border-gray-100 flex flex-col items-center justify-center gap-3 text-gray-400 shadow-xs">
+          <Loader2 className="w-8 h-8 animate-spin text-[#531FFF]" />
+          <p className="text-sm font-semibold">Memuat direktori data siswa...</p>
+        </div>
+      ) : (
+        <>
+          {/* GRID VIEW */}
+          {viewMode === "grid" && filteredStudents.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
+              {filteredStudents.map((student, i) => (
+                <div 
+                  key={student._firestoreId || i} 
+                  className="group bg-white rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_30px_-8px_rgba(83,31,255,0.12)] transition-all duration-300 hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between"
+                >
+                  {/* Top Decorative Cover Header */}
+                  <div>
+                    <div className="h-20 bg-gradient-to-r from-[#531FFF]/15 via-[#6E3BFF]/10 to-[#531FFF]/5 relative p-3 flex items-start justify-end">
+                      {/* Status Badge */}
+                      <div className={cn(
+                        "px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 backdrop-blur-md border shadow-xs",
+                        (student.status || "Aktif") === "Aktif" 
+                          ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" 
+                          : "bg-rose-500/10 text-rose-700 border-rose-500/20"
+                      )}>
+                        <span className={cn(
+                          "w-1.5 h-1.5 rounded-full",
+                          (student.status || "Aktif") === "Aktif" ? "bg-emerald-500 animate-pulse" : "bg-rose-500"
+                        )} />
+                        {student.status || "Aktif"}
+                      </div>
+                    </div>
+
+                    {/* Overlapping Avatar */}
+                    <div className="px-4 flex items-end justify-between -mt-8 relative z-10 mb-3">
+                      <div className="w-16 h-16 rounded-2xl ring-4 ring-white shadow-md relative overflow-hidden border border-gray-100 bg-gray-100 shrink-0">
+                        <Image 
+                          src={student.imageUrl || "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=250&auto=format&fit=crop"} 
+                          alt={student.name || "Student"}
+                          fill
+                          className="object-cover transition-transform duration-500 group-hover:scale-110"
+                          unoptimized
+                        />
+                      </div>
+
+                      {/* Class Badge */}
+                      <span className="px-3 py-1 rounded-xl bg-[#531FFF]/10 text-[#531FFF] font-extrabold text-xs border border-[#531FFF]/20">
+                        {student.classId || "Tanpa Kelas"}
+                      </span>
+                    </div>
+
+                    {/* Student Info Body */}
+                    <div className="px-4 pb-2 space-y-0.5">
+                      <h3 className="font-extrabold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors truncate tracking-tight" title={student.name}>
+                        {student.name}
+                      </h3>
+                      <p className="text-[12px] font-semibold text-gray-400">
+                        NISN: <span className="text-gray-600">{student.id || "-"}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Card Action Footer */}
+                  <div className="p-4 pt-3 border-t border-gray-100/80 flex items-center justify-between mt-2">
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                      Profil Siswa
+                    </span>
+
+                    <div className="flex items-center gap-1.5">
                       <button 
                         onClick={() => setCrudState({ open: true, mode: "edit", data: student })}
-                        className="p-1.5 bg-white/90 backdrop-blur-sm rounded-lg text-gray-700 hover:text-[#531FFF] shadow-sm transition-colors"
+                        className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
+                        title="Edit Data Siswa"
                       >
-                        <Edit2 className="w-4 h-4" />
+                        <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button 
                         onClick={() => setCrudState({ open: true, mode: "delete", data: student })}
-                        className="p-1.5 bg-white/90 backdrop-blur-sm rounded-lg text-gray-700 hover:text-red-600 shadow-sm transition-colors"
+                        className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-rose-50 text-gray-500 hover:text-rose-600 transition-all flex items-center justify-center"
+                        title="Hapus Data Siswa"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <div className="absolute top-3 right-3 z-10 bg-[#E8F5E9] px-2.5 py-1 rounded-md text-[10px] font-bold text-emerald-600 shadow-sm uppercase tracking-wide border border-emerald-100/50">
-                      {student.status || "Aktif"}
-                    </div>
-
-                    <div className="aspect-[3/4] relative w-full bg-gray-100 shrink-0">
-                      <Image 
-                        src={student.imageUrl || "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=250&auto=format&fit=crop"} 
-                        alt={student.name || "Student"}
-                        fill
-                        className="object-cover"
-                        unoptimized
-                      />
-                      
-                      {/* Text Content Overlay */}
-                      <div className="absolute inset-x-0 bottom-0 top-1/2 flex flex-col justify-end">
-                        {/* Subtle white fade overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-white/95 via-white/50 to-transparent" />
-                        
-                        {/* Frosted glass blur effect with gradient mask to fade smoothly */}
-                        <div className="absolute inset-0 backdrop-blur-[12px] [mask-image:linear-gradient(to_top,white_50%,transparent_100%)]" />
-                        
-                        {/* Text Content */}
-                        <div className="relative p-4 flex flex-col z-10 text-left">
-                          <h3 className="font-bold text-[14px] leading-tight text-gray-900 truncate mb-1">{student.name}</h3>
-                          <div className="flex flex-col text-[12px] text-gray-700 space-y-0.5 mt-0.5">
-                            <span className="font-medium">{student.id}</span>
-                            <span className="font-bold text-gray-900">{student.classId}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
                   </div>
-                ))}
-              </div>
-            )}
-            
-            {viewMode === "grid" && students.length === 0 && (
-              <div className="py-20 text-center flex flex-col items-center justify-center">
-                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                  <User className="w-8 h-8 text-gray-300" />
                 </div>
-                <h3 className="text-gray-900 font-bold mb-1">Belum ada data siswa</h3>
-                <p className="text-gray-500 text-sm mb-4">Klik tambah data untuk memasukkan data siswa baru.</p>
+              ))}
+            </div>
+          )}
+
+          {/* LIST / TABLE VIEW */}
+          {viewMode === "list" && filteredStudents.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50/80 border-b border-gray-100 text-gray-400 text-[11px] font-extrabold uppercase tracking-wider">
+                      <th className="py-3.5 px-6">Siswa</th>
+                      <th className="py-3.5 px-6">NIS / NISN</th>
+                      <th className="py-3.5 px-6">Kelas</th>
+                      <th className="py-3.5 px-6">Status</th>
+                      <th className="py-3.5 px-6 text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredStudents.map((student, i) => (
+                      <tr key={student._firestoreId || i} className="hover:bg-purple-50/20 transition-colors group">
+                        <td className="py-3.5 px-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full relative overflow-hidden bg-gray-100 border border-gray-200 shrink-0">
+                              <Image
+                                src={student.imageUrl || "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=250&auto=format&fit=crop"}
+                                alt={student.name || "Student"}
+                                fill
+                                className="object-cover"
+                                unoptimized
+                              />
+                            </div>
+                            <span className="font-bold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors">
+                              {student.name}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-6 font-semibold text-sm text-gray-600">
+                          {student.id || "-"}
+                        </td>
+                        <td className="py-3.5 px-6">
+                          <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-[#531FFF]/10 text-[#531FFF]">
+                            {student.classId || "-"}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-6">
+                          <span className={cn(
+                            "px-2.5 py-1 rounded-md text-xs font-bold inline-flex items-center gap-1.5 border",
+                            (student.status || "Aktif") === "Aktif"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-rose-50 text-rose-700 border-rose-200"
+                          )}>
+                            <span className={cn("w-1.5 h-1.5 rounded-full", (student.status || "Aktif") === "Aktif" ? "bg-emerald-500" : "bg-rose-500")} />
+                            {student.status || "Aktif"}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-6 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setCrudState({ open: true, mode: "edit", data: student })}
+                              className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-xl transition-colors"
+                              title="Edit"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setCrudState({ open: true, mode: "delete", data: student })}
+                              className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                              title="Hapus"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* EMPTY STATE */}
+          {filteredStudents.length === 0 && (
+            <div className="py-20 bg-white rounded-2xl border border-gray-100 text-center flex flex-col items-center justify-center p-6 shadow-xs">
+              <div className="w-16 h-16 bg-purple-50 text-[#531FFF] rounded-full flex items-center justify-center mb-4">
+                <User className="w-8 h-8" />
+              </div>
+              <h3 className="text-gray-900 font-extrabold text-base mb-1">
+                {isFiltered ? "Siswa tidak ditemukan" : "Belum ada data siswa"}
+              </h3>
+              <p className="text-gray-500 text-sm max-w-sm mb-5 font-medium">
+                {isFiltered 
+                  ? "Coba ubah kata kunci pencarian atau reset filter untuk menampilkan siswa lainnya."
+                  : "Silakan tambahkan siswa baru ke dalam sistem direktori sekolah."
+                }
+              </p>
+              
+              {isFiltered ? (
+                <button 
+                  onClick={handleResetFilters}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-5 py-2.5 rounded-xl text-sm font-bold transition-all"
+                >
+                  Reset Filter
+                </button>
+              ) : (
                 <button 
                   onClick={() => setCrudState({ open: true, mode: "create" })}
-                  className="bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-all"
+                  className="bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-[#531FFF]/20"
                 >
-                  Tambah Data Siswa
+                  + Tambah Siswa Baru
                 </button>
-              </div>
-            )}
-
-            {/* List View placeholder */}
-            {viewMode === "list" && (
-              <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-gray-500 text-sm">
-                List view implemented in full table.
-              </div>
-            )}
-          </>
-        )}
-      </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

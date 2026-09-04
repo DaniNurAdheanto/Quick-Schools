@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
+import { useToast } from "@/context/ToastContext";
 
 interface CrudField {
   name: string;
@@ -18,7 +19,7 @@ interface CrudSheetProps {
   entityName: string;
   fields: CrudField[];
   initialData?: any;
-  onSubmit?: (data: any) => void;
+  onSubmit?: (data: any) => Promise<void> | void;
   onDataChange?: (data: any) => void;
 }
 
@@ -33,10 +34,11 @@ export function CrudSheet({
   onDataChange
 }: CrudSheetProps) {
   const [formData, setFormData] = useState<any>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     if (open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       const data = initialData || {};
       setFormData(data);
       if (onDataChange) onDataChange(data);
@@ -67,11 +69,28 @@ export function CrudSheet({
     });
   };
 
-  const handleSubmit = () => {
-    if (onSubmit) {
-      onSubmit(isDelete ? initialData : formData);
+  const handleSubmit = async () => {
+    try {
+      setIsSubmitting(true);
+      if (onSubmit) {
+        await onSubmit(isDelete ? initialData : formData);
+      }
+      
+      if (mode === "create") {
+        toast.showSuccess(`Data ${entityName} berhasil ditambahkan.`, "Berhasil Tambah");
+      } else if (mode === "edit") {
+        toast.showEdit(`Data ${entityName} berhasil diperbarui.`, "Berhasil Edit");
+      } else if (mode === "delete") {
+        toast.showError(`Data ${entityName} berhasil dihapus.`, "Berhasil Hapus");
+      }
+
+      onOpenChange(false);
+    } catch (error: any) {
+      console.error("Error submitting form:", error);
+      toast.showError(error?.message || `Gagal menyimpan data ${entityName}.`, "Gagal");
+    } finally {
+      setIsSubmitting(false);
     }
-    onOpenChange(false);
   };
 
   return (
@@ -88,6 +107,7 @@ export function CrudSheet({
           <button 
             onClick={() => onOpenChange(false)} 
             className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors z-10"
+            disabled={isSubmitting}
           >
             <X className="w-5 h-5" />
           </button>
@@ -106,6 +126,7 @@ export function CrudSheet({
                       value={formData[field.name] || ""}
                       onChange={(e) => handleChange(field.name, e.target.value)}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl text-[14px] text-gray-900 focus:outline-none focus:ring-4 focus:ring-[#6E3BFF]/10 focus:border-[#6E3BFF] transition-all font-medium appearance-none bg-white"
+                      disabled={isSubmitting}
                     >
                       <option value="" disabled>{field.placeholder || `Pilih ${field.label.toLowerCase()}`}</option>
                       {field.options?.map((opt) => (
@@ -125,6 +146,7 @@ export function CrudSheet({
                           handleChange(field.name, file);
                         }
                       }}
+                      disabled={isSubmitting}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl text-[14px] text-gray-900 focus:outline-none focus:ring-4 focus:ring-[#6E3BFF]/10 focus:border-[#6E3BFF] transition-all font-medium file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#6E3BFF]/10 file:text-[#6E3BFF] hover:file:bg-[#6E3BFF]/20 cursor-pointer"
                     />
                   ) : (
@@ -134,6 +156,7 @@ export function CrudSheet({
                       placeholder={field.placeholder || `Masukkan ${field.label.toLowerCase()}`}
                       value={formData[field.name] || ""}
                       onChange={(e) => handleChange(field.name, e.target.value)}
+                      disabled={isSubmitting}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-4 focus:ring-[#6E3BFF]/10 focus:border-[#6E3BFF] transition-all font-medium"
                     />
                   )}
@@ -149,18 +172,21 @@ export function CrudSheet({
         <div className="flex items-center justify-between p-6 border-t border-gray-100 bg-white rounded-b-2xl shrink-0">
           <button 
             onClick={() => onOpenChange(false)}
-            className="px-6 py-3 rounded-xl text-[14px] font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-colors"
+            disabled={isSubmitting}
+            className="px-6 py-3 rounded-xl text-[14px] font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             Batal
           </button>
           <button 
             onClick={handleSubmit}
-            className={`px-6 py-3 rounded-xl text-[14px] font-bold text-white transition-colors shadow-sm ${
+            disabled={isSubmitting}
+            className={`px-6 py-3 rounded-xl text-[14px] font-bold text-white transition-colors shadow-sm flex items-center gap-2 ${
               isDelete 
                 ? "bg-red-500 hover:bg-red-600 shadow-red-500/20" 
                 : "bg-[#6E3BFF] hover:bg-[#5C2EE6] shadow-[#6E3BFF]/20"
-            }`}
+            } disabled:opacity-50`}
           >
+            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
             {mode === "create" && "Simpan Data"}
             {mode === "edit" && "Simpan Perubahan"}
             {mode === "delete" && "Ya, Hapus Data"}

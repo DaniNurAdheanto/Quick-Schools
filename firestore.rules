@@ -23,7 +23,15 @@ service cloud.firestore {
     
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn();
+    }
+
+    match /roles/{roleId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /reportCards/{cardId} {
+      allow read, write: if isSignedIn();
     }
     
     function isValidStudent(data) {
@@ -129,6 +137,10 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
     match /schedules/{scheduleId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /examSchedules/{examId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
     }

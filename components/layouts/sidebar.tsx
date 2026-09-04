@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -25,6 +25,31 @@ import {
   PenLine
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { DEFAULT_PERMISSIONS } from "@/app/(protected)/admin/roles/page";
+
+const NAV_MODULE_MAP: Record<string, string> = {
+  "/admin/dashboard": "dashboard",
+  "/admin/calendar": "academic",
+  "/admin/schedule": "academic",
+  "/admin/announcements": "announcements",
+  "/admin/data-siswa": "users",
+  "/admin/classes": "academic",
+  "/admin/teachers": "users",
+  "/admin/homeroom": "users",
+  "/admin/subjects": "academic",
+  "/admin/attendance": "attendance",
+  "/admin/grades": "grades",
+  "/admin/report-cards": "grades",
+  "/admin/exams": "academic",
+  "/admin/academic-years": "academic",
+  "/admin/payments": "finance",
+  "/admin/financial-reports": "finance",
+  "/admin/settings": "settings",
+  "/admin/roles": "settings",
+};
 
 const OVERVIEW_NAV = [
   { href: "/admin/dashboard", label: "Dashboard", badge: 1, icon: LayoutDashboard },
@@ -46,6 +71,7 @@ const AKADEMIK_NAV = [
   { href: "/admin/grades", label: "Penilaian", icon: PenLine },
   { href: "/admin/report-cards", label: "Rapor Digital", icon: Award },
   { href: "/admin/exams", label: "Jadwal Ujian", icon: CalendarRange },
+  { href: "/admin/academic-years", label: "Tahun Ajaran & Kenaikan", icon: CalendarDays },
 ];
 
 const KEUANGAN_NAV = [
@@ -59,7 +85,25 @@ const SYSTEM_NAV = [
   { href: "/", label: "Keluar", icon: LogOut, isDanger: true },
 ];
 
-function NavGroup({ title, items, currentPath, isCollapsed, isFooter = false }: { title: string; items: any[]; currentPath: string; isCollapsed: boolean; isFooter?: boolean }) {
+function NavGroup({ title, items, currentPath, isCollapsed, userPermissions, isFooter = false }: { 
+  title: string; 
+  items: any[]; 
+  currentPath: string; 
+  isCollapsed: boolean; 
+  userPermissions: Record<string, { read: boolean; write: boolean; delete: boolean }>;
+  isFooter?: boolean 
+}) {
+  // Filter items based on permissions
+  const visibleItems = items.filter(item => {
+    if (item.isDanger || item.href === "/") return true;
+    const modId = NAV_MODULE_MAP[item.href];
+    if (!modId) return true;
+    const modPerm = userPermissions[modId];
+    return modPerm ? modPerm.read : true;
+  });
+
+  if (visibleItems.length === 0) return null;
+
   return (
     <div className={cn(isFooter ? "mb-0" : isCollapsed ? "mb-6" : "mb-8", isCollapsed ? "px-2" : "")}>
       {!isCollapsed ? (
@@ -75,7 +119,7 @@ function NavGroup({ title, items, currentPath, isCollapsed, isFooter = false }: 
         )
       )}
       <div className={cn("space-y-1", isCollapsed && "space-y-3")}>
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const isActive = currentPath === item.href || (item.href === '/admin/data-siswa' && currentPath.includes('/admin/data-siswa'));
           
           return (
@@ -88,10 +132,10 @@ function NavGroup({ title, items, currentPath, isCollapsed, isFooter = false }: 
                   ? "justify-center mx-auto w-[46px] h-[46px]" 
                   : "justify-between mx-4 px-3 py-2",
                 isActive
-                  ? "bg-white text-[#531FFF] rounded-xl shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] border border-gray-100"
+                  ? "bg-white text-[#531FFF] rounded-xl shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] border border-gray-100 font-bold"
                   : item.isDanger 
-                     ? "text-red-500 hover:text-red-600 rounded-xl hover:bg-red-50" 
-                     : "text-[#4B5563] hover:bg-gray-100 hover:text-gray-900 rounded-xl"
+                     ? "text-red-500 hover:text-red-600 rounded-xl hover:bg-red-50 font-semibold" 
+                     : "text-[#4B5563] hover:bg-gray-100 hover:text-gray-900 rounded-xl font-semibold"
               )}
               title={isCollapsed ? item.label : undefined}
             >
@@ -100,7 +144,7 @@ function NavGroup({ title, items, currentPath, isCollapsed, isFooter = false }: 
                   isCollapsed ? "w-5 h-5" : "w-4 h-4", 
                   isActive ? "text-[#531FFF]" : item.isDanger ? "text-red-500" : "text-[#4B5563]"
                 )} />
-                {!isCollapsed && <span className="text-[13px] font-semibold">{item.label}</span>}
+                {!isCollapsed && <span className="text-[13px]">{item.label}</span>}
               </div>
               {!isCollapsed && item.badge && (
                 <span className={cn(
@@ -121,6 +165,40 @@ function NavGroup({ title, items, currentPath, isCollapsed, isFooter = false }: 
 export function Sidebar() {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [userRole, setUserRole] = useState<string>("admin");
+  const [rolePermissions, setRolePermissions] = useState<Record<string, { read: boolean; write: boolean; delete: boolean }>>(
+    DEFAULT_PERMISSIONS["admin"]
+  );
+
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userSnap = await getDoc(doc(db, "users", user.uid));
+          const rawRole = userSnap.exists() ? (userSnap.data().role || "admin") : "admin";
+          const role = (rawRole === "student" || rawRole === "siswa") ? "siswa" : rawRole;
+          setUserRole(role);
+
+          // Get permissions for this role
+          try {
+            const roleSnap = await getDoc(doc(db, "roles", role));
+            if (roleSnap.exists() && roleSnap.data().modules) {
+              setRolePermissions(roleSnap.data().modules);
+              return;
+            }
+          } catch (e) {
+            // fallback to DEFAULT_PERMISSIONS
+          }
+
+          setRolePermissions(DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS["siswa"] || DEFAULT_PERMISSIONS["admin"]);
+        } catch (err) {
+          console.error("Sidebar role fetch error:", err);
+        }
+      }
+    });
+
+    return () => unsubAuth();
+  }, []);
 
   return (
     <aside className={cn(
@@ -160,12 +238,12 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* Nav Content */}
+      {/* Nav Content Filtered by Permissions */}
       <div className="flex-1 overflow-y-auto pt-6 pb-2 scrollbar-none">
-        <NavGroup title="OVERVIEW" items={OVERVIEW_NAV} currentPath={pathname} isCollapsed={isCollapsed} />
-        <NavGroup title="MASTER DATA" items={MASTER_DATA_NAV} currentPath={pathname} isCollapsed={isCollapsed} />
-        <NavGroup title="AKADEMIK" items={AKADEMIK_NAV} currentPath={pathname} isCollapsed={isCollapsed} />
-        <NavGroup title="KEUANGAN" items={KEUANGAN_NAV} currentPath={pathname} isCollapsed={isCollapsed} />
+        <NavGroup title="OVERVIEW" items={OVERVIEW_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} />
+        <NavGroup title="MASTER DATA" items={MASTER_DATA_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} />
+        <NavGroup title="AKADEMIK" items={AKADEMIK_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} />
+        <NavGroup title="KEUANGAN" items={KEUANGAN_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} />
       </div>
 
       {/* Footer Fixed */}
@@ -173,7 +251,7 @@ export function Sidebar() {
         "shrink-0 pt-4",
         isCollapsed ? "pb-4" : "pb-6"
       )}>
-        <NavGroup title="SYSTEM & SETTINGS" items={SYSTEM_NAV} currentPath={pathname} isCollapsed={isCollapsed} isFooter={true} />
+        <NavGroup title="SYSTEM & SETTINGS" items={SYSTEM_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} isFooter={true} />
       </div>
 
     </aside>
