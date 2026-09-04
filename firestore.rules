@@ -50,6 +50,19 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isValidGrade(data) {
+      return data.keys().hasAll(['studentId', 'studentName', 'subject', 'type', 'score', 'semester', 'academicYear', 'createdAt', 'updatedAt'])
+        && data.studentId is string && data.studentId.size() > 0 && data.studentId.size() <= 100
+        && data.studentName is string && data.studentName.size() > 0 && data.studentName.size() <= 100
+        && data.subject is string && data.subject.size() > 0 && data.subject.size() <= 100
+        && data.type is string && data.type in ['Tugas', 'Ulangan', 'UTS', 'UAS']
+        && data.score is number && data.score >= 0 && data.score <= 100
+        && data.semester is string && data.semester.size() > 0 && data.semester.size() <= 50
+        && data.academicYear is string && data.academicYear.size() > 0 && data.academicYear.size() <= 50
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
     match /students/{studentId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() 
@@ -61,6 +74,23 @@ service cloud.firestore {
                     && isValidStudent(incoming())
                     && incoming().diff(existing()).affectedKeys().hasOnly(['id', 'name', 'classId', 'status', 'imageUrl']);
       allow delete: if isSignedIn() && isValidId(studentId);
+    }
+    
+    match /grades/{gradeId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && isValidId(gradeId)
+                    && isValidGrade(incoming())
+                    && incoming().keys().size() == 9
+                    && incoming().createdAt == request.time
+                    && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+                    && isValidId(gradeId)
+                    && isValidGrade(incoming())
+                    && incoming().diff(existing()).affectedKeys().hasOnly(['studentId', 'studentName', 'subject', 'type', 'score', 'semester', 'academicYear', 'updatedAt'])
+                    && incoming().createdAt == existing().createdAt
+                    && incoming().updatedAt == request.time;
+      allow delete: if isSignedIn() && isValidId(gradeId);
     }
     
     match /announcements/{announcementId} {

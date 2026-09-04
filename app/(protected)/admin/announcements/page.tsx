@@ -3,9 +3,9 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Megaphone, Plus, Filter, Grid, Search, MoreHorizontal, Calendar, User, Users, 
-  Eye, Zap, AlertCircle, BookOpen, CreditCard, Activity, Info, Clock, CheckCircle2,
-  Send, ListFilter, Sparkles, ChevronDown, PenTool, Trash2
+  Megaphone, Plus, Filter, Grid, Search, Calendar, User, Users, 
+  Eye, AlertCircle, BookOpen, CreditCard, Activity, Info, Clock, CheckCircle2,
+  Send, Sparkles, ChevronDown, PenTool, Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
@@ -234,7 +234,7 @@ export default function AnnouncementsPage() {
                   <Megaphone className="w-12 h-12 mb-3 text-gray-200" />
                   <p className="text-sm font-medium">Belum ada pengumuman.</p>
                 </div>
-              ) : announcements.map((item, i) => (
+              ) : announcements.map((item) => (
                 <div key={item.id} className="flex flex-col sm:flex-row bg-white border border-gray-100 rounded-3xl p-3 shadow-sm hover:shadow-md transition-all gap-4 items-stretch group">
                    {/* Illustration Thumbnail */}
                    <div className={cn(

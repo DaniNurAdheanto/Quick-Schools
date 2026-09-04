@@ -1,6 +1,6 @@
 'use client';
 
-import { Mail, Lock, EyeOff, Eye, BarChart3, ShieldCheck, Zap, Building2, Loader2, User } from "lucide-react";
+import { Mail, Lock, EyeOff, Eye, BarChart3, ShieldCheck, Zap, Loader2, User } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";

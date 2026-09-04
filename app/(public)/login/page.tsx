@@ -2,7 +2,7 @@
 
 import { Mail, Lock, EyeOff, Eye, BarChart3, ShieldCheck, Zap, Building2, Loader2 } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
+
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";

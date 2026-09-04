@@ -3,23 +3,21 @@
 import Image from "next/image";
 import Link from "next/link";
 import { 
-  ArrowRight, Sparkles, CheckCircle2, ChevronRight, Menu, Play, Star,
-  Users, Calendar, GraduationCap, Megaphone, Bot, LineChart, Check,
-  Laptop, Smartphone, BarChart3, ShieldCheck, Zap, Globe2, Heart, Award, ArrowUpRight,
-  User, CheckSquare, Clock, CreditCard, MessageCircle
+  ArrowRight, Sparkles, CheckCircle2, ChevronRight, Menu, Star,
+  Calendar, GraduationCap, Bot, LineChart, Check,
+  ShieldCheck, Zap, Globe2, Heart, Award, User, CheckSquare, Clock, CreditCard, MessageCircle
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { useRouter } from "next/navigation";
 
-const STAGGER_DELAY = 0.1;
+
 
 export default function LandingPage() {
   const [user, setUser] = useState<any>(null);
-  const router = useRouter();
+  
 
   useEffect(() => {
     let inactivityTimer: NodeJS.Timeout;
@@ -463,7 +461,7 @@ export default function LandingPage() {
            {/* Mockup Right */}
            <div className="flex-1 relative w-full lg:min-h-[600px] flex justify-center items-center">
               
-              {/* Laptop base mockup */}
+              {/* base mockup */}
               <motion.div 
                  initial={{ opacity: 0, scale: 0.95 }}
                  whileInView={{ opacity: 1, scale: 1 }}
@@ -471,7 +469,7 @@ export default function LandingPage() {
                  transition={{ duration: 0.8 }}
                  className="relative z-10 w-full max-w-[800px] aspect-[16/10] bg-black rounded-t-[2rem] border-[12px] border-black border-b-0 shadow-2xl flex flex-col overflow-hidden"
               >
-                  {/* Laptop Screen Top Bar */}
+                  {/* Screen Top Bar */}
                   <div className="w-full flex justify-center pb-2 bg-black absolute top-0 inset-x-0 z-20">
                      <div className="w-3 h-3 rounded-full bg-gray-800"></div>
                   </div>

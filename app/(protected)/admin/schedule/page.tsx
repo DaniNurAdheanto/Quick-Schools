@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Plus, Search, ChevronDown, PenTool, Trash2, Loader2, Calendar, Clock, LayoutGrid, List
+  Plus, PenTool, Trash2, Loader2, Calendar, Clock, LayoutGrid, List
 } from "lucide-react";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
 import { db, auth } from "@/lib/firebase";

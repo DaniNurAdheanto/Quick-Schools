@@ -19,8 +19,6 @@ import {
   Trash2
 } from "lucide-react";
 import {
-  LineChart,
-  Line,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -38,26 +36,16 @@ import {
   isSameMonth, 
   isSameDay, 
   addDays, 
-  parseISO,
-  isToday
-} from 'date-fns';
+  } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 
 import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-const sparklineDataBlue = [
-  { value: 10 }, { value: 25 }, { value: 15 }, { value: 30 }, { value: 20 }, { value: 40 }, { value: 35 }
-];
-const sparklineDataRed = [
-  { value: 5 }, { value: 10 }, { value: 8 }, { value: 12 }, { value: 7 }, { value: 15 }, { value: 10 }
-];
-const sparklineDataOrange = [
-  { value: 2 }, { value: 5 }, { value: 3 }, { value: 7 }, { value: 4 }, { value: 8 }, { value: 6 }
-];
-const sparklineDataGreen = [
-  { value: 15 }, { value: 20 }, { value: 18 }, { value: 25 }, { value: 22 }, { value: 30 }, { value: 28 }
-];
+
+
+
+
 
 export default function CalendarPage() {
   const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete"; data?: any }>({

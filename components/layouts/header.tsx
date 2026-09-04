@@ -1,7 +1,7 @@
 "use client";
 
-import { Search, Bell, ChevronDown, Command, CalendarDays, ChevronRight, Home } from "lucide-react";
-import Image from "next/image";
+import { Search, Bell, ChevronDown, Command, ChevronRight, Home } from "lucide-react";
+
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import React, { useEffect, useState } from 'react';
@@ -65,7 +65,7 @@ export function Header() {
     // Skip 'admin' in breadcrumbs to make it cleaner, or keep it depending on preference
     // Let's hide 'admin' and capitalize the rest
     let currentPath = "";
-    pathParts.forEach((part, index) => {
+    pathParts.forEach((part) => {
       currentPath += `/${part}`;
       if (part === "admin" || part === "(protected)") return; // skip showing these internally
       

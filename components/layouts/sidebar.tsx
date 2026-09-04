@@ -12,19 +12,16 @@ import {
   Users,
   GraduationCap,
   Award,
-  ClipboardList,
   FileCheck,
   FileText,
   CalendarRange,
   CreditCard,
   Settings,
-  Shield,
   LogOut,
   ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
   UserCog,
-  PenTool,
   PenLine
 } from "lucide-react";
 import { cn } from "@/lib/utils";

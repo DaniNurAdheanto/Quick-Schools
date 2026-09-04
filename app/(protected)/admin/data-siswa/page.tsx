@@ -4,7 +4,6 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { 
-  UserPlus, 
   User,
   Download, 
   MoreHorizontal, 

@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Users, Plus, Search, Filter, MoreHorizontal, GraduationCap, ChevronDown, PenTool, Trash2, ArrowUp, Briefcase, Loader2, LayoutGrid, List
+  Users, Plus, Search, Filter, ChevronDown, PenTool, Trash2, ArrowUp, Briefcase, Loader2, LayoutGrid, List
 } from "lucide-react";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
 import { db, auth } from "@/lib/firebase";
@@ -15,7 +15,6 @@ import { onAuthStateChanged } from "firebase/auth";
 export default function TeachersPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [teachers, setTeachers] = useState<any[]>([]);
-  const [classesList, setClassesList] = useState<any[]>([]);
   const [subjectsList, setSubjectsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -41,8 +40,7 @@ export default function TeachersPage() {
         });
 
         const qClasses = query(collection(db, "classes"));
-        const unsubClasses = onSnapshot(qClasses, (snapshot) => {
-          setClassesList(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
+        const unsubClasses = onSnapshot(qClasses, () => {
         });
 
         const qSubjects = query(collection(db, "subjects"));
@@ -57,7 +55,6 @@ export default function TeachersPage() {
         };
       } else {
         setTeachers([]);
-        setClassesList([]);
         setSubjectsList([]);
         setLoading(false);
       }

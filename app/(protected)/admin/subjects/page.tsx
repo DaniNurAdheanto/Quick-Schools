@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  BookOpen, Plus, Search, Filter, PenTool, Trash2, ArrowUp, Loader2
+  BookOpen, Plus, Search, PenTool, Trash2, Loader2
 } from "lucide-react";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
 import { db, auth } from "@/lib/firebase";

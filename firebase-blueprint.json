@@ -1,5 +1,22 @@
 {
   "entities": {
+    "Grade": {
+      "title": "Grade",
+      "description": "Student grades for subjects",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "maxLength": 100 },
+        "studentName": { "type": "string", "maxLength": 100 },
+        "subject": { "type": "string", "maxLength": 100 },
+        "type": { "type": "string", "enum": ["Tugas", "Ulangan", "UTS", "UAS"] },
+        "score": { "type": "number" },
+        "semester": { "type": "string", "maxLength": 50 },
+        "academicYear": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["studentId", "studentName", "subject", "type", "score", "semester", "academicYear", "createdAt", "updatedAt"]
+    },
     "Student": {
       "title": "Student",
       "description": "A student in the school",
@@ -34,6 +51,10 @@
     }
   },
   "firestore": {
+    "grades/{gradeId}": {
+      "schema": { "$ref": "#/entities/Grade" },
+      "description": "Collection of student grades"
+    },
     "students/{studentId}": {
       "schema": { "$ref": "#/entities/Student" },
       "description": "Collection of students"

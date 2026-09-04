@@ -4,12 +4,12 @@ import React, { useState } from "react";
 import Image from "next/image";
 import { 
   MapPin, ScanFace, CheckCircle2, XCircle, Clock, 
-  Search, Filter, AlertTriangle, Map, Calendar, User,
-  MoreVertical, RefreshCcw, List, Download
+  Search, AlertTriangle, Map, Calendar, User,
+  RefreshCcw, List, Download
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import dynamic from "next/dynamic";
-const MapComponent = dynamic(() => import("./MapComponent"), { ssr: false });
+
+
 
 const MOCK_ATTENDANCE = [
   {
@@ -113,14 +113,14 @@ const MOCK_ATTENDANCE = [
 
 export default function AttendancePage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("Semua");
+  const [status, setStatus] = useState("Semua");
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [selectedItem, setSelectedItem] = useState<typeof MOCK_ATTENDANCE[0] | null>(null);
 
   const filteredData = MOCK_ATTENDANCE.filter(item => {
     const matchesSearch = item.studentName.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           item.studentId.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "Semua" || item.status === statusFilter || (statusFilter === "Ditolak" && item.status.includes("Ditolak"));
+    const matchesStatus = status=== "Semua" || item.status === status|| (status=== "Ditolak" && item.status.includes("Ditolak"));
     return matchesSearch && matchesStatus;
   });
 
@@ -227,7 +227,7 @@ export default function AttendancePage() {
 
       {/* Main Content Area */}
       <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col">
-        {/* Filters */}
+        {/* s */}
         <div className="p-5 border-b border-gray-100 flex flex-col md:flex-row gap-4 justify-between items-center bg-gray-50/50">
           <div className="flex items-center gap-4 w-full md:w-auto">
             <div className="flex items-center bg-gray-100 p-1 rounded-xl">
@@ -268,10 +268,10 @@ export default function AttendancePage() {
             {["Semua", "Hadir", "Terlambat", "Ditolak"].map((status) => (
               <button
                 key={status}
-                onClick={() => setStatusFilter(status)}
+                onClick={() => setStatus(status)}
                 className={cn(
                   "px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap",
-                  statusFilter === status 
+                  status=== status 
                     ? "bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/20" 
                     : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
                 )}

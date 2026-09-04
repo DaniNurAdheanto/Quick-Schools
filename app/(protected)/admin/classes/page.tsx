@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Users, Plus, Search, Filter, MoreHorizontal, GraduationCap, ChevronDown, PenTool, Trash2, ArrowUp, Loader2
+  Users, Plus, Search, Filter, GraduationCap, ChevronDown, PenTool, Trash2, ArrowUp, Loader2
 } from "lucide-react";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
 import { db, auth } from "@/lib/firebase";
