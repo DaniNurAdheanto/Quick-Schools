@@ -400,21 +400,17 @@ export default function HomeroomPage() {
                         <h3 className="font-extrabold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors truncate tracking-tight" title={item.homeroom || "Belum Ditetapkan"}>
                           {item.homeroom || "Belum Ditetapkan"}
                         </h3>
-                        <p className="text-[12px] font-semibold text-gray-400">
-                          Wali Kelas <span className="text-gray-600 font-bold">{item.name}</span>
+                        <p className="text-[12px] font-semibold text-gray-500 truncate">
+                          {item.name}
                         </p>
                       </div>
                     </div>
 
                     {/* Card Action Footer */}
-                    <div className="p-4 pt-3 border-t border-gray-100/80 flex items-center justify-between mt-2">
-                      <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                        Penugasan
-                      </span>
-
+                    <div className="p-4 pt-3 border-t border-gray-100/80 flex items-center justify-end mt-2">
                       <button 
                         onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#531FFF]/10 hover:bg-[#531FFF]/20 text-[#531FFF] text-xs font-extrabold transition-all"
+                        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-[#531FFF]/10 hover:bg-[#531FFF]/20 text-[#531FFF] text-xs font-extrabold transition-all"
                       >
                         <PenTool className="w-3.5 h-3.5" />
                         <span>Set Wali Kelas</span>

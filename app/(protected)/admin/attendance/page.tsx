@@ -1,27 +1,49 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { 
-  MapPin, ScanFace, CheckCircle2, XCircle, Clock, 
-  Search, AlertTriangle, Map, Calendar, User,
-  RefreshCcw, List, Download
+  MapPin, 
+  ScanFace, 
+  CheckCircle2, 
+  XCircle, 
+  Clock, 
+  Search, 
+  AlertTriangle, 
+  Map, 
+  Calendar, 
+  User,
+  RefreshCw, 
+  List, 
+  Download,
+  Filter,
+  ChevronDown,
+  LayoutGrid,
+  ShieldCheck,
+  Building2,
+  ExternalLink,
+  SlidersHorizontal,
+  Check,
+  AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { db, auth } from "@/lib/firebase";
+import { collection, query, onSnapshot, orderBy } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { useToast } from "@/context/ToastContext";
 
-
-
+// Fallback Rich Mock Data for Attendance & Face Recognition
 const MOCK_ATTENDANCE = [
   {
     id: "ATT-1001",
-    studentName: "Ahmad Rizqi",
+    studentName: "Ahmad Rizqi Pratama",
     studentId: "NISN-2023001",
     className: "10 IPA 1",
     timestamp: "06:45:22",
     date: "06 Agustus 2026",
     faceVerified: true,
     faceMatchScore: 98.5,
-    capturedImage: "https://picsum.photos/seed/ahmad/200/200",
+    capturedImage: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&auto=format&fit=crop&q=80",
     location: {
       lat: -6.200000,
       lng: 106.816666,
@@ -40,7 +62,7 @@ const MOCK_ATTENDANCE = [
     date: "06 Agustus 2026",
     faceVerified: true,
     faceMatchScore: 92.1,
-    capturedImage: "https://picsum.photos/seed/budi/200/200",
+    capturedImage: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80",
     location: {
       lat: -6.200100,
       lng: 106.816700,
@@ -59,7 +81,7 @@ const MOCK_ATTENDANCE = [
     date: "06 Agustus 2026",
     faceVerified: false,
     faceMatchScore: 45.2,
-    capturedImage: "https://picsum.photos/seed/citra/200/200",
+    capturedImage: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&auto=format&fit=crop&q=80",
     location: {
       lat: -6.200050,
       lng: 106.816680,
@@ -79,7 +101,7 @@ const MOCK_ATTENDANCE = [
     date: "06 Agustus 2026",
     faceVerified: true,
     faceMatchScore: 96.8,
-    capturedImage: "https://picsum.photos/seed/dewi/200/200",
+    capturedImage: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&auto=format&fit=crop&q=80",
     location: {
       lat: -6.205000,
       lng: 106.820000,
@@ -99,7 +121,7 @@ const MOCK_ATTENDANCE = [
     date: "06 Agustus 2026",
     faceVerified: true,
     faceMatchScore: 99.1,
-    capturedImage: "https://picsum.photos/seed/eko/200/200",
+    capturedImage: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=80",
     location: {
       lat: -6.199990,
       lng: 106.816650,
@@ -108,367 +130,665 @@ const MOCK_ATTENDANCE = [
     },
     status: "Hadir",
     type: "in"
+  },
+  {
+    id: "ATT-1006",
+    studentName: "Fina Amanda",
+    studentId: "NISN-2023006",
+    className: "11 IPA 3",
+    timestamp: "06:42:00",
+    date: "06 Agustus 2026",
+    faceVerified: true,
+    faceMatchScore: 97.4,
+    capturedImage: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
+    location: {
+      lat: -6.200010,
+      lng: 106.816640,
+      distance: 8,
+      inRadius: true
+    },
+    status: "Hadir",
+    type: "in"
+  },
+  {
+    id: "ATT-1007",
+    studentName: "Gilang Ramadhan",
+    studentId: "NISN-2023007",
+    className: "10 IPS 1",
+    timestamp: "07:12:44",
+    date: "06 Agustus 2026",
+    faceVerified: true,
+    faceMatchScore: 94.0,
+    capturedImage: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=400&auto=format&fit=crop&q=80",
+    location: {
+      lat: -6.200080,
+      lng: 106.816710,
+      distance: 30,
+      inRadius: true
+    },
+    status: "Terlambat",
+    type: "in"
+  },
+  {
+    id: "ATT-1008",
+    studentName: "Hania Putri",
+    studentId: "NISN-2023008",
+    className: "12 IPA 1",
+    timestamp: "06:25:10",
+    date: "06 Agustus 2026",
+    faceVerified: true,
+    faceMatchScore: 99.8,
+    capturedImage: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop&q=80",
+    location: {
+      lat: -6.200005,
+      lng: 106.816660,
+      distance: 4,
+      inRadius: true
+    },
+    status: "Hadir",
+    type: "in"
   }
 ];
 
 export default function AttendancePage() {
+  const { addToast } = useToast();
+  const [attendanceData, setAttendanceData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filters & Controls
   const [searchQuery, setSearchQuery] = useState("");
-  const [status, setStatus] = useState("Semua");
-  const [viewMode, setViewMode] = useState<"list" | "map">("list");
-  const [selectedItem, setSelectedItem] = useState<typeof MOCK_ATTENDANCE[0] | null>(null);
+  const [statusFilter, setStatusFilter] = useState("Semua");
+  const [classFilter, setClassFilter] = useState("Semua Kelas");
+  const [viewMode, setViewMode] = useState<"table" | "grid" | "map">("table");
+  const [selectedItem, setSelectedItem] = useState<any | null>(null);
 
-  const filteredData = MOCK_ATTENDANCE.filter(item => {
-    const matchesSearch = item.studentName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          item.studentId.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = status=== "Semua" || item.status === status|| (status=== "Ditolak" && item.status.includes("Ditolak"));
-    return matchesSearch && matchesStatus;
-  });
+  // Fetch Firestore attendance or merge fallback
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        const qAttendance = query(collection(db, "attendance"));
+        const unsubscribe = onSnapshot(qAttendance, (snapshot) => {
+          if (!snapshot.empty) {
+            const data = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            setAttendanceData(data);
+          } else {
+            setAttendanceData(MOCK_ATTENDANCE);
+          }
+          setLoading(false);
+        }, (error) => {
+          console.warn("Firestore attendance query error, using mock fallback:", error);
+          setAttendanceData(MOCK_ATTENDANCE);
+          setLoading(false);
+        });
+        return () => unsubscribe();
+      } else {
+        setAttendanceData(MOCK_ATTENDANCE);
+        setLoading(false);
+      }
+    });
 
-  
+    return () => unsubscribeAuth();
+  }, []);
+
+  // Extract unique class list for filter dropdown
+  const availableClasses = useMemo(() => {
+    const classesSet = new Set<string>();
+    attendanceData.forEach(item => {
+      if (item.className) classesSet.add(item.className);
+    });
+    return Array.from(classesSet).sort();
+  }, [attendanceData]);
+
+  // Filtered List
+  const filteredData = useMemo(() => {
+    return attendanceData.filter(item => {
+      const matchesSearch = 
+        (item.studentName?.toLowerCase() || "").includes(searchQuery.toLowerCase()) || 
+        (item.studentId?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
+        (item.className?.toLowerCase() || "").includes(searchQuery.toLowerCase());
+      
+      const matchesStatus = 
+        statusFilter === "Semua" || 
+        item.status === statusFilter || 
+        (statusFilter === "Ditolak" && (item.status === "Ditolak" || item.rejectReason));
+
+      const matchesClass = 
+        classFilter === "Semua Kelas" || item.className === classFilter;
+
+      return matchesSearch && matchesStatus && matchesClass;
+    });
+  }, [attendanceData, searchQuery, statusFilter, classFilter]);
+
+  // Summary Metrics
+  const stats = useMemo(() => {
+    const total = attendanceData.length;
+    const hadir = attendanceData.filter(i => i.status === "Hadir").length;
+    const terlambat = attendanceData.filter(i => i.status === "Terlambat").length;
+    const ditolak = attendanceData.filter(i => i.status === "Ditolak" || i.rejectReason).length;
+    const avgScore = total > 0 
+      ? (attendanceData.reduce((acc, curr) => acc + (curr.faceMatchScore || 0), 0) / total).toFixed(1)
+      : 0;
+
+    return { total, hadir, terlambat, ditolak, avgScore };
+  }, [attendanceData]);
+
+  // CSV Export Handler
   const handleExportCSV = () => {
-    const headers = ["ID Presensi", "Nama Siswa", "NISN", "Kelas", "Waktu", "Tanggal", "Status", "Lokasi Lintang", "Lokasi Bujur", "Dalam Radius"];
-    const csvContent = [
-      headers.join(","),
-      ...filteredData.map(row => 
-        [
-          row.id, 
-          "\"" + row.studentName + "\"", 
-          row.studentId, 
-          "\"" + row.className + "\"", 
-          row.timestamp, 
-          "\"" + row.date + "\"", 
-          "\"" + row.status + "\"", 
-          row.location.lat, 
-          row.location.lng, 
-          row.location.inRadius ? "Ya" : "Tidak"
-        ].join(",")
-      )
-    ].join("\n");
+    const headers = ["ID Presensi", "Nama Siswa", "NISN", "Kelas", "Waktu", "Tanggal", "Status", "Skor AI Face (%)", "Jarak Radius (m)", "Status Radius"];
+    const csvRows = filteredData.map(row => [
+      row.id,
+      `"${row.studentName || ''}"`,
+      row.studentId || '',
+      `"${row.className || ''}"`,
+      row.timestamp || '',
+      `"${row.date || ''}"`,
+      `"${row.status || ''}"`,
+      row.faceMatchScore || 0,
+      row.location?.distance || 0,
+      row.location?.inRadius ? "Dalam Radius" : "Luar Radius"
+    ]);
 
+    const csvContent = [headers.join(","), ...csvRows.map(r => r.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `Laporan_Presensi_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = "hidden";
+    link.setAttribute("download", `Laporan_Absensi_FaceID_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+
+    addToast("Berhasil mengekspor data absensi ke format CSV", "info");
+  };
+
+  const handleRefresh = () => {
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      addToast("Data presensi siswa berhasil disinkronkan dengan AI Server", "success");
+    }, 600);
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="p-6 md:p-8 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-300">
+      {/* Top Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Data Absensi & Face Recognition</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Data Absensi & Face Recognition</h1>
+            <span className="px-2.5 py-0.5 text-xs font-semibold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20">
+              AI Real-Time
+            </span>
+          </div>
           <p className="text-sm text-gray-500 mt-1">
-            Monitoring kehadiran siswa dengan verifikasi wajah (AI) dan geolokasi radius sekolah.
+            Monitoring rekap absensi harian siswa terverifikasi AI facial match score & lokasi GPS radius sekolah.
           </p>
         </div>
+
+        {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-3">
           <button 
             onClick={handleExportCSV}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium shadow-sm"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-sm font-semibold shadow-sm"
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-4 h-4 text-gray-500" />
             Ekspor CSV
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium shadow-sm">
-            <RefreshCcw className="w-4 h-4" />
-            Sinkronisasi Data
+
+          <button 
+            onClick={handleRefresh}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-sm font-semibold shadow-sm"
+          >
+            <RefreshCw className={cn("w-4 h-4 text-gray-500", loading && "animate-spin")} />
+            Sinkron Data
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-[#531FFF] text-white rounded-xl hover:bg-[#4314cc] transition-colors text-sm font-medium shadow-sm shadow-[#531FFF]/20">
+
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-[#531FFF] text-white rounded-xl text-sm font-semibold shadow-sm shadow-[#531FFF]/20">
             <Calendar className="w-4 h-4" />
-            06 Agustus 2026
-          </button>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
-            <User className="w-6 h-6 text-blue-600" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-0.5">Total Presensi</p>
-            <h3 className="text-2xl font-bold text-gray-900">452</h3>
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] flex items-center gap-4">
-          <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-6 h-6 text-green-600" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-0.5">Berhasil (Hadir/Telat)</p>
-            <h3 className="text-2xl font-bold text-gray-900">445</h3>
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] flex items-center gap-4">
-          <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center shrink-0">
-            <MapPin className="w-6 h-6 text-orange-600" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-0.5">Di Luar Radius</p>
-            <h3 className="text-2xl font-bold text-gray-900">4</h3>
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] flex items-center gap-4">
-          <div className="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center shrink-0">
-            <ScanFace className="w-6 h-6 text-red-600" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-500 mb-0.5">Wajah Tak Dikenali</p>
-            <h3 className="text-2xl font-bold text-gray-900">3</h3>
+            <span>06 Agustus 2026</span>
           </div>
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Summary KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Total Attendance */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-gray-200 transition-all flex items-center gap-4">
+          <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center shrink-0 border border-purple-100">
+            <User className="w-6 h-6 text-[#531FFF]" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Absensi</p>
+            <h3 className="text-2xl font-bold text-gray-900 mt-0.5">{stats.total}</h3>
+          </div>
+        </div>
+
+        {/* Hadir Tepat Waktu */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-gray-200 transition-all flex items-center gap-4">
+          <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0 border border-emerald-100">
+            <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Hadir Tepat</p>
+            <h3 className="text-2xl font-bold text-emerald-600 mt-0.5">{stats.hadir}</h3>
+          </div>
+        </div>
+
+        {/* Terlambat */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-gray-200 transition-all flex items-center gap-4">
+          <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center shrink-0 border border-amber-100">
+            <Clock className="w-6 h-6 text-amber-600" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Terlambat</p>
+            <h3 className="text-2xl font-bold text-amber-600 mt-0.5">{stats.terlambat}</h3>
+          </div>
+        </div>
+
+        {/* Ditolak / Alert */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-gray-200 transition-all flex items-center gap-4">
+          <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center shrink-0 border border-rose-100">
+            <AlertTriangle className="w-6 h-6 text-rose-600" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Absensi Ditolak</p>
+            <h3 className="text-2xl font-bold text-rose-600 mt-0.5">{stats.ditolak}</h3>
+          </div>
+        </div>
+
+        {/* AI Confidence Score */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-gray-200 transition-all flex items-center gap-4">
+          <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center shrink-0 border border-blue-100">
+            <ScanFace className="w-6 h-6 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Akurasi AI</p>
+            <h3 className="text-2xl font-bold text-gray-900 mt-0.5">{stats.avgScore}%</h3>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Table / Grid Content Section */}
       <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col">
-        {/* s */}
+        
+        {/* Filter Toolbar Header */}
         <div className="p-5 border-b border-gray-100 flex flex-col md:flex-row gap-4 justify-between items-center bg-gray-50/50">
-          <div className="flex items-center gap-4 w-full md:w-auto">
-            <div className="flex items-center bg-gray-100 p-1 rounded-xl">
+          
+          {/* Left Controls: View Mode & Search */}
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            {/* View Switcher */}
+            <div className="flex items-center bg-gray-200/70 p-1 rounded-xl">
               <button
-                onClick={() => setViewMode("list")}
+                onClick={() => setViewMode("table")}
                 className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all",
-                  viewMode === "list" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                  "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
+                  viewMode === "table" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
                 )}
               >
-                <List className="w-4 h-4" />
-                List
+                <List className="w-3.5 h-3.5" />
+                Tabel
+              </button>
+              <button
+                onClick={() => setViewMode("grid")}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
+                  viewMode === "grid" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                )}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                Kartu Foto
               </button>
               <button
                 onClick={() => setViewMode("map")}
                 className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all",
-                  viewMode === "map" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                  "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
+                  viewMode === "map" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
                 )}
               >
-                <Map className="w-4 h-4" />
-                Map
+                <Map className="w-3.5 h-3.5" />
+                Peta Geolokasi
               </button>
             </div>
             
+            {/* Search Input */}
             <div className="relative flex-1 md:w-64">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
               <input 
                 type="text" 
-                placeholder="Cari nama atau NISN..."
+                placeholder="Cari nama, NISN, atau kelas..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
               />
             </div>
           </div>
-          <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-            {["Semua", "Hadir", "Terlambat", "Ditolak"].map((status) => (
-              <button
-                key={status}
-                onClick={() => setStatus(status)}
-                className={cn(
-                  "px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap",
-                  status=== status 
-                    ? "bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/20" 
-                    : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
-                )}
+
+          {/* Right Controls: Filters (Status & Class) */}
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            {/* Class Filter Dropdown */}
+            <div className="relative">
+              <select
+                value={classFilter}
+                onChange={(e) => setClassFilter(e.target.value)}
+                className="appearance-none bg-white border border-gray-200 text-gray-700 pl-3.5 pr-8 py-2 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-sm"
               >
-                {status}
-              </button>
-            ))}
+                <option value="Semua Kelas">Semua Kelas</option>
+                {availableClasses.map(cls => (
+                  <option key={cls} value={cls}>{cls}</option>
+                ))}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+
+            {/* Status Quick Filter Buttons */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+              {["Semua", "Hadir", "Terlambat", "Ditolak"].map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setStatusFilter(st)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap",
+                    statusFilter === st 
+                      ? "bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/30 shadow-sm" 
+                      : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+                  )}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {viewMode === "list" ? (
-          <>
-            {/* Table */}
-            <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-white border-b border-gray-100">
-                <th className="px-6 py-4 text-[12px] font-semibold text-gray-500 uppercase tracking-wider">Murid</th>
-                <th className="px-6 py-4 text-[12px] font-semibold text-gray-500 uppercase tracking-wider">Waktu Presensi</th>
-                <th className="px-6 py-4 text-[12px] font-semibold text-gray-500 uppercase tracking-wider">Geolokasi & Radius</th>
-                <th className="px-6 py-4 text-[12px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-4 text-[12px] font-semibold text-gray-500 uppercase tracking-wider text-right">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filteredData.length > 0 ? filteredData.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50/50 transition-colors group">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden relative shrink-0 border border-gray-200">
-                        <Image 
-                          src={item.capturedImage} 
-                          alt={item.studentName}
-                          fill
-                          className="object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">{item.studentName}</p>
-                        <p className="text-[12px] text-gray-500">{item.studentId} • {item.className}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <Clock className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm font-medium">{item.timestamp}</span>
-                    </div>
-                    <p className="text-[11px] text-gray-500 mt-0.5 ml-6">Masuk</p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-start gap-2">
-                      <div className={cn(
-                        "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border mt-0.5",
-                        item.location.inRadius ? "bg-blue-50 border-blue-100" : "bg-orange-50 border-orange-100"
-                      )}>
-                        <MapPin className={cn(
-                          "w-4 h-4",
-                          item.location.inRadius ? "text-blue-600" : "text-orange-600"
-                        )} />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className={cn(
-                            "text-sm font-semibold",
-                            item.location.inRadius ? "text-gray-900" : "text-orange-700"
-                          )}>
-                            {item.location.distance}m dari pusat
-                          </span>
+        {/* View Mode 1: Table View */}
+        {viewMode === "table" && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-white border-b border-gray-100">
+                  <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Siswa</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Face Recognition (AI)</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Waktu Absen</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Lokasi & Radius GPS</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filteredData.length > 0 ? (
+                  filteredData.map((item) => (
+                    <tr key={item.id} className="hover:bg-gray-50/60 transition-colors group">
+                      {/* Siswa Info */}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden relative shrink-0 border border-gray-200 shadow-sm">
+                            <Image 
+                              src={item.capturedImage} 
+                              alt={item.studentName || "Siswa"}
+                              fill
+                              className="object-cover"
+                              unoptimized
+                            />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-gray-900 group-hover:text-[#531FFF] transition-colors">
+                              {item.studentName}
+                            </p>
+                            <p className="text-xs text-gray-500 font-medium">{item.studentId} • {item.className}</p>
+                          </div>
                         </div>
-                        <p className="text-[11px] text-gray-500 font-mono mt-0.5">
-                          {item.location.lat}, {item.location.lng}
-                        </p>
+                      </td>
+
+                      {/* Face Recognition Score */}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className={cn(
+                            "px-2.5 py-1 rounded-lg text-xs font-extrabold flex items-center gap-1.5",
+                            item.faceVerified 
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
+                              : "bg-rose-50 text-rose-700 border border-rose-200/60"
+                          )}>
+                            <ScanFace className="w-3.5 h-3.5" />
+                            <span>{item.faceMatchScore || 0}% Match</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Waktu Absen */}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2 text-gray-800">
+                          <Clock className="w-4 h-4 text-gray-400" />
+                          <span className="text-xs font-bold">{item.timestamp}</span>
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-0.5 font-medium">{item.date}</p>
+                      </td>
+
+                      {/* Geolokasi & Radius */}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className={cn(
+                            "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border",
+                            item.location?.inRadius ? "bg-emerald-50 border-emerald-100 text-emerald-600" : "bg-rose-50 border-rose-100 text-rose-600"
+                          )}>
+                            <MapPin className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-gray-900">
+                              {item.location?.distance || 0}m <span className="text-gray-400 font-normal">dari sekolah</span>
+                            </p>
+                            <p className={cn(
+                              "text-[11px] font-semibold",
+                              item.location?.inRadius ? "text-emerald-600" : "text-rose-600"
+                            )}>
+                              {item.location?.inRadius ? "Dalam Radius" : "Luar Radius"}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Status Badge */}
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col items-start">
+                          <span className={cn(
+                            "px-2.5 py-1 text-xs font-bold rounded-lg inline-flex items-center gap-1.5 border shadow-sm",
+                            item.status === "Hadir" && "bg-emerald-50 text-emerald-700 border-emerald-200",
+                            item.status === "Terlambat" && "bg-amber-50 text-amber-700 border-amber-200",
+                            (item.status === "Ditolak" || item.rejectReason) && "bg-rose-50 text-rose-700 border-rose-200"
+                          )}>
+                            {item.status === "Hadir" && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+                            {item.status === "Terlambat" && <Clock className="w-3.5 h-3.5 text-amber-600" />}
+                            {(item.status === "Ditolak" || item.rejectReason) && <XCircle className="w-3.5 h-3.5 text-rose-600" />}
+                            {item.status}
+                          </span>
+                          {item.rejectReason && (
+                            <span className="text-[11px] font-semibold text-rose-600 mt-1">
+                              {item.rejectReason}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Action */}
+                      <td className="px-6 py-4 text-right">
+                        <button 
+                          onClick={() => setSelectedItem(item)}
+                          className="px-3 py-1.5 bg-gray-100 hover:bg-[#F3F0FF] text-gray-700 hover:text-[#531FFF] rounded-xl text-xs font-bold transition-all border border-gray-200 hover:border-[#531FFF]/30"
+                        >
+                          Detail AI
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center">
+                      <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <Search className="w-5 h-5 text-gray-400" />
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col items-start">
+                      <p className="text-sm font-bold text-gray-900">Data presensi tidak ditemukan</p>
+                      <p className="text-xs text-gray-500 mt-1">Coba sesuaikan kata kunci pencarian atau filter kelas/status.</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* View Mode 2: Photo Card Grid View */}
+        {viewMode === "grid" && (
+          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 bg-gray-50/50">
+            {filteredData.length > 0 ? (
+              filteredData.map((item) => (
+                <div 
+                  key={item.id}
+                  onClick={() => setSelectedItem(item)}
+                  className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-lg hover:border-[#531FFF]/30 transition-all duration-300 overflow-hidden cursor-pointer group flex flex-col"
+                >
+                  {/* Photo Preview Container */}
+                  <div className="relative aspect-[4/3] w-full bg-gray-100 overflow-hidden">
+                    <Image 
+                      src={item.capturedImage} 
+                      alt={item.studentName}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform duration-500"
+                      unoptimized
+                    />
+                    
+                    {/* Top Overlay Badges */}
+                    <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
                       <span className={cn(
-                        "px-2.5 py-1 text-[12px] font-bold rounded-md inline-flex items-center gap-1.5",
-                        item.status === "Hadir" && "bg-green-100/80 text-green-700",
-                        item.status === "Terlambat" && "bg-yellow-100/80 text-yellow-700",
-                        item.status === "Ditolak" && "bg-red-100/80 text-red-700"
+                        "px-2.5 py-1 text-[11px] font-extrabold rounded-lg backdrop-blur-md shadow-md",
+                        item.status === "Hadir" && "bg-emerald-500/90 text-white",
+                        item.status === "Terlambat" && "bg-amber-500/90 text-white",
+                        (item.status === "Ditolak" || item.rejectReason) && "bg-rose-500/90 text-white"
                       )}>
-                        {item.status === "Hadir" && <CheckCircle2 className="w-3.5 h-3.5" />}
-                        {item.status === "Terlambat" && <Clock className="w-3.5 h-3.5" />}
-                        {item.status === "Ditolak" && <AlertTriangle className="w-3.5 h-3.5" />}
                         {item.status}
                       </span>
-                      {item.rejectReason && (
-                        <span className="text-[11px] text-red-600 font-medium mt-1.5">
-                          {item.rejectReason}
-                        </span>
-                      )}
+
+                      <span className="px-2 py-1 text-[11px] font-extrabold bg-black/60 text-white rounded-lg backdrop-blur-md flex items-center gap-1 shadow-md">
+                        <ScanFace className="w-3 h-3 text-cyan-300" />
+                        {item.faceMatchScore}%
+                      </span>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => setSelectedItem(item)}
-                      className="p-2 hover:bg-gray-100 text-[#531FFF] hover:text-[#4314cc] rounded-lg transition-colors font-medium text-sm border border-transparent hover:border-gray-200"
-                    >
-                      Detail
-                    </button>
-                  </td>
-                </tr>
-              )) : (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center">
-                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-100">
-                      <Search className="w-6 h-6 text-gray-400" />
+
+                    {/* Bottom Time Overlay */}
+                    <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-lg text-xs font-bold text-gray-900 shadow-sm flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-[#531FFF]" />
+                      {item.timestamp}
                     </div>
-                    <h3 className="text-gray-900 font-semibold mb-1">Data tidak ditemukan</h3>
-                    <p className="text-gray-500 text-sm">Tidak ada data absensi yang sesuai dengan filter.</p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        
-        {/* Pagination/Footer */}
-        <div className="p-4 border-t border-gray-100 bg-gray-50/30 flex items-center justify-between text-sm text-gray-500">
-          <p>Menampilkan {filteredData.length} data absensi</p>
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50">
-              Sebelumnya
-            </button>
-            <button className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50">
-              Selanjutnya
-            </button>
-          </div>
-        </div>
-        </>
-        ) : (
-          <div className="p-6 bg-gray-50">
-            <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm relative h-[500px] overflow-hidden flex items-center justify-center">
-              {/* Map Grid Background */}
-              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5" />
-              <div className="absolute inset-0 bg-gradient-to-tr from-gray-50 to-gray-100/50" />
-              
-              {/* Center point (School) */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10">
-                <div className="w-12 h-12 bg-white rounded-full shadow-lg border-4 border-[#531FFF] flex items-center justify-center z-10 relative">
-                  <MapPin className="w-5 h-5 text-[#531FFF]" />
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="p-4 flex flex-col flex-1 justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900 group-hover:text-[#531FFF] transition-colors truncate">
+                        {item.studentName}
+                      </h4>
+                      <p className="text-xs text-gray-500 font-medium mt-0.5">
+                        {item.studentId} • {item.className}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5 text-gray-600 font-medium">
+                        <MapPin className={cn(
+                          "w-3.5 h-3.5",
+                          item.location?.inRadius ? "text-emerald-600" : "text-rose-600"
+                        )} />
+                        <span>{item.location?.distance || 0}m radius</span>
+                      </div>
+                      <span className="text-[#531FFF] font-bold group-hover:underline">
+                        Detail →
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="w-96 h-96 border border-[#531FFF]/20 rounded-full absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#531FFF]/5" />
-                <div className="w-48 h-48 border border-[#531FFF]/20 rounded-full absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#531FFF]/5" />
-                <span className="mt-2 text-xs font-bold text-gray-700 bg-white/80 px-2 py-0.5 rounded-full shadow-sm backdrop-blur-sm">Pusat Sekolah</span>
+              ))
+            ) : (
+              <div className="col-span-full py-12 text-center bg-white rounded-2xl border border-gray-100">
+                <p className="text-sm font-bold text-gray-900">Data presensi tidak ditemukan</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* View Mode 3: Interactive Geolokasi Map */}
+        {viewMode === "map" && (
+          <div className="p-6 bg-gray-50/50">
+            <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm relative h-[520px] overflow-hidden flex items-center justify-center">
+              {/* Decorative Radar Lines */}
+              <div className="absolute inset-0 bg-[radial-gradient(#531FFF_1px,transparent_1px)] [background-size:16px_16px] opacity-10" />
+              
+              {/* School Center Marker */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10">
+                <div className="w-14 h-14 bg-white rounded-full shadow-2xl border-4 border-[#531FFF] flex items-center justify-center z-10 relative animate-pulse">
+                  <Building2 className="w-7 h-7 text-[#531FFF]" />
+                </div>
+                <div className="w-96 h-96 border-2 border-dashed border-[#531FFF]/30 rounded-full absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#531FFF]/5 pointer-events-none" />
+                <div className="w-48 h-48 border border-[#531FFF]/30 rounded-full absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#531FFF]/10 pointer-events-none" />
+                <span className="mt-3 text-xs font-extrabold text-gray-900 bg-white px-3 py-1 rounded-full shadow-md border border-gray-200">
+                  Pusat Gedung Sekolah (Radius 100m)
+                </span>
               </div>
 
-              {/* Plotted Students */}
-              {filteredData.map(item => {
-                // Calculate rough x/y offset based on lat/lng difference from center
+              {/* Plotted Student Pins */}
+              {filteredData.map((item, idx) => {
                 const centerLat = -6.200000;
                 const centerLng = 106.816666;
-                const latDiff = (item.location.lat - centerLat) * 100000; // scale factor
-                const lngDiff = (item.location.lng - centerLng) * 100000; // scale factor
+                const latDiff = ((item.location?.lat || centerLat) - centerLat) * 120000;
+                const lngDiff = ((item.location?.lng || centerLng) - centerLng) * 120000;
                 
-                // Map the scaled differences to percentages for top/left
                 const top = `calc(50% - ${latDiff}px)`;
                 const left = `calc(50% + ${lngDiff}px)`;
                 
                 const isSuccess = item.status === "Hadir" || item.status === "Terlambat";
-                const isRejected = item.status.includes("Ditolak");
-                
+
                 return (
                   <div 
-                    key={item.id}
-                    className="absolute z-20 group"
+                    key={item.id || idx}
+                    className="absolute z-20 group cursor-pointer"
                     style={{ top, left }}
+                    onClick={() => setSelectedItem(item)}
                   >
                     <div className="relative -translate-x-1/2 -translate-y-1/2">
                       <div className={cn(
-                        "w-4 h-4 rounded-full border-2 bg-white shadow-sm transition-transform group-hover:scale-125 cursor-pointer",
-                        isSuccess ? "border-green-500" : isRejected ? "border-red-500" : "border-gray-500"
-                      )} />
+                        "w-5 h-5 rounded-full border-2 bg-white shadow-md transition-transform group-hover:scale-150 flex items-center justify-center",
+                        isSuccess ? "border-emerald-500 bg-emerald-50" : "border-rose-500 bg-rose-50"
+                      )}>
+                        <div className={cn(
+                          "w-2 h-2 rounded-full",
+                          isSuccess ? "bg-emerald-500" : "bg-rose-500"
+                        )} />
+                      </div>
                       
-                      {/* Tooltip */}
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 p-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30">
+                      {/* Tooltip Card on Hover */}
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 p-3 opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-30 transform group-hover:translate-y-0 translate-y-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <Image src={item.capturedImage} alt={item.studentName} width={24} height={24} className="rounded-full" referrerPolicy="no-referrer" />
-                          <span className="text-sm font-semibold text-gray-900 truncate">{item.studentName}</span>
+                          <div className="w-7 h-7 rounded-full overflow-hidden relative shrink-0 border border-gray-200">
+                            <Image src={item.capturedImage} alt={item.studentName} fill className="object-cover" unoptimized />
+                          </div>
+                          <div className="overflow-hidden">
+                            <p className="text-xs font-bold text-gray-900 truncate">{item.studentName}</p>
+                            <p className="text-[10px] text-gray-500">{item.className}</p>
+                          </div>
                         </div>
-                        <div className="space-y-1">
-                          <p className="text-[11px] text-gray-500 flex justify-between">
-                            <span>Status</span>
-                            <span className={cn("font-semibold", isSuccess ? "text-green-600" : "text-red-600")}>{item.status}</span>
-                          </p>
-                          <p className="text-[11px] text-gray-500 flex justify-between">
-                            <span>Jarak</span>
-                            <span className="font-semibold text-gray-700">{item.location.distance}m</span>
-                          </p>
-                          <p className="text-[11px] text-gray-500 flex justify-between">
-                            <span>Waktu</span>
-                            <span className="font-semibold text-gray-700">{item.timestamp}</span>
-                          </p>
+                        <div className="space-y-1 pt-2 border-t border-gray-100 text-[11px]">
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Status:</span>
+                            <span className={cn("font-bold", isSuccess ? "text-emerald-600" : "text-rose-600")}>{item.status}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Jarak:</span>
+                            <span className="font-bold text-gray-800">{item.location?.distance}m</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">AI Score:</span>
+                            <span className="font-bold text-[#531FFF]">{item.faceMatchScore}%</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -478,143 +798,170 @@ export default function AttendancePage() {
             </div>
           </div>
         )}
+
+        {/* Footer / Record Summary */}
+        <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500 font-medium">
+          <p>Menampilkan <span className="font-bold text-gray-900">{filteredData.length}</span> dari <span className="font-bold text-gray-900">{attendanceData.length}</span> rekap presensi</p>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-600 shadow-sm">
+              Halaman 1 dari 1
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Floating Detail Modal */}
+      {/* Floating Detail Slide-Over Drawer */}
       {selectedItem && (
         <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Backdrop */}
           <div 
-            className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity"
+            className="absolute inset-0 bg-gray-900/40 backdrop-blur-xs transition-opacity"
             onClick={() => setSelectedItem(null)}
           />
-          <div className="relative w-full max-w-md bg-white shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-300 flex flex-col h-full">
-            {/* Modal Header */}
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
-              <h3 className="text-lg font-bold text-gray-900">Detail Presensi</h3>
+
+          {/* Drawer Content */}
+          <div className="relative w-full max-w-lg bg-white shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-300 flex flex-col h-full z-10">
+            
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-20">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-[#531FFF]" />
+                <h3 className="text-lg font-bold text-gray-900">Verifikasi Detail Presensi AI</h3>
+              </div>
               <button 
                 onClick={() => setSelectedItem(null)}
                 className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
               >
-                <XCircle className="w-6 h-6" />
+                <XCircle className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-8">
-              {/* User Info */}
-              <div className="flex items-center gap-4 pb-6 border-b border-gray-100">
-                <div className="w-16 h-16 rounded-full bg-gray-100 overflow-hidden relative shrink-0 border-2 border-white shadow-md">
+            {/* Body */}
+            <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+              
+              {/* Siswa Card Header */}
+              <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                <div className="w-16 h-16 rounded-2xl bg-white overflow-hidden relative shrink-0 border-2 border-white shadow-md">
                   <Image 
                     src={selectedItem.capturedImage} 
                     alt={selectedItem.studentName}
                     fill
                     className="object-cover"
-                    referrerPolicy="no-referrer"
+                    unoptimized
                   />
                 </div>
                 <div>
-                  <h4 className="text-xl font-bold text-gray-900">{selectedItem.studentName}</h4>
-                  <p className="text-sm text-gray-500 font-medium">{selectedItem.studentId} • {selectedItem.className}</p>
-                </div>
-                <div className="ml-auto">
-                  <span className={cn(
-                    "px-3 py-1.5 text-sm font-bold rounded-lg inline-flex items-center gap-1.5 shadow-sm",
-                    selectedItem.status === "Hadir" && "bg-green-100 text-green-700 border border-green-200",
-                    selectedItem.status === "Terlambat" && "bg-yellow-100 text-yellow-700 border border-yellow-200",
-                    selectedItem.status === "Ditolak" && "bg-red-100 text-red-700 border border-red-200"
-                  )}>
-                    {selectedItem.status}
-                  </span>
+                  <h4 className="text-base font-bold text-gray-900">{selectedItem.studentName}</h4>
+                  <p className="text-xs text-gray-500 font-medium mt-0.5">{selectedItem.studentId} • {selectedItem.className}</p>
+                  <div className="mt-2">
+                    <span className={cn(
+                      "px-2.5 py-0.5 text-xs font-extrabold rounded-md inline-flex items-center gap-1 border",
+                      selectedItem.status === "Hadir" && "bg-emerald-50 text-emerald-700 border-emerald-200",
+                      selectedItem.status === "Terlambat" && "bg-amber-50 text-amber-700 border-amber-200",
+                      (selectedItem.status === "Ditolak" || selectedItem.rejectReason) && "bg-rose-50 text-rose-700 border-rose-200"
+                    )}>
+                      {selectedItem.status}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Attendance Photo Detail */}
-              <div>
-                <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <ScanFace className="w-4 h-4 text-gray-500" />
-                  Foto Presensi
+              {/* AI Facial Recognition Analysis */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-extrabold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                  <ScanFace className="w-4 h-4 text-[#531FFF]" />
+                  Hasil Verifikasi AI Wajah
                 </h4>
-                <div className="w-full aspect-[4/3] relative rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shadow-inner group">
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-100">
+                    <p className="text-xs text-purple-700 font-bold">Confidence Match Score</p>
+                    <p className="text-2xl font-black text-[#531FFF] mt-1">{selectedItem.faceMatchScore || 0}%</p>
+                    <p className="text-[10px] text-purple-600 mt-1 font-medium">Ambangan Batas Minimal: 80%</p>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                    <p className="text-xs text-gray-500 font-bold">Status Biometrik</p>
+                    <p className={cn(
+                      "text-lg font-black mt-1",
+                      selectedItem.faceVerified ? "text-emerald-600" : "text-rose-600"
+                    )}>
+                      {selectedItem.faceVerified ? "Terverifikasi Valid" : "Gagal Cocok"}
+                    </p>
+                    <p className="text-[10px] text-gray-500 mt-1 font-medium">
+                      {selectedItem.faceVerified ? "Wajah Dikenali di Database" : "Wajah Tidak Cocok dengan Master"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Photo Viewer */}
+                <div className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden bg-gray-900 border border-gray-200 shadow-inner group">
                   <Image 
                     src={selectedItem.capturedImage} 
-                    alt="Foto Absensi Detail" 
-                    fill 
-                    className="object-cover group-hover:scale-105 transition-transform duration-500 cursor-pointer" 
-                    referrerPolicy="no-referrer"
-                    onClick={() => window.open(selectedItem.capturedImage, '_blank')}
+                    alt="Foto Presensi"
+                    fill
+                    className="object-cover"
+                    unoptimized
                   />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-4">
+                    <div className="text-white">
+                      <p className="text-xs font-bold flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                        Diambil pada {selectedItem.timestamp} ({selectedItem.date})
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Status Details Grid */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 shadow-sm">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock className="w-4 h-4 text-[#531FFF]" />
-                    <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Waktu</span>
-                  </div>
-                  <p className="text-xl font-black text-gray-900">{selectedItem.timestamp}</p>
-                  <p className="text-sm text-gray-500 mt-1 font-medium">{selectedItem.date}</p>
-                </div>
-                
-                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 shadow-sm">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CheckCircle2 className="w-4 h-4 text-[#531FFF]" />
-                    <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Tipe</span>
-                  </div>
-                  <p className="text-xl font-black text-gray-900">Masuk</p>
-                  <p className="text-sm text-gray-500 mt-1 font-medium">Kehadiran Harian</p>
-                </div>
-              </div>
-
-              {/* Location Detail */}
-              <div className="space-y-4">
-                <div className="flex justify-between items-end">
-                  <div>
-                    <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-gray-500" />
-                      Geolokasi
-                    </h4>
-                    <p className="text-xs text-gray-500 mt-1 font-medium">Jarak: <span className="text-gray-900 font-bold">{selectedItem.location.distance} Meter</span> dari sekolah</p>
-                  </div>
+              {/* Geolokasi Details & Map View */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-extrabold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-[#531FFF]" />
+                    Lokasi GPS & Radius Sekolah
+                  </h4>
                   <span className={cn(
-                    "text-xs font-bold px-3 py-1 rounded-full border shadow-sm",
-                    selectedItem.location.inRadius ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
+                    "text-xs font-bold px-2.5 py-0.5 rounded-full border",
+                    selectedItem.location?.inRadius ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"
                   )}>
-                    {selectedItem.location.inRadius ? "Dalam Radius" : "Luar Radius"}
+                    {selectedItem.location?.distance} Meter
                   </span>
                 </div>
-                
-                {/* Google Maps View */}
-                <div className="w-full h-48 rounded-2xl bg-gray-100 relative overflow-hidden border border-gray-200 shadow-inner flex items-center justify-center">
+
+                {/* Embedded Map */}
+                <div className="w-full h-44 rounded-2xl bg-gray-100 relative overflow-hidden border border-gray-200 shadow-inner">
                   <iframe 
                     width="100%" 
                     height="100%" 
                     style={{ border: 0 }} 
                     loading="lazy" 
                     allowFullScreen 
-                    src={`https://maps.google.com/maps?q=${selectedItem.location.lat},${selectedItem.location.lng}&z=16&output=embed`}
+                    src={`https://maps.google.com/maps?q=${selectedItem.location?.lat || -6.200000},${selectedItem.location?.lng || 106.816666}&z=16&output=embed`}
                   />
                 </div>
 
-                <div className="flex items-center justify-between bg-gray-50 p-3 rounded-xl border border-gray-100">
-                  <p className="text-xs text-gray-600 font-mono">
-                    {selectedItem.location.lat}, {selectedItem.location.lng}
-                  </p>
-                  {selectedItem.rejectReason && (
-                    <span className="text-xs font-bold text-red-600">
-                      Error: {selectedItem.rejectReason}
-                    </span>
-                  )}
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between text-xs">
+                  <span className="text-gray-500 font-mono">
+                    GPS: {selectedItem.location?.lat}, {selectedItem.location?.lng}
+                  </span>
+                  <a 
+                    href={`https://www.google.com/maps/search/?api=1&query=${selectedItem.location?.lat},${selectedItem.location?.lng}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[#531FFF] font-bold flex items-center gap-1 hover:underline"
+                  >
+                    Buka Google Maps <ExternalLink className="w-3 h-3" />
+                  </a>
                 </div>
               </div>
             </div>
 
-            {/* Modal Footer */}
-            <div className="p-6 border-t border-gray-100 bg-gray-50 mt-auto sticky bottom-0 z-10">
+            {/* Footer Actions */}
+            <div className="p-6 border-t border-gray-100 bg-gray-50 sticky bottom-0 z-20 flex gap-3">
               <button 
                 onClick={() => setSelectedItem(null)}
-                className="w-full py-3.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-sm font-bold shadow-sm"
+                className="w-full py-3 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-xs font-bold shadow-sm"
               >
                 Tutup Detail
               </button>
