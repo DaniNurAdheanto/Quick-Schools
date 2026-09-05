@@ -4,10 +4,11 @@ import React, { useState, useEffect, useMemo } from "react";
 import { 
   Calendar, CheckCircle2, Plus, Edit3, Trash2, GraduationCap, 
   ArrowRight, ShieldCheck, RefreshCw, AlertTriangle, Layers, 
-  Users, School, Sparkles, BookOpen, Loader2, Save, FileText, ChevronRight
+  Users, School, Sparkles, BookOpen, Loader2, Save, FileText, ChevronRight, ShieldAlert
 } from "lucide-react";
-import { collection, onSnapshot, doc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { collection, onSnapshot, doc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch, getDocs, getDoc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { db, auth } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { AlertBox, AlertType } from "@/components/ui/alert-box";
@@ -15,6 +16,7 @@ import { AlertBox, AlertType } from "@/components/ui/alert-box";
 export default function AcademicYearsPage() {
   const { activeAcademicYear, activeSemester, availableYears, setActiveAcademicYear, setActiveSemester } = useAcademicYear();
 
+  const [userRole, setUserRole] = useState<string>("admin");
   const [students, setStudents] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [dbYears, setDbYears] = useState<any[]>([]);
@@ -44,8 +46,23 @@ export default function AcademicYearsPage() {
   // Promotion Wizard State
   const [targetNewYear, setTargetNewYear] = useState("2026/2027");
 
-  // Firestore Subscriptions
+  // Firestore Subscriptions & Auth Check
   useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userSnap = await getDoc(doc(db, "users", user.uid));
+          if (userSnap.exists()) {
+            const rawRole = userSnap.data().role || "admin";
+            const role = (rawRole === "student" || rawRole === "siswa") ? "siswa" : rawRole;
+            setUserRole(role);
+          }
+        } catch (err) {
+          console.error("Error fetching user role:", err);
+        }
+      }
+    });
+
     const unsubYears = onSnapshot(collection(db, "academicYears"), (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setDbYears(list);
@@ -61,6 +78,7 @@ export default function AcademicYearsPage() {
     });
 
     return () => {
+      unsubAuth();
       unsubYears();
       unsubStudents();
       unsubClasses();
@@ -181,6 +199,20 @@ export default function AcademicYearsPage() {
       setIsProcessing(false);
     }
   };
+
+  if (userRole === "siswa") {
+    return (
+      <div className="p-8 max-w-2xl mx-auto my-16 text-center bg-white rounded-3xl border border-gray-100 shadow-xl p-12 space-y-4">
+        <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">Akses Ditolak</h2>
+        <p className="text-gray-500 text-sm max-w-md mx-auto leading-relaxed font-medium">
+          Halaman Manajemen Tahun Ajaran & Kenaikan Kelas hanya dapat diakses oleh Admin Sekolah / Pengelola Kurikulum.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-full mx-auto w-full flex-1 flex flex-col min-h-screen bg-gray-50/50 animate-in fade-in duration-300 relative">

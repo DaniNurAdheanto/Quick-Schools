@@ -44,7 +44,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/admin/grades": "grades",
   "/admin/report-cards": "grades",
   "/admin/exams": "academic",
-  "/admin/academic-years": "academic",
+  "/admin/academic-years": "settings",
   "/admin/payments": "finance",
   "/admin/financial-reports": "finance",
   "/admin/settings": "settings",
