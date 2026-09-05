@@ -21,7 +21,8 @@ import {
   GraduationCap,
   CheckCircle2,
   XCircle,
-  Plus
+  Plus,
+  Eye
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
@@ -41,7 +42,7 @@ export default function DataSiswaPage() {
   const [selectedClass, setSelectedClass] = useState("All");
   const [selectedStatus, setSelectedStatus] = useState("All");
 
-  const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete"; data?: any }>({
+  const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete" | "view"; data?: any }>({
     open: false,
     mode: "create"
   });
@@ -49,17 +50,67 @@ export default function DataSiswaPage() {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
+        // Fetch from students collection & users collection
         const qStudents = query(collection(db, "students"));
+        const qUsers = query(collection(db, "users"));
+
+        let currentStudents: any[] = [];
+        let currentUsers: any[] = [];
+
+        const updateCombinedList = () => {
+          const studentMap = new Map();
+          
+          // First add entries from students collection
+          currentStudents.forEach(item => {
+            studentMap.set(item._firestoreId, item);
+          });
+
+          // Then merge any user with role === "siswa" or "student"
+          currentUsers.forEach(u => {
+            const role = (u.role || "").toLowerCase();
+            if (role === "siswa" || role === "student") {
+              const existing = studentMap.get(u._firestoreId);
+              if (!existing) {
+                studentMap.set(u._firestoreId, {
+                  _firestoreId: u._firestoreId,
+                  uid: u.uid || u._firestoreId,
+                  name: u.name || u.email?.split('@')[0] || "Siswa Baru",
+                  email: u.email || "",
+                  status: u.onboardingCompleted ? "Aktif" : "Belum Onboarding",
+                  nis: u.nis || "-",
+                  nisn: u.nisn || "-",
+                  grade: u.grade || "X",
+                  classId: u.classId || "X-IPA-1",
+                  photoUrl: u.photoUrl || "",
+                  phone: u.phone || "-"
+                });
+              }
+            }
+          });
+
+          setStudents(Array.from(studentMap.values()));
+          setLoading(false);
+        };
+
         const unsubscribeStudents = onSnapshot(qStudents, (snapshot) => {
-          const studentsData = snapshot.docs.map(doc => ({
+          currentStudents = snapshot.docs.map(doc => ({
             _firestoreId: doc.id,
             ...doc.data()
           }));
-          setStudents(studentsData);
-          setLoading(false);
+          updateCombinedList();
         }, (error) => {
           console.error("Error fetching students:", error);
           setLoading(false);
+        });
+
+        const unsubscribeUsers = onSnapshot(qUsers, (snapshot) => {
+          currentUsers = snapshot.docs.map(doc => ({
+            _firestoreId: doc.id,
+            ...doc.data()
+          }));
+          updateCombinedList();
+        }, (error) => {
+          console.error("Error fetching users:", error);
         });
 
         const qClasses = query(collection(db, "classes"));
@@ -75,6 +126,7 @@ export default function DataSiswaPage() {
         
         return () => {
           unsubscribeStudents();
+          unsubscribeUsers();
           unsubscribeClasses();
         };
       } else {
@@ -225,6 +277,7 @@ export default function DataSiswaPage() {
         fields={studentFields}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
+        onEditRequested={() => setCrudState(s => ({ ...s, mode: "edit" }))}
       />
 
       {/* Page Header Card */}
@@ -447,6 +500,13 @@ export default function DataSiswaPage() {
 
                     <div className="flex items-center gap-1.5">
                       <button 
+                        onClick={() => setCrudState({ open: true, mode: "view", data: student })}
+                        className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
+                        title="Lihat Detail Siswa"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
                         onClick={() => setCrudState({ open: true, mode: "edit", data: student })}
                         className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
                         title="Edit Data Siswa"
@@ -521,6 +581,13 @@ export default function DataSiswaPage() {
                         </td>
                         <td className="py-3.5 px-6 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setCrudState({ open: true, mode: "view", data: student })}
+                              className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-xl transition-colors"
+                              title="Lihat Detail"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => setCrudState({ open: true, mode: "edit", data: student })}
                               className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-xl transition-colors"

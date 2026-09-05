@@ -3,20 +3,18 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  BookOpen, Plus, Search, PenTool, Trash2, Loader2
+  BookOpen, Plus, Search, PenTool, Trash2, Loader2, Eye
 } from "lucide-react";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
 import { db, auth } from "@/lib/firebase";
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
-
-
 export default function SubjectsPage() {
   const [subjects, setSubjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete"; data?: any }>({
+  const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete" | "view"; data?: any }>({
     open: false,
     mode: "create"
   });
@@ -98,6 +96,7 @@ export default function SubjectsPage() {
         fields={subjectFields}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
+        onEditRequested={() => setCrudState(s => ({ ...s, mode: "edit" }))}
       />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -215,6 +214,11 @@ export default function SubjectsPage() {
                      </td>
                      <td className="py-4 px-6">
                         <div className="flex items-center justify-center gap-2">
+                           <button 
+                             onClick={() => setCrudState({ open: true, mode: "view", data: item })}
+                             className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded-md transition-colors" title="Lihat Detail">
+                             <Eye className="w-4 h-4" />
+                           </button>
                            <button 
                              onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
                              className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded-md transition-colors" title="Edit">

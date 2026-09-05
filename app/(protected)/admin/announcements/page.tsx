@@ -9,8 +9,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { collection, onSnapshot, doc, getDoc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { db, auth } from "@/lib/firebase";
 
 const POPULAR_ANNOUNCEMENTS = [
   { title: "Libur Idul Fitri 1447 H", views: "1.245", date: "10 Apr 2026", color: "text-[#531FFF]", bgColor: "bg-[#531FFF]/10" },
@@ -23,15 +24,29 @@ const POPULAR_ANNOUNCEMENTS = [
 
 
 export default function AnnouncementsPage() {
-  const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete"; data?: any }>({
+  const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete" | "view"; data?: any }>({
     open: false,
     mode: "create"
   });
   
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string>("admin");
 
   useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userSnap = await getDoc(doc(db, "users", user.uid));
+          if (userSnap.exists()) {
+            setUserRole(userSnap.data().role || "admin");
+          }
+        } catch (e) {
+          console.warn("User role fetch error", e);
+        }
+      }
+    });
+
     const unsub = onSnapshot(collection(db, "announcements"), (snap) => {
       const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setAnnouncements(data);
@@ -40,7 +55,11 @@ export default function AnnouncementsPage() {
       console.error(error);
       setLoading(false);
     });
-    return unsub;
+
+    return () => {
+      unsubAuth();
+      unsub();
+    };
   }, []);
 
   const getTheme = (tag: string) => {
@@ -66,6 +85,8 @@ export default function AnnouncementsPage() {
   };
 
   const handleCrudSubmit = async (data: any) => {
+    if (userRole === "siswa") return; // Read only safeguard
+
     try {
       if (crudState.mode === "create") {
         const id = crypto.randomUUID();
@@ -152,12 +173,13 @@ export default function AnnouncementsPage() {
         fields={announcementFields}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
+        onEditRequested={userRole !== "siswa" ? () => setCrudState(s => ({ ...s, mode: "edit" })) : undefined}
       />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Pengumuman</h1>
-          <p className="text-[13px] text-gray-500 mt-1 font-medium">Kelola dan sampaikan informasi penting untuk seluruh warga sekolah.</p>
+          <p className="text-[13px] text-gray-500 mt-1 font-medium">Informasi resmi dan pengumuman untuk siswa & warga sekolah.</p>
         </div>
         <div className="flex items-center gap-3">
           <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 rounded-xl text-[13px] font-bold shadow-sm transition-colors">
@@ -166,12 +188,14 @@ export default function AnnouncementsPage() {
           <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 rounded-xl text-[13px] font-bold shadow-sm transition-colors">
             <Grid className="w-4 h-4" /> Kategori
           </button>
-          <button 
-            onClick={() => setCrudState({ open: true, mode: "create" })}
-            className="flex items-center gap-2 px-4 py-2 bg-[#531FFF] text-white hover:bg-[#4314E5] rounded-xl text-[13px] font-bold shadow-sm transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Buat Pengumuman
-          </button>
+          {userRole !== "siswa" && (
+            <button 
+              onClick={() => setCrudState({ open: true, mode: "create" })}
+              className="flex items-center gap-2 px-4 py-2 bg-[#531FFF] text-white hover:bg-[#4314E5] rounded-xl text-[13px] font-bold shadow-sm transition-colors cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Buat Pengumuman
+            </button>
+          )}
         </div>
       </div>
 
@@ -269,18 +293,27 @@ export default function AnnouncementsPage() {
                            )}>
                              {item.status}
                            </span>
-                           <div className="flex items-center gap-1">
-                             <button 
-                               onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                               className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded-md transition-colors" title="Edit">
-                               <PenTool className="w-4 h-4" />
-                             </button>
-                             <button 
-                               onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
-                               className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors" title="Hapus">
-                               <Trash2 className="w-4 h-4" />
-                             </button>
-                           </div>
+                             <div className="flex items-center gap-1">
+                               <button 
+                                 onClick={() => setCrudState({ open: true, mode: "view", data: item })}
+                                 className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded-md transition-colors cursor-pointer" title="Lihat Detail">
+                                 <Eye className="w-4 h-4" />
+                               </button>
+                               {userRole !== "siswa" && (
+                                 <>
+                                   <button 
+                                     onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
+                                     className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded-md transition-colors cursor-pointer" title="Edit">
+                                     <PenTool className="w-4 h-4" />
+                                   </button>
+                                   <button 
+                                     onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
+                                     className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors cursor-pointer" title="Hapus">
+                                     <Trash2 className="w-4 h-4" />
+                                   </button>
+                                 </>
+                               )}
+                             </div>
                          </div>
                        </div>
                        

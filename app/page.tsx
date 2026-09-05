@@ -5,7 +5,8 @@ import Link from "next/link";
 import { 
   ArrowRight, Sparkles, CheckCircle2, ChevronRight, Menu, Star,
   Calendar, GraduationCap, Bot, LineChart, Check,
-  ShieldCheck, Zap, Globe2, Heart, Award, User, CheckSquare, Clock, CreditCard, MessageCircle
+  ShieldCheck, Zap, Globe2, Heart, Award, User, CheckSquare, Clock, CreditCard, MessageCircle,
+  Play, Users, BookOpen, Layers, Shield, Globe
 } from "lucide-react";
 
 import { motion } from "motion/react";
@@ -13,11 +14,200 @@ import { useEffect, useState } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 
-
+// Bilingual Translations Dictionary
+const TRANSLATIONS = {
+  id: {
+    nav: {
+      features: "Fitur",
+      howItWorks: "Cara Kerja",
+      pricing: "Harga",
+      testimonials: "Testimoni",
+      signIn: "Masuk",
+      getStarted: "Mulai Gratis",
+      dashboard: "Ke Dashboard",
+    },
+    hero: {
+      badge: "Sistem Manajemen Sekolah Berbasis AI Generasi Baru",
+      titlePart1: "Kelola Sekolah Lebih ",
+      titleHighlight: "Cerdas, Cepat",
+      titlePart2: " & Modern",
+      desc: "Platform serba ada untuk mengelola presensi AI face recognition, data siswa, kurikulum, jadwal otomatis, pembayaran, dan laporan akademik real-time.",
+      btnPrimary: "Mulai Uji Coba Gratis",
+      btnSecondary: "Lihat Fitur Lengkap",
+      trust1: "Tanpa Kartu Kredit",
+      trust2: "Setup Cepat 5 Menit",
+      trust3: "Terintegrasi Cloud & AI",
+      statsSiswa: "Total Siswa",
+      statsPresensi: "Kehadiran AI",
+      statsKelas: "Kelas Aktif",
+      statsSPP: "SPP Terbayar",
+      grafikTitle: "Grafik Kehadiran & Akademik",
+      grafikSub: "Rekapitulasi Tahun Ajaran 2025/2026",
+      liveBadge: "Live AI Face ID",
+      aiScheduleTitle: "AI Schedule Optimizer",
+      aiScheduleDesc: "Jadwal pelajaran otomatis tanpa bentrok",
+      securityTitle: "Aman & Terenkripsi Cloud",
+      securityDesc: "Privasi data sekolah terjamin 100%",
+    },
+    trustedBy: "Dipercaya oleh lebih dari 500+ Sekolah & Institusi di Indonesia",
+    features: {
+      badge: "Fitur Unggulan",
+      title: "Semua Kebutuhan Manajemen Sekolah dalam Satu Platform",
+      desc: "Dirancang khusus untuk mempermudah operasional sekolah modern dengan teknologi otomasi dan kecerdasan buatan.",
+      f1Title: "Absensi & AI Face Recognition",
+      f1Desc: "Presensi siswa berbasis verifikasi wajah AI dan validasi radius geolokasi GPS sekolah.",
+      f2Title: "Manajemen Data Siswa & Guru",
+      f2Desc: "Kelola biodata, wali kelas, jam mengajar, serta berkas administrasi secara terpusat.",
+      f3Title: "Penyusunan Jadwal Otomatis",
+      f3Desc: "AI Generator jadwal pelajaran pintar tanpa bentrok antar guru dan ruang kelas.",
+      f4Title: "Pembayaran & Keuangan SPP",
+      f4Desc: "Sistem tagihan digital, konfirmasi otomatis, dan rekap arus kas keuangan sekolah.",
+      f5Title: "Pengumuman & Komunikasi",
+      f5Desc: "Pesan instan dan pengumuman sekolah langsung ke siswa, guru, dan orang tua.",
+      f6Title: "Laporan & Raport Akademik",
+      f6Desc: "Olahan nilai otomatis, grafik performa siswa, dan cetak raport digital siap pakai.",
+      more: "Selengkapnya",
+    },
+    pricing: {
+      badge: "Paket Langganan",
+      title: "Harga Transparan Tanpa Biaya Tersembunyi",
+      desc: "Pilih paket yang paling sesuai dengan kebutuhan jumlah siswa dan skala sekolah Anda.",
+      p1Name: "Paket Basic",
+      p1Desc: "Cocok untuk sekolah skala kecil / yayasan pemula",
+      p1Price: "Gratis",
+      p1Unit: "/ selamanya",
+      p1Btn: "Mulai Gratis",
+      p2Name: "Paket Pro AI",
+      p2Desc: "Untuk sekolah menengah & berkembang",
+      p2Badge: "Paling Populer",
+      p2Price: "Rp 199.000",
+      p2Unit: "/ bulan",
+      p2Btn: "Coba Gratis 14 Hari",
+      p3Name: "Paket Enterprise",
+      p3Desc: "Untuk grup sekolah & kompleks yayasan besar",
+      p3Price: "Kustom",
+      p3Btn: "Hubungi Tim Sales",
+    },
+    cta: {
+      title: "Siap Mentransformasi Operasional Sekolah Anda?",
+      desc: "Bergabunglah bersama ratusan sekolah lain di Indonesia yang telah beralih ke sistem sekolah modern berbasis AI.",
+      btn: "Daftar Sekarang",
+      stat: "Sekolah Aktif Terdaftar",
+    },
+    footer: {
+      tagline: "Platform sistem informasi manajemen sekolah cerdas terdepan di Indonesia.",
+      col1: "Produk",
+      col2: "Perusahaan",
+      col3: "Hubungi Kami",
+      rights: "Quick Schools. Hak cipta dilindungi undang-undang.",
+    }
+  },
+  en: {
+    nav: {
+      features: "Features",
+      howItWorks: "How It Works",
+      pricing: "Pricing",
+      testimonials: "Testimonials",
+      signIn: "Sign In",
+      getStarted: "Get Started Free",
+      dashboard: "Go to Dashboard",
+    },
+    hero: {
+      badge: "Next-Gen AI Powered School Management Platform",
+      titlePart1: "Manage Your School ",
+      titleHighlight: "Smarter, Faster",
+      titlePart2: " & Future-Ready",
+      desc: "All-in-one platform to manage AI face recognition attendance, student data, academics, automated scheduling, payments, and real-time reports.",
+      btnPrimary: "Start Free Trial",
+      btnSecondary: "Explore All Features",
+      trust1: "No Credit Card Required",
+      trust2: "Fast 5-Min Setup",
+      trust3: "Cloud & AI Integrated",
+      statsSiswa: "Total Students",
+      statsPresensi: "AI Attendance",
+      statsKelas: "Active Classes",
+      statsSPP: "Tuition Paid",
+      grafikTitle: "Attendance & Academic Analytics",
+      grafikSub: "Academic Year Summary 2025/2026",
+      liveBadge: "Live AI Face ID",
+      aiScheduleTitle: "AI Schedule Optimizer",
+      aiScheduleDesc: "Conflict-free automated class timetable generator",
+      securityTitle: "Secure Cloud Encryption",
+      securityDesc: "100% Guaranteed school data privacy & safety",
+    },
+    trustedBy: "Trusted by over 500+ Schools & Institutions across Indonesia",
+    features: {
+      badge: "Core Features",
+      title: "Everything You Need in One Unified School Platform",
+      desc: "Designed specifically to streamline modern school operations with smart automation and artificial intelligence.",
+      f1Title: "AI Face Recognition & GPS Attendance",
+      f1Desc: "Student attendance powered by facial recognition AI and school location geofencing.",
+      f2Title: "Student & Teacher Management",
+      f2Desc: "Centralized bio-data, homeroom teachers, teaching hours, and administration files.",
+      f3Title: "Automated AI Timetabling",
+      f3Desc: "Smart schedule generator preventing room and teacher conflict seamlessly.",
+      f4Title: "Tuition & Financial Management",
+      f4Desc: "Digital invoicing, auto-reconciliation, and comprehensive school cashflow reports.",
+      f5Title: "Communication & Announcements",
+      f5Desc: "Direct messaging and school broadcast alerts to students, teachers, and parents.",
+      f6Title: "Academic Reports & Report Cards",
+      f6Desc: "Automated grade calculations, student progress charts, and digital report cards.",
+      more: "Learn More",
+    },
+    pricing: {
+      badge: "Subscription Plans",
+      title: "Simple & Transparent Pricing Without Hidden Fees",
+      desc: "Choose the perfect plan tailored to your school size and operational scale.",
+      p1Name: "Basic Plan",
+      p1Desc: "Ideal for small schools and new foundations",
+      p1Price: "Free",
+      p1Unit: "/ forever",
+      p1Btn: "Start Free",
+      p2Name: "Pro AI Plan",
+      p2Desc: "Best for growing and medium-sized schools",
+      p2Badge: "Most Popular",
+      p2Price: "Rp 199,000",
+      p2Unit: "/ month",
+      p2Btn: "Start 14-Day Free Trial",
+      p3Name: "Enterprise Plan",
+      p3Desc: "For large school networks & multi-campus institutions",
+      p3Price: "Custom",
+      p3Btn: "Contact Sales Team",
+    },
+    cta: {
+      title: "Ready to Transform Your School Operations?",
+      desc: "Join hundreds of schools already leveraging Quick Schools for a smarter academic experience.",
+      btn: "Register Now",
+      stat: "Active Registered Schools",
+    },
+    footer: {
+      tagline: "Leading smart school management information platform in Indonesia.",
+      col1: "Product",
+      col2: "Company",
+      col3: "Contact Us",
+      rights: "Quick Schools. All rights reserved.",
+    }
+  }
+};
 
 export default function LandingPage() {
   const [user, setUser] = useState<any>(null);
-  
+  const [lang, setLang] = useState<"id" | "en">("id");
+
+  // Load language preference
+  useEffect(() => {
+    const savedLang = localStorage.getItem("qs_lang") as "id" | "en";
+    if (savedLang === "id" || savedLang === "en") {
+      setLang(savedLang);
+    }
+  }, []);
+
+  const changeLanguage = (newLang: "id" | "en") => {
+    setLang(newLang);
+    localStorage.setItem("qs_lang", newLang);
+  };
+
+  const t = TRANSLATIONS[lang];
 
   useEffect(() => {
     let inactivityTimer: NodeJS.Timeout;
@@ -78,733 +268,544 @@ export default function LandingPage() {
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className="fixed top-0 inset-x-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100"
+        className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100 shadow-xs"
       >
         <div className="max-w-[1400px] mx-auto px-6 h-20 flex items-center justify-between">
            <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#531FFF] to-[#8C6BFF] flex items-center justify-center shadow-lg shadow-[#531FFF]/20">
                  <Zap className="w-5 h-5 text-white" />
               </div>
-              <span className="font-bold text-xl tracking-tight text-gray-900">
+              <span className="font-extrabold text-xl tracking-tight text-gray-900 leading-tight">
                 Quick Schools<br/>
-                <span className="text-[10px] font-medium text-gray-500 uppercase tracking-widest leading-none block -mt-1">School Management System</span>
+                <span className="text-[10px] font-bold text-[#531FFF] uppercase tracking-widest block -mt-1">School Management System</span>
               </span>
            </div>
            
-           <nav className="hidden lg:flex items-center gap-10">
-             <Link href="#features" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors">Features</Link>
-             <Link href="#how-it-works" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors">How It Works</Link>
-             <Link href="#pricing" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors">Pricing</Link>
-             <Link href="#resources" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors flex items-center gap-1">
-                Resources <ChevronRight className="w-4 h-4 rotate-90" />
-             </Link>
+           <nav className="hidden lg:flex items-center gap-8">
+             <Link href="#features" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors">{t.nav.features}</Link>
+             <Link href="#how-it-works" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors">{t.nav.howItWorks}</Link>
+             <Link href="#pricing" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors">{t.nav.pricing}</Link>
+             <Link href="#testimonials" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors">{t.nav.testimonials}</Link>
            </nav>
            
-           <div className="hidden lg:flex items-center gap-6">
-             {user ? (
-               <Link href="/admin/dashboard" className="px-6 py-2.5 bg-[#531FFF] text-white rounded-full text-[14px] font-semibold hover:bg-[#4314E5] transition-colors shadow-lg shadow-[#531FFF]/25">
-                 Go to Dashboard
-               </Link>
-             ) : (
-               <>
-                 <Link href="/login" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors">
-                   Sign In
+           <div className="flex items-center gap-3">
+             {/* Language Switcher Toggle */}
+             <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200">
+               <button
+                 onClick={() => changeLanguage("id")}
+                 className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${
+                   lang === "id" 
+                     ? "bg-white text-gray-900 shadow-xs" 
+                     : "text-gray-500 hover:text-gray-900"
+                 }`}
+               >
+                 <span>🇮🇩</span> ID
+               </button>
+               <button
+                 onClick={() => changeLanguage("en")}
+                 className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${
+                   lang === "en" 
+                     ? "bg-white text-gray-900 shadow-xs" 
+                     : "text-gray-500 hover:text-gray-900"
+                 }`}
+               >
+                 <span>🇬🇧</span> EN
+               </button>
+             </div>
+
+             <div className="hidden lg:flex items-center gap-3">
+               {user ? (
+                 <Link href="/admin/dashboard" className="px-6 py-2.5 bg-[#531FFF] text-white rounded-lg text-[14px] font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/20">
+                   {t.nav.dashboard}
                  </Link>
-                 <Link href="/register" className="px-6 py-2.5 bg-[#531FFF] text-white rounded-full text-[14px] font-semibold hover:bg-[#4314E5] transition-colors shadow-lg shadow-[#531FFF]/25">
-                   Get Started
-                 </Link>
-               </>
-             )}
+               ) : (
+                 <>
+                   <Link href="/login" className="px-4 py-2.5 text-[14px] font-bold text-gray-700 hover:text-[#531FFF] transition-colors">
+                     {t.nav.signIn}
+                   </Link>
+                   <Link href="/register" className="px-6 py-2.5 bg-[#531FFF] text-white rounded-lg text-[14px] font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/20 hover:shadow-lg hover:shadow-[#531FFF]/30">
+                     {t.nav.getStarted}
+                   </Link>
+                 </>
+               )}
+             </div>
+             
+             <button className="lg:hidden text-gray-900 p-2">
+               <Menu className="w-6 h-6" />
+             </button>
            </div>
-           
-           <button className="lg:hidden text-gray-900">
-             <Menu className="w-6 h-6" />
-           </button>
         </div>
       </motion.header>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 lg:pt-40 lg:pb-32 overflow-hidden bg-[#531FFF] relative">
-         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-gradient-to-br from-white/20 to-transparent rounded-full blur-3xl opacity-50 translate-x-1/3 -translate-y-1/2 pointer-events-none"></div>
-         <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-gradient-to-tr from-black/20 to-transparent rounded-full blur-3xl opacity-30 -translate-x-1/3 translate-y-1/3 pointer-events-none"></div>
-         
+      <section className="pt-32 pb-20 lg:pt-36 lg:pb-28 relative overflow-hidden bg-gradient-to-b from-slate-50/80 via-white to-white">
+         <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:32px_32px] opacity-40 pointer-events-none" />
+         <div className="absolute top-10 right-1/4 w-[500px] h-[500px] bg-[#531FFF]/5 rounded-full blur-3xl pointer-events-none" />
+         <div className="absolute bottom-10 left-10 w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
 
-         <div className="max-w-[1400px] mx-auto px-6 relative z-10 flex flex-col xl:flex-row items-center gap-16">
+         <div className="max-w-[1400px] mx-auto px-6 relative z-10">
             
-            {/* Hero Left */}
-            <div className="flex-1 text-center xl:text-left pt-10">
+            <div className="text-center max-w-4xl mx-auto mb-14">
                <motion.div 
-                 initial={{ opacity: 0, y: 20 }}
+                 initial={{ opacity: 0, y: 15 }}
                  animate={{ opacity: 1, y: 0 }}
-                 transition={{ delay: 0.1, duration: 0.5 }}
-                 className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/20 text-white text-[13px] font-bold mb-6 shadow-sm"
+                 transition={{ duration: 0.5 }}
+                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#F3F0FF] border border-[#531FFF]/20 text-[#531FFF] text-xs font-extrabold mb-6 shadow-sm shadow-[#531FFF]/10"
                >
-                 <Star className="w-4 h-4 fill-current" />
-                 Nest-Gen School Management System
+                 <Sparkles className="w-4 h-4 text-[#531FFF]" />
+                 {t.hero.badge}
                </motion.div>
                
                <motion.h1 
                  initial={{ opacity: 0, y: 20 }}
                  animate={{ opacity: 1, y: 0 }}
-                 transition={{ delay: 0.2, duration: 0.5 }}
-                 className="text-5xl lg:text-[64px] font-extrabold tracking-tight text-white mb-6 leading-[1.1]"
+                 transition={{ delay: 0.1, duration: 0.6 }}
+                 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-gray-900 leading-[1.1] mb-6"
                >
-                 Manage Your School<br/>
-                 Smarter, Faster, and<br/>
-                 <span className="text-[#FFB800]">Future-Ready</span>
+                 {t.hero.titlePart1}<span className="bg-gradient-to-r from-[#531FFF] via-[#7B4DFF] to-[#3B82F6] bg-clip-text text-transparent">{t.hero.titleHighlight}</span>{t.hero.titlePart2}
                </motion.h1>
                
                <motion.p 
                  initial={{ opacity: 0, y: 20 }}
                  animate={{ opacity: 1, y: 0 }}
-                 transition={{ delay: 0.3, duration: 0.5 }}
-                 className="text-[18px] text-white/80 mb-10 leading-relaxed max-w-xl mx-auto xl:mx-0 font-medium"
+                 transition={{ delay: 0.2, duration: 0.6 }}
+                 className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto font-medium leading-relaxed mb-8"
                >
-                 All-in-one platform to manage attendance, academics, schedules, communication, payments, and more. Designed for modern schools.
+                 {t.hero.desc}
                </motion.p>
 
                <motion.div 
                  initial={{ opacity: 0, y: 20 }}
                  animate={{ opacity: 1, y: 0 }}
-                 transition={{ delay: 0.4, duration: 0.5 }}
-                 className="flex flex-col sm:flex-row items-center justify-center xl:justify-start gap-4 mb-12"
+                 transition={{ delay: 0.3, duration: 0.6 }}
+                 className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10"
                >
-                 <Link href="/register" className="w-full sm:w-auto px-8 py-4 bg-white text-[#531FFF] rounded-full text-[15px] font-bold hover:bg-gray-50 transition-all shadow-lg flex items-center justify-center gap-2 group">
-                   Get Started Free <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                 <Link 
+                   href="/register" 
+                   className="w-full sm:w-auto px-8 py-4 bg-[#531FFF] text-white rounded-lg text-15 font-bold hover:bg-[#4314cc] transition-all shadow-lg shadow-[#531FFF]/25 hover:shadow-xl hover:shadow-[#531FFF]/30 flex items-center justify-center gap-2.5 group"
+                 >
+                   {t.hero.btnPrimary} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                  </Link>
-                 <Link href="#demo" className="w-full sm:w-auto px-8 py-4 bg-white/10 border border-white/20 text-white rounded-full text-[15px] font-bold hover:bg-white/20 transition-all flex items-center justify-center gap-2 backdrop-blur-sm">
-                   Request Demo
+
+                 <Link 
+                   href="#features" 
+                   className="w-full sm:w-auto px-8 py-4 bg-white border border-gray-200 text-gray-800 rounded-lg text-15 font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-xs flex items-center justify-center gap-2"
+                 >
+                   <Play className="w-4 h-4 text-[#531FFF] fill-current" /> {t.hero.btnSecondary}
                  </Link>
                </motion.div>
 
                <motion.div 
                  initial={{ opacity: 0 }}
                  animate={{ opacity: 1 }}
-                 transition={{ delay: 0.6, duration: 0.8 }}
-                 className="flex items-center justify-center xl:justify-start gap-6"
+                 transition={{ delay: 0.4, duration: 0.6 }}
+                 className="flex items-center justify-center gap-6 text-sm text-gray-500 font-medium flex-wrap"
                >
-                  <div className="flex -space-x-3">
-                    {['A','B','C'].map((initial, i) => (
-                      <div key={i} className="w-10 h-10 rounded-full border-2 border-[#531FFF] bg-white/20 backdrop-blur-sm flex items-center justify-center text-white text-[13px] font-bold shadow-sm">
-                         {initial}
-                      </div>
-                    ))}
+                  <div className="flex items-center gap-1.5 text-gray-700 font-semibold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" /> {t.hero.trust1}
                   </div>
-                  <div className="flex flex-col items-start gap-0.5">
-                    <div className="flex text-[#FFB800] gap-0.5">
-                      {[1,2,3,4,5].map(i => <Star key={i} className="w-4 h-4 fill-current" />)}
-                    </div>
-                    <span className="text-[13px] font-semibold text-white/90">Trusted by 500+ schools in Indonesia</span>
+                  <span className="text-gray-300">•</span>
+                  <div className="flex items-center gap-1.5 text-gray-700 font-semibold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" /> {t.hero.trust2}
+                  </div>
+                  <span className="text-gray-300">•</span>
+                  <div className="flex items-center gap-1.5 text-gray-700 font-semibold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" /> {t.hero.trust3}
                   </div>
                </motion.div>
             </div>
 
-            {/* Hero Right - Enhanced Mockup composition */}
+            {/* Clean Hero Mockup Section */}
             <motion.div 
-              initial={{ opacity: 0, x: 40 }}
-              animate={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.8 }}
-              className="flex-1 w-full relative h-[450px] lg:h-[650px] hidden lg:block"
+              className="relative max-w-6xl mx-auto"
             >
-               {/* Main Application Window Mockup */}
-               <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[850px] bg-white rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] border border-white/20 overflow-hidden transform perspective-1000 rotate-y-[-5deg] rotate-x-[2deg]">
-                 {/* Mock Content area representing the dashboard */}
-                 <div className="flex h-[550px]">
-                    {/* Mock Sidebar */}
-                    <div className="w-[180px] border-r border-gray-100 p-4 pt-6 bg-gray-50/50 flex flex-col gap-5">
-                       <div className="w-full h-8 bg-[#531FFF]/10 rounded-lg flex items-center px-3 gap-2">
-                         <div className="w-4 h-4 rounded-sm bg-[#531FFF]/80"></div>
-                         <div className="h-2 w-16 bg-[#531FFF]/60 rounded"></div>
-                       </div>
-                       {[...Array(6)].map((_, i) => (
-                         <div key={i} className="h-8 flex items-center px-3 gap-2">
-                           <div className="w-4 h-4 rounded-sm bg-gray-300"></div>
-                           <div className="h-2 w-16 bg-gray-200 rounded"></div>
-                         </div>
-                       ))}
-                    </div>
-                    
-                    {/* Mock Main View */}
-                    <div className="flex-1 p-6 bg-white flex flex-col gap-6">
-                       {/* Header mock */}
-                       <div className="flex justify-between items-center mb-2">
-                         <div className="h-4 w-32 bg-gray-200 rounded"></div>
-                         <div className="flex gap-3">
-                           <div className="w-48 h-8 rounded-full bg-gray-100 border border-gray-200"></div>
-                           <div className="w-8 h-8 rounded-full bg-gray-200"></div>
-                         </div>
-                       </div>
+               <div className="bg-white rounded-3xl border border-gray-200/80 shadow-[0_20px_60px_-15px_rgba(83,31,255,0.12)] overflow-hidden p-2 sm:p-4">
+                 
+                 <div className="flex items-center justify-between px-4 py-3 bg-gray-50/80 border-b border-gray-100 rounded-t-2xl">
+                   <div className="flex items-center gap-2">
+                     <div className="w-3 h-3 rounded-full bg-rose-400" />
+                     <div className="w-3 h-3 rounded-full bg-amber-400" />
+                     <div className="w-3 h-3 rounded-full bg-emerald-400" />
+                   </div>
+                   <div className="px-4 py-1 bg-white border border-gray-200 rounded-full text-xs font-semibold text-gray-500 shadow-xs flex items-center gap-2">
+                     <Shield className="w-3 h-3 text-[#531FFF]" />
+                     <span>https://quickschools.id/admin/dashboard</span>
+                   </div>
+                   <div className="w-12" />
+                 </div>
 
-                       {/* Top stats mock */}
-                       <div className="grid grid-cols-4 gap-4">
-                         {[...Array(4)].map((_, i) => (
-                           <div key={i} className="h-24 bg-white border border-gray-100 shadow-sm rounded-xl p-4 flex flex-col justify-between">
-                             <div className="h-2 w-20 bg-gray-200 rounded"></div>
-                             <div className="h-6 w-12 bg-gray-800 rounded"></div>
-                             <div className="h-2 w-16 bg-green-200 rounded"></div>
+                 <div className="bg-slate-50/60 p-4 sm:p-6 rounded-b-2xl grid grid-cols-1 lg:grid-cols-4 gap-4">
+                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-[#531FFF] font-bold">
+                        <Users className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase">{t.hero.statsSiswa}</p>
+                        <p className="text-xl font-extrabold text-gray-900">1,482</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold">
+                        <CheckCircle2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase">{t.hero.statsPresensi}</p>
+                        <p className="text-xl font-extrabold text-emerald-600">98.5%</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 font-bold">
+                        <BookOpen className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase">{t.hero.statsKelas}</p>
+                        <p className="text-xl font-extrabold text-gray-900">42 {lang === 'id' ? 'Kelas' : 'Classes'}</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 font-bold">
+                        <CreditCard className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase">{t.hero.statsSPP}</p>
+                        <p className="text-xl font-extrabold text-gray-900">94.2%</p>
+                      </div>
+                    </div>
+
+                    <div className="lg:col-span-3 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between min-h-[220px]">
+                      <div className="flex items-center justify-between border-b border-gray-50 pb-3">
+                        <div>
+                          <p className="text-xs font-extrabold text-[#531FFF] uppercase tracking-wider">{t.hero.grafikTitle}</p>
+                          <p className="text-sm font-bold text-gray-900">{t.hero.grafikSub}</p>
+                        </div>
+                        <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg">Realtime</span>
+                      </div>
+                      <div className="h-32 w-full pt-4 relative flex items-end justify-between gap-2">
+                         {[65, 78, 85, 92, 88, 96, 94, 98, 95, 99].map((val, idx) => (
+                           <div key={idx} className="flex-1 flex flex-col items-center gap-2 group">
+                             <div 
+                               style={{ height: `${val}%` }} 
+                               className="w-full bg-gradient-to-t from-[#531FFF]/30 to-[#531FFF] rounded-t-lg transition-all group-hover:bg-[#4314cc]" 
+                             />
                            </div>
                          ))}
-                       </div>
+                      </div>
+                    </div>
 
-                       {/* Charts Area mock */}
-                       <div className="flex-1 flex gap-4">
-                         <div className="flex-[2] bg-white border border-gray-100 shadow-sm rounded-xl p-4 flex flex-col">
-                           <div className="flex justify-between mb-6">
-                             <div className="h-3 w-32 bg-gray-200 rounded"></div>
-                             <div className="h-3 w-16 bg-gray-200 rounded"></div>
-                           </div>
-                           <div className="flex-1 border-b border-l border-gray-100 relative">
-                              <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
-                                <path d="M0 100 L 10 80 L 30 90 L 50 40 L 70 70 L 90 20 L 100 20" fill="none" stroke="#531FFF" strokeWidth="2" vectorEffect="non-scaling-stroke"/>
-                                <path d="M0 100 L 10 80 L 30 90 L 50 40 L 70 70 L 90 20 L 100 20 L 100 100 Z" fill="rgba(83,31,255,0.1)" />
-                              </svg>
-                           </div>
-                         </div>
-                         <div className="flex-[1.2] bg-white border border-gray-100 shadow-sm rounded-xl p-4 flex flex-col gap-4">
-                            <div className="h-3 w-24 bg-gray-200 rounded"></div>
-                            {[...Array(4)].map((_, i) => (
-                               <div key={i} className="flex gap-3 py-2 border-b border-gray-50 items-center">
-                                 <div className="w-10 h-3 bg-gray-200 rounded"></div>
-                                 <div className="flex-1">
-                                    <div className="h-2.5 w-full bg-gray-800 rounded mb-1.5"></div>
-                                    <div className="h-2 w-1/2 bg-gray-300 rounded"></div>
-                                 </div>
-                               </div>
-                            ))}
-                         </div>
-                       </div>
+                    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
+                      <div>
+                        <p className="text-xs font-extrabold text-gray-400 uppercase tracking-wider mb-2">{t.hero.liveBadge}</p>
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2.5 p-2 bg-emerald-50/60 rounded-xl border border-emerald-100">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                            <div className="overflow-hidden">
+                              <p className="text-xs font-bold text-gray-900 truncate">Ahmad Rizqi (10 IPA 1)</p>
+                              <p className="text-[10px] text-emerald-700 font-semibold">98.5% Match • 06:45 WIB</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5 p-2 bg-purple-50/60 rounded-xl border border-purple-100">
+                            <div className="w-2 h-2 rounded-full bg-[#531FFF]" />
+                            <div className="overflow-hidden">
+                              <p className="text-xs font-bold text-gray-900 truncate">Siti Nurhaliza (11 IPS 2)</p>
+                              <p className="text-[10px] text-[#531FFF] font-semibold">99.1% Match • 06:48 WIB</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[11px] text-gray-400 text-center block pt-2 font-medium">GPS Verification Active</span>
                     </div>
                  </div>
                </div>
 
-               {/* Floating Widgets */}
-               {/* 1. AI Assistant Widget */}
                <motion.div 
-                 initial={{ opacity: 0, y: 20 }}
-                 animate={{ opacity: 1, y: 0 }}
-                 transition={{ delay: 0.6, duration: 0.6 }}
-                 className="absolute -left-12 top-1/2 translate-y-20 w-[240px] bg-white rounded-2xl shadow-xl border border-[#531FFF]/10 p-5 z-20 flex flex-col gap-3"
+                 animate={{ y: [0, -8, 0] }}
+                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                 className="absolute -left-6 top-1/3 bg-white p-4 rounded-2xl shadow-xl border border-gray-100 hidden xl:flex items-center gap-3 z-20"
                >
-                 <div className="flex items-center gap-3 mb-2">
-                   <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                     <Bot className="w-5 h-5 text-[#531FFF]" />
-                   </div>
-                   <div className="text-[13px] font-bold text-gray-900">AI Assistant</div>
+                 <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-[#531FFF]">
+                   <Bot className="w-5 h-5" />
                  </div>
-                 <p className="text-[12px] text-gray-500 leading-relaxed font-medium">
-                   You can optimize Monday&apos;s schedule by 19%
-                 </p>
-                 <div className="text-[12px] text-[#531FFF] font-bold flex items-center gap-1 cursor-pointer">
-                   <Sparkles className="w-3.5 h-3.5" /> View Insight
+                 <div>
+                   <p className="text-xs font-bold text-gray-900">{t.hero.aiScheduleTitle}</p>
+                   <p className="text-[11px] text-gray-500 font-medium">{t.hero.aiScheduleDesc}</p>
                  </div>
                </motion.div>
 
-               {/* 2. Announcement Widget */}
                <motion.div 
-                 initial={{ opacity: 0, y: -20 }}
-                 animate={{ opacity: 1, y: 0 }}
-                 transition={{ delay: 0.7, duration: 0.6 }}
-                 className="absolute top-16 right-[-20px] w-[260px] bg-white rounded-2xl shadow-xl border border-gray-100 p-4 z-20 flex flex-col gap-2"
+                 animate={{ y: [0, 8, 0] }}
+                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+                 className="absolute -right-6 bottom-10 bg-white p-4 rounded-2xl shadow-xl border border-gray-100 hidden xl:flex items-center gap-3 z-20"
                >
-                 <div className="flex gap-3 items-center mb-1">
-                   <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
-                     <Calendar className="w-4 h-4 text-amber-500" />
-                   </div>
-                   <div>
-                     <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">New Announcement</div>
-                     <div className="text-[13px] font-bold text-gray-900">Science Fair 2024</div>
-                   </div>
+                 <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                   <ShieldCheck className="w-5 h-5" />
                  </div>
-                 <div className="text-[12px] text-gray-500 ml-11">May 25, 2024</div>
-                 <div className="ml-11 mt-1 inline-flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-600 rounded-md text-[10px] w-max font-bold">
-                   <Clock className="w-3 h-3" /> 2 days left
+                 <div>
+                   <p className="text-xs font-bold text-gray-900">{t.hero.securityTitle}</p>
+                   <p className="text-[11px] text-gray-500 font-medium">{t.hero.securityDesc}</p>
                  </div>
                </motion.div>
-
-               {/* 3. Payment Received Widget */}
-               <motion.div 
-                 initial={{ opacity: 0, x: 20 }}
-                 animate={{ opacity: 1, x: 0 }}
-                 transition={{ delay: 0.8, duration: 0.6 }}
-                 className="absolute bottom-16 right-[-40px] w-[240px] bg-white rounded-2xl shadow-xl border border-gray-100 p-5 z-20"
-               >
-                 <div className="flex gap-3 items-center mb-4">
-                   <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                     <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                   </div>
-                   <div className="text-[13px] font-bold text-gray-900">Payment Received</div>
-                 </div>
-                 <div className="text-[12px] text-gray-500 mb-1">From Budi Santoso</div>
-                 <div className="text-xl font-bold text-gray-900 mb-1">Rp 1,250,000</div>
-                 <div className="text-[11px] text-gray-400">Today, 10:30 AM</div>
-               </motion.div>
-
             </motion.div>
          </div>
       </section>
 
-      {/* Logging/Trusted By */}
-      <section className="border-b border-gray-100 bg-white">
-        <div className="max-w-[1400px] mx-auto px-6 py-12">
-          <p className="text-center text-[13px] font-bold text-gray-800 uppercase tracking-widest mb-10">Trusted by schools across Indonesia</p>
-          <div className="flex flex-wrap items-center justify-center gap-12 lg:gap-20 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-500">
-            {/* Using text+icon setups instead of raw images to mirror the reference roughly */}
-            <div className="flex items-center gap-2 group cursor-pointer">
-              <ShieldCheck className="w-8 h-8 text-blue-800" />
-              <span className="font-bold text-lg text-blue-900">SMA LABSCHOOL<br/><span className="text-[10px] tracking-wide block -mt-1">JAKARTA</span></span>
+      {/* Trusted By Section */}
+      <section className="py-14 border-y border-gray-100 bg-white">
+        <div className="max-w-[1400px] mx-auto px-6">
+          <p className="text-center text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-8">
+            {t.trustedBy}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-10 lg:gap-16 opacity-70 hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-2 cursor-pointer">
+              <ShieldCheck className="w-7 h-7 text-blue-700" />
+              <span className="font-bold text-base text-gray-800">SMA LABSCHOOL<br/><span className="text-[9px] text-gray-500 tracking-wider block -mt-1">JAKARTA</span></span>
             </div>
-            <div className="flex items-center gap-2 group cursor-pointer">
-               <div className="w-8 h-8 rounded bg-red-700 flex items-center justify-center text-white font-serif font-bold italic">B</div>
-               <span className="font-bold text-lg text-gray-800">BINUS<br/><span className="text-[10px] text-gray-500 tracking-wide block -mt-1">SCHOOL</span></span>
+            <div className="flex items-center gap-2 cursor-pointer">
+               <div className="w-7 h-7 rounded bg-red-700 flex items-center justify-center text-white font-serif font-bold italic text-sm">B</div>
+               <span className="font-bold text-base text-gray-800">BINUS<br/><span className="text-[9px] text-gray-500 tracking-wider block -mt-1">SCHOOL</span></span>
             </div>
-            <div className="flex items-center gap-2 group cursor-pointer">
-               <Globe2 className="w-8 h-8 text-green-700" />
-               <span className="font-bold text-lg text-gray-800">Al-Azhar<br/><span className="text-[10px] text-gray-500 tracking-wide block -mt-1">Kelapa Gading</span></span>
+            <div className="flex items-center gap-2 cursor-pointer">
+               <Globe2 className="w-7 h-7 text-emerald-700" />
+               <span className="font-bold text-base text-gray-800">Al-Azhar<br/><span className="text-[9px] text-gray-500 tracking-wider block -mt-1">Kelapa Gading</span></span>
             </div>
-            <div className="flex items-center gap-2 group cursor-pointer">
-               <div className="w-8 h-8 flex flex-col justify-between py-1">
-                 <div className="h-1.5 w-full bg-blue-900"></div>
-                 <div className="h-1.5 w-8 bg-blue-900"></div>
-                 <div className="h-1.5 w-full bg-blue-900"></div>
-               </div>
-               <span className="font-bold text-lg text-gray-800">BPK PENABUR<br/><span className="text-[10px] text-gray-500 tracking-wide block -mt-1">Jakarta</span></span>
-            </div>
-            <div className="flex items-center gap-2 group cursor-pointer">
-               <GraduationCap className="w-8 h-8 text-purple-800" />
-               <span className="font-bold text-lg text-gray-800 uppercase">Global Jaya<br/><span className="text-[9px] text-gray-500 tracking-widest block -mt-1">S C H O O L</span></span>
+            <div className="flex items-center gap-2 cursor-pointer">
+               <GraduationCap className="w-7 h-7 text-purple-700" />
+               <span className="font-bold text-base text-gray-800 uppercase">Global Jaya<br/><span className="text-[9px] text-gray-500 tracking-widest block -mt-1">S C H O O L</span></span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Features Grid */}
-      <section className="bg-white py-32" id="features">
+      {/* Main Features Section */}
+      <section className="bg-slate-50/50 py-24 sm:py-32" id="features">
         <div className="max-w-[1400px] mx-auto px-6">
-           <div className="text-center mb-20">
-             <div className="inline-flex px-4 py-1.5 bg-[#F8F9FE] text-[#531FFF] border border-[#531FFF]/10 text-[12px] font-bold tracking-wider uppercase rounded-full mb-6 mt-10">
-               Features
+           <div className="text-center max-w-3xl mx-auto mb-20">
+             <div className="inline-flex px-4 py-1.5 bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/20 text-xs font-extrabold tracking-wider uppercase rounded-full mb-4">
+               {t.features.badge}
              </div>
-             <h2 className="text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-6">
-               Everything You Need in One Platform
+             <h2 className="text-3xl sm:text-5xl font-extrabold text-gray-900 tracking-tight mb-5">
+               {t.features.title}
              </h2>
-             <p className="text-[17px] text-gray-500 max-w-2xl mx-auto font-medium leading-relaxed">
-               Powerful features to simplify every aspect of school management.
+             <p className="text-base sm:text-lg text-gray-600 font-medium">
+               {t.features.desc}
              </p>
            </div>
 
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
              {[
-               { icon: User, title: "Student Management", desc: "Manage student data, classes, enrollment, and academic records in one place." },
-               { icon: CheckSquare, title: "Attendance System", desc: "Real-time attendance tracking with smart validation for accuracy and transparency." },
-               { icon: Calendar, title: "Academic Scheduling", desc: "Automated class, exam, and event scheduling with drag-and-drop ease." },
-               { icon: MessageCircle, title: "Communication Hub", desc: "Connect with students, parents, and teachers through announcements and messages." },
-               { icon: CreditCard, title: "Finance & Payments", desc: "Manage fee collections, invoices, and payments with secure and easy tracking." },
-               { icon: LineChart, title: "Reports & Analytics", desc: "Visual reports and insights to monitor performance and make data-driven decisions." },
+               { icon: CheckSquare, title: t.features.f1Title, desc: t.features.f1Desc },
+               { icon: User, title: t.features.f2Title, desc: t.features.f2Desc },
+               { icon: Calendar, title: t.features.f3Title, desc: t.features.f3Desc },
+               { icon: CreditCard, title: t.features.f4Title, desc: t.features.f4Desc },
+               { icon: MessageCircle, title: t.features.f5Title, desc: t.features.f5Desc },
+               { icon: LineChart, title: t.features.f6Title, desc: t.features.f6Desc },
              ].map((f, i) => (
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                  transition={{ delay: i * 0.1, duration: 0.5 }}
+                  viewport={{ once: true, margin: "-50px" }}
+                  transition={{ delay: i * 0.08, duration: 0.5 }}
                   key={i} 
-                  className="bg-white border text-center lg:text-left border-gray-100 p-10 rounded-[2rem] shadow-sm hover:shadow-[0_15px_40px_-15px_rgba(83,31,255,0.15)] hover:border-[#531FFF]/20 transition-all duration-300"
+                  className="bg-white border border-gray-200/80 p-8 rounded-3xl shadow-xs hover:shadow-xl hover:border-[#531FFF]/30 transition-all duration-300 group flex flex-col justify-between"
                 >
-                   <div className="w-16 h-16 rounded-2xl bg-[#F8F9FE] flex items-center justify-center mb-8 mx-auto lg:mx-0">
-                     <f.icon className="w-8 h-8 text-[#531FFF]" strokeWidth={1.5} />
+                   <div>
+                     <div className="w-14 h-14 rounded-2xl bg-[#F3F0FF] flex items-center justify-center mb-6 text-[#531FFF] group-hover:scale-110 group-hover:bg-[#531FFF] group-hover:text-white transition-all">
+                       <f.icon className="w-7 h-7" strokeWidth={2} />
+                     </div>
+                     <h3 className="text-xl font-bold text-gray-900 mb-3">{f.title}</h3>
+                     <p className="text-sm font-medium text-gray-600 leading-relaxed">
+                       {f.desc}
+                     </p>
                    </div>
-                   <h3 className="text-[20px] font-bold text-gray-900 mb-4">{f.title}</h3>
-                   <p className="text-[15px] font-medium text-gray-500 leading-relaxed">
-                     {f.desc}
-                   </p>
+                   <div className="mt-6 pt-4 border-t border-gray-100 flex items-center gap-1 text-xs font-bold text-[#531FFF] group-hover:translate-x-1 transition-transform">
+                     <span>{t.features.more}</span>
+                     <ChevronRight className="w-3.5 h-3.5" />
+                   </div>
                 </motion.div>
              ))}
            </div>
         </div>
       </section>
 
-      {/* Feature Showcase: Built for Modern Schools */}
-      <section className="py-20 lg:py-32 bg-white relative overflow-hidden">
-        <div className="max-w-[1400px] mx-auto px-6 flex flex-col lg:flex-row items-center gap-16 lg:gap-24 relative z-10">
-           
-           {/* Content Left */}
-           <div className="flex-1 lg:max-w-xl">
-             <div className="inline-flex px-4 py-1.5 bg-[#F8F9FE] text-[#531FFF] border border-[#531FFF]/10 text-[12px] font-bold tracking-wider uppercase rounded-full mb-8">
-               Smarter School Operations <Sparkles className="w-3.5 h-3.5 ml-2 inline-block pt-[1px]"/>
-             </div>
-             
-             <h2 className="text-4xl lg:text-[52px] font-extrabold text-gray-900 leading-[1.1] tracking-tight mb-10">
-               Built for Modern<br/>Schools Like Yours
-             </h2>
-
-             <ul className="space-y-5 mb-12">
-               {[
-                 "Centralized data & secure cloud access",
-                 "Role-based access for staff & teachers",
-                 "AI-powered insights & smart suggestions",
-                 "Mobile-friendly for anytime, anywhere",
-                 "Easy to use, no training needed"
-               ].map((item, i) => (
-                 <li key={i} className="flex items-center gap-4">
-                   <div className="w-6 h-6 rounded-full bg-[#FAFAFA] border border-gray-200 flex items-center justify-center shrink-0">
-                     <Check className="w-3.5 h-3.5 text-[#531FFF]" strokeWidth={3} />
-                   </div>
-                   <span className="text-[16px] font-semibold text-gray-700">{item}</span>
-                 </li>
-               ))}
-             </ul>
-
-             <button className="px-8 py-4 bg-[#531FFF] text-white rounded-full text-[15px] font-bold hover:bg-[#4314E5] transition-all shadow-lg shadow-[#531FFF]/25 flex items-center gap-2 group">
-               Explore All Features <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-             </button>
-           </div>
-
-           {/* Mockup Right */}
-           <div className="flex-1 relative w-full lg:min-h-[600px] flex justify-center items-center">
-              
-              {/* base mockup */}
-              <motion.div 
-                 initial={{ opacity: 0, scale: 0.95 }}
-                 whileInView={{ opacity: 1, scale: 1 }}
-                 viewport={{ once: true }}
-                 transition={{ duration: 0.8 }}
-                 className="relative z-10 w-full max-w-[800px] aspect-[16/10] bg-black rounded-t-[2rem] border-[12px] border-black border-b-0 shadow-2xl flex flex-col overflow-hidden"
-              >
-                  {/* Screen Top Bar */}
-                  <div className="w-full flex justify-center pb-2 bg-black absolute top-0 inset-x-0 z-20">
-                     <div className="w-3 h-3 rounded-full bg-gray-800"></div>
-                  </div>
-                  {/* Mock Interface Details */}
-                  <div className="w-full h-full bg-[#f8fbfa] pt-6 flex flex-col relative z-10">
-                     <div className="flex px-4 py-2 bg-white border-b border-gray-100 items-center justify-between">
-                       <div className="flex items-center gap-3"><div className="w-4 h-4 bg-gray-300 rounded-sm"></div><span className="text-[10px] font-bold text-gray-500">Students</span></div>
-                       <div className="flex gap-2">
-                          <div className="h-6 w-32 bg-gray-100 rounded-full"></div>
-                          <div className="h-6 w-24 bg-[#531FFF] rounded-md text-white text-[9px] flex justify-center items-center">+ Add Student</div>
-                       </div>
-                     </div>
-                     <div className="p-4 bg-white flex-1 overflow-hidden">
-                        <div className="flex border-b border-gray-100 pb-2 mb-3">
-                          <div className="w-1/4 text-[10px] font-bold text-gray-400">Student Name</div>
-                          <div className="w-1/4 text-[10px] font-bold text-gray-400">Class</div>
-                          <div className="w-1/4 text-[10px] font-bold text-gray-400">Attendance</div>
-                          <div className="w-1/4 text-[10px] font-bold text-gray-400">Status</div>
-                        </div>
-                        {[1,2,3,4,5].map(i => (
-                           <div key={i} className="flex border-b border-gray-50 py-3 items-center">
-                              <div className="w-1/4 flex gap-2 items-center"><div className="w-6 h-6 rounded-full bg-gray-200"></div><div className="h-2 w-16 bg-gray-800 rounded"></div></div>
-                              <div className="w-1/4"><div className="h-2 w-10 bg-gray-500 rounded"></div></div>
-                              <div className="w-1/4 text-[11px] font-bold">{100 - i}%</div>
-                              <div className="w-1/4"><div className="px-2 py-0.5 bg-emerald-100 text-emerald-600 rounded-full text-[9px] w-max font-bold">● Active</div></div>
-                           </div>
-                        ))}
-                     </div>
-                  </div>
-                  <div className="h-4 w-[110%] -ml-[5%] bg-gray-400 absolute bottom-0 rounded-b-xl shadow-[0_20px_40px_rgba(0,0,0,0.4)] z-30"></div>
-              </motion.div>
-
-              {/* Mobile Mockup overlapping right */}
-              <motion.div 
-                 initial={{ opacity: 0, y: 50 }}
-                 whileInView={{ opacity: 1, y: 0 }}
-                 viewport={{ once: true }}
-                 transition={{ delay: 0.3, duration: 0.8 }}
-                 className="absolute -right-6 lg:-right-4 -bottom-10 lg:-bottom-16 w-[180px] lg:w-[220px] aspect-[9/19] bg-white rounded-[3rem] border-[8px] border-black shadow-[0_30px_60px_rgba(0,0,0,0.5)] z-30 overflow-hidden flex flex-col"
-              >
-                  <div className="w-full flex justify-center pt-2 pb-1 bg-white absolute top-0 inset-x-0 z-20">
-                     <div className="w-20 h-5 bg-black rounded-full"></div>
-                  </div>
-                  <div className="mt-10 px-4 flex flex-col gap-3">
-                     <div className="h-3 w-16 bg-gray-800 rounded mb-2"></div>
-                     <div className="h-20 w-full bg-purple-50 rounded-xl border border-purple-100 p-3">
-                        <div className="h-2 w-20 bg-gray-400 rounded mb-6"></div>
-                        <div className="text-xl font-bold text-gray-900">98%</div>
-                     </div>
-                     <div className="h-32 w-full bg-white rounded-xl border border-gray-100 p-3 flex flex-col justify-end">
-                        <div className="w-full h-[60%] border-b border-l border-gray-100 relative mt-auto">
-                           <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
-                             <path d="M0 100 L 20 70 L 40 85 L 60 50 L 80 60 L 100 20" fill="none" stroke="#531FFF" strokeWidth="3" vectorEffect="non-scaling-stroke"/>
-                           </svg>
-                        </div>
-                     </div>
-                  </div>
-              </motion.div>
-              
-              {/* Floating decorative elements */}
-              <motion.div 
-                animate={{ y: [0, -10, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute top-10 right-0 w-20 h-20 bg-white rounded-full shadow-xl border border-gray-100 flex items-center justify-center z-40"
-              >
-                 <span className="text-2xl font-bold text-[#531FFF]">Ai<Sparkles className="w-4 h-4 text-[#FFB800] inline absolute top-5 right-4" /></span>
-              </motion.div>
-           </div>
-        </div>
-      </section>
-
-      {/* Stats Banner Gradient */}
-      <section className="py-20 bg-gradient-to-r from-[#5013F1] to-[#713EE5] text-white">
+      {/* Pricing Section */}
+      <section className="bg-white py-24 sm:py-32" id="pricing">
          <div className="max-w-[1400px] mx-auto px-6">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 divide-x divide-white/20 text-center">
-               {[
-                 { icon: Award, label: "500+", desc: "Schools Trusted" },
-                 { icon: User, label: "50,000+", desc: "Students Managed" },
-                 { icon: Heart, label: "98%", desc: "Customer Satisfaction" },
-                 { icon: ShieldCheck, label: "24/7", desc: "Support Available" },
-               ].map((s, i) => (
-                 <div key={i} className="flex flex-col items-center gap-3">
-                    <s.icon className="w-8 h-8 text-white/80" strokeWidth={1.5} />
-                    <div>
-                      <div className="text-3xl lg:text-[40px] font-extrabold tracking-tight">{s.label}</div>
-                      <div className="text-[15px] text-white/80 font-medium mt-1">{s.desc}</div>
-                    </div>
-                 </div>
-               ))}
-            </div>
-         </div>
-      </section>
-
-      {/* Testimonials */}
-      <section className="bg-[#F8F9FE] py-32" id="testimonials">
-         <div className="max-w-[1400px] mx-auto px-6">
-            <div className="flex flex-col lg:flex-row gap-16 lg:items-center">
-               <div className="lg:w-1/3">
-                  <div className="inline-flex px-4 py-1.5 bg-white text-[#531FFF] border border-[#531FFF]/10 text-[12px] font-bold tracking-wider uppercase rounded-full mb-6">
-                    Testimonials
-                  </div>
-                  <h2 className="text-4xl lg:text-[48px] font-extrabold text-gray-900 tracking-tight leading-[1.1] mb-8">
-                    Loved by<br/>Educators
-                  </h2>
+            <div className="text-center max-w-3xl mx-auto mb-16">
+               <div className="inline-flex px-4 py-1.5 bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/20 text-xs font-extrabold tracking-wider uppercase rounded-full mb-4">
+                 {t.pricing.badge}
                </div>
-
-               <div className="lg:w-2/3 grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {[
-                    { quote: "Quick Schools has transformed the way we manage our school. It's efficient, intuitive, and the support is amazing!", name: "Indra Gunawan", role: "Principal", school: "SMA Global Mandiri", avatar: 12 },
-                    { quote: "Scheduling, attendance, reports — everything is now automated. Saves us so much time!", name: "Rina Marlina", role: "Academic Coordinator", school: "SMP Al-Azhar 1", avatar: 41 },
-                    { quote: "The best investment for our school. Parents love the communication features!", name: "Fauzi Rahman", role: "Vice Principal", school: "BPK Penabur", avatar: 33 },
-                  ].map((t, i) => (
-                     <div key={i} className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
-                        <p className="text-[15px] font-medium text-gray-600 leading-relaxed italic mb-8">&quot;{t.quote}&quot;</p>
-                        <div className="flex items-center gap-4">
-                            <Image src={`https://i.pravatar.cc/100?img=${t.avatar}`} alt={t.name} className="w-12 h-12 rounded-full object-cover bg-gray-100" fill referrerPolicy="no-referrer" />
-                           <div>
-                             <div className="font-bold text-[14px] text-gray-900">{t.name}</div>
-                             <div className="text-[12px] text-gray-500 font-medium">{t.role}</div>
-                             <div className="text-[12px] text-gray-500">{t.school}</div>
-                           </div>
-                        </div>
-                     </div>
-                  ))}
-               </div>
-            </div>
-            
-            {/* Pagination dots (visual only for mockup) */}
-            <div className="flex justify-center gap-2 mt-16">
-               <div className="w-2.5 h-2.5 rounded-full bg-[#531FFF]"></div>
-               <div className="w-2.5 h-2.5 rounded-full bg-gray-300"></div>
-               <div className="w-2.5 h-2.5 rounded-full bg-gray-300"></div>
-               <div className="w-2.5 h-2.5 rounded-full bg-gray-300"></div>
-               <div className="w-2.5 h-2.5 rounded-full bg-gray-300"></div>
-            </div>
-         </div>
-      </section>
-
-      {/* Pricing */}
-      <section className="bg-white py-32" id="pricing">
-         <div className="max-w-[1400px] mx-auto px-6">
-            <div className="flex flex-col lg:flex-row lg:items-end justify-between mb-16 gap-8">
-               <div>
-                 <div className="inline-flex px-4 py-1.5 bg-[#F8F9FE] text-[#531FFF] border border-[#531FFF]/10 text-[12px] font-bold tracking-wider uppercase rounded-full mb-6 mt-10">
-                   Pricing
-                 </div>
-                 <h2 className="text-4xl lg:text-[48px] font-extrabold text-gray-900 tracking-tight leading-[1.1]">
-                   Simple, Transparent<br/>Pricing
-                 </h2>
-               </div>
-               
-               {/* Toggle visual */}
-               <div className="flex items-center gap-2 mb-4">
-                  <div className="text-[14px] font-bold text-gray-500">Monthly</div>
-                  <div className="w-12 h-6 bg-[#531FFF] rounded-full p-1 relative cursor-pointer">
-                     <div className="w-4 h-4 rounded-full bg-white absolute right-1"></div>
-                  </div>
-                  <div className="text-[14px] font-bold text-gray-900">Yearly <span className="text-[#531FFF] font-bold ml-1 text-[12px]">-20% Off</span></div>
-               </div>
+               <h2 className="text-3xl sm:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
+                 {t.pricing.title}
+               </h2>
+               <p className="text-base text-gray-600 font-medium">
+                 {t.pricing.desc}
+               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
                {/* Starter */}
-               <div className="border border-gray-200 rounded-[2rem] p-10 bg-white">
-                  <div className="text-[18px] font-bold text-gray-900">Starter</div>
-                  <div className="text-[14px] font-medium text-gray-500 mb-6">Perfect for small schools</div>
-                  <div className="flex items-baseline gap-1 mb-8">
-                     <span className="text-[40px] font-extrabold text-gray-900">Rp 0</span>
-                     <span className="text-[14px] font-bold text-gray-500">/month</span>
+               <div className="border border-gray-200 rounded-3xl p-8 bg-white shadow-xs flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">{t.pricing.p1Name}</h3>
+                    <p className="text-xs font-semibold text-gray-500 mt-1 mb-6">{t.pricing.p1Desc}</p>
+                    <div className="flex items-baseline gap-1 mb-6">
+                       <span className="text-4xl font-extrabold text-gray-900">{t.pricing.p1Price}</span>
+                       <span className="text-xs font-bold text-gray-500">{t.pricing.p1Unit}</span>
+                    </div>
+                    <ul className="space-y-3.5 mb-8 text-xs font-semibold text-gray-700">
+                       {[
+                         lang === 'id' ? "Hingga 150 Siswa" : "Up to 150 Students", 
+                         lang === 'id' ? "Absensi GPS Standard" : "Standard GPS Attendance", 
+                         lang === 'id' ? "Manajemen Data Siswa" : "Student Bio-data Management", 
+                         lang === 'id' ? "Laporan Rekap Bulanan" : "Monthly Summary Reports"
+                       ].map((item, i) => (
+                          <li key={i} className="flex gap-2.5 items-center">
+                             <Check className="w-4 h-4 text-emerald-500 shrink-0" strokeWidth={3} />
+                             <span>{item}</span>
+                          </li>
+                       ))}
+                    </ul>
                   </div>
-                  <ul className="space-y-4 mb-10">
-                     {["Up to 100 Students", "Attendance System", "Basic Reports", "Email Support"].map((item, i) => (
-                        <li key={i} className="flex gap-3 items-center">
-                           <div className="w-5 h-5 rounded-full bg-[#531FFF]/10 flex items-center justify-center shrink-0">
-                               <Check className="w-3 h-3 text-[#531FFF]" strokeWidth={3} />
-                           </div>
-                           <span className="text-[14px] font-medium text-gray-600">{item}</span>
-                        </li>
-                     ))}
-                  </ul>
-                  <button className="w-full py-4 rounded-xl border-2 border-[#531FFF] text-[#531FFF] font-bold text-[15px] hover:bg-[#531FFF]/5 transition-colors">
-                    Start Free Trial
+                  <button className="w-full py-3.5 rounded-xl border-2 border-gray-200 text-gray-800 font-bold text-sm hover:bg-gray-50 transition-colors">
+                    {t.pricing.p1Btn}
                   </button>
                </div>
 
                {/* Pro (Most Popular) */}
-               <div className="border-2 border-[#531FFF] rounded-[2rem] p-10 bg-white shadow-2xl relative transform lg:scale-105 z-10">
-                  <div className="absolute -top-4 right-8 bg-[#531FFF] text-white px-4 py-1 rounded-full text-[12px] font-bold tracking-wide uppercase">
-                    Most Popular
+               <div className="border-2 border-[#531FFF] rounded-3xl p-8 bg-white shadow-2xl relative flex flex-col justify-between transform lg:-translate-y-2">
+                  <div className="absolute -top-4 right-8 bg-[#531FFF] text-white px-3.5 py-1 rounded-full text-xs font-extrabold tracking-wide uppercase shadow-md">
+                    {t.pricing.p2Badge}
                   </div>
-                  <div className="text-[18px] font-bold text-gray-900">Pro</div>
-                  <div className="text-[14px] font-medium text-gray-500 mb-6">Best for growing schools</div>
-                  <div className="flex items-baseline gap-1 mb-8">
-                     <span className="text-[40px] font-extrabold text-gray-900">Rp 199,000</span>
-                     <span className="text-[14px] font-bold text-gray-500">/month</span>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">{t.pricing.p2Name}</h3>
+                    <p className="text-xs font-semibold text-gray-500 mt-1 mb-6">{t.pricing.p2Desc}</p>
+                    <div className="flex items-baseline gap-1 mb-6">
+                       <span className="text-4xl font-extrabold text-gray-900">{t.pricing.p2Price}</span>
+                       <span className="text-xs font-bold text-gray-500">{t.pricing.p2Unit}</span>
+                    </div>
+                    <ul className="space-y-3.5 mb-8 text-xs font-semibold text-gray-800">
+                       {[
+                         lang === 'id' ? "Hingga 1.000 Siswa" : "Up to 1,000 Students", 
+                         lang === 'id' ? "Presensi AI Face Recognition" : "AI Face Recognition Attendance", 
+                         lang === 'id' ? "AI Generator Jadwal Otomatis" : "Automated AI Timetabling", 
+                         lang === 'id' ? "Sistem Pembayaran SPP Digital" : "Digital Fee & Invoicing System", 
+                         lang === 'id' ? "Dukungan Prioritas 24/7" : "24/7 Priority Support"
+                       ].map((item, i) => (
+                          <li key={i} className="flex gap-2.5 items-center">
+                             <Check className="w-4 h-4 text-[#531FFF] shrink-0" strokeWidth={3} />
+                             <span>{item}</span>
+                          </li>
+                       ))}
+                    </ul>
                   </div>
-                  <ul className="space-y-4 mb-10">
-                     {["Up to 1,000 Students", "All Starter Features", "AI Schedule Assistant", "Advanced Analytics", "Priority Support"].map((item, i) => (
-                        <li key={i} className="flex gap-3 items-center">
-                           <div className="w-5 h-5 rounded-full bg-[#531FFF]/10 flex items-center justify-center shrink-0">
-                               <Check className="w-3 h-3 text-[#531FFF]" strokeWidth={3} />
-                           </div>
-                           <span className="text-[14px] font-bold text-gray-900">{item}</span>
-                        </li>
-                     ))}
-                  </ul>
-                  <button className="w-full py-4 rounded-xl bg-[#531FFF] text-white font-bold text-[15px] shadow-lg shadow-[#531FFF]/30 hover:bg-[#4314E5] transition-colors">
-                    Start Free Trial
+                  <button className="w-full py-3.5 rounded-xl bg-[#531FFF] text-white font-bold text-sm shadow-lg shadow-[#531FFF]/30 hover:bg-[#4314cc] transition-colors">
+                    {t.pricing.p2Btn}
                   </button>
                </div>
 
                {/* Enterprise */}
-               <div className="border border-gray-200 rounded-[2rem] p-10 bg-white">
-                  <div className="text-[18px] font-bold text-gray-900">Enterprise</div>
-                  <div className="text-[14px] font-medium text-gray-500 mb-6">For large institutions</div>
-                  <div className="flex items-baseline gap-1 mb-8">
-                     <span className="text-[32px] font-extrabold text-gray-900 pt-2">Custom Pricing</span>
+               <div className="border border-gray-200 rounded-3xl p-8 bg-white shadow-xs flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">{t.pricing.p3Name}</h3>
+                    <p className="text-xs font-semibold text-gray-500 mt-1 mb-6">{t.pricing.p3Desc}</p>
+                    <div className="flex items-baseline gap-1 mb-6">
+                       <span className="text-3xl font-extrabold text-gray-900">{t.pricing.p3Price}</span>
+                    </div>
+                    <ul className="space-y-3.5 mb-8 text-xs font-semibold text-gray-700">
+                       {[
+                         lang === 'id' ? "Jumlah Siswa Tanpa Batas" : "Unlimited Students", 
+                         lang === 'id' ? "Kustomisasi Server & Integrasi" : "Custom Server & API Integrations", 
+                         lang === 'id' ? "Dedicated Account Manager" : "Dedicated Account Manager", 
+                         lang === 'id' ? "SLA Garansi 99.9% Uptime" : "SLA 99.9% Uptime Guarantee"
+                       ].map((item, i) => (
+                          <li key={i} className="flex gap-2.5 items-center">
+                             <Check className="w-4 h-4 text-emerald-500 shrink-0" strokeWidth={3} />
+                             <span>{item}</span>
+                          </li>
+                       ))}
+                    </ul>
                   </div>
-                  <ul className="space-y-4 mb-10">
-                     {["Unlimited Students", "Custom Integrations", "Dedicated Support", "SLA Guarantee", "All Pro Features"].map((item, i) => (
-                        <li key={i} className="flex gap-3 items-center">
-                           <div className="w-5 h-5 rounded-full bg-[#531FFF]/10 flex items-center justify-center shrink-0">
-                               <Check className="w-3 h-3 text-[#531FFF]" strokeWidth={3} />
-                           </div>
-                           <span className="text-[14px] font-medium text-gray-600">{item}</span>
-                        </li>
-                     ))}
-                  </ul>
-                  <button className="w-full py-4 rounded-xl border border-gray-200 text-gray-900 font-bold text-[15px] hover:border-gray-900 hover:bg-gray-50 transition-all">
-                    Contact Sales
+                  <button className="w-full py-3.5 rounded-xl border border-gray-200 text-gray-800 font-bold text-sm hover:bg-gray-50 transition-colors">
+                    {t.pricing.p3Btn}
                   </button>
                </div>
             </div>
-            
-            <p className="text-center text-[13px] text-gray-500 mt-10 font-medium">All plans include 14-day free trial. No credit card required.</p>
          </div>
       </section>
 
-      {/* CTA Pre Footer */}
+      {/* CTA Pre-Footer */}
       <section className="bg-white px-6 pb-20">
-         <div className="max-w-[1400px] mx-auto bg-gradient-to-r from-[#4E11F4] to-[#6A39E9] rounded-[2rem] p-12 lg:p-20 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-10">
-            {/* Shapes */}
-            <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-white/10 rounded-full blur-3xl opacity-50 translate-x-1/3 -translate-y-1/3"></div>
-            
-            <div className="relative z-10 max-w-xl text-center md:text-left">
-               <h2 className="text-3xl md:text-[40px] font-extrabold text-white leading-[1.2] mb-6">
-                 Ready to Transform<br/>Your School?
+         <div className="max-w-[1400px] mx-auto bg-gradient-to-r from-[#531FFF] to-[#7B4DFF] rounded-3xl p-10 lg:p-16 text-white flex flex-col lg:flex-row items-center justify-between gap-8 shadow-2xl">
+            <div className="max-w-xl text-center lg:text-left">
+               <h2 className="text-3xl sm:text-4xl font-extrabold leading-tight mb-4">
+                 {t.cta.title}
                </h2>
-               <p className="text-[16px] text-white/80 font-medium mb-10">
-                 Join hundreds of schools already using Quick Schools to create better academic experiences.
+               <p className="text-sm sm:text-base text-white/80 font-medium mb-8">
+                 {t.cta.desc}
                </p>
-               <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
-                  <button className="px-8 py-4 bg-white text-[#531FFF] rounded-full font-bold text-[15px] shadow-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
-                    Get Started Free <ArrowRight className="w-4 h-4" />
-                  </button>
-                  <button className="px-8 py-4 bg-transparent border border-white/30 text-white rounded-full font-bold text-[15px] hover:bg-white/10 transition-colors">
-                    Talk to Sales
-                  </button>
+               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                  <Link href="/register" className="px-8 py-3.5 bg-white text-[#531FFF] rounded-lg font-bold text-sm shadow-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
+                    {t.cta.btn} <ArrowRight className="w-4 h-4" />
+                  </Link>
                </div>
             </div>
             
-            <div className="relative z-10 hidden lg:block">
-               {/* Simulated illustration of graduation cap / books via abstract shapes */}
-               <div className="relative w-64 h-64">
-                  <div className="absolute bottom-10 left-0 w-64 h-16 bg-[#3B0ABB] rounded-xl transform rotate-[-15deg] shadow-2xl border-t border-white/10"></div>
-                  <div className="absolute bottom-16 left-4 w-56 h-16 bg-[#4A16DB] rounded-xl transform rotate-[-8deg] shadow-2xl border-t border-white/10"></div>
-                  {/* Grad cap top */}
-                  <div className="absolute top-10 left-12 w-40 h-40 bg-[#1D084A] transform rotate-45 skew-x-12 skew-y-12 border-2 border-[#531FFF] rounded-md shadow-2xl"></div>
-                  {/* Tassel */}
-                  <div className="absolute top-28 left-40 w-1 max-h-[80px] bg-[#FFB800] rounded flex flex-col items-center">
-                    <div className="w-2 h-2 rounded-full bg-[#FFB800] -mt-1"></div>
-                    <div className="h-full w-full bg-[#FFB800]"></div>
-                    <div className="w-4 h-8 bg-[#FFB800] rounded-b-sm mt-auto shadow-sm"></div>
-                  </div>
-               </div>
+            <div className="w-full lg:w-auto flex justify-center">
+              <div className="p-6 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl text-center">
+                <p className="text-3xl font-extrabold mb-1">500+</p>
+                <p className="text-xs font-semibold text-white/80">{t.cta.stat}</p>
+              </div>
             </div>
          </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-[#0A071B] pt-24 pb-12 text-gray-400">
-         <div className="max-w-[1400px] mx-auto px-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-12 mb-20 lg:gap-8">
-            <div className="lg:col-span-2">
-               <div className="flex items-center gap-3 mb-6">
-                 <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#531FFF] to-[#8C6BFF] flex items-center justify-center">
-                   <Zap className="w-4 h-4 text-white" />
+      <footer className="bg-gray-900 pt-16 pb-12 text-gray-400 text-xs">
+         <div className="max-w-[1400px] mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+            <div>
+               <div className="flex items-center gap-2.5 mb-4">
+                 <div className="w-8 h-8 rounded-lg bg-[#531FFF] flex items-center justify-center text-white">
+                   <Zap className="w-4 h-4" />
                  </div>
-                 <span className="font-bold text-[18px] text-white tracking-tight leading-snug">
-                   Quick Schools<br/>
-                   <span className="text-[10px] text-gray-500 font-medium uppercase tracking-widest block -mt-1">School Management System</span>
-                 </span>
+                 <span className="font-bold text-base text-white">Quick Schools</span>
                </div>
-               <p className="text-[13px] mb-8 max-w-sm leading-relaxed">
-                 Empowering schools to work smarter, not harder.
+               <p className="text-xs leading-relaxed text-gray-400">
+                 {t.footer.tagline}
                </p>
-               <div className="flex gap-3">
-                  {/* Social links (simulated) */}
-                  {['f', 't', 'y', 'i'].map((i, index) => (
-                    <a key={index} href="#" className="w-8 h-8 rounded-full bg-white/5 border border-white/5 flex items-center justify-center hover:bg-[#531FFF] hover:text-white transition-all text-sm font-serif">
-                       {i}
-                    </a>
-                  ))}
-               </div>
             </div>
             
-            {[
-              { title: "Product", links: ["Features", "Pricing", "Updates"] },
-              { title: "Company", links: ["About Us", "Careers", "Contact"] },
-              { title: "Resources", links: ["Blog", "Help Center", "Guides"] },
-              { title: "Legal", links: ["Privacy Policy", "Terms of Service"] },
-            ].map((col, i) => (
-               <div key={i}>
-                  <h4 className="font-bold text-white text-[15px] mb-6">{col.title}</h4>
-                  <ul className="space-y-4 text-[14px] font-medium">
-                     {col.links.map(link => (
-                        <li key={link}><a href="#" className="hover:text-white transition-colors">{link}</a></li>
-                     ))}
-                  </ul>
-               </div>
-            ))}
+            <div>
+               <h4 className="font-bold text-white mb-4">{t.footer.col1}</h4>
+               <ul className="space-y-2.5">
+                  <li><a href="#features" className="hover:text-white transition-colors">{lang === 'id' ? 'Absensi AI Wajah' : 'AI Face Attendance'}</a></li>
+                  <li><a href="#features" className="hover:text-white transition-colors">{lang === 'id' ? 'Jadwal Pelajaran AI' : 'AI Class Timetable'}</a></li>
+                  <li><a href="#pricing" className="hover:text-white transition-colors">{lang === 'id' ? 'Harga Paket' : 'Pricing Plans'}</a></li>
+               </ul>
+            </div>
 
-            <div className="lg:col-span-1 hidden xl:block">
-               <h4 className="font-bold text-white text-[15px] mb-6">Newsletter</h4>
-               <p className="text-[13px] mb-4">Get the latest updates</p>
-               <div className="relative">
-                  <input type="email" placeholder="Enter your email" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-[13px] text-white focus:outline-none focus:border-[#531FFF]" />
-                  <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-               </div>
+            <div>
+               <h4 className="font-bold text-white mb-4">{t.footer.col2}</h4>
+               <ul className="space-y-2.5">
+                  <li><a href="#" className="hover:text-white transition-colors">{lang === 'id' ? 'Tentang Kami' : 'About Us'}</a></li>
+                  <li><a href="#" className="hover:text-white transition-colors">{lang === 'id' ? 'Kontak Support' : 'Support Contact'}</a></li>
+                  <li><a href="#" className="hover:text-white transition-colors">{lang === 'id' ? 'Kebijakan Privasi' : 'Privacy Policy'}</a></li>
+               </ul>
+            </div>
+
+            <div>
+               <h4 className="font-bold text-white mb-4">{t.footer.col3}</h4>
+               <p className="text-xs text-gray-400">Email: support@quickschools.id</p>
+               <p className="text-xs text-gray-400 mt-1">Jakarta, Indonesia</p>
             </div>
          </div>
          
-         <div className="max-w-[1400px] mx-auto px-6 pt-8 border-t border-white/10 text-center text-[13px] font-medium">
-            © {new Date().getFullYear()} Quick Schools. All rights reserved.
+         <div className="max-w-[1400px] mx-auto px-6 pt-8 border-t border-gray-800 text-center font-medium">
+            © {new Date().getFullYear()} {t.footer.rights}
          </div>
       </footer>
     </div>

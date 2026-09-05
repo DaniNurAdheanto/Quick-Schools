@@ -20,7 +20,8 @@ import {
   CheckCircle2,
   XCircle,
   BookOpen,
-  UserCheck
+  UserCheck,
+  Eye
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
@@ -40,7 +41,7 @@ export default function TeachersPage() {
   const [selectedSubject, setSelectedSubject] = useState("All");
   const [selectedStatus, setSelectedStatus] = useState("All");
 
-  const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete"; data?: any }>({
+  const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete" | "view"; data?: any }>({
     open: false,
     mode: "create"
   });
@@ -218,6 +219,7 @@ export default function TeachersPage() {
         fields={teacherFields}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
+        onEditRequested={() => setCrudState(s => ({ ...s, mode: "edit" }))}
       />
 
       {/* Page Header Card */}
@@ -456,6 +458,13 @@ export default function TeachersPage() {
 
                     <div className="flex items-center gap-1.5">
                       <button 
+                        onClick={() => setCrudState({ open: true, mode: "view", data: teacher })}
+                        className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
+                        title="Lihat Detail Guru"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
                         onClick={() => setCrudState({ open: true, mode: "edit", data: teacher })}
                         className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
                         title="Edit Data Guru"
@@ -543,6 +552,13 @@ export default function TeachersPage() {
                         </td>
                         <td className="py-3.5 px-6 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setCrudState({ open: true, mode: "view", data: teacher })}
+                              className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-xl transition-colors"
+                              title="Lihat Detail"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => setCrudState({ open: true, mode: "edit", data: teacher })}
                               className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-xl transition-colors"

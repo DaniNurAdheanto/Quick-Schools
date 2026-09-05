@@ -5,7 +5,7 @@ import {
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronDown, 
   Download, Plus, Sun, ClipboardCheck, Flag, BookOpen, Filter, 
   Sparkles, Trash2, Edit3, Search, Clock, MapPin, Users, Printer, 
-  X, Check, Loader2, Tag, ArrowRight, Layers, FileText, CheckCircle2, AlertTriangle, School
+  X, Check, Loader2, Tag, ArrowRight, Layers, FileText, CheckCircle2, AlertTriangle, School, Save
 } from "lucide-react";
 import { 
   ResponsiveContainer, PieChart, Pie, Cell 
@@ -17,9 +17,10 @@ import {
 } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { 
-  collection, onSnapshot, doc, setDoc, addDoc, deleteDoc, updateDoc, serverTimestamp 
+  collection, onSnapshot, doc, getDoc, setDoc, addDoc, deleteDoc, updateDoc, serverTimestamp 
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { db, auth } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { AlertBox, AlertType } from "@/components/ui/alert-box";
 
@@ -95,6 +96,7 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [userRole, setUserRole] = useState<string>("admin");
   
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -146,8 +148,21 @@ export default function CalendarPage() {
   const currentSemester = today.getMonth() < 6 ? "Semester Genap" : "Semester Ganjil";
   const academicYearText = today.getMonth() < 6 ? `${currentYear - 1}/${currentYear}` : `${currentYear}/${currentYear + 1}`;
 
-  // Firestore Realtime Subscription & Auto Sample Fallback
+  // Firestore Realtime Subscription & Auto Sample Fallback + Auth Role fetch
   useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userSnap = await getDoc(doc(db, "users", user.uid));
+          if (userSnap.exists()) {
+            setUserRole(userSnap.data().role || "admin");
+          }
+        } catch (e) {
+          console.warn("User role fetch error", e);
+        }
+      }
+    });
+
     const unsub = onSnapshot(collection(db, "calendar_events"), (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setEvents(list.length > 0 ? list : SAMPLE_CALENDAR_EVENTS);
@@ -158,7 +173,10 @@ export default function CalendarPage() {
       setLoading(false);
     });
 
-    return () => unsub();
+    return () => {
+      unsubAuth();
+      unsub();
+    };
   }, []);
 
   // Filtered Events
@@ -321,9 +339,12 @@ export default function CalendarPage() {
         days.push(
           <div
             key={day.toString()}
-            onClick={() => handleOpenAdd(dateStr)}
+            onClick={() => {
+              if (userRole !== "siswa") handleOpenAdd(dateStr);
+            }}
             className={cn(
-              "min-h-[110px] p-2 border-b border-r border-gray-100 transition-all cursor-pointer group flex flex-col justify-between relative hover:bg-purple-50/30",
+              "min-h-[110px] p-2 border-b border-r border-gray-100 transition-all group flex flex-col justify-between relative",
+              userRole !== "siswa" && "cursor-pointer hover:bg-purple-50/30",
               !isCurrentMonth ? "bg-gray-50/40 text-gray-400" : isToday ? "bg-purple-50/20" : "bg-white"
             )}
           >
@@ -458,13 +479,15 @@ export default function CalendarPage() {
             <span>Cetak Kalender (PDF)</span>
           </button>
 
-          <button
-            onClick={() => handleOpenAdd()}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah Agenda Baru</span>
-          </button>
+          {userRole !== "siswa" && (
+            <button
+              onClick={() => handleOpenAdd()}
+              className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah Agenda Baru</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -657,22 +680,24 @@ export default function CalendarPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => handleEdit(evt)}
-                          className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 rounded-lg transition-colors"
-                          title="Edit Agenda"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(evt.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Hapus Agenda"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {userRole !== "siswa" && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => handleEdit(evt)}
+                            className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
+                            title="Edit Agenda"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(evt.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            title="Hapus Agenda"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

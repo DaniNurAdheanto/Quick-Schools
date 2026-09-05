@@ -59,6 +59,7 @@ const DISTRIBUTION_DATA = [
 
 export default function DashboardPage() {
   const [userName, setUserName] = useState("Adiratna");
+  const [userRole, setUserRole] = useState<string>("admin");
   const [greeting, setGreeting] = useState("Selamat pagi");
   const [academicYear, setAcademicYear] = useState("2026 / 2027");
   const [currentDate, setCurrentDate] = useState("");
@@ -103,8 +104,14 @@ export default function DashboardPage() {
       if (user) {
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists() && userDoc.data().name) {
-            setUserName(userDoc.data().name);
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            if (data.name) setUserName(data.name);
+            else setUserName(user.displayName || user.email?.split('@')[0] || "User");
+
+            const rawRole = data.role || "admin";
+            const role = (rawRole === "student" || rawRole === "siswa") ? "siswa" : rawRole;
+            setUserRole(role);
           } else {
             setUserName(user.displayName || user.email?.split('@')[0] || "User");
           }
@@ -176,10 +183,12 @@ export default function DashboardPage() {
         
         {/* Action Buttons & Illustration area */}
         <div className="z-10 relative flex flex-col items-end gap-3 min-w-[200px]">
-          <button className="w-full flex items-center justify-center gap-2 bg-white text-[#4E54C8] hover:bg-gray-50 px-5 py-3 rounded-xl text-sm font-bold transition-colors shadow-sm">
-            <BarChart2 className="w-4 h-4" />
-            Generate Report
-          </button>
+          {userRole !== "siswa" && (
+            <button className="w-full flex items-center justify-center gap-2 bg-white text-[#4E54C8] hover:bg-gray-50 px-5 py-3 rounded-xl text-sm font-bold transition-colors shadow-sm">
+              <BarChart2 className="w-4 h-4" />
+              Generate Report
+            </button>
+          )}
           <button className="w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 px-5 py-3 rounded-xl text-sm font-bold transition-all backdrop-blur-sm">
             <Calendar className="w-4 h-4" />
             Lihat Kalender

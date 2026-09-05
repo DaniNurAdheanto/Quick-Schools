@@ -25,15 +25,27 @@ export default function RegisterPage() {
       
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Create user profile in Firestore
+      // Create user profile in Firestore with default 'siswa' role
       await setDoc(doc(db, "users", userCredential.user.uid), {
         uid: userCredential.user.uid,
         email,
         name,
-        role: "admin", // Default to admin for now
+        role: "siswa", // Automatically default new registered user to 'siswa'
+        onboardingCompleted: false,
+        createdAt: new Date().toISOString()
       });
 
-      router.push("/admin/dashboard");
+      // Also create student record in students collection for Master Data Siswa
+      await setDoc(doc(db, "students", userCredential.user.uid), {
+        uid: userCredential.user.uid,
+        name,
+        email,
+        role: "siswa",
+        status: "Belum Onboarding",
+        createdAt: new Date().toISOString()
+      }, { merge: true });
+
+      router.push("/onboarding");
     } catch (err: any) {
       setError(err.message || "Gagal membuat akun");
     } finally {
@@ -162,7 +174,7 @@ export default function RegisterPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Masukkan nama lengkap Anda" 
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] placeholder:text-gray-400"
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] placeholder:text-gray-400"
                     required
                   />
                 </div>
@@ -178,7 +190,7 @@ export default function RegisterPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Masukkan alamat email Anda" 
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] placeholder:text-gray-400"
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] placeholder:text-gray-400"
                     required
                   />
                 </div>
@@ -194,7 +206,7 @@ export default function RegisterPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Buat password" 
-                    className="w-full pl-10 pr-10 py-3 bg-white border border-gray-200 rounded-xl text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] placeholder:text-gray-400"
+                    className="w-full pl-10 pr-10 py-3 bg-white border border-gray-200 rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] placeholder:text-gray-400"
                     required
                     minLength={6}
                   />
@@ -212,10 +224,10 @@ export default function RegisterPage() {
                 <button 
                   type="submit" 
                   disabled={loading}
-                  className="w-full flex justify-center items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white font-medium py-3 rounded-xl text-[15px] transition-all shadow-sm disabled:opacity-70"
+                  className="w-full flex justify-center items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white font-bold py-3 rounded-lg text-sm transition-all shadow-sm disabled:opacity-70 active:scale-[0.99]"
                 >
                   {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Daftar
+                  Daftar Akun Siswa
                 </button>
               </div>
               
@@ -227,7 +239,7 @@ export default function RegisterPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3 pb-2">
-                <button type="button" className="flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-xl text-[13px] transition-colors">
+                <button type="button" className="flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-lg text-xs transition-colors">
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                      <path fillRule="evenodd" clipRule="evenodd" d="M23.04 12.2614C23.04 11.4459 22.9668 10.6618 22.8309 9.90909H12V14.3575H18.1891C17.922 15.795 17.1124 17.0227 15.8943 17.8382V20.7136H19.6109C21.7855 18.7118 23.04 15.7636 23.04 12.2614Z" fill="#4285F4"/>
                      <path fillRule="evenodd" clipRule="evenodd" d="M12 23.4998C15.105 23.4998 17.7082 22.4703 19.6109 20.7135L15.8943 17.8381C14.8648 18.5276 13.545 18.9453 12 18.9453C9.00497 18.9453 6.46951 16.9208 5.56542 14.185H1.72314V17.164C3.61542 20.9231 7.50451 23.4998 12 23.4998Z" fill="#34A853"/>
@@ -237,7 +249,7 @@ export default function RegisterPage() {
                   Google
                 </button>
                 
-                <button type="button" className="flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-xl text-[13px] transition-colors">
+                <button type="button" className="flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-lg text-xs transition-colors">
                   <svg className="w-4 h-4" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M10 10H0V0H10V10Z" fill="#F25022"/>
                     <path d="M21 10H11V0H21V10Z" fill="#7FBA00"/>

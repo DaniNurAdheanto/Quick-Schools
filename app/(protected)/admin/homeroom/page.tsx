@@ -17,12 +17,15 @@ import {
   AlertCircle,
   ChevronDown,
   UserCheck,
-  BookOpen
+  BookOpen,
+  XCircle,
+  Plus,
+  Eye
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
 import { db, auth } from "@/lib/firebase";
-import { collection, query, onSnapshot, updateDoc, doc } from "firebase/firestore";
+import { collection, query, onSnapshot, getDocs, updateDoc, doc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
 export default function HomeroomPage() {
@@ -36,7 +39,7 @@ export default function HomeroomPage() {
   const [selectedLevel, setSelectedLevel] = useState("All");
   const [selectedStatus, setSelectedStatus] = useState("All");
 
-  const [crudState, setCrudState] = useState<{ open: boolean; mode: "edit" | "create" | "delete"; data?: any }>({
+  const [crudState, setCrudState] = useState<{ open: boolean; mode: "edit" | "create" | "delete" | "view"; data?: any }>({
     open: false,
     mode: "edit"
   });
@@ -185,6 +188,7 @@ export default function HomeroomPage() {
         fields={editHomeroomFields}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
+        onEditRequested={() => setCrudState(s => ({ ...s, mode: "edit" }))}
       />
 
       {/* Page Header Card */}
@@ -407,10 +411,17 @@ export default function HomeroomPage() {
                     </div>
 
                     {/* Card Action Footer */}
-                    <div className="p-4 pt-3 border-t border-gray-100/80 flex items-center justify-end mt-2">
+                    <div className="p-4 pt-3 border-t border-gray-100/80 flex items-center gap-2 mt-2">
+                      <button 
+                        onClick={() => setCrudState({ open: true, mode: "view", data: item })}
+                        className="p-2 rounded-xl bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all"
+                        title="Lihat Detail"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
                       <button 
                         onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-[#531FFF]/10 hover:bg-[#531FFF]/20 text-[#531FFF] text-xs font-extrabold transition-all"
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-[#531FFF]/10 hover:bg-[#531FFF]/20 text-[#531FFF] text-xs font-extrabold transition-all"
                       >
                         <PenTool className="w-3.5 h-3.5" />
                         <span>Set Wali Kelas</span>
@@ -475,13 +486,22 @@ export default function HomeroomPage() {
                           </span>
                         </td>
                         <td className="py-3.5 px-6 text-right">
-                          <button
-                            onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 rounded-xl transition-colors ml-auto"
-                          >
-                            <PenTool className="w-3.5 h-3.5" />
-                            <span>Set Wali Kelas</span>
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setCrudState({ open: true, mode: "view", data: item })}
+                              className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-xl transition-colors"
+                              title="Lihat Detail"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 rounded-xl transition-colors"
+                            >
+                              <PenTool className="w-3.5 h-3.5" />
+                              <span>Set Wali Kelas</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

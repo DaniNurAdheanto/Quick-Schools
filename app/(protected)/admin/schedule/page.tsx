@@ -6,7 +6,7 @@ import {
   Search, Filter, Sparkles, AlertTriangle, CheckCircle2, User, BookOpen, GraduationCap, X, ChevronRight
 } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
@@ -84,6 +84,8 @@ export default function SchedulePage() {
   const currentDayString = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"][now.getDay()];
   const currentTimeString = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }).replace('.', ':');
 
+  const [userRole, setUserRole] = useState<string>("admin");
+
   const isActive = (schedule: any) => {
     if (!mounted) return false;
     if (schedule.day !== currentDayString) return false;
@@ -91,8 +93,17 @@ export default function SchedulePage() {
   };
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        try {
+          const userSnap = await getDoc(doc(db, "users", user.uid));
+          if (userSnap.exists()) {
+            setUserRole(userSnap.data().role || "admin");
+          }
+        } catch (e) {
+          console.warn("User role fetch error", e);
+        }
+
         const q = query(collection(db, "schedules"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
           const schedulesData = snapshot.docs.map(doc => ({
@@ -296,13 +307,15 @@ export default function SchedulePage() {
              <span>{mounted ? `${currentDayString}, ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : ""}</span>
           </div>
           
-          <button 
-            onClick={() => handleOpenAddModal()}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Tambah Jadwal</span>
-          </button>
+          {userRole !== "siswa" && (
+            <button 
+              onClick={() => handleOpenAddModal()}
+              className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Tambah Jadwal</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -453,23 +466,25 @@ export default function SchedulePage() {
                                 {schedule.startTime} - {schedule.endTime}
                               </span>
 
-                              {/* Action Buttons: Always visible */}
-                              <div className="flex items-center gap-1">
-                                <button 
-                                  onClick={() => handleOpenEditModal(schedule)}
-                                  className="p-1 text-gray-400 hover:text-[#531FFF] hover:bg-white/80 rounded-md transition-colors"
-                                  title="Edit"
-                                >
-                                  <PenTool className="w-3.5 h-3.5" />
-                                </button>
-                                <button 
-                                  onClick={() => handleOpenDeleteModal(schedule)}
-                                  className="p-1 text-gray-400 hover:text-red-500 hover:bg-white/80 rounded-md transition-colors"
-                                  title="Hapus"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
+                              {/* Action Buttons: Only for non-students */}
+                              {userRole !== "siswa" && (
+                                <div className="flex items-center gap-1">
+                                  <button 
+                                    onClick={() => handleOpenEditModal(schedule)}
+                                    className="p-1 text-gray-400 hover:text-[#531FFF] hover:bg-white/80 rounded-md transition-colors cursor-pointer"
+                                    title="Edit"
+                                  >
+                                    <PenTool className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleOpenDeleteModal(schedule)}
+                                    className="p-1 text-gray-400 hover:text-red-500 hover:bg-white/80 rounded-md transition-colors cursor-pointer"
+                                    title="Hapus"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
 
                             <h4 className={cn("font-bold text-sm mb-2 leading-snug", palette.text)}>
@@ -493,10 +508,10 @@ export default function SchedulePage() {
                       })}
 
                       {/* Empty Day State */}
-                      {daySchedules.length === 0 && (
+                      {daySchedules.length === 0 && userRole !== "siswa" && (
                         <button
                           onClick={() => handleOpenAddModal(day)}
-                          className="w-full h-32 flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 hover:border-[#531FFF]/40 hover:bg-[#531FFF]/5 text-gray-400 hover:text-[#531FFF] transition-all group p-4"
+                          className="w-full h-32 flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 hover:border-[#531FFF]/40 hover:bg-[#531FFF]/5 text-gray-400 hover:text-[#531FFF] transition-all group p-4 cursor-pointer"
                         >
                           <Plus className="w-6 h-6 mb-1 group-hover:scale-110 transition-transform" />
                           <span className="text-xs font-semibold">Tambah Slot</span>
@@ -563,20 +578,22 @@ export default function SchedulePage() {
                                           <span className={cn("font-bold text-xs truncate", palette.text)}>
                                             {s.subject}
                                           </span>
-                                          <div className="flex items-center gap-0.5">
-                                            <button 
-                                              onClick={() => handleOpenEditModal(s)}
-                                              className="p-0.5 text-gray-400 hover:text-[#531FFF]"
-                                            >
-                                              <PenTool className="w-3 h-3" />
-                                            </button>
-                                            <button 
-                                              onClick={() => handleOpenDeleteModal(s)}
-                                              className="p-0.5 text-gray-400 hover:text-red-500"
-                                            >
-                                              <Trash2 className="w-3 h-3" />
-                                            </button>
-                                          </div>
+                                          {userRole !== "siswa" && (
+                                            <div className="flex items-center gap-0.5">
+                                              <button 
+                                                onClick={() => handleOpenEditModal(s)}
+                                                className="p-0.5 text-gray-400 hover:text-[#531FFF] cursor-pointer"
+                                              >
+                                                <PenTool className="w-3 h-3" />
+                                              </button>
+                                              <button 
+                                                onClick={() => handleOpenDeleteModal(s)}
+                                                className="p-0.5 text-gray-400 hover:text-red-500 cursor-pointer"
+                                              >
+                                                <Trash2 className="w-3 h-3" />
+                                              </button>
+                                            </div>
+                                          )}
                                         </div>
                                         <div className="text-[11px] text-gray-600 font-medium truncate">
                                           Kelas {s.class} · {s.teacher}
@@ -585,15 +602,15 @@ export default function SchedulePage() {
                                     );
                                   })}
                                 </div>
-                              ) : (
+                              ) : userRole !== "siswa" ? (
                                 <button
                                   onClick={() => handleOpenAddModal(day, selectedClassFilter !== "All" ? selectedClassFilter : "", slot.start, slot.end)}
-                                  className="w-full h-full flex flex-col items-center justify-center text-gray-300 hover:text-[#531FFF] hover:bg-[#531FFF]/5 rounded-lg border border-dashed border-transparent hover:border-[#531FFF]/20 transition-all group py-3"
+                                  className="w-full h-full flex flex-col items-center justify-center text-gray-300 hover:text-[#531FFF] hover:bg-[#531FFF]/5 rounded-lg border border-dashed border-transparent hover:border-[#531FFF]/20 transition-all group py-3 cursor-pointer"
                                 >
                                   <Plus className="w-4 h-4 mb-0.5 group-hover:scale-110 transition-transform" />
                                   <span className="text-[10px] font-semibold">Isi Slot</span>
                                 </button>
-                              )}
+                              ) : null}
                             </td>
                           );
                         })}
@@ -667,20 +684,22 @@ export default function SchedulePage() {
                                   </h4>
                                 </div>
 
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => handleOpenEditModal(schedule)}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-gray-700 hover:text-[#531FFF] text-xs font-bold rounded-lg border border-gray-200 shadow-xs transition-colors"
-                                  >
-                                    <PenTool className="w-3.5 h-3.5" /> Edit
-                                  </button>
-                                  <button
-                                    onClick={() => handleOpenDeleteModal(schedule)}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-600 hover:bg-red-50 text-xs font-bold rounded-lg border border-gray-200 shadow-xs transition-colors"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" /> Hapus
-                                  </button>
-                                </div>
+                                {userRole !== "siswa" && (
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => handleOpenEditModal(schedule)}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-gray-700 hover:text-[#531FFF] text-xs font-bold rounded-lg border border-gray-200 shadow-xs transition-colors cursor-pointer"
+                                    >
+                                      <PenTool className="w-3.5 h-3.5" /> Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleOpenDeleteModal(schedule)}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-600 hover:bg-red-50 text-xs font-bold rounded-lg border border-gray-200 shadow-xs transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" /> Hapus
+                                    </button>
+                                  </div>
+                                )}
                               </div>
 
                               <div className="grid grid-cols-2 gap-4 bg-white/70 backdrop-blur-xs p-3.5 rounded-xl border border-black/5 text-xs">
@@ -705,13 +724,15 @@ export default function SchedulePage() {
                     </div>
                     <h3 className="text-base font-bold text-gray-900">Belum ada jadwal untuk {selectedDay}</h3>
                     <p className="text-xs text-gray-500 mt-1 max-w-sm">Klik tombol di bawah untuk menambahkan sesi pelajaran baru di hari {selectedDay}.</p>
-                    <button
-                      onClick={() => handleOpenAddModal(selectedDay)}
-                      className="mt-4 inline-flex items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Tambah Jadwal {selectedDay}</span>
-                    </button>
+                    {userRole !== "siswa" && (
+                      <button
+                        onClick={() => handleOpenAddModal(selectedDay)}
+                        className="mt-4 inline-flex items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Tambah Jadwal {selectedDay}</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
