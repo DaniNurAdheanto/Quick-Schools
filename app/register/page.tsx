@@ -4,6 +4,9 @@ import { Mail, Lock, EyeOff, Eye, BarChart3, ShieldCheck, Zap, Loader2, User } f
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { auth, db } from "@/lib/firebase";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -19,35 +22,29 @@ export default function RegisterPage() {
     setLoading(true);
     setError("");
     try {
-      const { createUserWithEmailAndPassword } = await import("firebase/auth");
-      const { doc, setDoc } = await import("firebase/firestore");
-      const { auth, db } = await import("@/lib/firebase");
-      
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = userCredential.user.uid;
       
-      // Create user profile in Firestore with default 'siswa' role
-      await setDoc(doc(db, "users", userCredential.user.uid), {
-        uid: userCredential.user.uid,
-        email,
-        name,
-        role: "siswa", // Automatically default new registered user to 'siswa'
-        onboardingCompleted: false,
-        createdAt: new Date().toISOString()
-      });
-
-      // Also create student record in students collection for Master Data Siswa
-      await setDoc(doc(db, "students", userCredential.user.uid), {
-        uid: userCredential.user.uid,
-        name,
-        email,
+      // 1. Create user profile in Firestore with default 'siswa' role & onboardingCompleted: false
+      await setDoc(doc(db, "users", uid), {
+        uid: uid,
+        email: email,
+        name: name || email.split('@')[0],
         role: "siswa",
         status: "Belum Onboarding",
+        onboardingCompleted: false,
         createdAt: new Date().toISOString()
       }, { merge: true });
 
+      try {
+        localStorage.setItem("onboarding_completed", "false");
+      } catch (e) {}
+
+      // 3. Always redirect to onboarding
       router.push("/onboarding");
     } catch (err: any) {
-      setError(err.message || "Gagal membuat akun");
+      console.error("Register error:", err);
+      setError(err?.message || "Gagal membuat akun. Silakan coba lagi.");
     } finally {
       setLoading(false);
     }

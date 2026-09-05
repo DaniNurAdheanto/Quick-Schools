@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Loader2, Edit3, User, Info } from "lucide-react";
+import { X, Loader2, Edit3, User, Info, AlertTriangle } from "lucide-react";
 import { useToast } from "@/context/ToastContext";
+import { cn } from "@/lib/utils";
 
 export interface CrudField {
   name: string;
@@ -61,7 +62,7 @@ export function CrudSheet({
   };
 
   const getDescription = () => {
-    if (isDelete) return `Apakah Anda yakin ingin menghapus data ${entityName} ini? Tindakan ini tidak dapat dibatalkan.`;
+    if (isDelete) return `Menghapus data ini juga akan menghapus akun pengguna terkait secara permanen dari sistem.`;
     if (isView) return `Informasi detail data ${entityName} yang tersimpan dalam sistem.`;
     return `Silakan isi formulir di bawah ini untuk ${mode === "create" ? "menambahkan" : "memperbarui"} data ${entityName}.`;
   };
@@ -132,11 +133,22 @@ export function CrudSheet({
   const photoUrl = initialData?.photoUrl || initialData?.avatar || initialData?.image;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl w-full max-w-[520px] h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 relative overflow-hidden border border-gray-100">
+    <div className={cn(
+      "fixed inset-0 z-50 p-4 bg-gray-900/50 backdrop-blur-sm animate-in fade-in duration-200 flex",
+      isDelete ? "items-center justify-center" : "justify-end"
+    )}>
+      <div className={cn(
+        "bg-white rounded-3xl w-full shadow-2xl flex flex-col relative overflow-hidden border border-gray-100",
+        isDelete 
+          ? "max-w-[440px] h-auto max-h-[90vh] animate-in zoom-in-95 duration-200" 
+          : "max-w-[520px] h-full animate-in slide-in-from-right duration-300"
+      )}>
         
         {/* Header */}
-        <div className={`relative p-6 text-center border-b border-gray-100 shrink-0 ${isView ? "bg-gradient-to-b from-[#F7F5FF] to-white" : isDelete ? "bg-red-50/50" : "bg-[#FAFAFA]"} rounded-t-3xl`}>
+        <div className={cn(
+          "relative p-6 text-center border-b border-gray-100 shrink-0 rounded-t-3xl",
+          isView ? "bg-gradient-to-b from-[#F7F5FF] to-white" : isDelete ? "bg-rose-50/60" : "bg-[#FAFAFA]"
+        )}>
           <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '16px 16px' }}></div>
           
           <button 
@@ -147,7 +159,17 @@ export function CrudSheet({
             <X className="w-5 h-5" />
           </button>
 
-          {isView ? (
+          {isDelete ? (
+            <div className="pt-2 pb-1 flex flex-col items-center">
+              <div className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-3 shadow-sm border border-rose-200">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <h2 className="text-[20px] font-extrabold text-gray-900 tracking-tight">{getTitle()}</h2>
+              <p className="text-[13px] text-rose-600 font-semibold mt-1 px-4 leading-relaxed">
+                {getDescription()}
+              </p>
+            </div>
+          ) : isView ? (
             <div className="pt-2 pb-1 flex flex-col items-center">
               {photoUrl ? (
                 <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-white shadow-lg mb-3 shrink-0 bg-gray-100">
@@ -260,8 +282,19 @@ export function CrudSheet({
               ))}
             </div>
           ) : (
-            <div className="py-8 text-center text-gray-500 font-medium">
-              Data akan dihapus secara permanen dari database sistem.
+            <div className="py-3 px-1 space-y-4">
+              <div className="p-4 bg-rose-50 border border-rose-200/80 rounded-2xl flex items-start gap-3 text-left">
+                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="text-sm font-extrabold text-rose-900">Perhatian Penting!</h4>
+                  <p className="text-xs font-medium text-rose-700 leading-relaxed">
+                    Menghapus data <strong>{primaryTitle}</strong> akan secara otomatis <strong>menghapus akun pengguna (hak akses login) & seluruh profil siswa/guru</strong> yang bersangkutan dari database sistem.
+                  </p>
+                </div>
+              </div>
+              <p className="text-center text-xs font-semibold text-gray-400">
+                Seluruh riwayat data terhapus secara permanen dan tidak dapat dikembalikan.
+              </p>
             </div>
           )}
         </div>
@@ -289,6 +322,24 @@ export function CrudSheet({
                 </button>
               )}
             </>
+          ) : isDelete ? (
+            <div className="grid grid-cols-2 gap-3 w-full">
+              <button 
+                onClick={() => onOpenChange(false)}
+                disabled={isSubmitting}
+                className="w-full py-3 rounded-xl text-[14px] font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="w-full py-3 rounded-xl text-[14px] font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-md shadow-rose-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                Ya, Hapus Data
+              </button>
+            </div>
           ) : (
             <>
               <button 
@@ -301,16 +352,11 @@ export function CrudSheet({
               <button 
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className={`px-6 py-3 rounded-xl text-[14px] font-bold text-white transition-colors shadow-sm flex items-center gap-2 ${
-                  isDelete 
-                    ? "bg-red-500 hover:bg-red-600 shadow-red-500/20" 
-                    : "bg-[#531FFF] hover:bg-[#4316CC] shadow-[#531FFF]/20"
-                } disabled:opacity-50`}
+                className="px-6 py-3 rounded-xl text-[14px] font-bold text-white bg-[#531FFF] hover:bg-[#4316CC] shadow-md shadow-[#531FFF]/20 transition-all flex items-center gap-2 disabled:opacity-50"
               >
                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {mode === "create" && "Simpan Data"}
                 {mode === "edit" && "Simpan Perubahan"}
-                {mode === "delete" && "Ya, Hapus Data"}
               </button>
             </>
           )}

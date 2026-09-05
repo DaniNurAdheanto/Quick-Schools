@@ -58,22 +58,8 @@ import { onAuthStateChanged } from "firebase/auth";
 
 type SettingCategory = 
   | "profile" 
-  | "branding" 
-  | "preferences" 
-  | "academic" 
-  | "schedule" 
   | "grading" 
-  | "calendar" 
-  | "lms" 
-  | "attendance" 
-  | "portal" 
-  | "announcements" 
-  | "roles" 
-  | "notifications" 
-  | "finance" 
-  | "security" 
-  | "privacy" 
-  | "history";
+  | "attendance";
 
 interface NavGroupItem {
   id: SettingCategory;
@@ -90,45 +76,21 @@ interface NavGroup {
 
 const SETTINGS_GROUPS: NavGroup[] = [
   {
-    groupTitle: "IDENTITAS & BRANDING",
+    groupTitle: "PROFIL & IDENTITAS",
     items: [
-      { id: "profile", label: "Profil Sekolah", desc: "Nama, logo, NPSN & alamat resmi", icon: Building2 },
-      { id: "branding", label: "Tampilan & Branding", desc: "Warna tema, logo & login branding", icon: Palette, badge: "Live Preview" },
-      { id: "preferences", label: "Preferensi Sistem", desc: "Bahasa, zona waktu & format tanggal", icon: Sliders },
+      { id: "profile", label: "Profil Sekolah", desc: "Nama, logo, NPSN & alamat resmi", icon: Building2 }
     ]
   },
   {
-    groupTitle: "KURIKULUM & AKADEMIK",
+    groupTitle: "KURIKULUM & PENILAIAN",
     items: [
-      { id: "academic", label: "Struktur Akademik", desc: "Tahun ajaran, jurusan & libur", icon: BookOpen },
-      { id: "schedule", label: "Kelas & Jadwal", desc: "Jam belajar, durasi & bentrok jadwal", icon: CalendarDays },
-      { id: "grading", label: "Penilaian & KKM", desc: "Batas KKM, bobot UTS/UAS & rapor", icon: Award },
-      { id: "calendar", label: "Kalender Akademik", desc: "Acara sekolah, ujian & libur nasional", icon: Calendar },
-      { id: "lms", label: "Pengaturan LMS", desc: "Batas file tugas, kuis & grading", icon: GraduationCap },
+      { id: "grading", label: "Penilaian & KKM", desc: "Batas KKM, bobot UTS/UAS & rapor", icon: Award }
     ]
   },
   {
-    groupTitle: "OPERASIONAL & SISWA",
+    groupTitle: "OPERASIONAL & PRESENSI",
     items: [
-      { id: "attendance", label: "Absensi & Geofence", desc: "Face ID, toleransi & radius GPS", icon: FileCheck },
-      { id: "portal", label: "Portal Siswa & Ortu", desc: "Akses fitur siswa dan orang tua", icon: Users },
-      { id: "announcements", label: "Pengumuman", desc: "Kategori & publikasi informasi", icon: Megaphone },
-    ]
-  },
-  {
-    groupTitle: "PENGGUNA & KEUANGAN",
-    items: [
-      { id: "roles", label: "Pengguna & Perizinan", desc: "Role matrix & hak akses modul", icon: UserCog },
-      { id: "notifications", label: "Kanal Notifikasi", desc: "In-App, Email & WhatsApp API", icon: Bell },
-      { id: "finance", label: "Keuangan & SPP", desc: "Kategori SPP, denda & invoice", icon: CreditCard },
-    ]
-  },
-  {
-    groupTitle: "KEAMANAN & PRIVASI",
-    items: [
-      { id: "security", label: "Keamanan Sistem", desc: "Password policy, 2FA & sesi aktif", icon: ShieldCheck },
-      { id: "privacy", label: "Data & Privasi", desc: "Backup data, retensi & purge DB", icon: ShieldAlert },
-      { id: "history", label: "Riwayat Aktivitas", desc: "Audit log audit trail & inspect diff", icon: History },
+      { id: "attendance", label: "Absensi & Geofence", desc: "Face ID, toleransi & radius GPS", icon: FileCheck }
     ]
   }
 ];
@@ -650,7 +612,7 @@ export default function SettingsPage() {
           )}
 
           {/* TAB 2: Appearance & Branding */}
-          {activeTab === "branding" && (
+          {(activeTab as string) === "branding" && (
             <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
               <div className="border-b border-gray-100 pb-4">
                 <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
@@ -932,8 +894,8 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* TAB 6: Users & Permission Matrix */}
-          {activeTab === "roles" && (
+          {/* TAB 8: Roles & Permissions */}
+          {(activeTab as string) === "roles" && (
             <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
               <div className="border-b border-gray-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
@@ -1020,7 +982,7 @@ export default function SettingsPage() {
           )}
 
           {/* TAB 14: Activity History & Diff Viewer */}
-          {activeTab === "history" && (
+          {(activeTab as string) === "history" && (
             <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
               <div className="border-b border-gray-100 pb-4">
                 <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
@@ -1071,7 +1033,7 @@ export default function SettingsPage() {
           )}
 
           {/* TAB 15: Security Settings */}
-          {activeTab === "security" && (
+          {(activeTab as string) === "security" && (
             <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
               <div className="border-b border-gray-100 pb-4 flex items-center justify-between">
                 <div>
@@ -1126,7 +1088,7 @@ export default function SettingsPage() {
           )}
 
           {/* TAB 16: System Preferences */}
-          {activeTab === "preferences" && (
+          {(activeTab as string) === "preferences" && (
             <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
               <div className="border-b border-gray-100 pb-4">
                 <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
@@ -1168,7 +1130,7 @@ export default function SettingsPage() {
           )}
 
           {/* TAB 13: Data & Privacy Danger Zone */}
-          {activeTab === "privacy" && (
+          {(activeTab as string) === "privacy" && (
             <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
               <div className="border-b border-gray-100 pb-4">
                 <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">

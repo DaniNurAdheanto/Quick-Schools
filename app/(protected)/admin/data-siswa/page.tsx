@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { 
   User, 
@@ -26,16 +26,97 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
+import { useToast } from "@/context/ToastContext";
 import { db, auth, storage } from "@/lib/firebase";
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 export default function DataSiswaPage() {
+  const toast = useToast();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [students, setStudents] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cleaning, setCleaning] = useState(false);
+
+  // Refs to hold active raw collections from Firestore
+  const rawStudentsRef = useRef<any[]>([]);
+  const rawUsersRef = useRef<any[]>([]);
+
+  // Count unboarded students
+  const unboardedCount = useMemo(() => {
+    return students.filter(
+      (s) => (s.status || "") === "Belum Onboarding" || s.onboardingCompleted === false
+    ).length;
+  }, [students]);
+
+  const handleCleanUnboardedStudents = async () => {
+    try {
+      setCleaning(true);
+      const unboarded = students.filter(
+        (s) => (s.status || "") === "Belum Onboarding" || s.onboardingCompleted === false
+      );
+
+      if (unboarded.length === 0) {
+        toast.showInfo("Tidak ada data siswa dengan status Belum Onboarding.", "Informasi");
+        setCleaning(false);
+        return;
+      }
+
+      let count = 0;
+      for (const student of unboarded) {
+        const allDocIdsToDelete = new Set<string>();
+        if (student._firestoreId) allDocIdsToDelete.add(student._firestoreId);
+        if (student.uid) allDocIdsToDelete.add(student.uid);
+        if (student._allDocIds && Array.isArray(student._allDocIds)) {
+          student._allDocIds.forEach((id: string) => allDocIdsToDelete.add(id));
+        }
+
+        const targetEmail = (student.email || "").toLowerCase();
+        const targetId = student.id || student.nis || student.nisn;
+
+        rawStudentsRef.current.forEach((s) => {
+          if (
+            (targetEmail && s.email?.toLowerCase() === targetEmail) ||
+            (student.uid && (s.uid === student.uid || s._firestoreId === student.uid)) ||
+            (targetId && targetId !== "-" && (s.id === targetId || s.nis === targetId || s.nisn === targetId))
+          ) {
+            if (s._firestoreId) allDocIdsToDelete.add(s._firestoreId);
+          }
+        });
+
+        rawUsersRef.current.forEach((u) => {
+          if (
+            (targetEmail && u.email?.toLowerCase() === targetEmail) ||
+            (student.uid && (u.uid === student.uid || u._firestoreId === student.uid)) ||
+            (targetId && targetId !== "-" && (u.id === targetId || u.nis === targetId || u.nisn === targetId))
+          ) {
+            if (u._firestoreId) allDocIdsToDelete.add(u._firestoreId);
+          }
+        });
+
+        for (const docId of Array.from(allDocIdsToDelete)) {
+          try {
+            await deleteDoc(doc(db, "students", docId));
+          } catch (e) {}
+          try {
+            await deleteDoc(doc(db, "users", docId));
+          } catch (e) {}
+        }
+        count++;
+      }
+
+      // Optimistically update UI
+      setStudents(prev => prev.filter(s => (s.status || "") !== "Belum Onboarding" && s.onboardingCompleted !== false));
+      toast.showSuccess(`Berhasil menghapus ${count} data siswa yang Belum Onboarding.`, "Berhasil Hapus");
+    } catch (err: any) {
+      console.error("Clean error:", err);
+      toast.showError("Gagal membersihkan data siswa.", "Gagal");
+    } finally {
+      setCleaning(false);
+    }
+  };
 
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState("");
@@ -50,38 +131,83 @@ export default function DataSiswaPage() {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // Fetch from students collection & users collection
         const qStudents = query(collection(db, "students"));
         const qUsers = query(collection(db, "users"));
 
-        let currentStudents: any[] = [];
-        let currentUsers: any[] = [];
-
         const updateCombinedList = () => {
-          const studentMap = new Map();
-          
-          // First add entries from students collection
-          currentStudents.forEach(item => {
-            studentMap.set(item._firestoreId, item);
+          const studentMap = new Map<string, any>();
+
+          // 1. Process items from `students` collection (only completed onboarding)
+          rawStudentsRef.current.forEach(item => {
+            if (item.status === "Belum Onboarding" || item.onboardingCompleted === false) {
+              return;
+            }
+            const key = item.uid || item.email?.toLowerCase() || item._firestoreId;
+            studentMap.set(key, {
+              _firestoreId: item._firestoreId,
+              _allDocIds: [item._firestoreId],
+              uid: item.uid || item._firestoreId,
+              id: item.id || item.nis || item.nisn || "-",
+              nis: item.nis || item.id || "-",
+              nisn: item.nisn || item.id || "-",
+              name: item.name || "",
+              email: item.email || "",
+              classId: item.classId || "X-IPA-1",
+              status: item.status || "Aktif",
+              onboardingCompleted: item.onboardingCompleted ?? true,
+              imageUrl: item.imageUrl || item.photoUrl || "",
+              photoUrl: item.photoUrl || item.imageUrl || "",
+              phone: item.phone || "-"
+            });
           });
 
-          // Then merge any user with role === "siswa" or "student"
-          currentUsers.forEach(u => {
+          // 2. Merge items from `users` collection where role is "siswa" or "student" (only completed onboarding)
+          rawUsersRef.current.forEach(u => {
             const role = (u.role || "").toLowerCase();
             if (role === "siswa" || role === "student") {
-              const existing = studentMap.get(u._firestoreId);
-              if (!existing) {
-                studentMap.set(u._firestoreId, {
+              if (u.onboardingCompleted === false || u.status === "Belum Onboarding") {
+                return;
+              }
+
+              const uEmail = (u.email || "").toLowerCase();
+              const uUid = u.uid || u._firestoreId;
+
+              let existingKey: string | undefined;
+              for (const [k, v] of studentMap.entries()) {
+                if (
+                  (uUid && (k === uUid || v.uid === uUid || v._firestoreId === uUid)) ||
+                  (uEmail && v.email?.toLowerCase() === uEmail)
+                ) {
+                  existingKey = k;
+                  break;
+                }
+              }
+
+              if (existingKey) {
+                const existing = studentMap.get(existingKey)!;
+                if (!existing._allDocIds.includes(u._firestoreId)) {
+                  existing._allDocIds.push(u._firestoreId);
+                }
+                if (!existing.name || existing.name === "Siswa Baru") existing.name = u.name || existing.name;
+                if (!existing.email) existing.email = u.email || "";
+                if (!existing.classId || existing.classId === "X-IPA-1") existing.classId = u.classId || existing.classId;
+              } else {
+                const newKey = uUid || uEmail || u._firestoreId;
+                studentMap.set(newKey, {
                   _firestoreId: u._firestoreId,
-                  uid: u.uid || u._firestoreId,
-                  name: u.name || u.email?.split('@')[0] || "Siswa Baru",
-                  email: u.email || "",
-                  status: u.onboardingCompleted ? "Aktif" : "Belum Onboarding",
+                  _allDocIds: [u._firestoreId],
+                  uid: uUid,
+                  id: u.nis || u.nisn || u.id || "-",
                   nis: u.nis || "-",
                   nisn: u.nisn || "-",
+                  name: u.name || u.email?.split('@')[0] || "Siswa Baru",
+                  email: u.email || "",
+                  status: u.status || "Aktif",
+                  onboardingCompleted: u.onboardingCompleted ?? true,
                   grade: u.grade || "X",
                   classId: u.classId || "X-IPA-1",
                   photoUrl: u.photoUrl || "",
+                  imageUrl: u.photoUrl || u.imageUrl || "",
                   phone: u.phone || "-"
                 });
               }
@@ -93,7 +219,7 @@ export default function DataSiswaPage() {
         };
 
         const unsubscribeStudents = onSnapshot(qStudents, (snapshot) => {
-          currentStudents = snapshot.docs.map(doc => ({
+          rawStudentsRef.current = snapshot.docs.map(doc => ({
             _firestoreId: doc.id,
             ...doc.data()
           }));
@@ -104,7 +230,7 @@ export default function DataSiswaPage() {
         });
 
         const unsubscribeUsers = onSnapshot(qUsers, (snapshot) => {
-          currentUsers = snapshot.docs.map(doc => ({
+          rawUsersRef.current = snapshot.docs.map(doc => ({
             _firestoreId: doc.id,
             ...doc.data()
           }));
@@ -190,15 +316,93 @@ export default function DataSiswaPage() {
           imageUrl: imageUrl
         });
       } else if (crudState.mode === "edit" && data._firestoreId) {
-        await updateDoc(doc(db, "students", data._firestoreId), {
+        const payload = {
           id: data.id || "",
+          nis: data.id || "",
+          nisn: data.id || "",
           name: data.name || "",
           classId: data.classId || "",
           status: data.status || "Aktif",
-          imageUrl: imageUrl
+          imageUrl: imageUrl,
+          photoUrl: imageUrl
+        };
+
+        const targetIds = Array.from(new Set([
+          data._firestoreId, 
+          data.uid, 
+          ...(data._allDocIds || [])
+        ].filter(Boolean)));
+
+        for (const tId of targetIds) {
+          try {
+            await updateDoc(doc(db, "students", tId as string), payload);
+          } catch (err) {
+            console.warn("Update students collection warning:", err);
+          }
+          try {
+            await updateDoc(doc(db, "users", tId as string), payload);
+          } catch (err) {
+            console.warn("Update users collection warning:", err);
+          }
+        }
+      } else if (crudState.mode === "delete" && data) {
+        const allDocIdsToDelete = new Set<string>();
+
+        if (data._firestoreId) allDocIdsToDelete.add(data._firestoreId);
+        if (data.uid) allDocIdsToDelete.add(data.uid);
+        if (data._allDocIds && Array.isArray(data._allDocIds)) {
+          data._allDocIds.forEach((id: string) => allDocIdsToDelete.add(id));
+        }
+
+        const targetEmail = (data.email || "").toLowerCase();
+        const targetId = data.id || data.nis || data.nisn;
+
+        // Scan rawStudentsRef and rawUsersRef for any matching doc IDs
+        rawStudentsRef.current.forEach(s => {
+          if (
+            (targetEmail && s.email?.toLowerCase() === targetEmail) ||
+            (data.uid && (s.uid === data.uid || s._firestoreId === data.uid)) ||
+            (targetId && targetId !== "-" && (s.id === targetId || s.nis === targetId || s.nisn === targetId))
+          ) {
+            if (s._firestoreId) allDocIdsToDelete.add(s._firestoreId);
+          }
         });
-      } else if (crudState.mode === "delete" && data._firestoreId) {
-        await deleteDoc(doc(db, "students", data._firestoreId));
+
+        rawUsersRef.current.forEach(u => {
+          if (
+            (targetEmail && u.email?.toLowerCase() === targetEmail) ||
+            (data.uid && (u.uid === data.uid || u._firestoreId === data.uid)) ||
+            (targetId && targetId !== "-" && (u.id === targetId || u.nis === targetId || u.nisn === targetId))
+          ) {
+            if (u._firestoreId) allDocIdsToDelete.add(u._firestoreId);
+          }
+        });
+
+        // Execute deleteDoc on both collections for all gathered IDs
+        for (const docId of Array.from(allDocIdsToDelete)) {
+          try {
+            await deleteDoc(doc(db, "students", docId));
+          } catch (err) {
+            console.warn("Could not delete from students collection:", docId, err);
+          }
+
+          try {
+            await deleteDoc(doc(db, "users", docId));
+          } catch (err) {
+            console.warn("Could not delete from users collection:", docId, err);
+          }
+        }
+
+        // Optimistically remove from local state immediately
+        setStudents((prev) =>
+          prev.filter((s) => {
+            const sEmail = (s.email || "").toLowerCase();
+            const matchDoc = allDocIdsToDelete.has(s._firestoreId);
+            const matchUid = data.uid && s.uid === data.uid;
+            const matchEmail = targetEmail && sEmail === targetEmail;
+            return !matchDoc && !matchUid && !matchEmail;
+          })
+        );
       }
     } catch (error) {
       console.error("Error saving student data:", error);

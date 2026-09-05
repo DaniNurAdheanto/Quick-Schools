@@ -130,16 +130,52 @@ export default function TeachersPage() {
           imageUrl: imageUrl
         });
       } else if (crudState.mode === "edit" && data._firestoreId) {
-        await updateDoc(doc(db, "teachers", data._firestoreId), {
+        const payload = {
           id: data.id || "",
           name: data.name || "",
           role: data.role || "",
           contact: data.contact || "",
           status: data.status || "Aktif",
           ...(imageUrl ? { imageUrl } : {})
-        });
-      } else if (crudState.mode === "delete" && data._firestoreId) {
-        await deleteDoc(doc(db, "teachers", data._firestoreId));
+        };
+
+        try {
+          await updateDoc(doc(db, "teachers", data._firestoreId), payload);
+        } catch (err) {
+          console.warn("Update teachers collection warning:", err);
+        }
+
+        try {
+          await updateDoc(doc(db, "users", data._firestoreId), payload);
+        } catch (err) {
+          console.warn("Update users collection warning:", err);
+        }
+      } else if (crudState.mode === "delete" && (data._firestoreId || data.id || data.uid)) {
+        const targetIds = Array.from(
+          new Set([data._firestoreId, data.uid, data.id].filter(Boolean))
+        );
+
+        for (const targetId of targetIds) {
+          try {
+            await deleteDoc(doc(db, "teachers", targetId as string));
+          } catch (err) {
+            console.warn("Could not delete from teachers collection:", err);
+          }
+
+          try {
+            await deleteDoc(doc(db, "users", targetId as string));
+          } catch (err) {
+            console.warn("Could not delete from users collection:", err);
+          }
+        }
+
+        setTeachers((prev) =>
+          prev.filter(
+            (t) =>
+              t._firestoreId !== data._firestoreId &&
+              (!data.uid || t.uid !== data.uid)
+          )
+        );
       }
     } catch (error) {
       console.error("Error saving teacher data:", error);
