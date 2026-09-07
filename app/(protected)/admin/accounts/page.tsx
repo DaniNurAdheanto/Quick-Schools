@@ -27,11 +27,13 @@ import {
   Bell,
   Send
 } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { 
   collection, 
   onSnapshot, 
   doc, 
+  getDoc,
   updateDoc, 
   deleteDoc, 
   setDoc, 
@@ -95,10 +97,26 @@ export default function AccountManagementPage() {
   const [formStatus, setFormStatus] = useState("Aktif");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 1. Listen to Auth State
+  const [currentUserRole, setCurrentUserRole] = useState<string>("");
+
+  // 1. Listen to Auth State and load user role
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (user) => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+      if (user) {
+        try {
+          const userSnap = await getDoc(doc(db, "users", user.uid));
+          if (userSnap.exists()) {
+            const role = (userSnap.data().role || "admin").toLowerCase();
+            setCurrentUserRole(role);
+          } else {
+            setCurrentUserRole("admin");
+          }
+        } catch (err) {
+          console.error("Error fetching current user role:", err);
+          setCurrentUserRole("admin");
+        }
+      }
       setAuthChecking(false);
       if (!user) {
         setLoading(false);
@@ -106,6 +124,8 @@ export default function AccountManagementPage() {
     });
     return () => unsubAuth();
   }, []);
+
+  const isSuperAdmin = currentUserRole === "super-admin" || currentUserRole === "superadmin" || currentUserRole === "super_admin";
 
   // 2. Subscribe to real-time users collection once authenticated
   useEffect(() => {
@@ -548,6 +568,33 @@ export default function AccountManagementPage() {
       setIsSubmitting(false);
     }
   };
+
+  // Access Restricted if authenticated user is NOT Super Admin
+  if (!authChecking && currentUser && !isSuperAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[65vh] p-6 text-center animate-in fade-in duration-300">
+        <div className="w-16 h-16 rounded-3xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shadow-lg shadow-rose-500/10 mb-4">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-rose-50 text-rose-700 border border-rose-200 uppercase tracking-wider mb-2">
+          <Shield className="w-3.5 h-3.5" />
+          Akses Khusus Super Admin
+        </span>
+        <h1 className="text-2xl font-black text-gray-900 tracking-tight">Halaman Manajemen Akun Dibatasi</h1>
+        <p className="text-sm text-gray-500 max-w-md mt-2 font-medium leading-relaxed">
+          Menu Manajemen Akun System secara eksklusif hanya dapat diakses oleh akun dengan peran <strong>Super Admin</strong> untuk menjaga privasi otentikasi pengguna dan keamanan institusi.
+        </p>
+        <div className="mt-6 flex items-center gap-3">
+          <Link
+            href="/admin/dashboard"
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#531FFF]/20 active:scale-95"
+          >
+            Kembali ke Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 pb-12">

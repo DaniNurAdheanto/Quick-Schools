@@ -26,7 +26,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
 import { db, auth, storage } from "@/lib/firebase";
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
@@ -51,10 +51,23 @@ export default function TeachersPage() {
       if (user) {
         const qTeachers = query(collection(db, "teachers"));
         const unsubscribeTeachers = onSnapshot(qTeachers, (snapshot) => {
-          const teachersData = snapshot.docs.map(doc => ({
-            _firestoreId: doc.id,
-            ...doc.data()
-          }));
+          const teachersData = snapshot.docs.map(doc => {
+            const raw = doc.data();
+            const nip = raw.id || raw.nip || "";
+            const role = raw.role || raw.subject || "";
+            const contact = raw.contact || raw.phone || "";
+            return {
+              _firestoreId: doc.id,
+              ...raw,
+              id: nip,
+              nip: nip,
+              role: role,
+              subject: role,
+              contact: contact,
+              phone: contact,
+              status: raw.status || "Aktif",
+            };
+          });
           setTeachers(teachersData);
           setLoading(false);
         }, (error) => {
@@ -123,33 +136,67 @@ export default function TeachersPage() {
       if (crudState.mode === "create") {
         await addDoc(collection(db, "teachers"), {
           id: data.id || `T${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+          nip: data.id || `T${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
           name: data.name || "",
           role: data.role || "",
+          subject: data.role || "",
           contact: data.contact || "",
+          phone: data.contact || "",
           status: data.status || "Aktif",
           imageUrl: imageUrl
         });
-      } else if (crudState.mode === "edit" && data._firestoreId) {
-        const payload = {
-          id: data.id || "",
+      } else if (crudState.mode === "edit") {
+        const targetId = data._firestoreId || crudState.data?._firestoreId || data.uid || crudState.data?.uid || data.id;
+        if (!targetId) {
+          throw new Error("ID Guru tidak ditemukan untuk diperbarui.");
+        }
+
+        const nipValue = data.id || data.nip || "";
+        const roleValue = data.role || data.subject || "";
+        const contactValue = data.contact || data.phone || "";
+
+        const payload: any = {
+          id: nipValue,
+          nip: nipValue,
           name: data.name || "",
-          role: data.role || "",
-          contact: data.contact || "",
+          role: roleValue,
+          subject: roleValue,
+          contact: contactValue,
+          phone: contactValue,
           status: data.status || "Aktif",
           ...(imageUrl ? { imageUrl } : {})
         };
 
         try {
-          await updateDoc(doc(db, "teachers", data._firestoreId), payload);
+          await updateDoc(doc(db, "teachers", targetId), payload);
         } catch (err) {
           console.warn("Update teachers collection warning:", err);
+          try {
+            await setDoc(doc(db, "teachers", targetId), payload, { merge: true });
+          } catch (innerErr) {
+            console.error("SetDoc teachers warning:", innerErr);
+          }
         }
 
-        try {
-          await updateDoc(doc(db, "users", data._firestoreId), payload);
-        } catch (err) {
-          console.warn("Update users collection warning:", err);
+        const userUid = data.uid || crudState.data?.uid || (targetId.length > 20 ? targetId : null);
+        if (userUid) {
+          try {
+            await updateDoc(doc(db, "users", userUid), {
+              name: data.name || "",
+              nip: nipValue,
+              subject: roleValue,
+              phone: contactValue,
+              status: data.status || "Aktif",
+              ...(imageUrl ? { imageUrl, photoUrl: imageUrl } : {})
+            });
+          } catch (err) {
+            console.warn("Update users collection warning:", err);
+          }
         }
+
+        setTeachers((prev) =>
+          prev.map((t) => (t._firestoreId === targetId || (userUid && t.uid === userUid) ? { ...t, ...payload } : t))
+        );
       } else if (crudState.mode === "delete" && (data._firestoreId || data.id || data.uid)) {
         const targetIds = Array.from(
           new Set([data._firestoreId, data.uid, data.id].filter(Boolean))
@@ -255,7 +302,7 @@ export default function TeachersPage() {
         fields={teacherFields}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
-        onEditRequested={() => setCrudState(s => ({ ...s, mode: "edit" }))}
+        onEditRequested={() => setCrudState(s => ({ ...s, mode: "edit", open: true }))}
       />
 
       {/* Page Header Card */}

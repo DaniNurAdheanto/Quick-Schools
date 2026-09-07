@@ -96,7 +96,7 @@ export const DEFAULT_PERMISSIONS: Record<string, Record<string, { read: boolean;
   "admin": {
     "dashboard": { read: true, write: true, delete: false },
     "users": { read: true, write: true, delete: true },
-    "accounts": { read: true, write: true, delete: true },
+    "accounts": { read: false, write: false, delete: false },
     "academic": { read: true, write: true, delete: true },
     "attendance": { read: true, write: true, delete: true },
     "grades": { read: true, write: true, delete: false },
@@ -107,6 +107,7 @@ export const DEFAULT_PERMISSIONS: Record<string, Record<string, { read: boolean;
   "guru": {
     "dashboard": { read: true, write: false, delete: false },
     "users": { read: true, write: false, delete: false },
+    "accounts": { read: false, write: false, delete: false },
     "academic": { read: true, write: false, delete: false },
     "attendance": { read: true, write: true, delete: false },
     "grades": { read: true, write: true, delete: false },
@@ -117,6 +118,7 @@ export const DEFAULT_PERMISSIONS: Record<string, Record<string, { read: boolean;
   "siswa": {
     "dashboard": { read: true, write: false, delete: false },
     "users": { read: false, write: false, delete: false },
+    "accounts": { read: false, write: false, delete: false },
     "academic": { read: true, write: false, delete: false },
     "attendance": { read: true, write: false, delete: false },
     "grades": { read: true, write: false, delete: false },
@@ -127,6 +129,7 @@ export const DEFAULT_PERMISSIONS: Record<string, Record<string, { read: boolean;
   "student": {
     "dashboard": { read: true, write: false, delete: false },
     "users": { read: false, write: false, delete: false },
+    "accounts": { read: false, write: false, delete: false },
     "academic": { read: true, write: false, delete: false },
     "attendance": { read: true, write: false, delete: false },
     "grades": { read: true, write: false, delete: false },
@@ -137,6 +140,7 @@ export const DEFAULT_PERMISSIONS: Record<string, Record<string, { read: boolean;
   "orang-tua": {
     "dashboard": { read: true, write: false, delete: false },
     "users": { read: false, write: false, delete: false },
+    "accounts": { read: false, write: false, delete: false },
     "academic": { read: true, write: false, delete: false },
     "attendance": { read: true, write: false, delete: false },
     "grades": { read: true, write: false, delete: false },
@@ -147,6 +151,7 @@ export const DEFAULT_PERMISSIONS: Record<string, Record<string, { read: boolean;
   "kepala-sekolah": {
     "dashboard": { read: true, write: false, delete: false },
     "users": { read: true, write: false, delete: false },
+    "accounts": { read: false, write: false, delete: false },
     "academic": { read: true, write: false, delete: false },
     "attendance": { read: true, write: false, delete: false },
     "grades": { read: true, write: false, delete: false },
@@ -210,6 +215,11 @@ export default function RolesAndPermissionsPage() {
   const handleToggle = (moduleId: string, action: "read" | "write" | "delete") => {
     if (activeRole === "super-admin") return;
 
+    if (moduleId === "accounts") {
+      toast.showWarning("Modul Manajemen Akun System bersifat eksklusif dan hanya dapat diakses oleh peran Super Admin.", "Akses Terkunci");
+      return;
+    }
+
     setPermissions(prev => {
       const currentRolePerms = prev[activeRole] || DEFAULT_PERMISSIONS[activeRole] || {};
       const modPerms = { ...(currentRolePerms[moduleId] || { read: false, write: false, delete: false }) };
@@ -260,6 +270,11 @@ export default function RolesAndPermissionsPage() {
       toast.showInfo(`Seluruh hak akses dibatasi untuk role ini.`, "Preset Dibatasi");
     }
 
+    // Always enforce accounts lock for non-super-admin
+    if (activeRole !== "super-admin") {
+      updatedModules["accounts"] = { read: false, write: false, delete: false };
+    }
+
     setPermissions(prev => ({
       ...prev,
       [activeRole]: updatedModules,
@@ -272,11 +287,15 @@ export default function RolesAndPermissionsPage() {
     if (activeRole === "super-admin") return;
 
     const currentRolePerms = permissions[activeRole] || {};
-    const allEnabled = filteredModules.every(mod => currentRolePerms[mod.id]?.[action]);
+    const allEnabled = filteredModules.filter(m => m.id !== "accounts").every(mod => currentRolePerms[mod.id]?.[action]);
 
     setPermissions(prev => {
       const nextRolePerms = { ...(prev[activeRole] || {}) };
       filteredModules.forEach(mod => {
+        if (mod.id === "accounts") {
+          nextRolePerms[mod.id] = { read: false, write: false, delete: false };
+          return;
+        }
         const cur = nextRolePerms[mod.id] || { read: false, write: false, delete: false };
         const val = !allEnabled;
         
@@ -508,7 +527,7 @@ export default function RolesAndPermissionsPage() {
                 </div>
 
                 <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
-                  {["Semua", "Akademik", "Master Data", "Keuangan"].map((cat) => (
+                  {["Semua", "Akademik", "Master Data", "Keuangan", "Sistem", "Komunikasi"].map((cat) => (
                     <button
                       key={cat}
                       onClick={() => setCategoryFilter(cat)}
@@ -561,13 +580,23 @@ export default function RolesAndPermissionsPage() {
                     filteredModules.map((mod) => {
                       const rolePerms = permissions[activeRole] || DEFAULT_PERMISSIONS[activeRole] || {};
                       const modPerms = rolePerms[mod.id] || { read: false, write: false, delete: false };
+                      const isAccountsModule = mod.id === "accounts";
+                      const isAccountsLocked = isAccountsModule && activeRole !== "super-admin";
 
                       return (
-                        <tr key={mod.id} className="hover:bg-gray-50/60 transition-colors group">
+                        <tr key={mod.id} className={cn("hover:bg-gray-50/60 transition-colors group", isAccountsLocked && "bg-rose-50/20")}>
                           <td className="px-6 py-4">
-                            <p className="font-bold text-gray-900 group-hover:text-[#531FFF] transition-colors">
-                              {mod.name}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold text-gray-900 group-hover:text-[#531FFF] transition-colors">
+                                {mod.name}
+                              </p>
+                              {isAccountsModule && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200">
+                                  <Lock className="w-2.5 h-2.5" />
+                                  Khusus Super Admin
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[11px] text-gray-500 font-medium mt-0.5">{mod.description}</p>
                           </td>
 
@@ -581,7 +610,7 @@ export default function RolesAndPermissionsPage() {
                             <PermissionCheckbox 
                               checked={modPerms.read} 
                               onChange={() => handleToggle(mod.id, "read")}
-                              disabled={activeRole === "super-admin"}
+                              disabled={activeRole === "super-admin" || isAccountsLocked}
                               activeColor="bg-blue-600 border-blue-600"
                             />
                           </td>
@@ -590,7 +619,7 @@ export default function RolesAndPermissionsPage() {
                             <PermissionCheckbox 
                               checked={modPerms.write} 
                               onChange={() => handleToggle(mod.id, "write")}
-                              disabled={activeRole === "super-admin"}
+                              disabled={activeRole === "super-admin" || isAccountsLocked}
                               activeColor="bg-emerald-600 border-emerald-600"
                             />
                           </td>
@@ -599,7 +628,7 @@ export default function RolesAndPermissionsPage() {
                             <PermissionCheckbox 
                               checked={modPerms.delete} 
                               onChange={() => handleToggle(mod.id, "delete")}
-                              disabled={activeRole === "super-admin" || (!modPerms.write && !modPerms.read)}
+                              disabled={activeRole === "super-admin" || isAccountsLocked || (!modPerms.write && !modPerms.read)}
                               activeColor="bg-rose-600 border-rose-600"
                             />
                           </td>

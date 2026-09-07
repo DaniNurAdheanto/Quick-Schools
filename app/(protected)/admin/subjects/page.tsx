@@ -19,11 +19,13 @@ import {
   Check, 
   X, 
   ChevronRight,
-  GraduationCap
+  GraduationCap,
+  AlertCircle,
+  BadgeCheck
 } from "lucide-react";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
 import { db, auth } from "@/lib/firebase";
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, writeBatch } from "firebase/firestore";
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, writeBatch } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useToast } from "@/context/ToastContext";
 import { cn } from "@/lib/utils";
@@ -77,15 +79,46 @@ export default function SubjectsPage() {
   const [isBatchAdding, setIsBatchAdding] = useState(false);
   const toast = useToast();
 
+  // User role & student class state
+  const [currentUserRole, setCurrentUserRole] = useState<string>("admin");
+  const [currentUserData, setCurrentUserData] = useState<any>(null);
+  const [currentStudentClass, setCurrentStudentClass] = useState<string>("");
+  const [classes, setClasses] = useState<any[]>([]);
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
+
+  // Student filter states
+  const [studentSearchQuery, setStudentSearchQuery] = useState("");
+  const [studentCategoryFilter, setStudentCategoryFilter] = useState("All");
+  const [studentViewMode, setStudentViewMode] = useState<"grid" | "table">("grid");
+
   const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete" | "view"; data?: any }>({
     open: false,
     mode: "create"
   });
 
-  // Real-time subjects & teachers listener
+  // Real-time subjects, teachers, classes, schedules & students listener
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        // 0. User role & class
+        try {
+          const uSnap = await getDoc(doc(db, "users", user.uid));
+          if (uSnap.exists()) {
+            const uData = uSnap.data();
+            setCurrentUserData(uData);
+            const rawRole = (uData.role || "admin").toLowerCase();
+            const normRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : rawRole;
+            setCurrentUserRole(normRole);
+            if (uData.classId || uData.className || uData.class) {
+              setCurrentStudentClass(uData.classId || uData.className || uData.class);
+            }
+          }
+        } catch (err) {
+          console.warn("Could not fetch user role in subjects:", err);
+        }
+
+        // 1. Subjects
         const qSubjects = query(collection(db, "subjects"));
         const unsubSubjects = onSnapshot(qSubjects, (snapshot) => {
           const data = snapshot.docs.map(doc => ({
@@ -99,22 +132,48 @@ export default function SubjectsPage() {
           setLoading(false);
         });
 
+        // 2. Teachers
         const qTeachers = query(collection(db, "teachers"));
         const unsubTeachers = onSnapshot(qTeachers, (snapshot) => {
           const tList = snapshot.docs.map(doc => ({
             id: doc.id,
             name: doc.data().name || "Guru",
-            subject: doc.data().subject || ""
+            subject: doc.data().subject || doc.data().role || ""
           }));
           setTeachers(tList);
+        });
+
+        // 3. Classes
+        const qClasses = query(collection(db, "classes"));
+        const unsubClasses = onSnapshot(qClasses, (snapshot) => {
+          setClasses(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
+        });
+
+        // 4. Schedules
+        const qSchedules = query(collection(db, "schedules"));
+        const unsubSchedules = onSnapshot(qSchedules, (snapshot) => {
+          setSchedules(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
+        });
+
+        // 5. Students
+        const qStudents = query(collection(db, "students"));
+        const unsubStudents = onSnapshot(qStudents, (snapshot) => {
+          setStudents(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
         });
         
         return () => {
           unsubSubjects();
           unsubTeachers();
+          unsubClasses();
+          unsubSchedules();
+          unsubStudents();
         };
       } else {
         setSubjects([]);
+        setTeachers([]);
+        setClasses([]);
+        setSchedules([]);
+        setStudents([]);
         setLoading(false);
       }
     });
@@ -333,6 +392,465 @@ export default function SubjectsPage() {
   const existingCodes = useMemo(() => {
     return new Set(subjects.map(s => (s.code || "").toUpperCase().trim()));
   }, [subjects]);
+
+  // =========================================================================
+  // LOGIKA KHUSUS ROLE SISWA: RESOLUSI KELAS & MAPEL KELAS SISWA
+  // =========================================================================
+  const isStudent = currentUserRole === "siswa" || currentUserRole === "student";
+
+  const studentClassId = useMemo(() => {
+    if (currentStudentClass) return currentStudentClass;
+    if (!auth.currentUser) return null;
+    const user = auth.currentUser;
+    const matched = students.find(s => 
+      s.id === user.uid || 
+      s._firestoreId === user.uid || 
+      (s.email && s.email.toLowerCase() === user.email?.toLowerCase()) ||
+      (s.name && currentUserData?.name && s.name.toLowerCase() === currentUserData.name.toLowerCase())
+    );
+    if (matched?.classId || matched?.className) {
+      return matched.classId || matched.className;
+    }
+    return currentUserData?.classId || currentUserData?.className || null;
+  }, [currentStudentClass, students, currentUserData]);
+
+  // Find student's own class object
+  const studentMyClass = useMemo(() => {
+    if (!studentClassId) return null;
+    return classes.find(c => 
+      c.name?.toLowerCase() === studentClassId.toLowerCase() ||
+      c.id?.toLowerCase() === studentClassId.toLowerCase() ||
+      c._firestoreId === studentClassId
+    ) || null;
+  }, [classes, studentClassId]);
+
+  // Determine subjects specifically for this student's class
+  const classSubjects = useMemo(() => {
+    if (!studentClassId) return [];
+    const classNameClean = (studentMyClass?.name || studentClassId || "").toLowerCase();
+    const classMajor = (studentMyClass?.major || (classNameClean.includes("ips") ? "IPS" : "IPA")).toUpperCase();
+
+    // 1. Get all schedules assigned to this class
+    const classSchedules = schedules.filter(s => {
+      const c = (s.class || s.classId || "").toLowerCase();
+      return c === classNameClean;
+    });
+
+    // Create a map of subject -> schedule
+    const schedMap = new Map<string, any>();
+    classSchedules.forEach(sc => {
+      if (sc.subject) {
+        schedMap.set(sc.subject.toLowerCase().trim(), sc);
+      }
+    });
+
+    // 2. Filter subjects that apply to this class
+    const result: any[] = [];
+    const seenSubjectNames = new Set<string>();
+
+    // First: include all subjects found in this class's schedule
+    classSchedules.forEach(sc => {
+      const sName = sc.subject?.trim();
+      if (!sName || seenSubjectNames.has(sName.toLowerCase())) return;
+      seenSubjectNames.add(sName.toLowerCase());
+
+      const matchedSubject = subjects.find(sub => 
+        (sub.name || "").toLowerCase().trim() === sName.toLowerCase()
+      );
+
+      result.push({
+        _firestoreId: matchedSubject?._firestoreId || sc._firestoreId,
+        code: matchedSubject?.code || (classMajor === "IPA" ? "IPA" : "IPS"),
+        name: sName,
+        category: matchedSubject?.category || "Wajib",
+        creditHours: matchedSubject?.creditHours || "3 JP",
+        kkm: matchedSubject?.kkm || sc.passingScore || 75,
+        level: matchedSubject?.level || studentMyClass?.level || "Semua Tingkat",
+        teacher: sc.teacher || matchedSubject?.teacher || "-",
+        description: matchedSubject?.description || `Mata pelajaran kurikulum untuk rombongan belajar ${studentMyClass?.name || studentClassId}.`,
+        status: matchedSubject?.status || "Aktif",
+        scheduleDay: sc.day || null,
+        scheduleTime: sc.startTime && sc.endTime ? `${sc.startTime} - ${sc.endTime}` : null
+      });
+    });
+
+    // Second: include standard subjects from the subjects collection that match the major & level
+    subjects.forEach(sub => {
+      const sName = (sub.name || "").trim();
+      if (!sName || seenSubjectNames.has(sName.toLowerCase())) return;
+
+      const subCode = (sub.code || "").toUpperCase().trim();
+      // If subject is clearly for the other major, skip it
+      if (classMajor === "IPA" && subCode === "IPS") return;
+      if (classMajor === "IPS" && subCode === "IPA") return;
+
+      // Check level match if specified
+      if (sub.level && sub.level !== "Semua Tingkat" && studentMyClass?.level) {
+        if (!sub.level.toLowerCase().includes(studentMyClass.level.toLowerCase())) {
+          return;
+        }
+      }
+
+      seenSubjectNames.add(sName.toLowerCase());
+      const sched = schedMap.get(sName.toLowerCase());
+
+      result.push({
+        ...sub,
+        teacher: (sub.teacher && sub.teacher !== "-") ? sub.teacher : (sched?.teacher || "-"),
+        scheduleDay: sched?.day || null,
+        scheduleTime: sched?.startTime && sched?.endTime ? `${sched.startTime} - ${sched.endTime}` : null
+      });
+    });
+
+    return result;
+  }, [studentClassId, studentMyClass, schedules, subjects]);
+
+  // Filtered subjects for student search & category
+  const filteredClassSubjects = useMemo(() => {
+    return classSubjects.filter(sub => {
+      const matchSearch = !studentSearchQuery.trim() ||
+        (sub.name || "").toLowerCase().includes(studentSearchQuery.toLowerCase().trim()) ||
+        (sub.code || "").toLowerCase().includes(studentSearchQuery.toLowerCase().trim()) ||
+        (sub.teacher || "").toLowerCase().includes(studentSearchQuery.toLowerCase().trim());
+
+      const matchCategory = 
+        studentCategoryFilter === "All" || sub.category === studentCategoryFilter;
+
+      return matchSearch && matchCategory;
+    });
+  }, [classSubjects, studentSearchQuery, studentCategoryFilter]);
+
+  // =========================================================================
+  // VIEW KHUSUS ROLE SISWA: HANYA MENAMPILKAN MATA PELAJARAN KELAS DIA SENDIRI
+  // =========================================================================
+  if (isStudent && !loading) {
+    if (!studentMyClass && !studentClassId) {
+      return (
+        <div className="p-4 sm:p-8 max-w-[1200px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
+          <div className="bg-white rounded-3xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-12">
+            <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200 shadow-sm">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-50 text-amber-800 border border-amber-200 uppercase tracking-wider">
+              Belum Ada Kelas
+            </span>
+            <h2 className="text-xl font-black text-gray-900 mt-3 tracking-tight">Belum Terdaftar di Kelas</h2>
+            <p className="text-xs text-gray-500 mt-2 font-medium leading-relaxed">
+              Akun Anda saat ini belum terhubung dengan rombongan belajar/kelas manapun. Silakan hubungi wali kelas atau bagian Tata Usaha sekolah untuk penempatan kelas Anda.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    const studentWajibCount = classSubjects.filter(s => s.category === "Wajib").length;
+    const studentPeminatanCount = classSubjects.filter(s => s.category === "Peminatan").length;
+    const totalJPNumber = classSubjects.reduce((acc, curr) => {
+      const jp = parseInt(curr.creditHours) || 3;
+      return acc + jp;
+    }, 0);
+
+    return (
+      <div className="p-4 sm:p-8 pb-16 max-w-[1500px] mx-auto w-full flex flex-col space-y-6 animate-in fade-in duration-300">
+        
+        {/* Top Header Card */}
+        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-96 h-full bg-gradient-to-l from-[#531FFF]/5 via-[#531FFF]/2 to-transparent pointer-events-none" />
+          
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] flex items-center justify-center text-white shadow-lg shadow-[#531FFF]/25 shrink-0">
+              <BookOpen className="w-7 h-7" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
+                  Portal Siswa
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                  {studentMyClass?.level || "Kelas 10"} • Peminatan {studentMyClass?.major || "IPA"}
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Kurikulum Aktif
+                </span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight mt-1">
+                Mata Pelajaran: {studentMyClass?.name || studentClassId}
+              </h1>
+              <p className="text-gray-500 text-xs sm:text-sm font-medium mt-1">
+                Daftar mata pelajaran resmi, alokasi jam belajar mingguan (JP), dan guru pengampu untuk kelas Anda.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 relative z-10 self-start sm:self-auto">
+            <div className="px-4 py-2 bg-gray-50 rounded-2xl border border-gray-100 text-right">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Kurikulum</p>
+              <p className="text-xs font-black text-gray-800">Merdeka Belajar</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 3 Detail Info Tiles */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          
+          {/* Card 1: Total Mata Pelajaran */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+            <div className="space-y-2">
+              <span className="text-[10px] font-black tracking-wider uppercase text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-100">
+                Mata Pelajaran Terdaftar
+              </span>
+              <div className="flex items-baseline gap-2 pt-1">
+                <span className="text-3xl font-black text-gray-900">{classSubjects.length}</span>
+                <span className="text-xs font-bold text-gray-400">Total Mapel di Kelas</span>
+              </div>
+              <p className="text-xs font-bold text-gray-500">
+                {studentWajibCount} Mapel Wajib • {studentPeminatanCount} Peminatan {studentMyClass?.major || "IPA"}
+              </p>
+            </div>
+            <div className="pt-3 mt-3 border-t border-gray-100 text-[11px] text-emerald-700 font-bold flex items-center gap-1.5">
+              <BadgeCheck className="w-4 h-4 text-emerald-600" />
+              <span>Sesuai standar rombel {studentMyClass?.name || studentClassId}</span>
+            </div>
+          </div>
+
+          {/* Card 2: Beban Belajar / Alokasi JP */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+            <div className="space-y-2">
+              <span className="text-[10px] font-black tracking-wider uppercase text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
+                Beban Jam Belajar (JP)
+              </span>
+              <div className="flex items-baseline gap-2 pt-1">
+                <span className="text-3xl font-black text-gray-900">{totalJPNumber} JP</span>
+                <span className="text-xs font-bold text-gray-400">/ Minggu</span>
+              </div>
+              <p className="text-xs font-bold text-gray-500">
+                Rata-rata 3 - 4 Jam Pelajaran tatap muka per mata pelajaran
+              </p>
+            </div>
+            <div className="pt-3 mt-3 border-t border-gray-100 text-[11px] text-gray-400 font-medium flex items-center justify-between">
+              <span>1 Jam Pelajaran (JP)</span>
+              <span className="font-bold text-gray-700">45 Menit</span>
+            </div>
+          </div>
+
+          {/* Card 3: Standar KKM Minimum */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+            <div className="space-y-2">
+              <span className="text-[10px] font-black tracking-wider uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+                Kriteria Ketuntasan (KKM)
+              </span>
+              <div className="flex items-baseline gap-2 pt-1">
+                <span className="text-3xl font-black text-gray-900">75</span>
+                <span className="text-xs font-bold text-gray-400">Standar Minimum KKM</span>
+              </div>
+              <p className="text-xs font-bold text-gray-500">
+                Batas capaian minimal kompetensi pembelajaran kelulusan
+              </p>
+            </div>
+            <div className="pt-3 mt-3 border-t border-gray-100 text-[11px] text-gray-400 font-medium flex items-center justify-between">
+              <span>Skala Penilaian</span>
+              <span className="font-bold text-gray-700">0 - 100</span>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Section: Daftar Mata Pelajaran */}
+        <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-xs space-y-5">
+          
+          {/* Controls Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+            <div>
+              <h2 className="text-lg font-black text-gray-900 tracking-tight">
+                Daftar Pelajaran Kelas {studentMyClass?.name || studentClassId} ({filteredClassSubjects.length})
+              </h2>
+              <p className="text-xs text-gray-500 font-medium mt-0.5">
+                Mata pelajaran yang diajarkan pada rombongan belajar Anda beserta guru pengampu.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Search */}
+              <div className="relative w-full sm:w-64">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Cari mapel atau guru..."
+                  value={studentSearchQuery}
+                  onChange={(e) => setStudentSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                />
+              </div>
+
+              {/* Category Filter */}
+              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border border-gray-200 text-xs font-bold">
+                {["All", "Wajib", "Peminatan", "Muatan Lokal"].map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setStudentCategoryFilter(cat)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg transition-all cursor-pointer whitespace-nowrap",
+                      studentCategoryFilter === cat ? "bg-white text-gray-900 shadow-2xs" : "text-gray-500 hover:text-gray-900"
+                    )}
+                  >
+                    {cat === "All" ? "Semua" : cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* View Toggle */}
+              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setStudentViewMode("grid")}
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all cursor-pointer",
+                    studentViewMode === "grid" ? "bg-white text-[#531FFF] shadow-2xs" : "text-gray-400 hover:text-gray-600"
+                  )}
+                  title="Tampilan Kartu"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStudentViewMode("table")}
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all cursor-pointer",
+                    studentViewMode === "table" ? "bg-white text-[#531FFF] shadow-2xs" : "text-gray-400 hover:text-gray-600"
+                  )}
+                  title="Tampilan Tabel"
+                >
+                  <TableIcon className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Content List */}
+          {filteredClassSubjects.length > 0 ? (
+            studentViewMode === "grid" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredClassSubjects.map((sub, idx) => {
+                  const isWajib = sub.category === "Wajib";
+
+                  return (
+                    <div
+                      key={sub._firestoreId || sub.name || idx}
+                      className="rounded-2xl p-4 bg-white border border-gray-100 hover:border-gray-200 hover:shadow-xs transition-all flex flex-col justify-between"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className={cn(
+                            "px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider",
+                            isWajib ? "bg-purple-50 text-[#531FFF] border border-purple-100" : "bg-blue-50 text-blue-700 border border-blue-100"
+                          )}>
+                            {sub.category}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold text-gray-400 px-2 py-0.5 bg-gray-50 rounded-md border border-gray-100">
+                            {sub.code || "MAPEL"}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h4 className="text-sm font-black text-gray-900 line-clamp-1" title={sub.name}>
+                            {sub.name}
+                          </h4>
+                          <p className="text-[11px] text-gray-500 font-medium line-clamp-2 mt-1 leading-relaxed">
+                            {sub.description || "Mata pelajaran kurikulum standar nasional sekolah."}
+                          </p>
+                        </div>
+
+                        {/* Teacher Box */}
+                        <div className="p-3 rounded-xl bg-gray-50/80 border border-gray-100 flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-white text-[#531FFF] border border-gray-200/80 shadow-2xs flex items-center justify-center font-bold text-xs shrink-0">
+                            {sub.teacher && sub.teacher !== "-" ? sub.teacher.charAt(0).toUpperCase() : "G"}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Guru Pengampu</p>
+                            <p className="text-xs font-bold text-gray-900 truncate" title={sub.teacher}>
+                              {sub.teacher && sub.teacher !== "-" ? sub.teacher : "Belum Ditentukan"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Schedule Info if scheduled */}
+                        {sub.scheduleDay && sub.scheduleTime && (
+                          <div className="p-2.5 rounded-xl bg-blue-50/60 border border-blue-100 text-blue-900 text-[11px] font-bold flex items-center gap-2">
+                            <Clock className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            <span className="truncate">
+                              {sub.scheduleDay}, {sub.scheduleTime}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] font-bold text-gray-500">
+                        <span className="text-[#531FFF] font-black">{sub.creditHours || "3 JP"}</span>
+                        <span>KKM: <strong className="text-gray-900">{sub.kkm || 75}</strong></span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-gray-100">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50/60 font-bold text-gray-400 uppercase tracking-wider text-[10px]">
+                      <th className="py-3 px-4 w-12 text-center">No</th>
+                      <th className="py-3 px-4">Kode</th>
+                      <th className="py-3 px-4">Nama Mata Pelajaran</th>
+                      <th className="py-3 px-4">Kategori</th>
+                      <th className="py-3 px-4">Guru Pengampu</th>
+                      <th className="py-3 px-4">Jadwal Kelas</th>
+                      <th className="py-3 px-4 text-center">Alokasi JP</th>
+                      <th className="py-3 px-4 text-center">KKM</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredClassSubjects.map((sub, idx) => (
+                      <tr key={sub._firestoreId || sub.name || idx} className="hover:bg-gray-50/60 transition-colors">
+                        <td className="py-3 px-4 text-center font-bold text-gray-400">{idx + 1}</td>
+                        <td className="py-3 px-4 font-mono font-bold text-gray-700">{sub.code || "-"}</td>
+                        <td className="py-3 px-4">
+                          <p className="font-bold text-gray-900">{sub.name}</p>
+                          <p className="text-[10px] text-gray-400 truncate max-w-xs">{sub.description || "-"}</p>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-full text-[10px] font-bold",
+                            sub.category === "Wajib" ? "bg-purple-50 text-[#531FFF]" : "bg-blue-50 text-blue-700"
+                          )}>
+                            {sub.category}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-bold text-gray-800">
+                          {sub.teacher && sub.teacher !== "-" ? sub.teacher : "Belum Ditentukan"}
+                        </td>
+                        <td className="py-3 px-4 text-gray-600 font-medium">
+                          {sub.scheduleDay && sub.scheduleTime ? `${sub.scheduleDay}, ${sub.scheduleTime}` : "-"}
+                        </td>
+                        <td className="py-3 px-4 text-center font-black text-[#531FFF]">{sub.creditHours || "3 JP"}</td>
+                        <td className="py-3 px-4 text-center font-bold text-gray-900">{sub.kkm || 75}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : (
+            <div className="py-12 text-center text-gray-400 text-xs font-semibold">
+              Tidak ada mata pelajaran yang cocok dengan pencarian &quot;{studentSearchQuery}&quot;.
+            </div>
+          )}
+
+        </div>
+
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-8 pb-16 max-w-[1600px] mx-auto w-full flex flex-col space-y-6">

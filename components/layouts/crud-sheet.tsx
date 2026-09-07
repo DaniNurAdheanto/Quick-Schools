@@ -985,7 +985,6 @@ export function CrudSheet({
               {onEditRequested && (
                 <button 
                   onClick={() => {
-                    onOpenChange(false);
                     onEditRequested();
                   }}
                   className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white bg-[#531FFF] hover:bg-[#4314cc] shadow-md shadow-[#531FFF]/20 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"

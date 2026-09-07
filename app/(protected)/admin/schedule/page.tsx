@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   Plus, PenTool, Trash2, Loader2, Calendar, Clock, LayoutGrid, List, Table,
-  Search, Filter, Sparkles, AlertTriangle, CheckCircle2, User, BookOpen, GraduationCap, X, ChevronRight
+  Search, Filter, Sparkles, AlertTriangle, CheckCircle2, User, BookOpen, GraduationCap, X, ChevronRight,
+  BadgeCheck, AlertCircle, CalendarDays
 } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc } from "firebase/firestore";
@@ -47,6 +48,8 @@ export default function SchedulePage() {
   const [subjects, setSubjects] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
+  const [currentUserData, setCurrentUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
   const [mounted, setMounted] = useState(false);
@@ -98,7 +101,9 @@ export default function SchedulePage() {
         try {
           const userSnap = await getDoc(doc(db, "users", user.uid));
           if (userSnap.exists()) {
-            setUserRole(userSnap.data().role || "admin");
+            const uData = userSnap.data();
+            setUserRole(uData.role || "admin");
+            setCurrentUserData(uData);
           }
         } catch (e) {
           console.warn("User role fetch error", e);
@@ -130,17 +135,24 @@ export default function SchedulePage() {
           setTeachers(snapshot.docs.map(d => ({ _firestoreId: d.id, ...d.data() })));
         });
 
+        const unsubStudents = onSnapshot(query(collection(db, "students")), (snapshot) => {
+          setStudents(snapshot.docs.map(d => ({ _firestoreId: d.id, ...d.data() })));
+        });
+
         return () => {
           unsubscribe();
           unsubSubjects();
           unsubClasses();
           unsubTeachers();
+          unsubStudents();
         };
       } else {
         setSchedules([]);
         setSubjects([]);
         setClasses([]);
         setTeachers([]);
+        setStudents([]);
+        setCurrentUserData(null);
         setLoading(false);
       }
     });
@@ -276,7 +288,627 @@ export default function SchedulePage() {
     }
   };
 
-  // Filtered schedule items
+  // =========================================================================
+  // LOGIKA KHUSUS ROLE SISWA: RESOLUSI KELAS & JADWAL KELAS SISWA
+  // =========================================================================
+  const isStudent = userRole === "siswa" || userRole === "student" || currentUserData?.role === "siswa" || currentUserData?.role === "student";
+
+  const studentClassId = useMemo(() => {
+    if (!auth.currentUser) return null;
+    const user = auth.currentUser;
+    const matched = students.find(s => 
+      s.id === user.uid || 
+      s._firestoreId === user.uid || 
+      (s.email && s.email.toLowerCase() === user.email?.toLowerCase()) ||
+      (s.name && currentUserData?.name && s.name.toLowerCase() === currentUserData.name.toLowerCase())
+    );
+    if (matched?.classId || matched?.className) {
+      return matched.classId || matched.className;
+    }
+    return currentUserData?.classId || currentUserData?.className || null;
+  }, [students, currentUserData]);
+
+  const studentMyClass = useMemo(() => {
+    if (!studentClassId) return null;
+    return classes.find(c => 
+      c.name?.toLowerCase() === studentClassId.toLowerCase() ||
+      c.id?.toLowerCase() === studentClassId.toLowerCase() ||
+      c._firestoreId === studentClassId
+    ) || null;
+  }, [classes, studentClassId]);
+
+  const studentHomeroomTeacher = useMemo(() => {
+    if (!studentMyClass?.homeroom) return null;
+    return teachers.find(t => 
+      t.name?.toLowerCase() === studentMyClass.homeroom?.toLowerCase() ||
+      t._firestoreId === studentMyClass.homeroom
+    ) || null;
+  }, [teachers, studentMyClass]);
+
+  // Schedules specifically for student's class
+  const studentClassSchedules = useMemo(() => {
+    if (!studentClassId) return [];
+    const targetClass = (studentMyClass?.name || studentClassId).toLowerCase().trim();
+    return schedules.filter(s => {
+      const sc = (s.class || s.classId || "").toLowerCase().trim();
+      return sc === targetClass;
+    });
+  }, [schedules, studentClassId, studentMyClass]);
+
+  // Filtered by student's search query (subject or teacher)
+  const filteredStudentSchedules = useMemo(() => {
+    if (!searchQuery.trim()) return studentClassSchedules;
+    const q = searchQuery.toLowerCase();
+    return studentClassSchedules.filter(s => 
+      (s.subject && s.subject.toLowerCase().includes(q)) ||
+      (s.teacher && s.teacher.toLowerCase().includes(q))
+    );
+  }, [studentClassSchedules, searchQuery]);
+
+  // Insights for student
+  const todaySchedules = useMemo(() => {
+    return studentClassSchedules
+      .filter(s => s.day === currentDayString)
+      .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
+  }, [studentClassSchedules, currentDayString]);
+
+  const currentActiveSchedule = useMemo(() => {
+    return todaySchedules.find(s => isActive(s)) || null;
+  }, [todaySchedules, isActive]);
+
+  const nextUpcomingSchedule = useMemo(() => {
+    if (!mounted) return null;
+    return todaySchedules.find(s => s.startTime > currentTimeString) || null;
+  }, [todaySchedules, mounted, currentTimeString]);
+
+  // JIKA ROLE ADALAH SISWA: TAMPILKAN PORTAL JADWAL KHUSUS KELASNYA SAJA
+  if (isStudent && !loading) {
+    if (!studentMyClass && !studentClassId) {
+      return (
+        <div className="p-4 sm:p-8 max-w-[1200px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
+          <div className="bg-white rounded-3xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-12">
+            <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200 shadow-sm">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-50 text-amber-800 border border-amber-200 uppercase tracking-wider">
+              Belum Ada Kelas
+            </span>
+            <h2 className="text-xl font-black text-gray-900 mt-3 tracking-tight">Belum Terdaftar di Kelas</h2>
+            <p className="text-xs text-gray-500 mt-2 font-medium leading-relaxed">
+              Akun Anda belum terdaftar dalam rombongan belajar/kelas manapun. Silakan hubungi wali kelas atau bagian Tata Usaha sekolah untuk penempatan kelas Anda agar jadwal pelajaran dapat dimuat.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-4 sm:p-8 pb-16 max-w-[1500px] mx-auto w-full flex flex-col space-y-6 animate-in fade-in duration-300">
+        
+        {/* Top Header Card */}
+        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col lg:flex-row lg:items-center justify-between gap-5 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-96 h-full bg-gradient-to-l from-[#531FFF]/5 via-[#531FFF]/2 to-transparent pointer-events-none" />
+          
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] flex items-center justify-center text-white shadow-lg shadow-[#531FFF]/25 shrink-0">
+              <Calendar className="w-7 h-7" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
+                  Portal Siswa
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Kelas Aktif
+                </span>
+                {studentMyClass?.major && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                    Jurusan {studentMyClass.major}
+                  </span>
+                )}
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight mt-1">
+                Jadwal Pelajaran: Kelas {studentMyClass?.name || studentClassId}
+              </h1>
+              <p className="text-gray-500 text-xs sm:text-sm font-medium mt-1">
+                Jadwal kegiatan belajar mengajar mingguan dan alokasi jam pelajaran aktif untuk rombongan belajar Anda.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 relative z-10 self-start lg:self-auto">
+            <div className="flex items-center gap-2 bg-white px-3.5 py-2 rounded-2xl border border-gray-200 shadow-sm text-xs sm:text-sm font-bold text-gray-700">
+              <Clock className="w-4 h-4 text-[#531FFF]" />
+              <span>{mounted ? `${currentDayString}, ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : ""}</span>
+            </div>
+            <div className="px-3.5 py-2 bg-gray-50 rounded-2xl border border-gray-200 text-right">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tahun Ajaran</p>
+              <p className="text-xs font-black text-gray-800">2025/2026 Ganjil</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 3 Insight Metric Tiles */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          
+          {/* Tile 1: Status Jadwal Hari Ini */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black tracking-wider uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Jadwal Hari Ini ({currentDayString})
+                </span>
+                <Clock className="w-4 h-4 text-emerald-600" />
+              </div>
+
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-gray-900 tracking-tight">
+                    {todaySchedules.length}
+                  </span>
+                  <span className="text-xs font-bold text-gray-500">Sesi Pelajaran</span>
+                </div>
+                
+                <div className="mt-3 p-3 rounded-2xl bg-gray-50/80 border border-gray-100">
+                  {currentActiveSchedule ? (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs font-black text-[#531FFF]">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#531FFF] opacity-75" />
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-[#531FFF]" />
+                        </span>
+                        <span>Sedang Berlangsung</span>
+                      </div>
+                      <p className="text-xs font-bold text-gray-900 truncate">{currentActiveSchedule.subject}</p>
+                      <p className="text-[11px] text-gray-500 font-medium">
+                        {currentActiveSchedule.startTime} - {currentActiveSchedule.endTime} · {currentActiveSchedule.teacher}
+                      </p>
+                    </div>
+                  ) : nextUpcomingSchedule ? (
+                    <div className="space-y-1">
+                      <span className="text-[11px] font-bold text-amber-600">Sesi Berikutnya:</span>
+                      <p className="text-xs font-bold text-gray-900 truncate">{nextUpcomingSchedule.subject}</p>
+                      <p className="text-[11px] text-gray-500 font-medium">
+                        Mulai {nextUpcomingSchedule.startTime} WIB · {nextUpcomingSchedule.teacher}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs font-medium text-gray-500">
+                      {todaySchedules.length > 0 ? "Seluruh sesi belajar hari ini telah selesai." : "Tidak ada jadwal pelajaran untuk hari ini."}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-gray-50 flex items-center justify-between text-xs text-gray-400 font-medium mt-3">
+              <span>Jam Belajar Aktif</span>
+              <span className="font-bold text-gray-700">07:00 - 15:30 WIB</span>
+            </div>
+          </div>
+
+          {/* Tile 2: Total Beban Belajar Mingguan */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black tracking-wider uppercase text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
+                  Beban Mingguan
+                </span>
+                <BookOpen className="w-4 h-4 text-blue-600" />
+              </div>
+
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-gray-900 tracking-tight">
+                    {studentClassSchedules.length}
+                  </span>
+                  <span className="text-xs font-bold text-gray-500">Total Sesi / Minggu</span>
+                </div>
+                <p className="text-xs text-gray-500 font-medium mt-1 leading-relaxed">
+                  Terbagi dalam sesi pembelajaran teori & praktikum terstruktur sesuai kurikulum sekolah.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-gray-50 flex items-center justify-between text-xs text-gray-400 font-medium mt-3">
+              <span>Hari Efektif Belajar</span>
+              <span className="font-bold text-gray-700">Senin s/d Jumat</span>
+            </div>
+          </div>
+
+          {/* Tile 3: Rombel & Wali Kelas */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black tracking-wider uppercase text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-100">
+                  Rombel & Wali Kelas
+                </span>
+                <BadgeCheck className="w-4 h-4 text-[#531FFF]" />
+              </div>
+
+              <div className="flex items-center gap-3 pt-1">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white flex items-center justify-center font-black text-lg shadow-md shadow-[#531FFF]/20 shrink-0">
+                  {studentHomeroomTeacher?.name ? studentHomeroomTeacher.name.charAt(0).toUpperCase() : (studentMyClass?.homeroom ? studentMyClass.homeroom.charAt(0).toUpperCase() : "W")}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-base font-black text-gray-900 truncate">
+                    {studentHomeroomTeacher?.name || studentMyClass?.homeroom || "Belum Ditetapkan"}
+                  </h3>
+                  <p className="text-xs text-gray-500 font-medium truncate">
+                    Wali Kelas {studentMyClass?.name || studentClassId}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-gray-50 flex items-center justify-between text-xs text-gray-400 font-medium mt-3">
+              <span>Lokasi Ruang Kelas</span>
+              <span className="font-bold text-[#531FFF]">{studentMyClass?.room || `Ruang ${studentMyClass?.name || studentClassId}`}</span>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Control Bar: View Switcher & Search */}
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-xs p-4 sm:p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+          
+          {/* View Switcher */}
+          <div className="flex bg-gray-100/80 p-1.5 rounded-2xl">
+            <button
+              onClick={() => setViewMode("weekly")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                viewMode === "weekly" ? "bg-white text-[#531FFF] shadow-xs" : "text-gray-500 hover:text-gray-800"
+              )}
+            >
+              <LayoutGrid className="w-4 h-4" />
+              <span>Kartu Mingguan</span>
+            </button>
+            <button
+              onClick={() => setViewMode("matrix")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                viewMode === "matrix" ? "bg-white text-[#531FFF] shadow-xs" : "text-gray-500 hover:text-gray-800"
+              )}
+            >
+              <Table className="w-4 h-4" />
+              <span>Matriks Jam</span>
+            </button>
+            <button
+              onClick={() => setViewMode("daily")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                viewMode === "daily" ? "bg-white text-[#531FFF] shadow-xs" : "text-gray-500 hover:text-gray-800"
+              )}
+            >
+              <List className="w-4 h-4" />
+              <span>Timeline Harian</span>
+            </button>
+          </div>
+
+          {/* Search & Class Pill */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 sm:w-64">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Cari mata pelajaran atau guru..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs font-medium bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+              />
+            </div>
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-purple-50 text-purple-700 text-xs font-bold rounded-xl border border-purple-100">
+              <GraduationCap className="w-3.5 h-3.5 text-[#531FFF]" />
+              <span>Kelas {studentMyClass?.name || studentClassId}</span>
+            </div>
+          </div>
+
+        </div>
+
+        {/* View Content */}
+        <div className="flex-1 flex flex-col min-h-0">
+          
+          {/* VIEW MODE 1: KARTU MINGGUAN */}
+          {viewMode === "weekly" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 overflow-y-auto custom-scrollbar pb-6">
+              {DAYS.map(day => {
+                const daySchedules = filteredStudentSchedules
+                  .filter(s => s.day === day)
+                  .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
+                const isToday = mounted && day === currentDayString;
+
+                return (
+                  <div key={day} className="flex flex-col bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden min-h-[420px]">
+                    {/* Day Column Header */}
+                    <div className={cn(
+                      "p-4 flex items-center justify-between border-b transition-colors",
+                      isToday ? "bg-[#531FFF] text-white border-[#531FFF]" : "bg-gray-50/80 border-gray-100 text-gray-800"
+                    )}>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-sm">{day}</h3>
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full text-[10px] font-black",
+                          isToday ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"
+                        )}>
+                          {daySchedules.length} Sesi
+                        </span>
+                      </div>
+                      {isToday && (
+                        <span className="text-[10px] font-black tracking-wider uppercase bg-white text-[#531FFF] px-2 py-0.5 rounded-full shadow-xs">
+                          Hari Ini
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Schedule Cards for this Day */}
+                    <div className="p-3.5 flex-1 space-y-3 overflow-y-auto custom-scrollbar">
+                      {daySchedules.map((schedule, idx) => {
+                        const active = isActive(schedule);
+                        const palette = getSubjectColor(schedule.subject);
+
+                        return (
+                          <div 
+                            key={schedule._firestoreId || idx}
+                            className={cn(
+                              "group relative p-3.5 rounded-2xl border transition-all duration-200",
+                              palette.bg, palette.border, palette.hover,
+                              active && "ring-2 ring-[#531FFF] shadow-md scale-[1.01]"
+                            )}
+                          >
+                            {/* Active Indicator */}
+                            {active && (
+                              <span className="absolute -top-2 -right-2 flex h-4 w-4">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#531FFF] opacity-75" />
+                                <span className="relative inline-flex rounded-full h-4 w-4 bg-[#531FFF] border-2 border-white" />
+                              </span>
+                            )}
+
+                            <div className="flex justify-between items-start mb-2">
+                              <span className={cn("text-[11px] font-extrabold px-2 py-0.5 rounded-lg", palette.badge)}>
+                                {schedule.startTime} - {schedule.endTime}
+                              </span>
+                              {active && (
+                                <span className="text-[9px] font-black uppercase text-[#531FFF] bg-white px-1.5 py-0.5 rounded-md shadow-xs">
+                                  Aktif
+                                </span>
+                              )}
+                            </div>
+
+                            <h4 className={cn("font-black text-sm mb-2 leading-snug", palette.text)}>
+                              {schedule.subject || "Mata Pelajaran"}
+                            </h4>
+
+                            <div className="space-y-1.5 text-xs text-gray-600 border-t border-black/5 pt-2.5 mt-2">
+                              <div className="flex items-center gap-2">
+                                <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                <span className="font-bold text-gray-800 truncate" title={schedule.teacher}>
+                                  {schedule.teacher || "Guru Pengajar"}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between text-[11px] text-gray-400">
+                                <span>Ruang:</span>
+                                <span className="font-bold text-gray-700">
+                                  {studentMyClass?.room || studentMyClass?.name || studentClassId}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Empty Day State */}
+                      {daySchedules.length === 0 && (
+                        <div className="w-full h-48 flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-100 p-4 text-center">
+                          <p className="text-xs font-bold text-gray-400">Tidak ada sesi pelajaran</p>
+                          <span className="text-[11px] text-gray-300 mt-1">Hari libur / mandiri</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* VIEW MODE 2: TIMETABLE MATRIX GRID */}
+          {viewMode === "matrix" && (
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden flex-1 flex flex-col">
+              <div className="overflow-x-auto custom-scrollbar flex-1">
+                <table className="w-full border-collapse text-left min-w-[800px]">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      <th className="py-3.5 px-4 w-40 border-r border-gray-100">Waktu / Slot</th>
+                      {DAYS.map(day => (
+                        <th key={day} className={cn(
+                          "py-3.5 px-4 text-center border-r border-gray-100",
+                          mounted && day === currentDayString && "bg-[#531FFF]/10 text-[#531FFF]"
+                        )}>
+                          {day}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-xs">
+                    {TIME_PRESETS.map((slot, slotIdx) => (
+                      <tr key={slotIdx} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="py-3.5 px-4 font-bold text-gray-700 bg-gray-50/40 border-r border-gray-100 align-top">
+                          <div className="flex items-center gap-1.5 text-[#531FFF]">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>{slot.start} - {slot.end}</span>
+                          </div>
+                          <span className="text-[10px] text-gray-400 font-normal">Jam ke-{slotIdx + 1}</span>
+                        </td>
+
+                        {DAYS.map(day => {
+                          const slotSchedules = filteredStudentSchedules.filter(s => 
+                            s.day === day && 
+                            s.startTime >= slot.start && 
+                            s.startTime < slot.end
+                          );
+
+                          return (
+                            <td key={day} className="py-2.5 px-2.5 border-r border-gray-100 align-top min-w-[150px] h-28">
+                              {slotSchedules.length > 0 ? (
+                                <div className="space-y-2">
+                                  {slotSchedules.map((s, sIdx) => {
+                                    const palette = getSubjectColor(s.subject);
+                                    const active = isActive(s);
+                                    return (
+                                      <div 
+                                        key={s._firestoreId || sIdx}
+                                        className={cn(
+                                          "p-3 rounded-xl border text-left transition-all",
+                                          palette.bg, palette.border,
+                                          active && "ring-2 ring-[#531FFF] shadow-sm"
+                                        )}
+                                      >
+                                        <div className="flex justify-between items-start gap-1 mb-1">
+                                          <span className={cn("font-black text-xs truncate", palette.text)}>
+                                            {s.subject}
+                                          </span>
+                                        </div>
+                                        <div className="text-[11px] text-gray-600 font-medium truncate">
+                                          {s.teacher}
+                                        </div>
+                                        <div className="text-[10px] text-gray-400 mt-1 font-semibold">
+                                          {s.startTime} - {s.endTime}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="h-full flex items-center justify-center text-gray-300 text-[11px] font-medium">
+                                  -
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW MODE 3: TIMELINE HARIAN */}
+          {viewMode === "daily" && (
+            <div className="flex-1 flex flex-col bg-white rounded-3xl border border-gray-100 shadow-xs p-6 overflow-hidden">
+              
+              {/* Day Selector Pills */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 border-b border-gray-100 custom-scrollbar">
+                {DAYS.map(day => {
+                  const count = filteredStudentSchedules.filter(s => s.day === day).length;
+                  const isDayActive = selectedDay === day;
+                  return (
+                    <button
+                      key={day}
+                      onClick={() => setSelectedDay(day)}
+                      className={cn(
+                        "px-5 py-2.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer",
+                        isDayActive 
+                          ? "bg-[#531FFF] text-white shadow-md shadow-[#531FFF]/20" 
+                          : "bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200"
+                      )}
+                    >
+                      <span>{day}</span>
+                      <span className={cn(
+                        "px-2 py-0.5 rounded-full text-[10px] font-bold",
+                        isDayActive ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"
+                      )}>
+                        {count} Sesi
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Timeline Cards */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+                {filteredStudentSchedules.filter(s => s.day === selectedDay).length > 0 ? (
+                  <div className="relative border-l-2 border-[#531FFF]/20 ml-4 md:ml-8 space-y-6 py-2">
+                    {filteredStudentSchedules
+                      .filter(s => s.day === selectedDay)
+                      .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""))
+                      .map((schedule, idx) => {
+                        const active = isActive(schedule);
+                        const palette = getSubjectColor(schedule.subject);
+
+                        return (
+                          <div key={schedule._firestoreId || idx} className="relative pl-6 md:pl-10">
+                            {/* Dot Indicator */}
+                            <div className={cn(
+                              "absolute -left-[9px] top-4 w-4 h-4 rounded-full border-4 border-white shadow-xs",
+                              active ? "bg-emerald-500 ring-4 ring-emerald-100" : palette.dot
+                            )} />
+
+                            <div className={cn(
+                              "p-5 rounded-2xl border transition-all",
+                              palette.bg, palette.border,
+                              active && "ring-2 ring-[#531FFF] shadow-md"
+                            )}>
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                                <div>
+                                  <span className={cn("text-xs font-black px-2.5 py-1 rounded-lg", palette.badge)}>
+                                    {schedule.startTime} - {schedule.endTime} WIB
+                                  </span>
+                                  <h4 className="font-black text-lg mt-2 text-gray-900">
+                                    {schedule.subject}
+                                  </h4>
+                                </div>
+
+                                {active && (
+                                  <span className="self-start sm:self-auto px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    Sedang Berlangsung
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white/70 backdrop-blur-xs p-3.5 rounded-xl border border-black/5 text-xs">
+                                <div>
+                                  <span className="text-gray-400 font-medium">Guru Pengampu:</span>
+                                  <p className="font-bold text-gray-900 mt-0.5">{schedule.teacher}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-400 font-medium">Ruang Pembelajaran:</span>
+                                  <p className="font-bold text-[#531FFF] mt-0.5">
+                                    {studentMyClass?.room || `Ruang ${studentMyClass?.name || studentClassId}`}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <div className="py-16 flex flex-col items-center justify-center text-center">
+                    <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mb-3 text-gray-400">
+                      <Calendar className="w-7 h-7" />
+                    </div>
+                    <h3 className="text-base font-bold text-gray-900">Tidak ada jadwal untuk hari {selectedDay}</h3>
+                    <p className="text-xs text-gray-500 mt-1 max-w-sm">
+                      Tidak ada sesi kegiatan belajar mengajar yang dijadwalkan untuk kelas {studentMyClass?.name || studentClassId} pada hari ini.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+        </div>
+
+      </div>
+    );
+  }
+
+  // Filtered schedule items (FOR ADMIN, GURU & SUPER-ADMIN)
   const filteredSchedules = schedules.filter(s => {
     const matchesClass = selectedClassFilter === "All" || s.class === selectedClassFilter;
     const matchesQuery = !searchQuery || 

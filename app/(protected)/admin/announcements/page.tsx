@@ -32,6 +32,7 @@ export default function AnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>("admin");
+  const isStudent = userRole === "siswa" || userRole === "student";
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
@@ -85,7 +86,7 @@ export default function AnnouncementsPage() {
   };
 
   const handleCrudSubmit = async (data: any) => {
-    if (userRole === "siswa") return; // Read only safeguard
+    if (isStudent) return; // Read only safeguard
 
     try {
       if (crudState.mode === "create") {
@@ -173,7 +174,7 @@ export default function AnnouncementsPage() {
         fields={announcementFields}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
-        onEditRequested={userRole !== "siswa" ? () => setCrudState(s => ({ ...s, mode: "edit" })) : undefined}
+        onEditRequested={!isStudent ? () => setCrudState(s => ({ ...s, mode: "edit" })) : undefined}
       />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -188,7 +189,7 @@ export default function AnnouncementsPage() {
           <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 rounded-xl text-[13px] font-bold shadow-sm transition-colors">
             <Grid className="w-4 h-4" /> Kategori
           </button>
-          {userRole !== "siswa" && (
+          {!isStudent && (
             <button 
               onClick={() => setCrudState({ open: true, mode: "create" })}
               className="flex items-center gap-2 px-4 py-2 bg-[#531FFF] text-white hover:bg-[#4314E5] rounded-xl text-[13px] font-bold shadow-sm transition-colors cursor-pointer"
@@ -299,7 +300,7 @@ export default function AnnouncementsPage() {
                                  className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded-md transition-colors cursor-pointer" title="Lihat Detail">
                                  <Eye className="w-4 h-4" />
                                </button>
-                               {userRole !== "siswa" && (
+                               {!isStudent && (
                                  <>
                                    <button 
                                      onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
@@ -350,7 +351,9 @@ export default function AnnouncementsPage() {
             <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
                <div className="flex justify-between items-center mb-5">
                  <h3 className="text-[14px] font-bold text-gray-900">Kategori Pengumuman</h3>
-                 <button className="text-[11px] font-bold text-[#531FFF] hover:underline">Kelola Kategori</button>
+                 {!isStudent && (
+                    <button className="text-[11px] font-bold text-[#531FFF] hover:underline">Kelola Kategori</button>
+                 )}
                </div>
                <div className="flex flex-col gap-3">
                  {categories.map((c, i) => (
@@ -391,57 +394,61 @@ export default function AnnouncementsPage() {
                </div>
             </div>
 
-            {/* Quick Send */}
-            <div className="bg-[#F8F9FE] border border-[#531FFF]/10 rounded-3xl p-6 shadow-sm relative overflow-hidden">
-               <div className="absolute top-0 right-0 w-24 h-24 bg-[#531FFF]/5 rounded-bl-[100px] pointer-events-none"></div>
-               
-               <div className="flex items-center justify-between mb-2 relative z-10">
-                 <h3 className="text-[14px] font-bold text-gray-900">Kirim Pengumuman Cepat</h3>
-                 <Sparkles className="w-4 h-4 text-[#531FFF]" />
-               </div>
-               
-               <p className="text-[12px] text-gray-500 mb-5 leading-relaxed relative z-10">
-                 Kirim pengumuman singkat ke seluruh warga sekolah atau grup tertentu.
-               </p>
-               
-               <div className="flex flex-col gap-3 relative z-10">
-                 <div>
-                   <label className="text-[11px] font-bold text-gray-700 block mb-1.5">Pilih Penerima</label>
-                   <div className="relative">
-                     <select className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-[13px] rounded-xl px-3 py-2.5 outline-none focus:border-[#531FFF] font-medium">
-                       <option>Pilih kelompok penerima...</option>
-                       <option>Semua Warga Sekolah</option>
-                       <option>Semua Guru & Staff</option>
-                       <option>Semua Siswa</option>
-                     </select>
-                     <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                   </div>
-                 </div>
-                 
-                 <button 
-                   onClick={() => setCrudState({ open: true, mode: "create" })}
-                   className="w-full bg-[#531FFF] text-white font-bold text-[13px] py-2.5 rounded-xl hover:bg-[#4314E5] transition-colors shadow-sm mt-2">
-                   Buat Pengumuman
-                 </button>
-               </div>
-            </div>
-
-            {/* AI Assistant Promo */}
-            <div className="bg-white border border-gray-100 rounded-3xl p-6 flex flex-col items-center justify-center shadow-sm">
-               <div className="flex w-full justify-between items-center mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-md bg-gradient-to-tr from-cyan-500 to-blue-500 flex items-center justify-center shadow-sm">
-                       <Sparkles className="w-3.5 h-3.5 text-white" />
-                    </div>
-                    <span className="font-bold text-[13px] text-gray-900">AI Assistant</span>
+            {/* Quick Send & AI Assistant (Only for Staff / Admin) */}
+            {!isStudent && (
+              <>
+                <div className="bg-[#F8F9FE] border border-[#531FFF]/10 rounded-3xl p-6 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-[#531FFF]/5 rounded-bl-[100px] pointer-events-none"></div>
+                  
+                  <div className="flex items-center justify-between mb-2 relative z-10">
+                    <h3 className="text-[14px] font-bold text-gray-900">Kirim Pengumuman Cepat</h3>
+                    <Sparkles className="w-4 h-4 text-[#531FFF]" />
                   </div>
-                  <span className="text-[9px] font-bold bg-[#531FFF]/10 text-[#531FFF] px-2 py-0.5 rounded-full tracking-wider">BETA</span>
-               </div>
-               <p className="text-[12px] text-gray-500 w-full mb-4">Butuh bantuan membuat pengumuman?</p>
-               <button className="w-full py-2.5 border border-[#531FFF]/20 text-[#531FFF] hover:bg-[#531FFF]/5 font-bold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-colors">
-                  <Sparkles className="w-4 h-4" /> Buat dengan AI
-               </button>
-            </div>
+                  
+                  <p className="text-[12px] text-gray-500 mb-5 leading-relaxed relative z-10">
+                    Kirim pengumuman singkat ke seluruh warga sekolah atau grup tertentu.
+                  </p>
+                  
+                  <div className="flex flex-col gap-3 relative z-10">
+                    <div>
+                      <label className="text-[11px] font-bold text-gray-700 block mb-1.5">Pilih Penerima</label>
+                      <div className="relative">
+                        <select className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-[13px] rounded-xl px-3 py-2.5 outline-none focus:border-[#531FFF] font-medium">
+                          <option>Pilih kelompok penerima...</option>
+                          <option>Semua Warga Sekolah</option>
+                          <option>Semua Guru & Staff</option>
+                          <option>Semua Siswa</option>
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                    </div>
+                    
+                    <button 
+                      onClick={() => setCrudState({ open: true, mode: "create" })}
+                      className="w-full bg-[#531FFF] text-white font-bold text-[13px] py-2.5 rounded-xl hover:bg-[#4314E5] transition-colors shadow-sm mt-2 cursor-pointer">
+                      Buat Pengumuman
+                    </button>
+                  </div>
+                </div>
+
+                {/* AI Assistant Promo */}
+                <div className="bg-white border border-gray-100 rounded-3xl p-6 flex flex-col items-center justify-center shadow-sm">
+                  <div className="flex w-full justify-between items-center mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-gradient-to-tr from-cyan-500 to-blue-500 flex items-center justify-center shadow-sm">
+                        <Sparkles className="w-3.5 h-3.5 text-white" />
+                      </div>
+                      <span className="font-bold text-[13px] text-gray-900">AI Assistant</span>
+                    </div>
+                    <span className="text-[9px] font-bold bg-[#531FFF]/10 text-[#531FFF] px-2 py-0.5 rounded-full tracking-wider">BETA</span>
+                  </div>
+                  <p className="text-[12px] text-gray-500 w-full mb-4">Butuh bantuan membuat pengumuman?</p>
+                  <button className="w-full py-2.5 border border-[#531FFF]/20 text-[#531FFF] hover:bg-[#531FFF]/5 font-bold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer">
+                    <Sparkles className="w-4 h-4" /> Buat dengan AI
+                  </button>
+                </div>
+              </>
+            )}
 
          </div>
       </div>

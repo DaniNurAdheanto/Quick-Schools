@@ -2,19 +2,19 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
-import { 
-  MapPin, 
-  ScanFace, 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
-  Search, 
-  AlertTriangle, 
-  Map, 
-  Calendar, 
+import {
+  MapPin,
+  ScanFace,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Search,
+  AlertTriangle,
+  Map,
+  Calendar,
   User,
-  RefreshCw, 
-  List, 
+  RefreshCw,
+  List,
   Download,
   Filter,
   ChevronDown,
@@ -250,19 +250,19 @@ export default function AttendancePage() {
   // Filtered List
   const filteredData = useMemo(() => {
     return studentAttendanceData.filter(item => {
-      const matchesSearch = 
-        (item.studentName?.toLowerCase() || "").includes(searchQuery.toLowerCase()) || 
+      const matchesSearch =
+        (item.studentName?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
         (item.studentId?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
         (item.className?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
         (item.date?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
         (item.status?.toLowerCase() || "").includes(searchQuery.toLowerCase());
-      
-      const matchesStatus = 
-        statusFilter === "Semua" || 
-        item.status === statusFilter || 
+
+      const matchesStatus =
+        statusFilter === "Semua" ||
+        item.status === statusFilter ||
         (statusFilter === "Ditolak" && (item.status === "Ditolak" || item.rejectReason));
 
-      const matchesClass = 
+      const matchesClass =
         classFilter === "Semua Kelas" || item.className === classFilter;
 
       return matchesSearch && matchesStatus && matchesClass;
@@ -275,7 +275,7 @@ export default function AttendancePage() {
     const hadir = studentAttendanceData.filter(i => i.status === "Hadir").length;
     const terlambat = studentAttendanceData.filter(i => i.status === "Terlambat").length;
     const ditolak = studentAttendanceData.filter(i => i.status === "Ditolak" || i.rejectReason).length;
-    const avgScore = total > 0 
+    const avgScore = total > 0
       ? (studentAttendanceData.reduce((acc, curr) => acc + (curr.faceMatchScore || 0), 0) / total).toFixed(1)
       : 0;
 
@@ -321,7 +321,7 @@ export default function AttendancePage() {
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-300">
-      
+
       {/* Quick Attendance Scan Modal */}
       <QuickAttendanceModal
         isOpen={showScanModal}
@@ -343,7 +343,7 @@ export default function AttendancePage() {
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            {isStudentRole 
+            {isStudentRole
               ? "Riwayat rekap presensi harian diri sendiri, hasil verifikasi AI facial match score, dan lokasi GPS."
               : "Monitoring rekap absensi harian siswa terverifikasi AI facial match score & lokasi GPS radius sekolah."
             }
@@ -352,7 +352,7 @@ export default function AttendancePage() {
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-3">
-          <button 
+          <button
             onClick={() => setShowScanModal(true)}
             className="flex items-center gap-2 px-4.5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:shadow-lg hover:shadow-emerald-500/25 active:scale-[0.98] transition-all text-sm font-extrabold shadow-sm cursor-pointer border border-white/20"
           >
@@ -360,7 +360,7 @@ export default function AttendancePage() {
             <span>Presensi Sekarang (Kamera & GPS)</span>
           </button>
 
-          <button 
+          <button
             onClick={handleExportCSV}
             className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-sm font-semibold shadow-sm"
           >
@@ -368,7 +368,7 @@ export default function AttendancePage() {
             Ekspor CSV
           </button>
 
-          <button 
+          <button
             onClick={handleRefresh}
             className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-sm font-semibold shadow-sm"
           >
@@ -451,10 +451,10 @@ export default function AttendancePage() {
 
       {/* Main Table / Grid Content Section */}
       <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col">
-        
+
         {/* Filter Toolbar Header */}
         <div className="p-5 border-b border-gray-100 flex flex-col md:flex-row gap-4 justify-between items-center bg-gray-50/50">
-          
+
           {/* Left Controls: View Mode & Search */}
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             {/* View Switcher */}
@@ -490,12 +490,12 @@ export default function AttendancePage() {
                 Peta Geolokasi
               </button>
             </div>
-            
+
             {/* Search Input */}
             <div className="relative flex-1 md:w-64">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder={isStudentRole ? "Cari tanggal atau status..." : "Cari nama, NISN, atau kelas..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -536,8 +536,8 @@ export default function AttendancePage() {
                   onClick={() => setStatusFilter(st)}
                   className={cn(
                     "px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap",
-                    statusFilter === st 
-                      ? "bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/30 shadow-sm" 
+                    statusFilter === st
+                      ? "bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/30 shadow-sm"
                       : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
                   )}
                 >
@@ -570,8 +570,8 @@ export default function AttendancePage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden relative shrink-0 border border-gray-200 shadow-sm">
-                            <Image 
-                              src={item.capturedImage} 
+                            <Image
+                              src={item.capturedImage}
                               alt={item.studentName || "Siswa"}
                               fill
                               className="object-cover"
@@ -592,7 +592,7 @@ export default function AttendancePage() {
                         <div className="flex items-center gap-2">
                           <div className={cn(
                             "px-2.5 py-1 rounded-lg text-xs font-extrabold flex items-center gap-1.5",
-                            item.faceVerified 
+                            item.faceVerified
                               ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60"
                               : "bg-rose-50 text-rose-700 border border-rose-200/60"
                           )}>
@@ -658,7 +658,7 @@ export default function AttendancePage() {
 
                       {/* Action */}
                       <td className="px-6 py-4 text-right">
-                        <button 
+                        <button
                           onClick={() => setSelectedItem(item)}
                           className="px-3 py-1.5 bg-gray-100 hover:bg-[#F3F0FF] text-gray-700 hover:text-[#531FFF] rounded-xl text-xs font-bold transition-all border border-gray-200 hover:border-[#531FFF]/30"
                         >
@@ -688,21 +688,21 @@ export default function AttendancePage() {
           <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 bg-gray-50/50">
             {filteredData.length > 0 ? (
               filteredData.map((item) => (
-                <div 
+                <div
                   key={item.id}
                   onClick={() => setSelectedItem(item)}
                   className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-lg hover:border-[#531FFF]/30 transition-all duration-300 overflow-hidden cursor-pointer group flex flex-col"
                 >
                   {/* Photo Preview Container */}
                   <div className="relative aspect-[4/3] w-full bg-gray-100 overflow-hidden">
-                    <Image 
-                      src={item.capturedImage} 
+                    <Image
+                      src={item.capturedImage}
                       alt={item.studentName}
                       fill
                       className="object-cover group-hover:scale-105 transition-transform duration-500"
                       unoptimized
                     />
-                    
+
                     {/* Top Overlay Badges */}
                     <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
                       <span className={cn(
@@ -767,7 +767,7 @@ export default function AttendancePage() {
             <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm relative h-[520px] overflow-hidden flex items-center justify-center">
               {/* Decorative Radar Lines */}
               <div className="absolute inset-0 bg-[radial-gradient(#531FFF_1px,transparent_1px)] [background-size:16px_16px] opacity-10" />
-              
+
               {/* School Center Marker */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10">
                 <div className="w-14 h-14 bg-white rounded-full shadow-2xl border-4 border-[#531FFF] flex items-center justify-center z-10 relative animate-pulse">
@@ -786,14 +786,14 @@ export default function AttendancePage() {
                 const centerLng = 106.816666;
                 const latDiff = ((item.location?.lat || centerLat) - centerLat) * 120000;
                 const lngDiff = ((item.location?.lng || centerLng) - centerLng) * 120000;
-                
+
                 const top = `calc(50% - ${latDiff}px)`;
                 const left = `calc(50% + ${lngDiff}px)`;
-                
+
                 const isSuccess = item.status === "Hadir" || item.status === "Terlambat";
 
                 return (
-                  <div 
+                  <div
                     key={item.id || idx}
                     className="absolute z-20 group cursor-pointer"
                     style={{ top, left }}
@@ -809,7 +809,7 @@ export default function AttendancePage() {
                           isSuccess ? "bg-emerald-500" : "bg-rose-500"
                         )} />
                       </div>
-                      
+
                       {/* Tooltip Card on Hover */}
                       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 p-3 opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-30 transform group-hover:translate-y-0 translate-y-1">
                         <div className="flex items-center gap-2 mb-2">
@@ -859,21 +859,21 @@ export default function AttendancePage() {
       {selectedItem && (
         <div className="fixed inset-0 z-50 flex justify-end">
           {/* Backdrop */}
-          <div 
+          <div
             className="absolute inset-0 bg-gray-900/40 backdrop-blur-xs transition-opacity"
             onClick={() => setSelectedItem(null)}
           />
 
           {/* Drawer Content */}
           <div className="relative w-full max-w-lg bg-white shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-300 flex flex-col h-full z-10">
-            
+
             {/* Header */}
             <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-20">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-[#531FFF]" />
                 <h3 className="text-lg font-bold text-gray-900">Verifikasi Detail Presensi AI</h3>
               </div>
-              <button 
+              <button
                 onClick={() => setSelectedItem(null)}
                 className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
               >
@@ -883,12 +883,12 @@ export default function AttendancePage() {
 
             {/* Body */}
             <div className="flex-1 p-6 space-y-6 overflow-y-auto">
-              
+
               {/* Siswa Card Header */}
               <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
                 <div className="w-16 h-16 rounded-2xl bg-white overflow-hidden relative shrink-0 border-2 border-white shadow-md">
-                  <Image 
-                    src={selectedItem.capturedImage} 
+                  <Image
+                    src={selectedItem.capturedImage}
                     alt={selectedItem.studentName}
                     fill
                     className="object-cover"
@@ -941,8 +941,8 @@ export default function AttendancePage() {
 
                 {/* Photo Viewer */}
                 <div className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden bg-gray-900 border border-gray-200 shadow-inner group">
-                  <Image 
-                    src={selectedItem.capturedImage} 
+                  <Image
+                    src={selectedItem.capturedImage}
                     alt="Foto Presensi"
                     fill
                     className="object-cover"
@@ -976,12 +976,12 @@ export default function AttendancePage() {
 
                 {/* Embedded Map */}
                 <div className="w-full h-44 rounded-2xl bg-gray-100 relative overflow-hidden border border-gray-200 shadow-inner">
-                  <iframe 
-                    width="100%" 
-                    height="100%" 
-                    style={{ border: 0 }} 
-                    loading="lazy" 
-                    allowFullScreen 
+                  <iframe
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    loading="lazy"
+                    allowFullScreen
                     src={`https://maps.google.com/maps?q=${selectedItem.location?.lat || -6.200000},${selectedItem.location?.lng || 106.816666}&z=16&output=embed`}
                   />
                 </div>
@@ -990,7 +990,7 @@ export default function AttendancePage() {
                   <span className="text-gray-500 font-mono">
                     GPS: {selectedItem.location?.lat}, {selectedItem.location?.lng}
                   </span>
-                  <a 
+                  <a
                     href={`https://www.google.com/maps/search/?api=1&query=${selectedItem.location?.lat},${selectedItem.location?.lng}`}
                     target="_blank"
                     rel="noreferrer"
@@ -1004,7 +1004,7 @@ export default function AttendancePage() {
 
             {/* Footer Actions */}
             <div className="p-6 border-t border-gray-100 bg-gray-50 sticky bottom-0 z-20 flex gap-3">
-              <button 
+              <button
                 onClick={() => setSelectedItem(null)}
                 className="w-full py-3 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-xs font-bold shadow-sm"
               >

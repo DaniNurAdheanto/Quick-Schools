@@ -82,23 +82,33 @@ const KEUANGAN_NAV = [
 ];
 
 const SYSTEM_NAV = [
+  { href: "/admin/profile", label: "Profile", icon: User },
   { href: "/admin/accounts", label: "Manajemen Akun System", icon: UserCheck },
   { href: "/admin/settings", label: "Pengaturan Sekolah", icon: Settings },
   { href: "/admin/roles", label: "Role & Permission", icon: UserCog },
   { href: "/", label: "Keluar", icon: LogOut, isDanger: true },
 ];
 
-function NavGroup({ title, items, currentPath, isCollapsed, userPermissions, isFooter = false }: { 
+function NavGroup({ title, items, currentPath, isCollapsed, userPermissions, userRole = "admin", isFooter = false }: { 
   title: string; 
   items: any[]; 
   currentPath: string; 
   isCollapsed: boolean; 
   userPermissions: Record<string, { read: boolean; write: boolean; delete: boolean }>;
+  userRole?: string;
   isFooter?: boolean 
 }) {
+  const isSuperAdmin = userRole === "super-admin" || userRole === "superadmin" || userRole === "super_admin";
+
   // Filter items based on permissions
   const visibleItems = items.filter(item => {
-    if (item.isDanger || item.href === "/") return true;
+    if (item.isDanger || item.href === "/" || item.href === "/admin/profile") return true;
+
+    // Strict rule: Manajemen Akun System is exclusively visible & accessible to Super Admin
+    if (item.href === "/admin/accounts" || NAV_MODULE_MAP[item.href] === "accounts") {
+      return isSuperAdmin;
+    }
+
     const modId = NAV_MODULE_MAP[item.href];
     if (!modId) return true;
     const modPerm = userPermissions[modId];
@@ -243,10 +253,10 @@ export function Sidebar() {
 
       {/* Nav Content Filtered by Permissions */}
       <div className="flex-1 overflow-y-auto pt-6 pb-2 scrollbar-none">
-        <NavGroup title="OVERVIEW" items={OVERVIEW_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} />
-        <NavGroup title="MASTER DATA" items={MASTER_DATA_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} />
-        <NavGroup title="AKADEMIK" items={AKADEMIK_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} />
-        <NavGroup title="KEUANGAN" items={KEUANGAN_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} />
+        <NavGroup title="OVERVIEW" items={OVERVIEW_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={userRole} />
+        <NavGroup title="MASTER DATA" items={MASTER_DATA_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={userRole} />
+        <NavGroup title="AKADEMIK" items={AKADEMIK_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={userRole} />
+        <NavGroup title="KEUANGAN" items={KEUANGAN_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={userRole} />
       </div>
 
       {/* Footer Fixed */}
@@ -254,7 +264,7 @@ export function Sidebar() {
         "shrink-0 pt-4",
         isCollapsed ? "pb-4" : "pb-6"
       )}>
-        <NavGroup title="SYSTEM & SETTINGS" items={SYSTEM_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} isFooter={true} />
+        <NavGroup title="SYSTEM & SETTINGS" items={SYSTEM_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={userRole} isFooter={true} />
       </div>
 
     </aside>

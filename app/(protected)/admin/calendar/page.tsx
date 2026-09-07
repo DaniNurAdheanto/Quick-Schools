@@ -97,6 +97,7 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [userRole, setUserRole] = useState<string>("admin");
+  const isStudent = userRole === "siswa" || userRole === "student";
   
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -213,6 +214,7 @@ export default function CalendarPage() {
 
   // Handle Open Create Modal
   const handleOpenAdd = (defaultDateStr?: string) => {
+    if (isStudent) return;
     setEditingEventId(null);
     const dateVal = defaultDateStr || format(new Date(), 'yyyy-MM-dd');
     setFormData({
@@ -232,6 +234,7 @@ export default function CalendarPage() {
 
   // Handle Edit Modal
   const handleEdit = (event: any) => {
+    if (isStudent) return;
     setEditingEventId(event.id);
     setFormData({
       title: event.title || "",
@@ -251,6 +254,7 @@ export default function CalendarPage() {
   // Form Submit Handler
   const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isStudent) return;
     if (!formData.title || !formData.startDate) {
       triggerAlert("error", "Harap lengkapi Judul Agenda dan Tanggal Mulai.", "Gagal Validasi");
       return;
@@ -295,6 +299,7 @@ export default function CalendarPage() {
 
   // Delete Handler
   const handleDelete = async (id: string) => {
+    if (isStudent) return;
     if (id.startsWith("sample_")) {
       triggerAlert("warning", "Contoh sampel agenda tidak perlu dihapus.", "Informasi");
       return;
@@ -361,16 +366,18 @@ export default function CalendarPage() {
                 {formattedDayNum}
               </span>
 
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleOpenAdd(dateStr);
-                }}
-                className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-[#531FFF] hover:bg-white rounded-md transition-all shadow-xs"
-                title="Tambah Agenda Hari Ini"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
+              {!isStudent && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenAdd(dateStr);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-[#531FFF] hover:bg-white rounded-md transition-all shadow-xs"
+                  title="Tambah Agenda Hari Ini"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Event Pills */}
@@ -382,7 +389,9 @@ export default function CalendarPage() {
                     key={event.id || idx}
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleEdit(event);
+                      if (!isStudent) {
+                        handleEdit(event);
+                      }
                     }}
                     className={cn(
                       "text-[10px] font-extrabold px-2 py-1 rounded-lg truncate transition-all flex items-center gap-1.5 border shadow-2xs hover:scale-[1.02]",
@@ -479,7 +488,7 @@ export default function CalendarPage() {
             <span>Cetak Kalender (PDF)</span>
           </button>
 
-          {userRole !== "siswa" && (
+          {!isStudent && (
             <button
               onClick={() => handleOpenAdd()}
               className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
@@ -680,7 +689,7 @@ export default function CalendarPage() {
                         </div>
                       </div>
 
-                      {userRole !== "siswa" && (
+                      {!isStudent && (
                         <div className="flex items-center gap-1 shrink-0">
                           <button
                             onClick={() => handleEdit(evt)}
@@ -761,12 +770,14 @@ export default function CalendarPage() {
               )}
             </div>
 
-            <button
-              onClick={() => handleOpenAdd()}
-              className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-[#531FFF] font-bold text-xs rounded-xl transition-colors border border-gray-200 flex items-center justify-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" /> Tambah Agenda Sekarang
-            </button>
+            {!isStudent && (
+              <button
+                onClick={() => handleOpenAdd()}
+                className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-[#531FFF] font-bold text-xs rounded-xl transition-colors border border-gray-200 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" /> Tambah Agenda Sekarang
+              </button>
+            )}
           </div>
 
           {/* Quick Statistics Card */}

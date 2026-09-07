@@ -20,8 +20,15 @@ import {
   LayoutGrid,
   Table as TableIcon,
   AlertCircle,
-  Layers
+  Layers,
+  Phone,
+  MessageCircle,
+  User,
+  BookOpen,
+  BadgeCheck,
+  ShieldCheck
 } from "lucide-react";
+import Image from "next/image";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
 import { db, auth } from "@/lib/firebase";
 import { 
@@ -32,6 +39,7 @@ import {
   updateDoc, 
   deleteDoc, 
   doc, 
+  getDoc,
   writeBatch 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -64,6 +72,14 @@ export default function ClassesPage() {
   const [selectedMajor, setSelectedMajor] = useState("All");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
+  // Student specific role states
+  const [currentUserRole, setCurrentUserRole] = useState<string>("admin");
+  const [currentUserData, setCurrentUserData] = useState<any>(null);
+  const [currentStudentClass, setCurrentStudentClass] = useState<string>("");
+  const [studentSearchQuery, setStudentSearchQuery] = useState("");
+  const [studentGenderFilter, setStudentGenderFilter] = useState("All");
+  const [studentViewMode, setStudentViewMode] = useState<"grid" | "table">("grid");
+
   // Student Management Modal state
   const [managingClass, setManagingClass] = useState<any | null>(null);
   const [manageTab, setManageTab] = useState<"enrolled" | "add" | "quickAdd">("enrolled");
@@ -92,8 +108,25 @@ export default function ClassesPage() {
 
   // Real-time synchronization for classes, students, and teachers
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        // 0. Fetch User Role & Class
+        try {
+          const uSnap = await getDoc(doc(db, "users", user.uid));
+          if (uSnap.exists()) {
+            const uData = uSnap.data();
+            setCurrentUserData(uData);
+            const rawRole = (uData.role || "admin").toLowerCase();
+            const normRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : rawRole;
+            setCurrentUserRole(normRole);
+            if (uData.classId || uData.className || uData.class) {
+              setCurrentStudentClass(uData.classId || uData.className || uData.class);
+            }
+          }
+        } catch (err) {
+          console.warn("Could not fetch user role in classes:", err);
+        }
+
         // 1. Classes
         const qClasses = query(collection(db, "classes"));
         const unsubClasses = onSnapshot(qClasses, (snapshot) => {
@@ -486,6 +519,506 @@ export default function ClassesPage() {
 
   const classesWithHomeroom = classes.filter(c => !!c.homeroom).length;
   const avgStudentsPerClass = classes.length > 0 ? Math.round(totalAssignedStudents / classes.length) : 0;
+
+  // Student role detection and class resolver
+  const isStudent = currentUserRole === "siswa" || currentUserRole === "student";
+
+  const studentClassId = useMemo(() => {
+    if (currentStudentClass) return currentStudentClass;
+    if (!auth.currentUser) return null;
+    const user = auth.currentUser;
+    const matched = students.find(s => 
+      s.id === user.uid || 
+      s._firestoreId === user.uid || 
+      (s.email && s.email.toLowerCase() === user.email?.toLowerCase()) ||
+      (s.name && currentUserData?.name && s.name.toLowerCase() === currentUserData.name.toLowerCase())
+    );
+    if (matched?.classId || matched?.className) {
+      return matched.classId || matched.className;
+    }
+    return currentUserData?.classId || currentUserData?.className || null;
+  }, [currentStudentClass, students, currentUserData]);
+
+  // Find student's own class object
+  const studentMyClass = useMemo(() => {
+    if (!studentClassId) return null;
+    return classes.find(c => 
+      c.name?.toLowerCase() === studentClassId.toLowerCase() ||
+      c.id?.toLowerCase() === studentClassId.toLowerCase() ||
+      c._firestoreId === studentClassId
+    ) || null;
+  }, [classes, studentClassId]);
+
+  // Find classmates for student's own class
+  const studentClassmates = useMemo(() => {
+    if (!studentClassId && !studentMyClass) return [];
+    const targetClassName = (studentMyClass?.name || studentClassId || "").toLowerCase();
+    
+    // Filter from students collection
+    const list = students.filter(s => {
+      const c = (s.classId || s.className || s.class || "").toLowerCase();
+      return c === targetClassName;
+    });
+
+    // If current student is not in list, add current user
+    const currentUid = auth.currentUser?.uid;
+    const alreadyIncluded = list.some(s => 
+      s.id === currentUid || 
+      s._firestoreId === currentUid || 
+      (s.name && currentUserData?.name && s.name.toLowerCase() === currentUserData.name.toLowerCase())
+    );
+    
+    if (!alreadyIncluded && currentUserData && (currentUserData.classId || currentUserData.className)) {
+      list.unshift({
+        _firestoreId: currentUid || "me",
+        id: currentUserData.nisn || currentUserData.id || "109823",
+        name: currentUserData.name || "Siswa",
+        nisn: currentUserData.nisn || currentUserData.id || "-",
+        gender: currentUserData.gender || "Laki-laki",
+        status: currentUserData.status || "Aktif",
+        imageUrl: currentUserData.imageUrl || "",
+        isMe: true
+      });
+    }
+
+    return list;
+  }, [students, studentMyClass, studentClassId, currentUserData]);
+
+  // Filtered classmates
+  const filteredClassmates = useMemo(() => {
+    return studentClassmates.filter(s => {
+      const matchSearch = !studentSearchQuery || 
+        s.name?.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
+        s.id?.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
+        (s.nisn && s.nisn.toLowerCase().includes(studentSearchQuery.toLowerCase()));
+      
+      const matchGender = studentGenderFilter === "All" || s.gender === studentGenderFilter;
+      return matchSearch && matchGender;
+    });
+  }, [studentClassmates, studentSearchQuery, studentGenderFilter]);
+
+  // Homeroom teacher for this class
+  const studentHomeroomTeacher = useMemo(() => {
+    if (!studentMyClass?.homeroom) return null;
+    return teachers.find(t => 
+      t.name?.toLowerCase() === studentMyClass.homeroom?.toLowerCase() ||
+      t.id === studentMyClass.homeroom ||
+      t.nip === studentMyClass.homeroom
+    ) || { 
+      name: studentMyClass.homeroom, 
+      contact: studentMyClass.homeroomContact || "", 
+      nip: studentMyClass.homeroomNip || "",
+      subject: studentMyClass.homeroomRole || "Wali Kelas"
+    };
+  }, [studentMyClass, teachers]);
+
+  // =========================================================================
+  // VIEW KHUSUS ROLE SISWA: HANYA MENAMPILKAN DATA KELAS DIA SENDIRI
+  // =========================================================================
+  if (isStudent && !loading) {
+    if (!studentMyClass && !studentClassId) {
+      return (
+        <div className="p-4 sm:p-8 max-w-[1200px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
+          <div className="bg-white rounded-3xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-12">
+            <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200 shadow-sm">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-50 text-amber-800 border border-amber-200 uppercase tracking-wider">
+              Belum Ada Kelas
+            </span>
+            <h2 className="text-xl font-black text-gray-900 mt-3 tracking-tight">Belum Terdaftar di Kelas</h2>
+            <p className="text-xs text-gray-500 mt-2 font-medium leading-relaxed">
+              Akun Anda saat ini belum terhubung dengan rombongan belajar/kelas manapun. Silakan hubungi wali kelas atau bagian Tata Usaha sekolah untuk penempatan kelas Anda.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    const maleCount = studentClassmates.filter(s => s.gender === "Laki-laki").length;
+    const femaleCount = studentClassmates.filter(s => s.gender === "Perempuan").length;
+    const currentUid = auth.currentUser?.uid;
+
+    return (
+      <div className="p-4 sm:p-8 pb-16 max-w-[1500px] mx-auto w-full flex flex-col space-y-6 animate-in fade-in duration-300">
+        
+        {/* Top Header Card */}
+        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-96 h-full bg-gradient-to-l from-[#531FFF]/5 via-[#531FFF]/2 to-transparent pointer-events-none" />
+          
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] flex items-center justify-center text-white shadow-lg shadow-[#531FFF]/25 shrink-0">
+              <GraduationCap className="w-7 h-7" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
+                  Portal Siswa
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Kelas Aktif
+                </span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight mt-1">
+                Kelas Saya: {studentMyClass?.name || studentClassId}
+              </h1>
+              <p className="text-gray-500 text-xs sm:text-sm font-medium mt-1">
+                Informasi detail rombongan belajar, kontak wali kelas pembimbing, dan daftar teman sekelas Anda.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 relative z-10 self-start sm:self-auto">
+            <div className="px-4 py-2 bg-gray-50 rounded-2xl border border-gray-100 text-right">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tahun Ajaran</p>
+              <p className="text-xs font-black text-gray-800">2025/2026 Ganjil</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 3 Detail Info Tiles */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          
+          {/* Card 1: Wali Kelas Pembimbing */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black tracking-wider uppercase text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-100">
+                  Wali Kelas Pembimbing
+                </span>
+                <BadgeCheck className="w-4 h-4 text-[#531FFF]" />
+              </div>
+
+              <div className="flex items-center gap-3.5 pt-1">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white flex items-center justify-center font-black text-lg shadow-md shadow-[#531FFF]/20 shrink-0">
+                  {studentHomeroomTeacher?.name ? studentHomeroomTeacher.name.charAt(0).toUpperCase() : "G"}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-base font-black text-gray-900 truncate">
+                    {studentHomeroomTeacher?.name || studentMyClass?.homeroom || "Belum Ditetapkan"}
+                  </h3>
+                  <p className="text-[11px] font-bold text-[#531FFF]">
+                    {studentHomeroomTeacher?.subject || studentHomeroomTeacher?.role || "Wali Kelas"}
+                  </p>
+                  <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+                    NIP: {studentHomeroomTeacher?.nip || studentMyClass?.homeroomNip || "-"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 mt-4 border-t border-gray-100">
+              {studentHomeroomTeacher?.contact || studentMyClass?.homeroomContact ? (
+                <a
+                  href={`https://wa.me/${(studentHomeroomTeacher?.contact || studentMyClass?.homeroomContact || "").replace(/\D/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-all border border-emerald-200 shadow-2xs"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Chat WhatsApp Wali Kelas</span>
+                </a>
+              ) : (
+                <div className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gray-50 text-gray-400 text-[11px] font-medium border border-gray-100">
+                  <span>Kontak belum tersedia</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 2: Identitas Rombongan Belajar */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black tracking-wider uppercase text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
+                  Spesifikasi Rombel
+                </span>
+                <BookOpen className="w-4 h-4 text-blue-600" />
+              </div>
+
+              <div>
+                <h3 className="text-xl font-black text-gray-900">
+                  {studentMyClass?.name || studentClassId}
+                </h3>
+                <p className="text-xs font-bold text-gray-500 mt-1">
+                  {studentMyClass?.level || "Tingkat Kelas 10"} • Peminatan {studentMyClass?.major || "IPA"}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+                <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-100">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase">Kapasitas</p>
+                  <p className="font-extrabold text-gray-900 mt-0.5">{studentMyClass?.maxCapacity || 36} Kursi</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-100">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase">Status</p>
+                  <p className="font-extrabold text-emerald-600 mt-0.5">{studentMyClass?.status || "Aktif"}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 mt-3 border-t border-gray-100 text-[11px] text-gray-400 font-medium flex items-center justify-between">
+              <span>Kurikulum: Merdeka Belajar</span>
+              <span className="font-bold text-gray-700">Reguler</span>
+            </div>
+          </div>
+
+          {/* Card 3: Statistik Siswa di Kelas */}
+          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black tracking-wider uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+                  Anggota Kelas
+                </span>
+                <Users className="w-4 h-4 text-emerald-600" />
+              </div>
+
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-gray-900">{studentClassmates.length}</span>
+                  <span className="text-xs font-bold text-gray-400">Teman Sekelas Terdaftar</span>
+                </div>
+                <div className="flex items-center gap-3 mt-2 text-xs font-bold">
+                  <span className="flex items-center gap-1.5 text-blue-700">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    {maleCount} Laki-laki
+                  </span>
+                  <span className="flex items-center gap-1.5 text-pink-700">
+                    <span className="w-2 h-2 rounded-full bg-pink-500" />
+                    {femaleCount} Perempuan
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 mt-3 border-t border-gray-100">
+              <div className="p-2 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-emerald-900 text-[11px] font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Akun Anda terdaftar aktif di rombel ini</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Section: Daftar Teman Sekelas */}
+        <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-xs space-y-5">
+          
+          {/* Header & Filter Controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+            <div>
+              <h2 className="text-lg font-black text-gray-900 tracking-tight">
+                Daftar Teman Sekelas ({studentClassmates.length} Siswa)
+              </h2>
+              <p className="text-xs text-gray-500 font-medium mt-0.5">
+                Rekan-rekan siswa yang berada dalam rombongan belajar yang sama dengan Anda.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Search */}
+              <div className="relative w-full sm:w-64">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Cari teman sekelas..."
+                  value={studentSearchQuery}
+                  onChange={(e) => setStudentSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                />
+              </div>
+
+              {/* Gender Filter */}
+              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border border-gray-200 text-xs font-bold">
+                {["All", "Laki-laki", "Perempuan"].map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => setStudentGenderFilter(g)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg transition-all cursor-pointer",
+                      studentGenderFilter === g ? "bg-white text-gray-900 shadow-2xs" : "text-gray-500 hover:text-gray-900"
+                    )}
+                  >
+                    {g === "All" ? "Semua" : g}
+                  </button>
+                ))}
+              </div>
+
+              {/* View Toggle */}
+              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setStudentViewMode("grid")}
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all cursor-pointer",
+                    studentViewMode === "grid" ? "bg-white text-[#531FFF] shadow-2xs" : "text-gray-400 hover:text-gray-600"
+                  )}
+                  title="Tampilan Kartu"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStudentViewMode("table")}
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all cursor-pointer",
+                    studentViewMode === "table" ? "bg-white text-[#531FFF] shadow-2xs" : "text-gray-400 hover:text-gray-600"
+                  )}
+                  title="Tampilan Tabel"
+                >
+                  <TableIcon className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* List Content */}
+          {filteredClassmates.length > 0 ? (
+            studentViewMode === "grid" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredClassmates.map((s, idx) => {
+                  const isCurrentStudent = s.isMe || s.id === currentUid || s._firestoreId === currentUid || (s.name && currentUserData?.name && s.name.toLowerCase() === currentUserData.name.toLowerCase());
+                  const isFemale = s.gender === "Perempuan";
+
+                  return (
+                    <div
+                      key={s.id || s._firestoreId || idx}
+                      className={cn(
+                        "rounded-2xl p-4 border transition-all relative overflow-hidden flex flex-col justify-between",
+                        isCurrentStudent
+                          ? "bg-purple-50/50 border-[#531FFF]/30 shadow-xs ring-1 ring-[#531FFF]/20"
+                          : "bg-white border-gray-100 hover:border-gray-200 hover:shadow-2xs"
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={cn(
+                          "w-11 h-11 rounded-2xl flex items-center justify-center text-white font-black text-base shrink-0 relative overflow-hidden shadow-2xs",
+                          isCurrentStudent
+                            ? "bg-gradient-to-tr from-[#531FFF] to-[#8252FF]"
+                            : isFemale
+                            ? "bg-gradient-to-tr from-pink-500 to-rose-400"
+                            : "bg-gradient-to-tr from-blue-600 to-cyan-500"
+                        )}>
+                          {s.imageUrl ? (
+                            <Image 
+                              src={s.imageUrl} 
+                              alt={s.name} 
+                              fill 
+                              className="object-cover" 
+                              unoptimized 
+                            />
+                          ) : (
+                            <span>{s.name ? s.name.charAt(0).toUpperCase() : "S"}</span>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h4 className="text-xs font-black text-gray-900 truncate" title={s.name}>
+                              {s.name}
+                            </h4>
+                            {isCurrentStudent && (
+                              <span className="px-1.5 py-0.2 rounded-md bg-[#531FFF] text-white text-[9px] font-black uppercase tracking-wider">
+                                Anda
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] font-mono text-gray-400 mt-0.5">
+                            NISN: {s.nisn || s.id || "-"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-[10px] font-bold">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded-full",
+                          isFemale ? "bg-pink-50 text-pink-700" : "bg-blue-50 text-blue-700"
+                        )}>
+                          {s.gender || "Laki-laki"}
+                        </span>
+                        <span className="text-emerald-600 flex items-center gap-1 font-bold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          {s.status || "Aktif"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-gray-100">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50/60 font-bold text-gray-400 uppercase tracking-wider text-[10px]">
+                      <th className="py-3 px-4 w-12 text-center">No</th>
+                      <th className="py-3 px-4">Nama Lengkap Siswa</th>
+                      <th className="py-3 px-4">NISN / Nomor Induk</th>
+                      <th className="py-3 px-4">Jenis Kelamin</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredClassmates.map((s, idx) => {
+                      const isCurrentStudent = s.isMe || s.id === currentUid || s._firestoreId === currentUid || (s.name && currentUserData?.name && s.name.toLowerCase() === currentUserData.name.toLowerCase());
+                      const isFemale = s.gender === "Perempuan";
+
+                      return (
+                        <tr key={s.id || s._firestoreId || idx} className={cn("hover:bg-gray-50/60 transition-colors", isCurrentStudent && "bg-purple-50/30")}>
+                          <td className="py-3 px-4 text-center font-bold text-gray-400">{idx + 1}</td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-xl bg-gray-100 text-gray-600 font-bold text-xs flex items-center justify-center shrink-0 overflow-hidden relative">
+                                {s.imageUrl ? (
+                                  <Image src={s.imageUrl} alt={s.name} fill className="object-cover" unoptimized />
+                                ) : (
+                                  <span>{s.name ? s.name.charAt(0).toUpperCase() : "S"}</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-gray-900">{s.name}</span>
+                                {isCurrentStudent && (
+                                  <span className="px-1.5 py-0.2 rounded-md bg-[#531FFF] text-white text-[9px] font-black uppercase tracking-wider">
+                                    Anda
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-gray-500 font-semibold">{s.nisn || s.id || "-"}</td>
+                          <td className="py-3 px-4">
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-full text-[10px] font-bold",
+                              isFemale ? "bg-pink-50 text-pink-700" : "bg-blue-50 text-blue-700"
+                            )}>
+                              {s.gender || "Laki-laki"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              {s.status || "Aktif"}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : (
+            <div className="py-12 text-center text-gray-400 text-xs font-semibold">
+              Tidak ada teman sekelas yang cocok dengan pencarian &quot;{studentSearchQuery}&quot;.
+            </div>
+          )}
+
+        </div>
+
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-8 pb-16 max-w-[1600px] mx-auto w-full flex flex-col space-y-6">
