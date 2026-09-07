@@ -82,6 +82,7 @@ export const ROLES = [
 export const PERMISSION_MODULES = [
   { id: "dashboard", name: "Dashboard & Analitik", category: "Umum", description: "Halaman utama grafik rekapitulasi data sekolah." },
   { id: "users", name: "Manajemen Data Siswa & Guru", category: "Master Data", description: "Kelola data biodata siswa, guru, wali kelas, dan akun." },
+  { id: "accounts", name: "Manajemen Akun System", category: "Sistem", description: "Kelola seluruh akun terdaftar, status keaktifan (Aktif/Nonaktif), dan role user." },
   { id: "academic", name: "Jadwal & Mata Pelajaran", category: "Akademik", description: "Jadwal kelas, kalender akademik, dan kurikulum." },
   { id: "attendance", name: "Absensi & Face Recognition", category: "Akademik", description: "Monitoring kehadiran siswa, guru, dan geolokasi." },
   { id: "grades", name: "Penilaian & Rapor Digital", category: "Akademik", description: "Input nilai harian, ujian, dan pencetakan rapor." },
@@ -95,6 +96,7 @@ export const DEFAULT_PERMISSIONS: Record<string, Record<string, { read: boolean;
   "admin": {
     "dashboard": { read: true, write: true, delete: false },
     "users": { read: true, write: true, delete: true },
+    "accounts": { read: true, write: true, delete: true },
     "academic": { read: true, write: true, delete: true },
     "attendance": { read: true, write: true, delete: true },
     "grades": { read: true, write: true, delete: false },

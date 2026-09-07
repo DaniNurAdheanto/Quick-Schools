@@ -22,7 +22,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   UserCog,
-  PenLine
+  PenLine,
+  UserCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { onAuthStateChanged } from "firebase/auth";
@@ -47,6 +48,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/admin/academic-years": "settings",
   "/admin/payments": "finance",
   "/admin/financial-reports": "finance",
+  "/admin/accounts": "accounts",
   "/admin/settings": "settings",
   "/admin/roles": "settings",
 };
@@ -80,6 +82,7 @@ const KEUANGAN_NAV = [
 ];
 
 const SYSTEM_NAV = [
+  { href: "/admin/accounts", label: "Manajemen Akun System", icon: UserCheck },
   { href: "/admin/settings", label: "Pengaturan Sekolah", icon: Settings },
   { href: "/admin/roles", label: "Role & Permission", icon: UserCog },
   { href: "/", label: "Keluar", icon: LogOut, isDanger: true },

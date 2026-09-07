@@ -22,7 +22,11 @@ import {
   CheckCircle2,
   XCircle,
   Plus,
-  Eye
+  Eye,
+  Bell,
+  Send,
+  AlertTriangle,
+  Clock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
@@ -137,40 +141,63 @@ export default function DataSiswaPage() {
         const updateCombinedList = () => {
           const studentMap = new Map<string, any>();
 
-          // 1. Process items from `students` collection (only completed onboarding)
+          // 1. Process items from `students` collection
           rawStudentsRef.current.forEach(item => {
-            if (item.status === "Belum Onboarding" || item.onboardingCompleted === false) {
-              return;
-            }
             const key = item.uid || item.email?.toLowerCase() || item._firestoreId;
+            const isUnboarded = item.status === "Belum Onboarding" || item.onboardingCompleted === false;
+            
             studentMap.set(key, {
+              ...item,
               _firestoreId: item._firestoreId,
               _allDocIds: [item._firestoreId],
               uid: item.uid || item._firestoreId,
-              id: item.id || item.nis || item.nisn || "-",
+              id: item.nisn || item.nis || item.id || "-",
               nis: item.nis || item.id || "-",
               nisn: item.nisn || item.id || "-",
-              name: item.name || "",
+              name: item.fullName || item.name || "",
+              fullName: item.fullName || item.name || "",
+              nickname: item.nickname || "",
               email: item.email || "",
-              classId: item.classId || "X-IPA-1",
-              status: item.status || "Aktif",
-              onboardingCompleted: item.onboardingCompleted ?? true,
+              gender: item.gender || "Laki-laki",
+              birthPlace: item.birthPlace || "",
+              birthDate: item.birthDate || "",
+              religion: item.religion || "Islam",
+              nik: item.nik || "",
+              address: item.address || "",
+              phone: item.phone || "-",
+              classId: item.classId || item.className || "10 IPA 1",
+              className: item.className || item.classId || "10 IPA 1",
+              major: item.major || "MIPA",
+              entryYear: item.entryYear || "2025/2026",
+              level: item.level || "SMA",
+              studentStatus: item.studentStatus || "Siswa Baru",
+              previousSchool: item.previousSchool || "",
+              fatherName: item.fatherName || "",
+              motherName: item.motherName || "",
+              guardianName: item.guardianName || "",
+              parentPhone: item.parentPhone || "",
+              parentJob: item.parentJob || "",
+              parentIncome: item.parentIncome || "",
+              parentAddress: item.parentAddress || "",
+              emergencyName: item.emergencyName || "",
+              emergencyPhone: item.emergencyPhone || "",
+              emergencyRelation: item.emergencyRelation || "",
+              status: isUnboarded ? "Belum Onboarding" : (item.status || "Aktif"),
+              onboardingCompleted: !isUnboarded,
               imageUrl: item.imageUrl || item.photoUrl || "",
               photoUrl: item.photoUrl || item.imageUrl || "",
-              phone: item.phone || "-"
+              pendingOnboardingReminder: item.pendingOnboardingReminder || false,
+              reminderSentAt: item.reminderSentAt || null
             });
           });
 
-          // 2. Merge items from `users` collection where role is "siswa" or "student" (only completed onboarding)
+          // 2. Merge items from `users` collection where role is "siswa" or "student"
           rawUsersRef.current.forEach(u => {
             const role = (u.role || "").toLowerCase();
             if (role === "siswa" || role === "student") {
-              if (u.onboardingCompleted === false || u.status === "Belum Onboarding") {
-                return;
-              }
-
               const uEmail = (u.email || "").toLowerCase();
               const uUid = u.uid || u._firestoreId;
+              const isUnboarded = u.onboardingCompleted === false || u.status === "Belum Onboarding";
 
               let existingKey: string | undefined;
               for (const [k, v] of studentMap.entries()) {
@@ -188,27 +215,62 @@ export default function DataSiswaPage() {
                 if (!existing._allDocIds.includes(u._firestoreId)) {
                   existing._allDocIds.push(u._firestoreId);
                 }
-                if (!existing.name || existing.name === "Siswa Baru") existing.name = u.name || existing.name;
+                // Merge fields from user profile if missing
+                Object.keys(u).forEach(k => {
+                  if ((existing[k] === undefined || existing[k] === "" || existing[k] === "-") && u[k]) {
+                    existing[k] = u[k];
+                  }
+                });
+                if (!existing.name || existing.name === "Siswa Baru") existing.name = u.fullName || u.name || existing.name;
                 if (!existing.email) existing.email = u.email || "";
-                if (!existing.classId || existing.classId === "X-IPA-1") existing.classId = u.classId || existing.classId;
+                if (!existing.imageUrl && (u.imageUrl || u.photoUrl)) existing.imageUrl = u.imageUrl || u.photoUrl;
+                if (u.pendingOnboardingReminder) existing.pendingOnboardingReminder = true;
+                if (u.reminderSentAt) existing.reminderSentAt = u.reminderSentAt;
               } else {
                 const newKey = uUid || uEmail || u._firestoreId;
                 studentMap.set(newKey, {
+                  ...u,
                   _firestoreId: u._firestoreId,
                   _allDocIds: [u._firestoreId],
                   uid: uUid,
-                  id: u.nis || u.nisn || u.id || "-",
+                  id: u.nisn || u.nis || u.id || "-",
                   nis: u.nis || "-",
                   nisn: u.nisn || "-",
-                  name: u.name || u.email?.split('@')[0] || "Siswa Baru",
+                  name: u.fullName || u.name || u.email?.split('@')[0] || "Siswa Baru",
+                  fullName: u.fullName || u.name || "",
+                  nickname: u.nickname || "",
                   email: u.email || "",
-                  status: u.status || "Aktif",
-                  onboardingCompleted: u.onboardingCompleted ?? true,
+                  gender: u.gender || "Laki-laki",
+                  birthPlace: u.birthPlace || "",
+                  birthDate: u.birthDate || "",
+                  religion: u.religion || "Islam",
+                  nik: u.nik || "",
+                  address: u.address || "",
+                  phone: u.phone || "-",
+                  classId: u.classId || u.className || "10 IPA 1",
+                  className: u.className || u.classId || "10 IPA 1",
+                  major: u.major || "MIPA",
+                  entryYear: u.entryYear || "2025/2026",
+                  level: u.level || "SMA",
+                  studentStatus: u.studentStatus || "Siswa Baru",
+                  previousSchool: u.previousSchool || "",
+                  fatherName: u.fatherName || "",
+                  motherName: u.motherName || "",
+                  guardianName: u.guardianName || "",
+                  parentPhone: u.parentPhone || "",
+                  parentJob: u.parentJob || "",
+                  parentIncome: u.parentIncome || "",
+                  parentAddress: u.parentAddress || "",
+                  emergencyName: u.emergencyName || "",
+                  emergencyPhone: u.emergencyPhone || "",
+                  emergencyRelation: u.emergencyRelation || "",
+                  status: isUnboarded ? "Belum Onboarding" : (u.status || "Aktif"),
+                  onboardingCompleted: !isUnboarded,
                   grade: u.grade || "X",
-                  classId: u.classId || "X-IPA-1",
-                  photoUrl: u.photoUrl || "",
+                  photoUrl: u.photoUrl || u.imageUrl || "",
                   imageUrl: u.photoUrl || u.imageUrl || "",
-                  phone: u.phone || "-"
+                  pendingOnboardingReminder: u.pendingOnboardingReminder || false,
+                  reminderSentAt: u.reminderSentAt || null
                 });
               }
             }
@@ -265,30 +327,217 @@ export default function DataSiswaPage() {
     return () => unsubscribeAuth();
   }, []);
 
-  const studentFields = [
-    { name: "name", label: "Nama Lengkap" },
-    { name: "id", label: "NIS / NISN" },
+  // Send Onboarding Reminder to a specific student
+  const handleSendReminder = async (student: any) => {
+    try {
+      const targetIds = Array.from(new Set([
+        student._firestoreId,
+        student.uid,
+        ...(student._allDocIds || [])
+      ].filter(Boolean)));
+
+      const now = new Date().toISOString();
+      for (const tId of targetIds) {
+        try {
+          await updateDoc(doc(db, "users", tId as string), {
+            pendingOnboardingReminder: true,
+            reminderSentAt: now
+          });
+        } catch (e) {}
+        try {
+          await updateDoc(doc(db, "students", tId as string), {
+            pendingOnboardingReminder: true,
+            reminderSentAt: now
+          });
+        } catch (e) {}
+      }
+
+      setStudents(prev => prev.map(s => {
+        if (s._firestoreId === student._firestoreId || s.uid === student.uid) {
+          return { ...s, pendingOnboardingReminder: true, reminderSentAt: now };
+        }
+        return s;
+      }));
+
+      toast.showSuccess(`Pengingat onboarding berhasil dikirim ke siswa ${student.name || student.email}.`, "Pengingat Terkirim");
+    } catch (err: any) {
+      console.error("Reminder error:", err);
+      toast.showError("Gagal mengirim pengingat onboarding.", "Gagal");
+    }
+  };
+
+  // Send Onboarding Reminder to ALL unboarded students
+  const handleSendBulkReminders = async () => {
+    const unboarded = students.filter(
+      s => (s.status || "") === "Belum Onboarding" || s.onboardingCompleted === false
+    );
+
+    if (unboarded.length === 0) {
+      toast.showInfo("Semua siswa telah menyelesaikan onboarding.", "Informasi");
+      return;
+    }
+
+    try {
+      const now = new Date().toISOString();
+      let sentCount = 0;
+
+      for (const student of unboarded) {
+        const targetIds = Array.from(new Set([
+          student._firestoreId,
+          student.uid,
+          ...(student._allDocIds || [])
+        ].filter(Boolean)));
+
+        for (const tId of targetIds) {
+          try {
+            await updateDoc(doc(db, "users", tId as string), {
+              pendingOnboardingReminder: true,
+              reminderSentAt: now
+            });
+          } catch (e) {}
+          try {
+            await updateDoc(doc(db, "students", tId as string), {
+              pendingOnboardingReminder: true,
+              reminderSentAt: now
+            });
+          } catch (e) {}
+        }
+        sentCount++;
+      }
+
+      setStudents(prev => prev.map(s => {
+        if ((s.status || "") === "Belum Onboarding" || s.onboardingCompleted === false) {
+          return { ...s, pendingOnboardingReminder: true, reminderSentAt: now };
+        }
+        return s;
+      }));
+
+      toast.showSuccess(`Berhasil mengirimkan pengingat onboarding ke ${sentCount} akun siswa!`, "Pengingat Terkirim");
+    } catch (err: any) {
+      console.error("Bulk reminder error:", err);
+      toast.showError("Gagal mengirim pengingat onboarding massal.", "Gagal");
+    }
+  };
+
+  const studentFields: CrudField[] = [
+    // --- BIODATA PRIBADI ---
+    { name: "name", label: "Nama Lengkap", category: "pribadi", colSpan: 2 },
+    { name: "nickname", label: "Nama Panggilan", category: "pribadi" },
+    { name: "id", label: "NISN / NIS", category: "pribadi" },
+    { 
+      name: "gender", 
+      label: "Jenis Kelamin",
+      category: "pribadi",
+      type: "select",
+      options: [
+        { label: "Laki-laki", value: "Laki-laki" },
+        { label: "Perempuan", value: "Perempuan" }
+      ]
+    },
+    { name: "birthPlace", label: "Tempat Lahir", category: "pribadi" },
+    { name: "birthDate", label: "Tanggal Lahir", category: "pribadi" },
+    { 
+      name: "religion", 
+      label: "Agama",
+      category: "pribadi",
+      type: "select",
+      options: [
+        { label: "Islam", value: "Islam" },
+        { label: "Kristen", value: "Kristen" },
+        { label: "Katolik", value: "Katolik" },
+        { label: "Hindu", value: "Hindu" },
+        { label: "Buddha", value: "Buddha" },
+        { label: "Konghucu", value: "Konghucu" }
+      ]
+    },
+    { name: "nik", label: "Nomor Induk Kependudukan (NIK)", category: "pribadi" },
+    { name: "email", label: "Email Siswa", category: "pribadi" },
+    { name: "phone", label: "Nomor WhatsApp / HP", category: "pribadi" },
+    { name: "address", label: "Alamat Tempat Tinggal", category: "pribadi", colSpan: 2 },
+
+    // --- DATA AKADEMIK ---
     { 
       name: "classId", 
       label: "Kelas",
+      category: "akademik",
       type: "select",
       placeholder: "Pilih Kelas",
-      options: classes.map(c => ({ label: c.name || c.id, value: c.name || c.id }))
+      options: classes.length > 0 
+        ? classes.map(c => ({ label: c.name || c.id, value: c.name || c.id }))
+        : [
+            { label: "10 IPA 1", value: "10 IPA 1" },
+            { label: "10 IPA 2", value: "10 IPA 2" },
+            { label: "10 IPS 1", value: "10 IPS 1" },
+            { label: "11 MIPA 1", value: "11 MIPA 1" },
+            { label: "12 MIPA 1", value: "12 MIPA 1" }
+          ]
     },
+    { 
+      name: "major", 
+      label: "Jurusan / Peminatan",
+      category: "akademik",
+      type: "select",
+      options: [
+        { label: "MIPA", value: "MIPA" },
+        { label: "IPS", value: "IPS" },
+        { label: "Bahasa", value: "Bahasa" }
+      ]
+    },
+    { name: "entryYear", label: "Tahun Masuk", category: "akademik" },
+    { 
+      name: "level", 
+      label: "Jenjang Pendidikan",
+      category: "akademik",
+      type: "select",
+      options: [
+        { label: "SMA", value: "SMA" },
+        { label: "SMP", value: "SMP" },
+        { label: "SD", value: "SD" }
+      ]
+    },
+    { 
+      name: "studentStatus", 
+      label: "Status Masuk",
+      category: "akademik",
+      type: "select",
+      options: [
+        { label: "Siswa Baru", value: "Siswa Baru" },
+        { label: "Pindahan", value: "Pindahan" }
+      ]
+    },
+    { name: "previousSchool", label: "Asal Sekolah Sebelumnya", category: "akademik", colSpan: 2 },
+
+    // --- DATA ORANG TUA & WALI ---
+    { name: "fatherName", label: "Nama Ayah Kandung", category: "orangTua" },
+    { name: "motherName", label: "Nama Ibu Kandung", category: "orangTua" },
+    { name: "guardianName", label: "Nama Wali (Opsional)", category: "orangTua" },
+    { name: "parentPhone", label: "No. HP Orang Tua / Wali", category: "orangTua" },
+    { name: "parentJob", label: "Pekerjaan Orang Tua", category: "orangTua" },
+    { name: "parentIncome", label: "Penghasilan Orang Tua", category: "orangTua" },
+    { name: "parentAddress", label: "Alamat Orang Tua", category: "orangTua", colSpan: 2 },
+
+    // --- KONTAK DARURAT & STATUS ---
+    { name: "emergencyName", label: "Nama Kontak Darurat", category: "darurat" },
+    { name: "emergencyPhone", label: "No. HP Kontak Darurat", category: "darurat" },
+    { name: "emergencyRelation", label: "Hubungan Kontak Darurat", category: "darurat" },
     { 
       name: "status", 
       label: "Status Siswa",
+      category: "darurat",
       type: "select",
       placeholder: "Pilih Status",
       options: [
         { label: "Aktif", value: "Aktif" },
+        { label: "Belum Onboarding", value: "Belum Onboarding" },
         { label: "Nonaktif", value: "Nonaktif" }
       ]
     },
     {
       name: "pasFoto",
-      label: "Pas Foto",
+      label: "Pas Foto Siswa",
+      category: "pribadi",
       type: "file",
+      colSpan: 2
     }
   ];
 
@@ -308,23 +557,85 @@ export default function DataSiswaPage() {
       }
 
       if (crudState.mode === "create") {
-        await addDoc(collection(db, "students"), {
-          id: data.id || "",
+        const newStudentData = {
+          id: data.id || data.nisn || `SISWA-${Date.now().toString().slice(-6)}`,
+          nis: data.id || data.nisn || "",
+          nisn: data.nisn || data.id || "",
           name: data.name || "",
-          classId: data.classId || "",
+          fullName: data.name || "",
+          nickname: data.nickname || "",
+          gender: data.gender || "Laki-laki",
+          birthPlace: data.birthPlace || "",
+          birthDate: data.birthDate || "",
+          religion: data.religion || "Islam",
+          nik: data.nik || "",
+          address: data.address || "",
+          phone: data.phone || "",
+          email: data.email || "",
+          classId: data.classId || "10 IPA 1",
+          className: data.classId || "10 IPA 1",
+          major: data.major || "MIPA",
+          entryYear: data.entryYear || "2025/2026",
+          level: data.level || "SMA",
+          studentStatus: data.studentStatus || "Siswa Baru",
+          previousSchool: data.previousSchool || "",
+          fatherName: data.fatherName || "",
+          motherName: data.motherName || "",
+          guardianName: data.guardianName || "",
+          parentPhone: data.parentPhone || "",
+          parentJob: data.parentJob || "",
+          parentIncome: data.parentIncome || "",
+          parentAddress: data.parentAddress || "",
+          emergencyName: data.emergencyName || "",
+          emergencyPhone: data.emergencyPhone || "",
+          emergencyRelation: data.emergencyRelation || "",
           status: data.status || "Aktif",
-          imageUrl: imageUrl
-        });
+          onboardingCompleted: data.status !== "Belum Onboarding",
+          imageUrl: imageUrl,
+          photoUrl: imageUrl,
+          role: "siswa",
+          createdAt: new Date().toISOString()
+        };
+
+        await addDoc(collection(db, "students"), newStudentData);
       } else if (crudState.mode === "edit" && data._firestoreId) {
         const payload = {
-          id: data.id || "",
-          nis: data.id || "",
-          nisn: data.id || "",
+          id: data.id || data.nisn || "",
+          nis: data.id || data.nisn || "",
+          nisn: data.nisn || data.id || "",
           name: data.name || "",
+          fullName: data.name || "",
+          nickname: data.nickname || "",
+          gender: data.gender || "Laki-laki",
+          birthPlace: data.birthPlace || "",
+          birthDate: data.birthDate || "",
+          religion: data.religion || "Islam",
+          nik: data.nik || "",
+          address: data.address || "",
+          phone: data.phone || "",
+          email: data.email || "",
           classId: data.classId || "",
+          className: data.classId || "",
+          major: data.major || "MIPA",
+          entryYear: data.entryYear || "2025/2026",
+          level: data.level || "SMA",
+          studentStatus: data.studentStatus || "Siswa Baru",
+          previousSchool: data.previousSchool || "",
+          fatherName: data.fatherName || "",
+          motherName: data.motherName || "",
+          guardianName: data.guardianName || "",
+          parentPhone: data.parentPhone || "",
+          parentJob: data.parentJob || "",
+          parentIncome: data.parentIncome || "",
+          parentAddress: data.parentAddress || "",
+          emergencyName: data.emergencyName || "",
+          emergencyPhone: data.emergencyPhone || "",
+          emergencyRelation: data.emergencyRelation || "",
           status: data.status || "Aktif",
+          onboardingCompleted: data.status !== "Belum Onboarding",
           imageUrl: imageUrl,
-          photoUrl: imageUrl
+          photoUrl: imageUrl,
+          updatedAt: new Date().toISOString()
         };
 
         const targetIds = Array.from(new Set([
@@ -429,8 +740,8 @@ export default function DataSiswaPage() {
   const dynamicStats = [
     { label: "Total Siswa", value: students.length.toString(), icon: Users, color: "text-[#531FFF] bg-[#531FFF]/10" },
     { label: "Siswa Aktif", value: students.filter(s => (s.status || "Aktif") === "Aktif").length.toString(), icon: CheckCircle2, color: "text-emerald-600 bg-emerald-100" },
+    { label: "Belum Onboarding", value: unboardedCount.toString(), icon: Clock, color: "text-amber-600 bg-amber-100" },
     { label: "Siswa Nonaktif", value: students.filter(s => s.status === "Nonaktif").length.toString(), icon: XCircle, color: "text-rose-600 bg-rose-100" },
-    { label: "Total Kelas", value: classes.length.toString(), icon: GraduationCap, color: "text-amber-600 bg-amber-100" },
   ];
 
   // Unique classes options for filter
@@ -518,6 +829,47 @@ export default function DataSiswaPage() {
         </div>
       </div>
 
+      {/* Interactive Unboarded Students Reminder Banner */}
+      {unboardedCount > 0 && (
+        <div className="bg-amber-50/90 border border-amber-200/80 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-200 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold text-amber-900">
+                  Ada {unboardedCount} Siswa Belum Menyelesaikan Onboarding
+                </h4>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200/80 text-amber-800">
+                  Data Belum Lengkap
+                </span>
+              </div>
+              <p className="text-xs text-amber-700 mt-0.5 font-medium leading-relaxed">
+                Biodata akademik, orang tua, dan kontak darurat belum tersimpan penuh ke direktori data siswa. Kirim pengingat agar siswa segera melengkapi proses onboarding.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5 w-full md:w-auto shrink-0 justify-end">
+            <button
+              onClick={handleSendBulkReminders}
+              className="flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+            >
+              <Bell className="w-3.5 h-3.5" />
+              <span>Ingatkan Semua ({unboardedCount})</span>
+            </button>
+            <button
+              onClick={handleCleanUnboardedStudents}
+              disabled={cleaning}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+            >
+              {cleaning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              <span>Bersihkan</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Stats Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {dynamicStats.map((stat, i) => {
@@ -576,7 +928,7 @@ export default function DataSiswaPage() {
           </div>
 
           {/* Filter by Status Dropdown */}
-          <div className="relative min-w-[140px]">
+          <div className="relative min-w-[150px]">
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
@@ -584,6 +936,7 @@ export default function DataSiswaPage() {
             >
               <option value="All">Semua Status</option>
               <option value="Aktif">Aktif</option>
+              <option value="Belum Onboarding">Belum Onboarding</option>
               <option value="Nonaktif">Nonaktif</option>
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -655,13 +1008,17 @@ export default function DataSiswaPage() {
                       {/* Status Badge */}
                       <div className={cn(
                         "px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 backdrop-blur-md border shadow-xs",
-                        (student.status || "Aktif") === "Aktif" 
-                          ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" 
-                          : "bg-rose-500/10 text-rose-700 border-rose-500/20"
+                        (student.status === "Belum Onboarding" || student.onboardingCompleted === false)
+                          ? "bg-amber-500/15 text-amber-700 border-amber-500/30"
+                          : (student.status || "Aktif") === "Aktif" 
+                            ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" 
+                            : "bg-rose-500/10 text-rose-700 border-rose-500/20"
                       )}>
                         <span className={cn(
                           "w-1.5 h-1.5 rounded-full",
-                          (student.status || "Aktif") === "Aktif" ? "bg-emerald-500 animate-pulse" : "bg-rose-500"
+                          (student.status === "Belum Onboarding" || student.onboardingCompleted === false)
+                            ? "bg-amber-500 animate-pulse"
+                            : (student.status || "Aktif") === "Aktif" ? "bg-emerald-500 animate-pulse" : "bg-rose-500"
                         )} />
                         {student.status || "Aktif"}
                       </div>
@@ -686,13 +1043,26 @@ export default function DataSiswaPage() {
                     </div>
 
                     {/* Student Info Body */}
-                    <div className="px-4 pb-2 space-y-0.5">
+                    <div className="px-4 pb-2 space-y-1">
                       <h3 className="font-extrabold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors truncate tracking-tight" title={student.name}>
                         {student.name}
                       </h3>
-                      <p className="text-[12px] font-semibold text-gray-400">
-                        NISN: <span className="text-gray-600">{student.id || "-"}</span>
-                      </p>
+                      <div className="flex items-center justify-between text-[11px] font-semibold text-gray-400">
+                        <span>NISN: <span className="text-gray-600">{student.id || "-"}</span></span>
+                        {student.major && (
+                          <span className="text-[#531FFF] bg-purple-50 px-1.5 py-0.5 rounded font-bold">{student.major}</span>
+                        )}
+                      </div>
+
+                      {/* Reminder status badge if unboarded */}
+                      {(student.status === "Belum Onboarding" || student.onboardingCompleted === false) && (
+                        <div className="pt-1">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/80">
+                            <Clock className="w-3 h-3 text-amber-600" />
+                            {student.reminderSentAt ? "Diingatkan" : "Belum Diingatkan"}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -703,6 +1073,16 @@ export default function DataSiswaPage() {
                     </span>
 
                     <div className="flex items-center gap-1.5">
+                      {/* Send Reminder Button for Unboarded Students */}
+                      {(student.status === "Belum Onboarding" || student.onboardingCompleted === false) && (
+                        <button 
+                          onClick={() => handleSendReminder(student)}
+                          className="w-8 h-8 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/80 transition-all flex items-center justify-center cursor-pointer"
+                          title={student.reminderSentAt ? `Sudah diingatkan (${new Date(student.reminderSentAt).toLocaleTimeString("id-ID")}). Klik untuk kirim ulang.` : "Kirim Pengingat Onboarding"}
+                        >
+                          <Bell className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button 
                         onClick={() => setCrudState({ open: true, mode: "view", data: student })}
                         className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
@@ -759,9 +1139,14 @@ export default function DataSiswaPage() {
                                 unoptimized
                               />
                             </div>
-                            <span className="font-bold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors">
-                              {student.name}
-                            </span>
+                            <div>
+                              <span className="font-bold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors block">
+                                {student.name}
+                              </span>
+                              {student.major && (
+                                <span className="text-[11px] text-gray-400 font-medium">{student.major}</span>
+                              )}
+                            </div>
                           </div>
                         </td>
                         <td className="py-3.5 px-6 font-semibold text-sm text-gray-600">
@@ -775,16 +1160,32 @@ export default function DataSiswaPage() {
                         <td className="py-3.5 px-6">
                           <span className={cn(
                             "px-2.5 py-1 rounded-md text-xs font-bold inline-flex items-center gap-1.5 border",
-                            (student.status || "Aktif") === "Aktif"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : "bg-rose-50 text-rose-700 border-rose-200"
+                            (student.status === "Belum Onboarding" || student.onboardingCompleted === false)
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : (student.status || "Aktif") === "Aktif"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-rose-50 text-rose-700 border-rose-200"
                           )}>
-                            <span className={cn("w-1.5 h-1.5 rounded-full", (student.status || "Aktif") === "Aktif" ? "bg-emerald-500" : "bg-rose-500")} />
+                            <span className={cn(
+                              "w-1.5 h-1.5 rounded-full",
+                              (student.status === "Belum Onboarding" || student.onboardingCompleted === false)
+                                ? "bg-amber-500 animate-pulse"
+                                : (student.status || "Aktif") === "Aktif" ? "bg-emerald-500" : "bg-rose-500"
+                            )} />
                             {student.status || "Aktif"}
                           </span>
                         </td>
                         <td className="py-3.5 px-6 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            {(student.status === "Belum Onboarding" || student.onboardingCompleted === false) && (
+                              <button
+                                onClick={() => handleSendReminder(student)}
+                                className="p-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 border border-amber-200 rounded-xl transition-colors cursor-pointer"
+                                title={student.reminderSentAt ? `Sudah diingatkan (${new Date(student.reminderSentAt).toLocaleTimeString("id-ID")})` : "Kirim Pengingat Onboarding"}
+                              >
+                                <Bell className="w-4 h-4" />
+                              </button>
+                            )}
                             <button
                               onClick={() => setCrudState({ open: true, mode: "view", data: student })}
                               className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-xl transition-colors"

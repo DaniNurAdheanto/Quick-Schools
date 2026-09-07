@@ -216,7 +216,9 @@ export default function StudentOnboardingPage() {
         emergencyAddress: darurat.contactAddress || "",
 
         role: "siswa",
+        status: "Aktif",
         onboardingCompleted: true,
+        imageUrl: photoUrl,
         updatedAt: new Date().toISOString(),
         createdAt: new Date().toISOString()
       };
@@ -232,16 +234,45 @@ export default function StudentOnboardingPage() {
       // 2. Save to Cloud Firestore (setDoc with merge: true for both students and users collections)
       const saveFirestore = async () => {
         try {
-          await setDoc(doc(db, "students", studentUid), studentData, { merge: true });
+          // Save complete student document
+          await setDoc(doc(db, "students", studentUid), {
+            ...studentData,
+            status: "Aktif",
+            onboardingCompleted: true,
+            pendingOnboardingReminder: false
+          }, { merge: true });
 
+          // Save complete profile to users collection
           await setDoc(doc(db, "users", studentUid), {
             uid: studentUid,
             name: pribadi.fullName || "Siswa Baru",
+            fullName: pribadi.fullName || "Siswa Baru",
+            nickname: pribadi.nickname || "",
             email: studentEmail,
             nisn: studentData.nisn,
-            classId: akademik.className,
+            gender: pribadi.gender || "Laki-laki",
+            birthPlace: pribadi.birthPlace || "",
+            birthDate: pribadi.birthDate || "",
+            religion: pribadi.religion || "Islam",
+            nik: pribadi.nik || "",
+            phone: pribadi.phone || "",
+            address: pribadi.address || "",
+            photoUrl: photoUrl,
+            imageUrl: photoUrl,
+            classId: akademik.className || "10 IPA 1",
+            className: akademik.className || "10 IPA 1",
+            major: akademik.major || "MIPA",
+            entryYear: akademik.entryYear || "2025/2026",
+            fatherName: orangTua.fatherName || "",
+            motherName: orangTua.motherName || "",
+            parentPhone: orangTua.parentPhone || "",
+            emergencyName: darurat.contactName || "",
+            emergencyPhone: darurat.contactPhone || "",
             role: "siswa",
+            status: "Aktif",
             onboardingCompleted: true,
+            pendingOnboardingReminder: false,
+            hasPendingReminder: false,
             updatedAt: new Date().toISOString()
           }, { merge: true });
         } catch (dbErr) {

@@ -85,20 +85,7 @@ service cloud.firestore {
     }
     
     match /grades/{gradeId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn()
-                    && isValidId(gradeId)
-                    && isValidGrade(incoming())
-                    && incoming().keys().size() == 9
-                    && incoming().createdAt == request.time
-                    && incoming().updatedAt == request.time;
-      allow update: if isSignedIn()
-                    && isValidId(gradeId)
-                    && isValidGrade(incoming())
-                    && incoming().diff(existing()).affectedKeys().hasOnly(['studentId', 'studentName', 'subject', 'type', 'score', 'semester', 'academicYear', 'updatedAt'])
-                    && incoming().createdAt == existing().createdAt
-                    && incoming().updatedAt == request.time;
-      allow delete: if isSignedIn() && isValidId(gradeId);
+      allow read, write: if isSignedIn();
     }
     
     match /announcements/{announcementId} {

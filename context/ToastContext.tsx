@@ -17,6 +17,7 @@ interface ToastContextType {
   showError: (message: string, title?: string) => void;
   showWarning: (message: string, title?: string) => void;
   showInfo: (message: string, title?: string) => void;
+  showDelete: (message: string, title?: string) => void;
 }
 
 const ToastContext = createContext<ToastContextType | null>(null);
@@ -40,13 +41,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const showError = (message: string, title: string = "Gagal") => showToast("error", message, title);
   const showWarning = (message: string, title: string = "Peringatan") => showToast("warning", message, title);
   const showInfo = (message: string, title: string = "Informasi") => showToast("edit", message, title);
+  const showDelete = (message: string, title: string = "Berhasil Hapus") => showToast("warning", message, title);
 
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
   return (
-    <ToastContext.Provider value={{ showToast, showSuccess, showEdit, showError, showWarning, showInfo }}>
+    <ToastContext.Provider value={{ showToast, showSuccess, showEdit, showError, showWarning, showInfo, showDelete }}>
       {children}
       
       {/* GLOBAL FLOATING TOAST NOTIFICATION CONTAINER */}
@@ -76,6 +78,7 @@ export function useToast() {
       showError: () => {},
       showWarning: () => {},
       showInfo: () => {},
+      showDelete: () => {},
     };
   }
   return ctx;
