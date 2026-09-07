@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { 
   Plus, 
   Search, 
@@ -8,24 +8,25 @@ import {
   CheckCircle2, 
   AlertCircle, 
   BookOpen, 
-  PenLine, 
   Trash2, 
   ShieldCheck, 
-  Lock, 
   Eye,
   Sparkles,
   LayoutGrid,
   Table as TableIcon,
-  Check,
   X,
   FileSpreadsheet,
   TrendingUp,
   PenTool,
   Loader2,
   Save,
-  RotateCcw,
-  SlidersHorizontal,
-  ChevronDown
+  ChevronDown,
+  ChevronUp,
+  Printer,
+  GraduationCap,
+  BadgeCheck,
+  MessageSquare,
+  Users
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
@@ -62,7 +63,12 @@ export default function GradesPage() {
   const [students, setStudents] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Raw refs for unified student synchronization (exactly aligned with data-siswa)
+  const rawStudentsRef = useRef<any[]>([]);
+  const rawUsersRef = useRef<any[]>([]);
 
   // User Auth & Role State
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -98,7 +104,121 @@ export default function GradesPage() {
   });
   const [currentFormData, setCurrentFormData] = useState<any>({});
 
+  // Student-specific Portal UI states
+  const [studentTab, setStudentTab] = useState<"bySubject" | "allGrades">("bySubject");
+  const [studentSubjectFilter, setStudentSubjectFilter] = useState<string>("All");
+  const [studentTypeFilter, setStudentTypeFilter] = useState<string>("Semua");
+  const [studentStatusFilter, setStudentStatusFilter] = useState<string>("All");
+  const [studentSemesterFilter, setStudentSemesterFilter] = useState<string>("All");
+  const [studentSearch, setStudentSearch] = useState<string>("");
+  const [expandedSubjectCard, setExpandedSubjectCard] = useState<string | null>(null);
+  const [detailModalGrade, setDetailModalGrade] = useState<any | null>(null);
+  const [currentUserData, setCurrentUserData] = useState<any>(null);
+
   const isStudentRole = userRole === "siswa" || userRole === "student";
+
+  // Unified Student Sync: merges `students` and `users` (role: siswa/student) in sync with data-siswa
+  const updateCombinedStudents = useCallback(() => {
+    const studentMap = new Map<string, any>();
+
+    // 1. Process items from `students` collection
+    rawStudentsRef.current.forEach(item => {
+      const key = item.uid || item.email?.toLowerCase() || item._firestoreId;
+      studentMap.set(key, {
+        ...item,
+        _firestoreId: item._firestoreId,
+        _allDocIds: [item._firestoreId],
+        uid: item.uid || item._firestoreId,
+        id: item.nisn || item.nis || item.id || item._firestoreId || "-",
+        nis: item.nis || item.id || "-",
+        nisn: item.nisn || item.id || "-",
+        name: item.fullName || item.name || "",
+        fullName: item.fullName || item.name || "",
+        nickname: item.nickname || "",
+        email: item.email || "",
+        gender: item.gender || "Laki-laki",
+        classId: item.classId || item.className || item.class || "",
+        className: item.className || item.classId || item.class || "",
+        status: item.status || "Aktif",
+        imageUrl: item.imageUrl || item.photoUrl || "",
+        photoUrl: item.photoUrl || item.imageUrl || ""
+      });
+    });
+
+    // 2. Merge items from `users` collection where role is "siswa" or "student"
+    rawUsersRef.current.forEach(u => {
+      const role = (u.role || "").toLowerCase();
+      if (role === "siswa" || role === "student") {
+        const uEmail = (u.email || "").toLowerCase();
+        const uUid = u.uid || u._firestoreId;
+
+        let existingKey: string | undefined;
+        for (const [k, v] of studentMap.entries()) {
+          if (
+            (uUid && (k === uUid || v.uid === uUid || v._firestoreId === uUid)) ||
+            (uEmail && v.email?.toLowerCase() === uEmail)
+          ) {
+            existingKey = k;
+            break;
+          }
+        }
+
+        if (existingKey) {
+          const existing = studentMap.get(existingKey)!;
+          if (!existing._allDocIds.includes(u._firestoreId)) {
+            existing._allDocIds.push(u._firestoreId);
+          }
+          Object.keys(u).forEach(k => {
+            if ((existing[k] === undefined || existing[k] === "" || existing[k] === "-") && u[k]) {
+              existing[k] = u[k];
+            }
+          });
+          if (!existing.name || existing.name === "Siswa Baru") existing.name = u.fullName || u.name || existing.name;
+          if (!existing.fullName) existing.fullName = u.fullName || u.name || existing.name;
+          if (!existing.classId && (u.classId || u.className || u.class)) {
+            existing.classId = u.classId || u.className || u.class;
+            existing.className = u.className || u.classId || u.class;
+          }
+        } else {
+          const newKey = uUid || uEmail || u._firestoreId;
+          studentMap.set(newKey, {
+            ...u,
+            _firestoreId: u._firestoreId,
+            _allDocIds: [u._firestoreId],
+            uid: uUid,
+            id: u.nisn || u.nis || u.id || u._firestoreId || "-",
+            nis: u.nis || "-",
+            nisn: u.nisn || "-",
+            name: u.fullName || u.name || u.email?.split("@")[0] || "Siswa Baru",
+            fullName: u.fullName || u.name || "",
+            email: u.email || "",
+            gender: u.gender || "Laki-laki",
+            classId: u.classId || u.className || u.class || "",
+            className: u.className || u.classId || u.class || "",
+            status: u.status || "Aktif",
+            imageUrl: u.imageUrl || u.photoUrl || "",
+            photoUrl: u.photoUrl || u.imageUrl || ""
+          });
+        }
+      }
+    });
+
+    setStudents(Array.from(studentMap.values()));
+  }, []);
+
+  // Universal helper to find a student by any identifier (id, _firestoreId, uid, nisn, or name)
+  const getStudentByIdOrName = useCallback((targetIdOrName?: string) => {
+    if (!targetIdOrName) return null;
+    const target = targetIdOrName.toString().trim().toLowerCase();
+    return students.find(s => 
+      s.id === targetIdOrName ||
+      s._firestoreId === targetIdOrName ||
+      s.uid === targetIdOrName ||
+      (s.nisn && s.nisn !== "-" && s.nisn.toString().toLowerCase() === target) ||
+      (s.nis && s.nis !== "-" && s.nis.toString().toLowerCase() === target) ||
+      ((s.fullName || s.name) && (s.fullName || s.name).toString().trim().toLowerCase() === target)
+    ) || null;
+  }, [students]);
 
   // Auth & Role Listener
   useEffect(() => {
@@ -109,10 +229,12 @@ export default function GradesPage() {
           const userSnap = await getDoc(doc(db, "users", user.uid));
           if (userSnap.exists()) {
             const uData = userSnap.data();
-            const role = uData.role || "admin";
-            setUserRole(role === "student" || role === "siswa" ? "siswa" : role);
-            if (role === "student" || role === "siswa") {
-              setStudentDoc(uData);
+            setCurrentUserData(uData);
+            const role = (uData.role || "admin").toLowerCase();
+            const normRole = (role === "student" || role === "siswa") ? "siswa" : role;
+            setUserRole(normRole);
+            setStudentDoc(uData);
+            if (normRole === "siswa") {
               setViewMode("table"); // Students see table of their own grades
             }
           }
@@ -125,7 +247,7 @@ export default function GradesPage() {
     return () => unsubAuth();
   }, []);
 
-  // Realtime Listeners for Grades, Students, Classes, Subjects
+  // Realtime Listeners for Grades, Students, Users, Classes, Subjects, Teachers
   useEffect(() => {
     const unsubGrades = onSnapshot(collection(db, "grades"), (snap) => {
       const data = snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() }));
@@ -137,7 +259,17 @@ export default function GradesPage() {
     });
 
     const unsubStudents = onSnapshot(collection(db, "students"), (snap) => {
-      setStudents(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
+      rawStudentsRef.current = snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() }));
+      updateCombinedStudents();
+    }, (error) => {
+      console.warn("Students listener error:", error);
+    });
+
+    const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
+      rawUsersRef.current = snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() }));
+      updateCombinedStudents();
+    }, (error) => {
+      console.warn("Users listener error:", error);
     });
 
     const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
@@ -148,21 +280,34 @@ export default function GradesPage() {
       setSubjects(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
     });
 
+    const unsubTeachers = onSnapshot(collection(db, "teachers"), (snap) => {
+      setTeachers(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
+    });
+
     return () => {
       unsubGrades();
       unsubStudents();
+      unsubUsers();
       unsubClasses();
       unsubSubjects();
+      unsubTeachers();
     };
-  }, []);
+  }, [updateCombinedStudents]);
 
-  // Available Classes Options
+  // Available Classes Options: dynamic count from synchronized students
   const availableClassOptions = useMemo(() => {
-    if (classes.length > 0) {
-      return classes.map(c => ({ label: c.name, value: c.name }));
-    }
-    const fromStudents = Array.from(new Set(students.map(s => s.classId).filter(Boolean)));
-    return fromStudents.map(c => ({ label: c, value: c }));
+    const classNamesFromClasses = classes.map(c => c.name?.trim()).filter(Boolean);
+    const classNamesFromStudents = students.map(s => (s.classId || s.className || s.class)?.trim()).filter(Boolean);
+    const uniqueClassNames = Array.from(new Set([...classNamesFromClasses, ...classNamesFromStudents])).sort();
+    
+    return uniqueClassNames.map(cName => {
+      const count = students.filter(s => (s.classId || s.className || s.class)?.trim().toLowerCase() === cName.toLowerCase()).length;
+      return {
+        label: count > 0 ? `${cName} (${count} Siswa)` : cName,
+        value: cName,
+        studentCount: count
+      };
+    });
   }, [classes, students]);
 
   // Available Subjects Options
@@ -183,22 +328,32 @@ export default function GradesPage() {
     ];
   }, [subjects]);
 
-  // Auto-initialize matrix class and subject
+  // Auto-initialize matrix class and subject smartly (prioritize class with enrolled students)
   useEffect(() => {
-    if (availableClassOptions.length > 0 && !matrixClassId) {
-      setMatrixClassId(availableClassOptions[0].value);
+    if (availableClassOptions.length > 0) {
+      const currentClassHasStudents = students.some(s => (s.classId || s.className || s.class)?.trim().toLowerCase() === matrixClassId.trim().toLowerCase());
+      
+      if (!matrixClassId || !currentClassHasStudents) {
+        const classWithStudents = availableClassOptions.find(opt => opt.studentCount > 0);
+        if (classWithStudents) {
+          setMatrixClassId(classWithStudents.value);
+        } else if (!matrixClassId) {
+          setMatrixClassId(availableClassOptions[0].value);
+        }
+      }
     }
     if (availableSubjectOptions.length > 0 && !matrixSubject) {
       setMatrixSubject(availableSubjectOptions[0].value);
     }
-  }, [availableClassOptions, availableSubjectOptions, matrixClassId, matrixSubject]);
+  }, [availableClassOptions, availableSubjectOptions, matrixClassId, matrixSubject, students]);
 
-  // Students enrolled in selected matrixClassId
+  // Students enrolled in selected matrixClassId (trimmed, case-insensitive)
   const matrixStudents = useMemo(() => {
     if (!matrixClassId) return [];
+    const target = matrixClassId.trim().toLowerCase();
     return students.filter(s => {
-      const c = s.classId || s.className || s.class;
-      return c === matrixClassId;
+      const c = (s.classId || s.className || s.class || "").trim().toLowerCase();
+      return c === target;
     });
   }, [students, matrixClassId]);
 
@@ -489,7 +644,8 @@ export default function GradesPage() {
     try {
       const firestoreType = mapTypeToFirestore(data.type || "Tugas");
       const numScore = Math.min(Math.max(Number(data.score) || 0, 0), 100);
-      const studentName = student ? (student.fullName || student.name) : (data.studentName || "Siswa");
+      const targetStudent = students.find(s => s.id === data.studentId);
+      const studentName = targetStudent ? (targetStudent.fullName || targetStudent.name) : (data.studentName || "Siswa");
 
       if (crudState.mode === "create") {
         const newDocRef = doc(collection(db, "grades"));
@@ -599,15 +755,6 @@ export default function GradesPage() {
     });
   }, [students, accessibleGrades, selectedClass]);
 
-  // Overall Analytics
-  const totalEntries = accessibleGrades.length;
-  const averageOverallScore = totalEntries > 0 
-    ? (accessibleGrades.reduce((acc, curr) => acc + (Number(curr.score) || 0), 0) / totalEntries).toFixed(1)
-    : "0";
-  const passedKkmCount = accessibleGrades.filter(g => (Number(g.score) || 0) >= (Number(g.kkm) || 75)).length;
-  const passedPercentage = totalEntries > 0 ? Math.round((passedKkmCount / totalEntries) * 100) : 0;
-  const remedialCount = totalEntries - passedKkmCount;
-
   // Single Form Configuration for CrudSheet
   const filteredStudentsForSingleForm = useMemo(() => {
     if (!currentFormData.classId) return [];
@@ -693,6 +840,962 @@ export default function GradesPage() {
     }
   ], [availableClassOptions, availableSubjectOptions, filteredStudentsForSingleForm, currentFormData.classId]);
 
+  // =========================================================================
+  // LOGIKA RESOLUSI DATA SISWA UNTUK PORTAL SISWA
+  // =========================================================================
+  const matchedStudent = useMemo(() => {
+    if (!currentUser) return null;
+    const uid = currentUser.uid;
+    const email = currentUser.email?.toLowerCase();
+    const uName = (currentUserData?.name || currentUserData?.fullName || studentDoc?.name || "").toLowerCase().trim();
+    const uNisn = currentUserData?.nisn || studentDoc?.nisn;
+
+    return students.find(s => 
+      s.id === uid || 
+      s._firestoreId === uid || 
+      (email && s.email && s.email.toLowerCase() === email) ||
+      (uNisn && (s.nisn === uNisn || s.id === uNisn)) ||
+      (uName && s.name && s.name.toLowerCase().trim() === uName) ||
+      (uName && s.fullName && s.fullName.toLowerCase().trim() === uName)
+    ) || null;
+  }, [students, currentUser, currentUserData, studentDoc]);
+
+  const studentClassId = useMemo(() => {
+    return matchedStudent?.classId || matchedStudent?.className || matchedStudent?.class || 
+           currentUserData?.classId || currentUserData?.className || currentUserData?.class ||
+           studentDoc?.classId || studentDoc?.className || studentDoc?.class || "";
+  }, [matchedStudent, currentUserData, studentDoc]);
+
+  const studentMyClass = useMemo(() => {
+    if (!studentClassId) return null;
+    return classes.find(c => 
+      c.name?.toLowerCase() === studentClassId.toLowerCase() ||
+      c.id?.toLowerCase() === studentClassId.toLowerCase() ||
+      c._firestoreId === studentClassId
+    ) || null;
+  }, [classes, studentClassId]);
+
+  const studentHomeroomTeacher = useMemo(() => {
+    const hrName = studentMyClass?.homeroom;
+    if (!hrName) return null;
+    return teachers.find(t => t.name?.toLowerCase() === hrName.toLowerCase()) || { name: hrName };
+  }, [studentMyClass, teachers]);
+
+  const studentDisplayName = matchedStudent?.fullName || matchedStudent?.name || currentUserData?.name || currentUser?.displayName || "Siswa";
+  const studentNisn = matchedStudent?.nisn || matchedStudent?.id || currentUserData?.nisn || studentDoc?.nisn || "-";
+
+  // Filter nilai spesifik milik siswa ini
+  const myStudentGrades = useMemo(() => {
+    if (!isStudentRole) return [];
+    const uid = currentUser?.uid;
+    const email = currentUser?.email?.toLowerCase();
+    const uName = (currentUserData?.name || currentUserData?.fullName || studentDoc?.name || "").toLowerCase().trim();
+    const sName = (matchedStudent?.name || matchedStudent?.fullName || "").toLowerCase().trim();
+    const sId = matchedStudent?.id;
+    const sNisn = matchedStudent?.nisn || currentUserData?.nisn || studentDoc?.nisn;
+
+    return grades.filter(g => {
+      // 1. Cocokkan ID atau NISN
+      if (sId && g.studentId === sId) return true;
+      if (uid && (g.studentId === uid || g.uid === uid)) return true;
+      if (sNisn && (g.studentId === sNisn || g.nisn === sNisn)) return true;
+
+      // 2. Cocokkan Email
+      if (email && g.studentEmail && g.studentEmail.toLowerCase() === email) return true;
+
+      // 3. Cocokkan Nama Siswa
+      if (g.studentName) {
+        const gName = g.studentName.toLowerCase().trim();
+        if (sName && (gName === sName || gName.includes(sName) || sName.includes(gName))) return true;
+        if (uName && (gName === uName || gName.includes(uName) || uName.includes(gName))) return true;
+      }
+
+      return false;
+    });
+  }, [grades, isStudentRole, currentUser, currentUserData, studentDoc, matchedStudent]);
+
+  // Kelompokkan nilai per mata pelajaran yang sudah dinilai
+  const studentGradesBySubject = useMemo(() => {
+    const map = new Map<string, any[]>();
+    
+    myStudentGrades.forEach(g => {
+      const subj = g.subject || "Mata Pelajaran";
+      if (!map.has(subj)) {
+        map.set(subj, []);
+      }
+      map.get(subj)!.push(g);
+    });
+
+    return Array.from(map.entries()).map(([subjName, subjGrades]) => {
+      const totalScore = subjGrades.reduce((acc, curr) => acc + (Number(curr.score) || 0), 0);
+      const avgScore = subjGrades.length > 0 ? Math.round((totalScore / subjGrades.length) * 10) / 10 : 0;
+      const kkm = Number(subjGrades[0]?.kkm) || 75;
+      const isPassed = avgScore >= kkm;
+
+      const getScoreForType = (typeKeywords: string[]) => {
+        const found = subjGrades.find(g => {
+          const t = (g.type || "").toLowerCase();
+          return typeKeywords.some(kw => t.includes(kw.toLowerCase()));
+        });
+        return found && found.score !== undefined && found.score !== null ? Number(found.score) : null;
+      };
+
+      const tugas = getScoreForType(["Tugas"]);
+      const kuis = getScoreForType(["Kuis"]);
+      const uh = getScoreForType(["Ulangan", "UH"]);
+      const pts = getScoreForType(["PTS", "UTS", "Tengah"]);
+      const pas = getScoreForType(["PAS", "UAS", "Akhir Semester"]);
+      const akhir = getScoreForType(["Asesmen Akhir", "Ujian Akhir"]);
+
+      let gradeLetter = "D";
+      let gradePred = "Perlu Bimbingan";
+      if (avgScore >= 90) {
+        gradeLetter = "A";
+        gradePred = "Sangat Baik";
+      } else if (avgScore >= 80) {
+        gradeLetter = "B";
+        gradePred = "Baik";
+      } else if (avgScore >= kkm) {
+        gradeLetter = "C";
+        gradePred = "Cukup";
+      }
+
+      const notesWithText = subjGrades.filter(g => g.notes && g.notes.trim() !== "");
+      const latestNote = notesWithText.length > 0 ? notesWithText[0].notes : null;
+      const subjMeta = subjects.find(s => s.name?.toLowerCase() === subjName.toLowerCase());
+
+      return {
+        subject: subjName,
+        category: subjMeta?.category || "Wajib",
+        creditHours: subjMeta?.creditHours || "3 JP",
+        kkm,
+        avgScore,
+        isPassed,
+        gradeLetter,
+        gradePred,
+        tugas,
+        kuis,
+        uh,
+        pts,
+        pas,
+        akhir,
+        totalItems: subjGrades.length,
+        latestNote,
+        gradesList: subjGrades
+      };
+    }).sort((a, b) => b.avgScore - a.avgScore);
+  }, [myStudentGrades, subjects]);
+
+  // Statistik Kumulatif Siswa
+  const studentTotalGradesCount = myStudentGrades.length;
+  const studentOverallAverage = studentTotalGradesCount > 0
+    ? (myStudentGrades.reduce((acc, curr) => acc + (Number(curr.score) || 0), 0) / studentTotalGradesCount).toFixed(1)
+    : "0";
+  const studentPassedSubjectsCount = studentGradesBySubject.filter(s => s.isPassed).length;
+  const studentTotalSubjectsCount = studentGradesBySubject.length;
+  const studentPassingPercentage = studentTotalSubjectsCount > 0 
+    ? Math.round((studentPassedSubjectsCount / studentTotalSubjectsCount) * 100) 
+    : 100;
+
+  const studentHighestScore = useMemo(() => {
+    if (myStudentGrades.length === 0) return null;
+    return [...myStudentGrades].sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0))[0];
+  }, [myStudentGrades]);
+
+  const studentAvailableSubjects = useMemo(() => {
+    return Array.from(new Set(myStudentGrades.map(g => g.subject).filter(Boolean)));
+  }, [myStudentGrades]);
+
+  // Filter daftar riwayat penilaian untuk Tab Riwayat Lengkap
+  const studentFilteredHistoryGrades = useMemo(() => {
+    return myStudentGrades.filter(g => {
+      if (studentSubjectFilter !== "All" && g.subject !== studentSubjectFilter) return false;
+
+      if (studentTypeFilter !== "Semua") {
+        const t = (g.type || "").toLowerCase();
+        if (studentTypeFilter === "PTS" && !t.includes("pts") && !t.includes("uts") && !t.includes("tengah")) return false;
+        if (studentTypeFilter === "PAS" && !t.includes("pas") && !t.includes("uas") && !t.includes("akhir semester")) return false;
+        if (studentTypeFilter === "Ulangan Harian" && !t.includes("ulangan") && !t.includes("uh")) return false;
+        if (studentTypeFilter === "Asesmen Akhir" && !t.includes("ujian") && !t.includes("asesmen akhir")) return false;
+        if (studentTypeFilter !== "PTS" && studentTypeFilter !== "PAS" && studentTypeFilter !== "Ulangan Harian" && studentTypeFilter !== "Asesmen Akhir" && g.type !== studentTypeFilter) return false;
+      }
+
+      const score = Number(g.score) || 0;
+      const kkm = Number(g.kkm) || 75;
+      if (studentStatusFilter === "Tuntas" && score < kkm) return false;
+      if (studentStatusFilter === "Remedial" && score >= kkm) return false;
+
+      if (studentSemesterFilter !== "All" && g.semester && g.semester !== studentSemesterFilter) return false;
+
+      if (studentSearch.trim()) {
+        const q = studentSearch.toLowerCase().trim();
+        const sSubj = (g.subject || "").toLowerCase();
+        const sType = (g.type || "").toLowerCase();
+        const sName = (g.assessmentName || g.topic || "").toLowerCase();
+        const sNote = (g.notes || "").toLowerCase();
+        return sSubj.includes(q) || sType.includes(q) || sName.includes(q) || sNote.includes(q);
+      }
+
+      return true;
+    });
+  }, [myStudentGrades, studentSubjectFilter, studentTypeFilter, studentStatusFilter, studentSemesterFilter, studentSearch]);
+
+  // =========================================================================
+  // VIEW KHUSUS ROLE SISWA: PORTAL CAPAIAN & PENILAIAN DIRI SENDIRI
+  // =========================================================================
+  if (isStudentRole && !loading) {
+    if (!studentMyClass && !studentClassId) {
+      return (
+        <div className="p-4 sm:p-8 max-w-[1200px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
+          <div className="bg-white rounded-3xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-12">
+            <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200 shadow-sm">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-50 text-amber-800 border border-amber-200 uppercase tracking-wider">
+              Belum Terdaftar di Kelas
+            </span>
+            <h2 className="text-xl font-black text-gray-900 mt-3 tracking-tight">Data Kelas Belum Terhubung</h2>
+            <p className="text-xs text-gray-500 mt-2 font-medium leading-relaxed">
+              Akun Anda saat ini belum terdaftar pada rombongan belajar/kelas manapun. Hasil penilaian dan capaian belajar akan otomatis ditampilkan di sini setelah Anda ditempatkan pada kelas resmi.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-4 sm:p-8 pb-16 max-w-[1600px] mx-auto w-full flex flex-col space-y-6 animate-in fade-in duration-200 printable-area">
+        
+        {/* ================= HEADER PORTAL SISWA ================= */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/40 p-6 rounded-3xl border border-purple-100/60 shadow-2xs">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-[#531FFF] text-white flex items-center justify-center shadow-lg shadow-[#531FFF]/25">
+                <Award className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+                    Capaian & Penilaian Belajar
+                  </h1>
+                  <span className="px-2.5 py-0.5 text-xs font-bold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20 flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Portal Siswa
+                  </span>
+                  <span className="px-2.5 py-0.5 text-xs font-bold bg-purple-50 text-purple-700 rounded-full border border-purple-200 flex items-center gap-1">
+                    <GraduationCap className="w-3.5 h-3.5" /> Kelas {studentMyClass?.name || studentClassId}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 font-medium mt-1">
+                  Transparansi hasil evaluasi belajar, tugas harian, PTS, dan PAS milik <strong className="text-gray-800">{studentDisplayName}</strong> (NISN: {studentNisn}).
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 no-print">
+            <button
+              onClick={() => window.print()}
+              className="px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 text-xs font-extrabold rounded-2xl border border-gray-200 shadow-xs flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-98 cursor-pointer"
+              title="Cetak transkrip nilai capaian"
+            >
+              <Printer className="w-4 h-4 text-[#531FFF]" />
+              <span>Cetak Rapor Capaian</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ================= METRICS CARDS ================= */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          
+          {/* CARD 1: RATA-RATA NILAI */}
+          <div className="p-5 rounded-3xl bg-white border border-gray-100 shadow-xs flex flex-col justify-between hover:border-purple-200 transition-all">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-extrabold text-gray-500 uppercase tracking-wider">Rata-Rata Kumulatif</span>
+              <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold">
+                <Award className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="my-3">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-black text-gray-900 tracking-tight">{studentOverallAverage}</span>
+                <span className="text-xs font-bold text-gray-400">/ 100</span>
+              </div>
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <span className={cn(
+                  "px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider",
+                  Number(studentOverallAverage) >= 90 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
+                  Number(studentOverallAverage) >= 80 ? "bg-blue-50 text-blue-700 border border-blue-200" :
+                  Number(studentOverallAverage) >= 75 ? "bg-amber-50 text-amber-700 border border-amber-200" :
+                  "bg-rose-50 text-rose-700 border border-rose-200"
+                )}>
+                  {Number(studentOverallAverage) >= 90 ? "Predikat A (Sangat Baik)" :
+                   Number(studentOverallAverage) >= 80 ? "Predikat B (Baik)" :
+                   Number(studentOverallAverage) >= 75 ? "Predikat C (Cukup)" : "Predikat D (Perlu Bimbingan)"}
+                </span>
+              </div>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+              <div 
+                className="bg-gradient-to-r from-[#531FFF] to-indigo-600 h-1.5 rounded-full transition-all duration-500" 
+                style={{ width: `${Math.min(100, Math.max(0, Number(studentOverallAverage)))}%` }} 
+              />
+            </div>
+          </div>
+
+          {/* CARD 2: KETUNTASAN KKM */}
+          <div className="p-5 rounded-3xl bg-white border border-gray-100 shadow-xs flex flex-col justify-between hover:border-emerald-200 transition-all">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-extrabold text-gray-500 uppercase tracking-wider">Ketuntasan KKM</span>
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="my-3">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-black text-gray-900 tracking-tight">
+                  {studentPassedSubjectsCount} <span className="text-sm font-bold text-gray-400">/ {studentTotalSubjectsCount} Mapel</span>
+                </span>
+              </div>
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  {studentPassingPercentage}% Memenuhi KKM
+                </span>
+              </div>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+              <div 
+                className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" 
+                style={{ width: `${studentPassingPercentage}%` }} 
+              />
+            </div>
+          </div>
+
+          {/* CARD 3: TOTAL EVALUASI TERINPUT */}
+          <div className="p-5 rounded-3xl bg-white border border-gray-100 shadow-xs flex flex-col justify-between hover:border-blue-200 transition-all">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-extrabold text-gray-500 uppercase tracking-wider">Evaluasi Dinilai</span>
+              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                <BookOpen className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="my-3">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-black text-gray-900 tracking-tight">{studentTotalGradesCount}</span>
+                <span className="text-xs font-bold text-gray-400">Tugas / Ujian</span>
+              </div>
+              <div className="mt-1.5">
+                <span className="text-[11px] font-medium text-gray-500">
+                  Dari {studentTotalSubjectsCount} mata pelajaran aktif
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] font-bold text-[#531FFF]">
+              <BadgeCheck className="w-3.5 h-3.5" /> Terverifikasi Guru Pengampu
+            </div>
+          </div>
+
+          {/* CARD 4: CAPAIAN TERTINGGI */}
+          <div className="p-5 rounded-3xl bg-white border border-gray-100 shadow-xs flex flex-col justify-between hover:border-amber-200 transition-all">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-extrabold text-gray-500 uppercase tracking-wider">Nilai Tertinggi</span>
+              <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                <Sparkles className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="my-3">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-black text-amber-600 tracking-tight">
+                  {studentHighestScore ? studentHighestScore.score : "-"}
+                </span>
+                <span className="text-xs font-bold text-gray-400">/ 100</span>
+              </div>
+              <div className="mt-1.5 truncate">
+                <span className="text-[11px] font-bold text-gray-700 truncate block">
+                  {studentHighestScore ? `${studentHighestScore.subject} (${studentHighestScore.type || "Tugas"})` : "Belum ada evaluasi"}
+                </span>
+              </div>
+            </div>
+            <div className="text-[10px] font-extrabold text-emerald-600 flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" /> Prestasi Terbaik Semester Ini
+            </div>
+          </div>
+
+        </div>
+
+        {/* ================= TAB NAVIGATION ================= */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200 pb-3 no-print">
+          <div className="flex items-center gap-2 bg-gray-100/80 p-1 rounded-2xl w-fit">
+            <button
+              onClick={() => setStudentTab("bySubject")}
+              className={cn(
+                "px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer",
+                studentTab === "bySubject"
+                  ? "bg-white text-gray-900 shadow-xs"
+                  : "text-gray-500 hover:text-gray-900"
+              )}
+            >
+              <LayoutGrid className="w-4 h-4 text-[#531FFF]" />
+              <span>Ringkasan Per Mata Pelajaran</span>
+              <span className={cn(
+                "px-2 py-0.5 rounded-full text-[10px] font-black",
+                studentTab === "bySubject" ? "bg-purple-50 text-[#531FFF]" : "bg-gray-200 text-gray-600"
+              )}>
+                {studentGradesBySubject.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setStudentTab("allGrades")}
+              className={cn(
+                "px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer",
+                studentTab === "allGrades"
+                  ? "bg-white text-gray-900 shadow-xs"
+                  : "text-gray-500 hover:text-gray-900"
+              )}
+            >
+              <TableIcon className="w-4 h-4 text-[#531FFF]" />
+              <span>Riwayat Lengkap Penilaian</span>
+              <span className={cn(
+                "px-2 py-0.5 rounded-full text-[10px] font-black",
+                studentTab === "allGrades" ? "bg-purple-50 text-[#531FFF]" : "bg-gray-200 text-gray-600"
+              )}>
+                {myStudentGrades.length}
+              </span>
+            </button>
+          </div>
+
+          <div className="text-xs font-medium text-gray-500 flex items-center gap-2">
+            <span>Wali Kelas:</span>
+            <strong className="text-gray-800">{studentHomeroomTeacher?.name || studentMyClass?.homeroom || "-"}</strong>
+          </div>
+        </div>
+
+        {/* ================= TAB CONTENT 1: PER MATA PELAJARAN ================= */}
+        {studentTab === "bySubject" && (
+          <div className="space-y-4">
+            {studentGradesBySubject.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-8">
+                <div className="w-16 h-16 rounded-3xl bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto mb-4 border border-purple-100 shadow-sm">
+                  <Award className="w-8 h-8" />
+                </div>
+                <span className="px-3 py-1 rounded-full text-xs font-black bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20 uppercase tracking-wider">
+                  Belum Ada Nilai Terbit
+                </span>
+                <h2 className="text-xl font-black text-gray-900 mt-3 tracking-tight">Belum Ada Penilaian yang Diterbitkan</h2>
+                <p className="text-xs text-gray-500 mt-2 font-medium leading-relaxed">
+                  Bapak/Ibu guru mata pelajaran belum menginput nilai evaluasi (Tugas, Kuis, UH, PTS, atau PAS) untuk semester ini. Nilai capaian Anda akan otomatis tampil di sini segera setelah diterbitkan oleh guru pengampu.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {studentGradesBySubject.map((item) => {
+                  const isExpanded = expandedSubjectCard === item.subject;
+
+                  return (
+                    <div 
+                      key={item.subject}
+                      className="bg-white rounded-3xl border border-gray-100 hover:border-purple-200 shadow-xs p-6 flex flex-col justify-between transition-all duration-200"
+                    >
+                      <div>
+                        {/* Header Card */}
+                        <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-100">
+                                {item.category}
+                              </span>
+                              <span className="text-xs font-semibold text-gray-400">
+                                {item.creditHours}
+                              </span>
+                            </div>
+                            <h3 className="text-lg font-black text-gray-900 tracking-tight">
+                              {item.subject}
+                            </h3>
+                          </div>
+
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="px-2.5 py-1 rounded-xl text-[11px] font-black bg-gray-50 text-gray-600 border border-gray-200">
+                              Target KKM: {item.kkm}
+                            </span>
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-lg text-[10px] font-black flex items-center gap-1",
+                              item.isPassed 
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
+                                : "bg-rose-50 text-rose-700 border border-rose-200"
+                            )}>
+                              {item.isPassed ? (
+                                <>
+                                  <CheckCircle2 className="w-3 h-3" /> Tuntas KKM
+                                </>
+                              ) : (
+                                <>
+                                  <AlertCircle className="w-3 h-3" /> Perlu Remedial
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Nilai Rata-rata & Visual Progress */}
+                        <div className="my-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-50/70 p-4 rounded-2xl border border-gray-100">
+                          <div>
+                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Rata-Rata Capaian</span>
+                            <div className="flex items-baseline gap-2 mt-0.5">
+                              <span className={cn(
+                                "text-3xl font-black tracking-tight",
+                                item.avgScore >= 90 ? "text-emerald-600" :
+                                item.avgScore >= 75 ? "text-blue-600" : "text-rose-600"
+                              )}>
+                                {item.avgScore}
+                              </span>
+                              <span className="text-xs font-bold text-gray-400">/ 100</span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-end">
+                            <span className="text-xs font-black text-gray-800">
+                              Predikat {item.gradeLetter}
+                            </span>
+                            <span className="text-[11px] font-medium text-gray-500">
+                              {item.gradePred}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar with KKM line */}
+                        <div className="space-y-1.5 mb-5">
+                          <div className="relative w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                            <div 
+                              className={cn(
+                                "h-2 rounded-full transition-all duration-500",
+                                item.isPassed ? "bg-emerald-500" : "bg-rose-500"
+                              )}
+                              style={{ width: `${Math.min(100, Math.max(0, item.avgScore))}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[10px] font-bold text-gray-400">
+                            <span>0</span>
+                            <span className="text-gray-600">Batas KKM: {item.kkm}</span>
+                            <span>100</span>
+                          </div>
+                        </div>
+
+                        {/* 6 Assessment Type Scores Matrix */}
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-2 pb-2">
+                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-blue-50/50 border border-blue-100">
+                            <span className="text-[10px] font-bold text-blue-700">Tugas</span>
+                            <span className="text-sm font-black text-gray-900 mt-0.5">
+                              {item.tugas !== null ? item.tugas : "-"}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-indigo-50/50 border border-indigo-100">
+                            <span className="text-[10px] font-bold text-indigo-700">Kuis</span>
+                            <span className="text-sm font-black text-gray-900 mt-0.5">
+                              {item.kuis !== null ? item.kuis : "-"}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-purple-50/50 border border-purple-100">
+                            <span className="text-[10px] font-bold text-purple-700">UH</span>
+                            <span className="text-sm font-black text-gray-900 mt-0.5">
+                              {item.uh !== null ? item.uh : "-"}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-amber-50/50 border border-amber-100">
+                            <span className="text-[10px] font-bold text-amber-700">PTS</span>
+                            <span className="text-sm font-black text-gray-900 mt-0.5">
+                              {item.pts !== null ? item.pts : "-"}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-orange-50/50 border border-orange-100">
+                            <span className="text-[10px] font-bold text-orange-700">PAS</span>
+                            <span className="text-sm font-black text-gray-900 mt-0.5">
+                              {item.pas !== null ? item.pas : "-"}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-rose-50/50 border border-rose-100">
+                            <span className="text-[10px] font-bold text-rose-700">Akhir</span>
+                            <span className="text-sm font-black text-gray-900 mt-0.5">
+                              {item.akhir !== null ? item.akhir : "-"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Teacher Note Quote (if any) */}
+                        {item.latestNote && (
+                          <div className="mt-3 p-3 rounded-2xl bg-purple-50/60 border border-purple-100 flex items-start gap-2.5">
+                            <MessageSquare className="w-4 h-4 text-[#531FFF] shrink-0 mt-0.5" />
+                            <div>
+                              <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">
+                                Catatan Guru Pengampu:
+                              </span>
+                              <p className="text-xs text-gray-700 font-medium italic mt-0.5">
+                                "{item.latestNote}"
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Accordion Toggle to View Sub-evaluations */}
+                      <div className="mt-4 pt-3 border-t border-gray-100">
+                        <button
+                          onClick={() => setExpandedSubjectCard(isExpanded ? null : item.subject)}
+                          className="w-full py-2 px-3 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold flex items-center justify-between transition-colors cursor-pointer"
+                        >
+                          <span>Rincian Evaluasi ({item.totalItems} Komponen Dinilai)</span>
+                          {isExpanded ? <ChevronUp className="w-4 h-4 text-[#531FFF]" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                        </button>
+
+                        {/* Accordion Details Content */}
+                        {isExpanded && (
+                          <div className="mt-3 space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                            {item.gradesList.map((g: any, idx: number) => {
+                              const scoreNum = Number(g.score) || 0;
+                              const isSubPassed = scoreNum >= item.kkm;
+
+                              return (
+                                <div 
+                                  key={g.id || idx}
+                                  className="p-3 bg-white rounded-xl border border-gray-200 flex items-center justify-between gap-2 hover:border-purple-300 transition-colors"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-50 text-[#531FFF] border border-purple-100">
+                                        {g.type || "Tugas"}
+                                      </span>
+                                      <span className="text-xs font-bold text-gray-900 truncate">
+                                        {g.assessmentName || g.topic || `${g.type || "Tugas"} Evaluasi`}
+                                      </span>
+                                    </div>
+                                    <div className="text-[10px] text-gray-400 font-medium mt-0.5">
+                                      Semester {g.semester || "Ganjil"} • TA {g.academicYear || "2025/2026"}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    <div className="text-right">
+                                      <span className={cn(
+                                        "text-base font-black block",
+                                        isSubPassed ? "text-emerald-600" : "text-rose-600"
+                                      )}>
+                                        {g.score}
+                                      </span>
+                                      <span className="text-[9px] font-bold text-gray-400 block">
+                                        {isSubPassed ? "Tuntas" : "Remedial"}
+                                      </span>
+                                    </div>
+
+                                    <button
+                                      onClick={() => setDetailModalGrade(g)}
+                                      className="p-1.5 rounded-lg bg-gray-50 hover:bg-purple-50 hover:text-[#531FFF] text-gray-400 border border-gray-200 transition-colors cursor-pointer"
+                                      title="Lihat detail nilai"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================= TAB CONTENT 2: RIWAYAT LENGKAP PENILAIAN ================= */}
+        {studentTab === "allGrades" && (
+          <div className="space-y-4">
+            
+            {/* Filter Toolbar */}
+            <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3 no-print">
+              <div className="relative w-full md:w-80">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Cari mata pelajaran, materi, atau catatan..."
+                  value={studentSearch}
+                  onChange={(e) => setStudentSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-xs font-medium bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                {/* Subject Filter */}
+                <select
+                  value={studentSubjectFilter}
+                  onChange={(e) => setStudentSubjectFilter(e.target.value)}
+                  className="px-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
+                >
+                  <option value="All">Semua Mata Pelajaran</option>
+                  {studentAvailableSubjects.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+
+                {/* Type Filter */}
+                <select
+                  value={studentTypeFilter}
+                  onChange={(e) => setStudentTypeFilter(e.target.value)}
+                  className="px-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
+                >
+                  <option value="Semua">Semua Komponen</option>
+                  <option value="Tugas">Tugas</option>
+                  <option value="Kuis">Kuis</option>
+                  <option value="Ulangan Harian">Ulangan Harian</option>
+                  <option value="PTS">PTS</option>
+                  <option value="PAS">PAS</option>
+                  <option value="Asesmen Akhir">Asesmen Akhir</option>
+                </select>
+
+                {/* Status KKM */}
+                <select
+                  value={studentStatusFilter}
+                  onChange={(e) => setStudentStatusFilter(e.target.value)}
+                  className="px-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
+                >
+                  <option value="All">Semua Status</option>
+                  <option value="Tuntas">Tuntas KKM</option>
+                  <option value="Remedial">Perlu Remedial</option>
+                </select>
+
+                {/* Semester */}
+                <select
+                  value={studentSemesterFilter}
+                  onChange={(e) => setStudentSemesterFilter(e.target.value)}
+                  className="px-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
+                >
+                  <option value="All">Semua Semester</option>
+                  <option value="Ganjil">Semester Ganjil</option>
+                  <option value="Genap">Semester Genap</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Table of Grades */}
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50/80 border-b border-gray-100 text-[11px] font-black text-gray-500 uppercase tracking-wider">
+                      <th className="py-3.5 px-6">Mata Pelajaran</th>
+                      <th className="py-3.5 px-4">Komponen & Topik Penilaian</th>
+                      <th className="py-3.5 px-4 text-center">Nilai</th>
+                      <th className="py-3.5 px-4 text-center">Target KKM</th>
+                      <th className="py-3.5 px-4 text-center">Status</th>
+                      <th className="py-3.5 px-4">Semester</th>
+                      <th className="py-3.5 px-4">Catatan Guru</th>
+                      <th className="py-3.5 px-6 text-right no-print">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-xs">
+                    {studentFilteredHistoryGrades.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-gray-400 font-medium">
+                          Tidak ada penilaian yang sesuai dengan kriteria filter.
+                        </td>
+                      </tr>
+                    ) : (
+                      studentFilteredHistoryGrades.map((grade) => {
+                        const scoreVal = Number(grade.score) || 0;
+                        const kkmVal = Number(grade.kkm) || 75;
+                        const isTuntas = scoreVal >= kkmVal;
+
+                        return (
+                          <tr key={grade.id} className="hover:bg-purple-50/30 transition-colors">
+                            <td className="py-3.5 px-6">
+                              <span className="font-extrabold text-gray-900 block">{grade.subject}</span>
+                              <span className="text-[10px] text-gray-400 font-medium">Kelas {grade.className || studentMyClass?.name || studentClassId}</span>
+                            </td>
+
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-50 text-[#531FFF] border border-purple-100">
+                                  {grade.type || "Tugas"}
+                                </span>
+                                <span className="font-bold text-gray-800">
+                                  {grade.assessmentName || grade.topic || "-"}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="py-3.5 px-4 text-center">
+                              <span className={cn(
+                                "text-base font-black px-2.5 py-0.5 rounded-lg inline-block",
+                                scoreVal >= 90 ? "bg-emerald-50 text-emerald-700" :
+                                scoreVal >= kkmVal ? "bg-blue-50 text-blue-700" : "bg-rose-50 text-rose-700"
+                              )}>
+                                {grade.score}
+                              </span>
+                            </td>
+
+                            <td className="py-3.5 px-4 text-center font-bold text-gray-500">
+                              {kkmVal}
+                            </td>
+
+                            <td className="py-3.5 px-4 text-center">
+                              <span className={cn(
+                                "px-2.5 py-0.5 rounded-full text-[10px] font-black inline-flex items-center gap-1",
+                                isTuntas 
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
+                                  : "bg-rose-50 text-rose-700 border border-rose-200"
+                              )}>
+                                {isTuntas ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                                {isTuntas ? "Tuntas" : "Remedial"}
+                              </span>
+                            </td>
+
+                            <td className="py-3.5 px-4 font-semibold text-gray-600">
+                              {grade.semester || "Ganjil"} <span className="text-[10px] text-gray-400">({grade.academicYear || "2025/2026"})</span>
+                            </td>
+
+                            <td className="py-3.5 px-4 max-w-xs truncate text-gray-500 italic">
+                              {grade.notes || "-"}
+                            </td>
+
+                            <td className="py-3.5 px-6 text-right no-print">
+                              <button
+                                onClick={() => setDetailModalGrade(grade)}
+                                className="px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-purple-50 text-[#531FFF] border border-gray-200 text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Detail</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ================= DETAIL MODAL ================= */}
+        {detailModalGrade && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200 no-print">
+            <div className="bg-white w-full max-w-md rounded-3xl border border-gray-100 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 p-6 space-y-5">
+              
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold">
+                    <Award className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-gray-900 text-sm">Rincian Hasil Penilaian</h3>
+                    <span className="text-[10px] text-gray-400 font-medium">Informasi resmi evaluasi belajar</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setDetailModalGrade(null)}
+                  className="p-1.5 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                
+                {/* Subject & Component Header */}
+                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">
+                    {detailModalGrade.type || "Tugas"}
+                  </span>
+                  <h4 className="text-base font-black text-gray-900 mt-2">
+                    {detailModalGrade.subject}
+                  </h4>
+                  <p className="text-xs text-gray-600 font-medium mt-0.5">
+                    Topik: <strong className="text-gray-800">{detailModalGrade.assessmentName || detailModalGrade.topic || "Evaluasi Berkala"}</strong>
+                  </p>
+                </div>
+
+                {/* Big Score Box */}
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-50/50 to-indigo-50/50 border border-purple-100/70 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Perolehan Nilai</span>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className={cn(
+                        "text-4xl font-black tracking-tight",
+                        Number(detailModalGrade.score) >= (Number(detailModalGrade.kkm) || 75) ? "text-emerald-600" : "text-rose-600"
+                      )}>
+                        {detailModalGrade.score}
+                      </span>
+                      <span className="text-xs font-bold text-gray-400">/ 100</span>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <span className={cn(
+                      "px-3 py-1 rounded-xl text-xs font-black inline-block",
+                      Number(detailModalGrade.score) >= (Number(detailModalGrade.kkm) || 75)
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-rose-50 text-rose-700 border border-rose-200"
+                    )}>
+                      {Number(detailModalGrade.score) >= (Number(detailModalGrade.kkm) || 75) ? "TUNTAS KKM" : "PERLU REMEDIAL"}
+                    </span>
+                    <span className="text-[10px] font-bold text-gray-400 block mt-1">
+                      KKM: {detailModalGrade.kkm || 75}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Details Table */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-100">
+                    <span className="text-[10px] text-gray-400 font-bold block">Semester</span>
+                    <span className="font-extrabold text-gray-800">{detailModalGrade.semester || "Ganjil"}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-100">
+                    <span className="text-[10px] text-gray-400 font-bold block">Tahun Ajaran</span>
+                    <span className="font-extrabold text-gray-800">{detailModalGrade.academicYear || "2025/2026"}</span>
+                  </div>
+                </div>
+
+                {/* Teacher Feedback / Notes */}
+                <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-200 space-y-1">
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5 text-[#531FFF]" /> Catatan & Saran Guru Pengampu:
+                  </span>
+                  <p className="text-xs text-gray-700 font-medium italic">
+                    {detailModalGrade.notes ? `"${detailModalGrade.notes}"` : "Tidak ada catatan khusus yang diberikan guru untuk penilaian ini."}
+                  </p>
+                </div>
+
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={() => setDetailModalGrade(null)}
+                  className="w-full py-2.5 bg-gray-900 hover:bg-black text-white rounded-2xl text-xs font-black transition-all cursor-pointer shadow-xs"
+                >
+                  Tutup Rincian
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // VIEW UNTUK GURU / ADMIN / SUPERADMIN (FULL MATRIX & CRUD)
+  // =========================================================================
   return (
     <div className="p-4 sm:p-8 pb-16 max-w-[1600px] mx-auto w-full flex flex-col space-y-6 animate-in fade-in duration-200">
       
