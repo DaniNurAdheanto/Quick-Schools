@@ -24,8 +24,7 @@ import {
   Shield,
   LogIn,
   AlertCircle,
-  Bell,
-  Send
+  Bell
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -125,7 +124,13 @@ export default function AccountManagementPage() {
     return () => unsubAuth();
   }, []);
 
-  const isSuperAdmin = currentUserRole === "super-admin" || currentUserRole === "superadmin" || currentUserRole === "super_admin";
+  const normalizedRole = (currentUserRole || "").toLowerCase().trim().replace(/[\s_-]+/g, "");
+  const isSuperAdmin = 
+    normalizedRole === "superadmin" || 
+    normalizedRole === "admin" ||
+    currentUserRole === "super-admin" || 
+    currentUserRole === "superadmin" || 
+    currentUserRole === "super_admin";
 
   // 2. Subscribe to real-time users collection once authenticated
   useEffect(() => {
@@ -538,7 +543,6 @@ export default function AccountManagementPage() {
 
       // 3. Delete from `users` collection
       let usersDeleteFailed = false;
-      let usersErrorMessage = "";
       for (const id of Array.from(userDocsToDelete)) {
         try {
           await deleteDoc(doc(db, "users", id));
@@ -546,7 +550,6 @@ export default function AccountManagementPage() {
           console.warn("Could not delete doc from users:", id, e);
           if (e.code === "permission-denied") {
             usersDeleteFailed = true;
-            usersErrorMessage = e.message;
           }
         }
       }

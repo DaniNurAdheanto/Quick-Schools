@@ -98,13 +98,19 @@ function NavGroup({ title, items, currentPath, isCollapsed, userPermissions, use
   userRole?: string;
   isFooter?: boolean 
 }) {
-  const isSuperAdmin = userRole === "super-admin" || userRole === "superadmin" || userRole === "super_admin";
+  const normalizedRole = (userRole || "").toLowerCase().trim().replace(/[\s_-]+/g, "");
+  const isSuperAdmin = 
+    normalizedRole === "superadmin" || 
+    normalizedRole === "admin" ||
+    userRole === "super-admin" || 
+    userRole === "superadmin" || 
+    userRole === "super_admin";
 
   // Filter items based on permissions
   const visibleItems = items.filter(item => {
     if (item.isDanger || item.href === "/" || item.href === "/admin/profile") return true;
 
-    // Strict rule: Manajemen Akun System is exclusively visible & accessible to Super Admin
+    // Strict rule: Manajemen Akun System is exclusively visible & accessible to Super Admin / Admin
     if (item.href === "/admin/accounts" || NAV_MODULE_MAP[item.href] === "accounts") {
       return isSuperAdmin;
     }

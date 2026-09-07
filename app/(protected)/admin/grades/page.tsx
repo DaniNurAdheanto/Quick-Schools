@@ -46,7 +46,7 @@ import { db, auth } from "@/lib/firebase";
 import { useToast } from "@/context/ToastContext";
 
 // 6 Core Assessment Types requested by user
-export const ASSESSMENT_TYPES = [
+const ASSESSMENT_TYPES = [
   { id: "Tugas", key: "tugas", label: "Tugas", shortLabel: "Tugas", badge: "bg-blue-50 text-blue-700 border-blue-200" },
   { id: "Kuis", key: "kuis", label: "Kuis", shortLabel: "Kuis", badge: "bg-indigo-50 text-indigo-700 border-indigo-200" },
   { id: "Ulangan Harian", key: "ulanganHarian", label: "Ulangan Harian", shortLabel: "UH", badge: "bg-purple-50 text-purple-700 border-purple-200" },
@@ -607,9 +607,9 @@ export default function GradesPage() {
 
       // 3. Class Filter
       if (selectedClass !== "All") {
-        const student = students.find(s => s.id === g.studentId);
-        const studentClass = g.classId || student?.classId || student?.className;
-        if (studentClass !== selectedClass) return false;
+        const student = getStudentByIdOrName(g.studentId) || getStudentByIdOrName(g.studentName);
+        const studentClass = (g.classId || student?.classId || student?.className || "").trim().toLowerCase();
+        if (studentClass !== selectedClass.trim().toLowerCase()) return false;
       }
 
       // 4. Subject Filter
@@ -635,7 +635,7 @@ export default function GradesPage() {
 
       return true;
     });
-  }, [grades, isStudentRole, studentDoc, currentUser, selectedType, selectedClass, selectedSubject, selectedKkmStatus, searchQuery, students]);
+  }, [grades, isStudentRole, studentDoc, currentUser, selectedType, selectedClass, selectedSubject, selectedKkmStatus, searchQuery, getStudentByIdOrName]);
 
   // Single Grade Submit Handler (CrudSheet)
   const handleCrudSubmit = async (data: any) => {
@@ -644,13 +644,13 @@ export default function GradesPage() {
     try {
       const firestoreType = mapTypeToFirestore(data.type || "Tugas");
       const numScore = Math.min(Math.max(Number(data.score) || 0, 0), 100);
-      const targetStudent = students.find(s => s.id === data.studentId);
+      const targetStudent = getStudentByIdOrName(data.studentId);
       const studentName = targetStudent ? (targetStudent.fullName || targetStudent.name) : (data.studentName || "Siswa");
 
       if (crudState.mode === "create") {
         const newDocRef = doc(collection(db, "grades"));
         await setDoc(newDocRef, {
-          studentId: data.studentId || "student_id",
+          studentId: data.studentId || targetStudent?.id || "student_id",
           studentName: studentName,
           subject: data.subject || "Matematika Wajib",
           type: firestoreType,
@@ -672,10 +672,10 @@ export default function GradesPage() {
           academicYear: data.academicYear || crudState.data.academicYear,
           updatedAt: serverTimestamp()
         });
-        toast.showEdit("Data nilai siswa berhasil diperbarui.", "Berhasil Edit");
+        toast.showSuccess("Data nilai siswa berhasil diperbarui.", "Berhasil Edit");
       } else if (crudState.mode === "delete" && crudState.data?.id) {
         await deleteDoc(doc(db, "grades", crudState.data.id));
-        toast.showWarning("Nilai siswa berhasil dihapus.", "Berhasil Hapus");
+        toast.showSuccess("Nilai siswa berhasil dihapus.", "Berhasil Hapus");
       }
     } catch (error: any) {
       console.error("Error saving grade:", error);
@@ -687,12 +687,14 @@ export default function GradesPage() {
   // Gradebook Grouping (for Rekap Rapor View)
   const gradebookData = useMemo(() => {
     const studentMap = new Map<string, any>();
+    const target = selectedClass.trim().toLowerCase();
     const targetStudents = selectedClass === "All" 
       ? students 
-      : students.filter(s => (s.classId || s.className || s.class) === selectedClass);
+      : students.filter(s => (s.classId || s.className || s.class || "").trim().toLowerCase() === target);
 
     targetStudents.forEach(s => {
-      studentMap.set(s.id, {
+      const key = s.id || s._firestoreId || s.uid;
+      studentMap.set(key, {
         student: s,
         scoresByType: {
           "Tugas": [] as number[],
@@ -706,7 +708,11 @@ export default function GradesPage() {
     });
 
     accessibleGrades.forEach(g => {
-      const entry = studentMap.get(g.studentId);
+      const matched = getStudentByIdOrName(g.studentId) || getStudentByIdOrName(g.studentName);
+      const entry = matched 
+        ? (studentMap.get(matched.id) || studentMap.get(matched._firestoreId) || studentMap.get(matched.uid))
+        : studentMap.get(g.studentId);
+
       if (entry) {
         const sc = Number(g.score) || 0;
         const t = g.type || "";
@@ -753,13 +759,22 @@ export default function GradesPage() {
         predicate
       };
     });
-  }, [students, accessibleGrades, selectedClass]);
+  }, [students, accessibleGrades, selectedClass, getStudentByIdOrName]);
 
   // Single Form Configuration for CrudSheet
   const filteredStudentsForSingleForm = useMemo(() => {
-    if (!currentFormData.classId) return [];
+    if (!currentFormData.classId) {
+      return students.map(s => {
+        const c = s.classId || s.className || s.class || "Tanpa Kelas";
+        return { 
+          label: `${s.fullName || s.name} (${c})`, 
+          value: s.id 
+        };
+      });
+    }
+    const target = currentFormData.classId.trim().toLowerCase();
     return students
-      .filter(s => (s.classId || s.className || s.class) === currentFormData.classId)
+      .filter(s => (s.classId || s.className || s.class || "").trim().toLowerCase() === target)
       .map(s => ({ label: `${s.fullName || s.name} (NISN: ${s.nisn || s.id})`, value: s.id }));
   }, [students, currentFormData.classId]);
 
@@ -2126,9 +2141,27 @@ export default function GradesPage() {
                   {matrixStudents.length === 0 ? (
                     <tr>
                       <td colSpan={11} className="py-16 text-center text-gray-400">
-                        <AlertCircle className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <div className="w-12 h-12 rounded-2xl bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto mb-3">
+                          <Users className="w-6 h-6" />
+                        </div>
                         <p className="font-bold text-gray-800 text-sm">Tidak ada siswa terdaftar di kelas {matrixClassId}</p>
-                        <p className="text-xs text-gray-400 mt-1">Tambahkan siswa ke kelas ini pada menu Manajemen Kelas.</p>
+                        <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                          Siswa di kelas ini belum tersedia. Anda dapat memilih kelas lain yang telah memiliki siswa:
+                        </p>
+                        {availableClassOptions.filter(o => o.studentCount > 0).length > 0 && (
+                          <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+                            {availableClassOptions.filter(o => o.studentCount > 0).map(opt => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => setMatrixClassId(opt.value)}
+                                className="px-3.5 py-1.5 bg-[#531FFF]/10 hover:bg-[#531FFF]/20 text-[#531FFF] font-extrabold text-xs rounded-xl transition-all cursor-pointer shadow-2xs"
+                              >
+                                Buka Kelas {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ) : (
@@ -2425,7 +2458,8 @@ export default function GradesPage() {
                     const score = Number(grade.score) || 0;
                     const kkm = Number(grade.kkm) || 75;
                     const isPassed = score >= kkm;
-                    const student = students.find(s => s.id === grade.studentId);
+                    const student = getStudentByIdOrName(grade.studentId) || getStudentByIdOrName(grade.studentName);
+                    const studentDisplayName = grade.studentName || student?.fullName || student?.name || "Siswa";
                     const className = grade.classId || student?.classId || student?.className;
 
                     return (
@@ -2434,11 +2468,11 @@ export default function GradesPage() {
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-black text-xs shrink-0">
-                              {(grade.studentName || "S").charAt(0).toUpperCase()}
+                              {(studentDisplayName || "S").charAt(0).toUpperCase()}
                             </div>
                             <div>
                               <div className="font-extrabold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors">
-                                {grade.studentName}
+                                {studentDisplayName}
                               </div>
                               <div className="text-[11px] text-gray-400 font-medium flex items-center gap-1.5">
                                 <span>NISN: {grade.studentId}</span>
