@@ -7,28 +7,32 @@ import {
   GraduationCap, 
   CalendarCheck, 
   Wallet, 
-  ChevronDown,
-  ChevronRight,
-  Megaphone,
-  ArrowUp,
-  ArrowDown,
-  Calendar,
-  Clock,
-  Clock3,
-  BarChart2,
-  FileText,
-  Settings,
-  Sparkles,
-  AlertTriangle,
-  Star,
-  CheckCircle2,
-  UserCheck,
-  Shield,
-  Droplet,
-  Award,
-  BookOpen,
-  MapPin,
-  ScanFace
+  ChevronDown, 
+  ChevronRight, 
+  Megaphone, 
+  ArrowUp, 
+  ArrowDown, 
+  Calendar, 
+  Clock, 
+  Clock3, 
+  BarChart2, 
+  FileText, 
+  Settings, 
+  Sparkles, 
+  AlertTriangle, 
+  Star, 
+  CheckCircle2, 
+  UserCheck, 
+  Shield, 
+  Droplet, 
+  Award, 
+  BookOpen, 
+  MapPin, 
+  ScanFace,
+  School,
+  CheckCircle,
+  CalendarRange,
+  TrendingUp
 } from "lucide-react";
 import { 
   LineChart, 
@@ -37,19 +41,20 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip as RechartsTooltip, 
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-  ReferenceLine
+  ResponsiveContainer, 
+  PieChart, 
+  Pie, 
+  Cell, 
+  BarChart, 
+  Bar, 
+  ReferenceLine 
 } from 'recharts';
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+import { cn } from "@/lib/utils";
 
 const ATTENDANCE_DATA = [
   { date: '15 Mei', value: 40 },
@@ -76,92 +81,551 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
   currentDay: string;
 }) {
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [studentDoc, setStudentDoc] = useState<any>(null);
+  const [studentClass, setStudentClass] = useState<string>("10 MIPA 1");
+  const [studentNisn, setStudentNisn] = useState<string>("202300124");
+  const [homeroomTeacher, setHomeroomTeacher] = useState<string>("");
 
-  const STUDENT_GRADES_DATA = [
-    { subject: "Matematika", score: 88, kkm: 75, grade: "A" },
-    { subject: "B. Indonesia", score: 92, kkm: 75, grade: "A+" },
-    { subject: "B. Inggris", score: 95, kkm: 75, grade: "A+" },
-    { subject: "Fisika", score: 82, kkm: 75, grade: "B+" },
-    { subject: "Kimia", score: 85, kkm: 75, grade: "A" },
-    { subject: "Biologi", score: 90, kkm: 75, grade: "A" },
-    { subject: "Sejarah", score: 86, kkm: 75, grade: "A" },
-  ];
+  // Firestore Realtime Collections
+  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+  const [gradesRecords, setGradesRecords] = useState<any[]>([]);
+  const [schedulesList, setSchedulesList] = useState<any[]>([]);
+  const [examSchedulesList, setExamSchedulesList] = useState<any[]>([]);
+  const [announcementsList, setAnnouncementsList] = useState<any[]>([]);
+  const [classesList, setClassesList] = useState<any[]>([]);
 
-  const STUDENT_ATTENDANCE_DATA = [
-    { name: "Hadir", value: 96.8, color: "#531FFF", count: "45 Hari" },
-    { name: "Izin", value: 2.2, color: "#F59E0B", count: "1 Hari" },
-    { name: "Sakit", value: 1.0, color: "#3B82F6", count: "1 Hari" },
-    { name: "Alfa", value: 0.0, color: "#EF4444", count: "0 Hari" },
-  ];
+  // Time tracker for live class status
+  const [nowTimeStr, setNowTimeStr] = useState<string>(() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  });
 
-  const TODAY_SCHEDULE = [
-    { time: "07:00 - 08:30", subject: "Matematika", room: "Ruang X-IPA-1", teacher: "Drs. Bambang H.", status: "Selesai", type: "Wajib" },
-    { time: "08:30 - 10:00", subject: "Bahasa Indonesia", room: "Ruang X-IPA-1", teacher: "Ibu Dewi R., M.Pd", status: "Berlangsung", type: "Wajib" },
-    { time: "10:15 - 11:45", subject: "Fisika Dasar", room: "Lab Fisika A", teacher: "Bp. Hendra W., S.T", status: "Selanjutnya", type: "Praktikum" },
-    { time: "12:30 - 14:00", subject: "Bahasa Inggris", room: "Ruang X-IPA-1", teacher: "Ibu Rina K., M.Hum", status: "Selanjutnya", type: "Wajib" },
-  ];
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const d = new Date();
+      setNowTimeStr(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
 
-  const RECENT_EVALUATIONS = [
-    { subject: "Bahasa Inggris", type: "UTS Genap", score: 95, kkm: 75, date: "02 Mei 2026", status: "Lulus KKM" },
-    { subject: "Matematika", type: "Tugas 2 Integral", score: 88, kkm: 75, date: "28 Apr 2026", status: "Lulus KKM" },
-    { subject: "Fisika Dasar", type: "Kuis Termodinamika", score: 82, kkm: 75, date: "22 Apr 2026", status: "Lulus KKM" },
-    { subject: "Biologi", type: "Praktikum Sel", score: 90, kkm: 75, date: "15 Apr 2026", status: "Lulus KKM" },
-  ];
+  // 1. Auth & Student Identity Fetching
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        setCurrentUser(u);
+        try {
+          // Fetch from users collection
+          const userSnap = await getDoc(doc(db, "users", u.uid));
+          let sClass = "";
+          let sNisn = "";
+          if (userSnap.exists()) {
+            const uData = userSnap.data();
+            sClass = uData.className || uData.classId || uData.kelas || "";
+            sNisn = uData.nisn || uData.nis || "";
+          }
+
+          // Fetch from students collection
+          try {
+            const studentSnap = await getDoc(doc(db, "students", u.uid));
+            if (studentSnap.exists()) {
+              const sData = studentSnap.data();
+              setStudentDoc(sData);
+              if (sData.className || sData.classId || sData.kelas) {
+                sClass = sData.className || sData.classId || sData.kelas;
+              }
+              if (sData.nisn || sData.nis) {
+                sNisn = sData.nisn || sData.nis;
+              }
+              if (sData.homeroom || sData.waliKelas) {
+                setHomeroomTeacher(sData.homeroom || sData.waliKelas);
+              }
+            }
+          } catch (e) {
+            console.warn("Student doc fetch error:", e);
+          }
+
+          if (sClass) setStudentClass(sClass);
+          if (sNisn) setStudentNisn(sNisn);
+        } catch (err) {
+          console.error("Profile fetch error:", err);
+        }
+      }
+    });
+    return () => unsubAuth();
+  }, []);
+
+  // 2. Realtime Subscriptions
+  useEffect(() => {
+    // Attendance
+    const unsubAttendance = onSnapshot(collection(db, "attendance"), (snap) => {
+      setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.warn("Attendance listener warning:", err));
+
+    // Grades
+    const unsubGrades = onSnapshot(collection(db, "grades"), (snap) => {
+      setGradesRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.warn("Grades listener warning:", err));
+
+    // Schedules
+    const unsubSchedules = onSnapshot(collection(db, "schedules"), (snap) => {
+      setSchedulesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.warn("Schedules listener warning:", err));
+
+    // Exams
+    const unsubExams = onSnapshot(collection(db, "examSchedules"), (snap) => {
+      setExamSchedulesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.warn("ExamSchedules listener warning:", err));
+
+    // Announcements
+    const unsubAnnouncements = onSnapshot(collection(db, "announcements"), (snap) => {
+      setAnnouncementsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.warn("Announcements listener warning:", err));
+
+    // Classes
+    const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
+      setClassesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.warn("Classes listener warning:", err));
+
+    return () => {
+      unsubAttendance();
+      unsubGrades();
+      unsubSchedules();
+      unsubExams();
+      unsubAnnouncements();
+      unsubClasses();
+    };
+  }, []);
+
+  // Helper to match class names flexibly (e.g. "10 MIPA 1" vs "10-MIPA-1")
+  const matchClass = (examClass: string, targetClass: string): boolean => {
+    if (!examClass || !targetClass) return false;
+    const cleanExam = examClass.toLowerCase().replace(/[\s\-_]/g, "");
+    const cleanTarget = targetClass.toLowerCase().replace(/[\s\-_]/g, "");
+    return cleanExam === cleanTarget || cleanExam.includes(cleanTarget) || cleanTarget.includes(cleanExam);
+  };
+
+  // Auto-resolve homeroom teacher from classesList if not yet set
+  useEffect(() => {
+    if (!homeroomTeacher && studentClass && classesList.length > 0) {
+      const matchedClass = classesList.find(c => matchClass(c.name || c.className || c.id, studentClass));
+      if (matchedClass && (matchedClass.homeroomTeacher || matchedClass.waliKelas)) {
+        setHomeroomTeacher(matchedClass.homeroomTeacher || matchedClass.waliKelas);
+      }
+    }
+  }, [homeroomTeacher, studentClass, classesList]);
+
+  // 3. Computed Attendance Stats & Today's Checkin Status
+  const attendanceComputed = useMemo(() => {
+    const uid = currentUser?.uid;
+    const nameLower = (userName || "").toLowerCase().trim();
+    const nisn = studentNisn;
+
+    // Filter student records
+    const myRecords = attendanceRecords.filter(r => {
+      if (uid && (r.studentId === uid || r.uid === uid)) return true;
+      if (nisn && (r.studentId === nisn || r.nisn === nisn)) return true;
+      if (studentDoc?.id && r.studentId === studentDoc.id) return true;
+      if (r.studentName && r.studentName.toLowerCase().trim() === nameLower) return true;
+      return false;
+    });
+
+    const todayStr = new Date().toISOString().split("T")[0];
+    const todayRecord = myRecords.find(r => r.date === todayStr);
+
+    const total = myRecords.length;
+    const hadir = myRecords.filter(r => r.status === "Hadir").length;
+    const terlambat = myRecords.filter(r => r.status === "Terlambat").length;
+    const sakit = myRecords.filter(r => r.status === "Sakit").length;
+    const izin = myRecords.filter(r => r.status === "Izin").length;
+    const alpa = myRecords.filter(r => r.status === "Alpa").length;
+
+    let percentage = "98.5";
+    if (total > 0) {
+      percentage = (((hadir + terlambat) / total) * 100).toFixed(1);
+    }
+
+    const pieData = [
+      { name: "Hadir", value: total > 0 ? hadir : 42, color: "#531FFF", count: `${total > 0 ? hadir : 42} Hari` },
+      { name: "Terlambat", value: total > 0 ? terlambat : 1, color: "#8B5CF6", count: `${total > 0 ? terlambat : 1} Hari` },
+      { name: "Izin", value: total > 0 ? izin : 1, color: "#F59E0B", count: `${total > 0 ? izin : 1} Hari` },
+      { name: "Sakit", value: total > 0 ? sakit : 1, color: "#3B82F6", count: `${total > 0 ? sakit : 1} Hari` },
+      { name: "Alfa", value: total > 0 ? alpa : 0, color: "#EF4444", count: `${total > 0 ? alpa : 0} Hari` },
+    ].filter(item => item.value > 0);
+
+    return {
+      myRecords,
+      todayRecord,
+      total: total > 0 ? total : 45,
+      hadir: total > 0 ? hadir : 42,
+      terlambat: total > 0 ? terlambat : 1,
+      sakit: total > 0 ? sakit : 1,
+      izin: total > 0 ? izin : 1,
+      alpa: total > 0 ? alpa : 0,
+      percentage,
+      pieData,
+      isLive: total > 0
+    };
+  }, [attendanceRecords, currentUser, userName, studentNisn, studentDoc]);
+
+  // 4. Computed Academic Grades & Chart
+  const gradesComputed = useMemo(() => {
+    const uid = currentUser?.uid;
+    const nameLower = (userName || "").toLowerCase().trim();
+    const nisn = studentNisn;
+
+    const myGrades = gradesRecords.filter(g => {
+      if (uid && (g.studentId === uid || g.uid === uid)) return true;
+      if (nisn && (g.studentId === nisn || g.nisn === nisn)) return true;
+      if (studentDoc?.id && g.studentId === studentDoc.id) return true;
+      if (g.studentName && g.studentName.toLowerCase().trim() === nameLower) return true;
+      return false;
+    });
+
+    // Default baseline curriculum subjects if student has no entered grades in db yet
+    const FALLBACK_GRADES = [
+      { subject: "Matematika", score: 88, kkm: 75, grade: "A" },
+      { subject: "B. Indonesia", score: 92, kkm: 75, grade: "A+" },
+      { subject: "B. Inggris", score: 95, kkm: 75, grade: "A+" },
+      { subject: "Fisika", score: 82, kkm: 75, grade: "B+" },
+      { subject: "Kimia", score: 85, kkm: 75, grade: "A" },
+      { subject: "Biologi", score: 90, kkm: 75, grade: "A" },
+      { subject: "Sejarah", score: 86, kkm: 75, grade: "A" },
+    ];
+
+    if (myGrades.length === 0) {
+      return {
+        gradesChartData: FALLBACK_GRADES,
+        averageScore: "88.3",
+        predikat: "A · Sangat Memuaskan",
+        passRate: 100,
+        recentEvaluations: [
+          { subject: "Bahasa Inggris", type: "UTS Genap", score: 95, kkm: 75, date: "02 Mei 2026", status: "Lulus KKM" },
+          { subject: "Matematika", type: "Tugas 2 Integral", score: 88, kkm: 75, date: "28 Apr 2026", status: "Lulus KKM" },
+          { subject: "Fisika Dasar", type: "Kuis Termodinamika", score: 82, kkm: 75, date: "22 Apr 2026", status: "Lulus KKM" },
+          { subject: "Biologi", type: "Praktikum Sel", score: 90, kkm: 75, date: "15 Apr 2026", status: "Lulus KKM" },
+        ],
+        isLive: false
+      };
+    }
+
+    // Group scores per subject
+    const subjectMap = new Map<string, number[]>();
+    myGrades.forEach(g => {
+      const sub = g.subject || "Umum";
+      const sc = Number(g.score) || 0;
+      if (!subjectMap.has(sub)) subjectMap.set(sub, []);
+      subjectMap.get(sub)!.push(sc);
+    });
+
+    const chartData = Array.from(subjectMap.entries()).map(([sub, scores]) => {
+      const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+      const grade = avg >= 90 ? "A+" : avg >= 85 ? "A" : avg >= 75 ? "B" : avg >= 65 ? "C" : "D";
+      return { subject: sub, score: avg, kkm: 75, grade };
+    });
+
+    const totalAvg = Math.round(
+      chartData.reduce((acc, curr) => acc + curr.score, 0) / (chartData.length || 1)
+    );
+
+    const passedCount = chartData.filter(d => d.score >= 75).length;
+    const passRate = Math.round((passedCount / (chartData.length || 1)) * 100);
+
+    let predikat = "B · Baik";
+    if (totalAvg >= 90) predikat = "A+ · Istimewa";
+    else if (totalAvg >= 85) predikat = "A · Sangat Memuaskan";
+    else if (totalAvg >= 75) predikat = "B · Baik (Tuntas KKM)";
+    else if (totalAvg >= 65) predikat = "C · Cukup";
+    else predikat = "D · Perlu Bimbingan";
+
+    // Recent evaluations sorted
+    const recent = [...myGrades]
+      .sort((a, b) => (new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime()))
+      .slice(0, 4)
+      .map(g => ({
+        subject: g.subject || "Mata Pelajaran",
+        type: g.type || "Evaluasi",
+        score: Number(g.score) || 0,
+        kkm: 75,
+        date: g.date || "Terbaru",
+        status: (Number(g.score) || 0) >= 75 ? "Lulus KKM" : "Remedial"
+      }));
+
+    return {
+      gradesChartData: chartData,
+      averageScore: totalAvg.toFixed(1),
+      predikat,
+      passRate,
+      recentEvaluations: recent,
+      isLive: true
+    };
+  }, [gradesRecords, currentUser, userName, studentNisn, studentDoc]);
+
+  // 5. Computed Today's Class Schedule
+  const scheduleComputed = useMemo(() => {
+    const daysIndo = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+    const todayDayIndex = new Date().getDay();
+    const todayDayName = daysIndo[todayDayIndex];
+    const isWeekend = todayDayIndex === 0 || todayDayIndex === 6;
+
+    // Filter by student class
+    const classSchedules = schedulesList.filter(s => matchClass(s.classId || s.className || "", studentClass));
+
+    // Find schedules for today (or Monday if weekend)
+    const targetDay = isWeekend ? "Senin" : todayDayName;
+    let dayList = classSchedules.filter(s => (s.day || "").toLowerCase() === targetDay.toLowerCase());
+
+    // Fallback if no specific schedules found in db
+    if (dayList.length === 0) {
+      dayList = [
+        { time: "07:00 - 08:30", startTime: "07:00", endTime: "08:30", subject: "Matematika", room: "Ruang X-IPA-1", teacher: "Drs. Bambang H.", type: "Wajib" },
+        { time: "08:30 - 10:00", startTime: "08:30", endTime: "10:00", subject: "Bahasa Indonesia", room: "Ruang X-IPA-1", teacher: "Ibu Dewi R., M.Pd", type: "Wajib" },
+        { time: "10:15 - 11:45", startTime: "10:15", endTime: "11:45", subject: "Fisika Dasar", room: "Lab Fisika A", teacher: "Bp. Hendra W., S.T", type: "Praktikum" },
+        { time: "12:30 - 14:00", startTime: "12:30", endTime: "14:00", subject: "Bahasa Inggris", room: "Ruang X-IPA-1", teacher: "Ibu Rina K., M.Hum", type: "Wajib" },
+      ];
+    }
+
+    // Determine live status for each item based on current time
+    const [nowH, nowM] = nowTimeStr.split(":").map(Number);
+    const nowMin = nowH * 60 + nowM;
+
+    let nextSubject = "-";
+    let nextTime = "-";
+
+    const mapped = dayList.map(item => {
+      const sTime = item.startTime || (item.time ? item.time.split("-")[0]?.trim() : "07:00");
+      const eTime = item.endTime || (item.time ? item.time.split("-")[1]?.trim() : "08:30");
+      
+      const [sH, sM] = sTime.split(":").map(Number);
+      const [eH, eM] = eTime.split(":").map(Number);
+      const sMin = sH * 60 + sM;
+      const eMin = eH * 60 + eM;
+
+      let status = "Selanjutnya";
+      if (!isWeekend) {
+        if (nowMin >= sMin && nowMin < eMin) {
+          status = "Berlangsung";
+        } else if (nowMin >= eMin) {
+          status = "Selesai";
+        }
+      }
+
+      if (status === "Berlangsung") {
+        nextSubject = item.subject;
+        nextTime = `${sTime} - ${eTime}`;
+      } else if (status === "Selanjutnya" && nextSubject === "-") {
+        nextSubject = item.subject;
+        nextTime = `${sTime} WIB`;
+      }
+
+      return {
+        ...item,
+        startTime: sTime,
+        endTime: eTime,
+        time: `${sTime} - ${eTime}`,
+        status
+      };
+    });
+
+    return {
+      dayList: mapped,
+      isWeekend,
+      targetDay,
+      nextSubject: nextSubject !== "-" ? nextSubject : (mapped[0]?.subject || "Matematika"),
+      nextTime: nextTime !== "-" ? nextTime : (mapped[0]?.time || "07:00 WIB")
+    };
+  }, [schedulesList, studentClass, nowTimeStr]);
+
+  // 6. Computed Upcoming Semester Exams (UTS / UAS)
+  const upcomingExamsComputed = useMemo(() => {
+    // Combine examSchedules + schedules with isExam
+    const allExams = [...examSchedulesList, ...schedulesList.filter(s => s.isExam || s.examType)];
+    
+    // Filter for student's class and semester exams (PTS/UTS & PAS/UAS)
+    const filtered = allExams.filter(e => {
+      if (!matchClass(e.classId || "", studentClass)) return false;
+      const typeUpper = (e.examType || "").toUpperCase();
+      const titleUpper = (e.title || "").toUpperCase();
+      const isUTS = typeUpper.includes("PTS") || typeUpper.includes("UTS") || titleUpper.includes("PTS") || titleUpper.includes("UTS") || titleUpper.includes("TENGAH");
+      const isUAS = typeUpper.includes("PAS") || typeUpper.includes("UAS") || titleUpper.includes("PAS") || titleUpper.includes("UAS") || titleUpper.includes("AKHIR");
+      return isUTS || isUAS;
+    });
+
+    // Fallback sample if no semester exams found in db
+    let examItems = filtered;
+    if (examItems.length === 0) {
+      examItems = [
+        {
+          id: "sample_uts_1",
+          title: "Penilaian Tengah Semester (PTS) Ganjil",
+          examType: "PTS",
+          subject: "Matematika Peminatan",
+          classId: studentClass,
+          date: "2025-09-15",
+          startTime: "07:30",
+          endTime: "09:00",
+          room: "Ruang R.101",
+          proctor: "Drs. Taufik Hidayat, M.Pd.",
+          status: "Akan Datang"
+        },
+        {
+          id: "sample_uts_2",
+          title: "Penilaian Tengah Semester (PTS) Ganjil",
+          examType: "PTS",
+          subject: "Fisika Terapan",
+          classId: studentClass,
+          date: "2025-09-16",
+          startTime: "07:30",
+          endTime: "09:00",
+          room: "Lab Fisika A",
+          proctor: "Dr. Budi Santoso, M.Si.",
+          status: "Akan Datang"
+        }
+      ];
+    }
+
+    // Sort by date ascending
+    examItems.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const nearest = examItems[0] || null;
+
+    let daysRemaining: number | null = null;
+    let countdownLabel = "Segera";
+    if (nearest?.date) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const target = new Date(nearest.date);
+      target.setHours(0, 0, 0, 0);
+      const diffMs = target.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      daysRemaining = diffDays;
+      if (diffDays === 0) countdownLabel = "Hari Ini!";
+      else if (diffDays === 1) countdownLabel = "Besok";
+      else if (diffDays > 1) countdownLabel = `${diffDays} Hari Lagi`;
+      else countdownLabel = "Berlangsung";
+    }
+
+    return {
+      list: examItems,
+      nearest,
+      daysRemaining,
+      countdownLabel
+    };
+  }, [examSchedulesList, schedulesList, studentClass]);
+
+  // 7. Computed Announcements
+  const recentAnnouncements = useMemo(() => {
+    const valid = announcementsList
+      .filter(a => {
+        const target = (a.target || "").toLowerCase();
+        return !target || target === "semua" || target === "siswa" || target.includes("siswa");
+      })
+      .slice(0, 3);
+
+    if (valid.length === 0) {
+      return [
+        {
+          id: "ann_1",
+          title: "Jadwal Pelaksanaan Penilaian Tengah Semester (PTS) Ganjil",
+          desc: "Seluruh siswa dimohon mempersiapkan kartu peserta ujian dan mematuhi tata tertib ruangan.",
+          tag: "AKADEMIK",
+          date: "05 Sep 2025"
+        },
+        {
+          id: "ann_2",
+          title: "Pemutakhiran Presensi Wajah & Geofence GPS Mandiri",
+          desc: "Gunakan fitur scan wajah mandiri pada jam masuk 06.30 - 07.15 WIB di area sekolah.",
+          tag: "PENTING",
+          date: "02 Sep 2025"
+        }
+      ];
+    }
+    return valid;
+  }, [announcementsList]);
 
   return (
     <div className="p-4 md:p-8 max-w-[1600px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
       
-      {/* Quick Attendance Modal */}
+      {/* Quick Attendance Modal with Real Student Class & ID */}
       <QuickAttendanceModal 
         isOpen={showAttendanceModal}
         onClose={() => setShowAttendanceModal(false)}
         userName={userName}
+        studentClass={studentClass}
+        studentId={studentNisn}
       />
 
-      {/* Student Hero Banner */}
-      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-[#531FFF] via-[#6E3BFF] to-[#8F94FB] p-6 md:p-8 text-white shadow-xl flex flex-col lg:flex-row justify-between lg:items-center gap-6 border border-white/10">
+      {/* Hero Welcome Banner */}
+      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-[#4410D9] via-[#531FFF] to-[#7942FF] p-6 md:p-8 text-white shadow-xl flex flex-col lg:flex-row justify-between lg:items-center gap-6 border border-white/15">
+        
+        {/* Background glow effects */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+        <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-emerald-400/10 rounded-full blur-2xl pointer-events-none" />
+
         <div className="z-10 relative space-y-4 flex-1">
+          {/* Status Badges */}
           <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-400/20 text-emerald-200 border border-emerald-300/30 flex items-center gap-1.5 backdrop-blur-md">
+            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-400/20 text-emerald-200 border border-emerald-300/30 flex items-center gap-1.5 backdrop-blur-md shadow-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               Siswa Aktif
             </span>
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-white/10 text-white border border-white/20 backdrop-blur-md">
               Tahun Ajaran {academicYear}
             </span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-white/10 text-white border border-white/20 backdrop-blur-md flex items-center gap-1">
+              <School className="w-3.5 h-3.5 text-purple-200" />
+              <span>Kelas {studentClass}</span>
+            </span>
           </div>
 
           <div>
             <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold tracking-tight mb-1 flex items-center gap-2">
-              {greeting}, {userName}! <span className="animate-bounce">👋</span>
+              {greeting}, {userName}! <span className="animate-bounce inline-block">👋</span>
             </h1>
-            <p className="text-white/80 text-sm md:text-base font-medium max-w-2xl">
-              Selamat datang di portal akademik Anda. Lakukan presensi harian dengan scan wajah & lokasi GPS di sini.
+            <p className="text-white/85 text-xs md:text-sm font-medium max-w-2xl leading-relaxed">
+              Selamat datang di portal akademik mandiri. Pantau rekap presensi kehadiran, grafik pencapaian nilai, serta jadwal pelajaran dan ujian semester Anda.
             </p>
           </div>
 
-          {/* Action Button & Quick Info Chips */}
+          {/* Action Button & Quick Profile Chips */}
           <div className="flex flex-wrap items-center gap-3 pt-1">
-            <button
-              onClick={() => setShowAttendanceModal(true)}
-              className="inline-flex items-center gap-2.5 px-5 py-3 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white rounded-2xl font-extrabold text-sm shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:scale-[1.03] active:scale-[0.98] transition-all cursor-pointer border border-white/20"
-            >
-              <ScanFace className="w-5 h-5 animate-pulse" />
-              <span>Absen Sekarang (Scan Face & GPS)</span>
-              <Sparkles className="w-4 h-4 text-amber-200" />
-            </button>
+            {/* Realtime Attendance Status Chip or Action */}
+            {attendanceComputed.todayRecord ? (
+              <div className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-500/25 border border-emerald-300/40 text-emerald-100 rounded-2xl text-xs font-extrabold backdrop-blur-md shadow-sm">
+                <CheckCircle className="w-4 h-4 text-emerald-300 shrink-0" />
+                <span>Sudah Presensi Hari Ini ({attendanceComputed.todayRecord.timestamp || "07:15 WIB"})</span>
+                {attendanceComputed.todayRecord.faceVerified && (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-400/20 text-[10px] text-emerald-200 font-bold border border-emerald-300/30">
+                    Wajah Terverifikasi
+                  </span>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowAttendanceModal(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white rounded-2xl font-extrabold text-xs md:text-sm shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer border border-white/20"
+              >
+                <ScanFace className="w-4 h-4 animate-pulse" />
+                <span>Absen Masuk (Face & GPS)</span>
+                <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+              </button>
+            )}
 
-            <div className="bg-white/10 hover:bg-white/20 px-3.5 py-2.5 rounded-2xl border border-white/15 backdrop-blur-md text-xs font-bold flex items-center gap-2">
-              <span className="text-white/60">NISN:</span> 202300124
+            <div className="bg-white/10 hover:bg-white/20 px-3.5 py-2 rounded-2xl border border-white/15 backdrop-blur-md text-xs font-bold flex items-center gap-1.5 transition-colors">
+              <span className="text-white/60">NISN:</span>
+              <span className="tracking-wide text-white">{studentNisn}</span>
             </div>
-            <div className="bg-white/10 hover:bg-white/20 px-3.5 py-2.5 rounded-2xl border border-white/15 backdrop-blur-md text-xs font-bold flex items-center gap-2">
-              <span className="text-white/60">Kelas:</span> X-IPA-1
-            </div>
+
+            {homeroomTeacher && (
+              <div className="bg-white/10 hover:bg-white/20 px-3.5 py-2 rounded-2xl border border-white/15 backdrop-blur-md text-xs font-bold flex items-center gap-1.5 transition-colors">
+                <span className="text-white/60">Wali Kelas:</span>
+                <span className="text-white">{homeroomTeacher}</span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Motivational Card Right */}
-        <div className="z-10 relative bg-white/15 backdrop-blur-md border border-white/25 p-5 rounded-2xl shrink-0 lg:w-[320px] flex flex-col justify-between space-y-3 shadow-inner">
+        <div className="z-10 relative bg-white/15 backdrop-blur-md border border-white/25 p-5 rounded-2xl shrink-0 lg:w-[320px] flex flex-col justify-between space-y-3 shadow-lg">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-white/80">Indeks Prestasi Siswa</span>
             <div className="w-8 h-8 rounded-xl bg-amber-400/20 flex items-center justify-center text-amber-300">
@@ -170,286 +634,389 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
           </div>
           <div>
             <div className="text-3xl font-extrabold text-white tracking-tight flex items-baseline gap-2">
-              88.5 <span className="text-xs font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-400/30">+3.2%</span>
+              {gradesComputed.averageScore} <span className="text-xs font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-400/30">KKM: 75</span>
             </div>
-            <p className="text-xs text-white/80 font-medium mt-1">Predikat A · Sangat Memuaskan</p>
+            <p className="text-xs text-white/90 font-semibold mt-1 flex items-center gap-1">
+              <span>{gradesComputed.predikat}</span>
+            </p>
           </div>
           <div className="pt-2 border-t border-white/15 flex items-center justify-between text-xs font-bold text-white/90">
-            <span>Presensi Harian</span>
-            <span className="text-emerald-300">96.8% (Tinggi)</span>
+            <span>Presensi Kehadiran</span>
+            <span className="text-emerald-300">{attendanceComputed.percentage}% (Tinggi)</span>
           </div>
         </div>
       </div>
 
-      {/* 4 Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* 4 Main KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
         
-        {/* Metric 1 */}
+        {/* KPI 1: Rata-Rata Nilai */}
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Rata-Rata Nilai</span>
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Rata-Rata Nilai</span>
             <div className="w-10 h-10 rounded-2xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Award className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-gray-900 tracking-tight mb-1">88.5 <span className="text-xs text-gray-400 font-normal">/ 100</span></div>
+          <div className="text-2xl font-black text-gray-900 tracking-tight mb-1">
+            {gradesComputed.averageScore} <span className="text-xs text-gray-400 font-normal">/ 100</span>
+          </div>
           <div className="flex items-center gap-1.5 text-xs">
             <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 flex items-center gap-0.5">
-              <ArrowUp className="w-3 h-3" /> +3.2%
+              <TrendingUp className="w-3 h-3" /> {gradesComputed.passRate}% Tuntas KKM
             </span>
-            <span className="text-gray-400">vs semester lalu</span>
           </div>
         </div>
 
-        {/* Metric 2 */}
+        {/* KPI 2: Kehadiran Presensi */}
         <div 
           onClick={() => setShowAttendanceModal(true)}
           className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all group cursor-pointer hover:border-emerald-200"
         >
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Kehadiran Presensi</span>
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Tingkat Presensi</span>
             <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <ScanFace className="w-5 h-5" />
             </div>
           </div>
           <div className="flex items-baseline justify-between mb-1">
-            <div className="text-2xl font-extrabold text-gray-900 tracking-tight">96.8%</div>
-            <span className="text-[11px] font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-              + Scan Absen
+            <div className="text-2xl font-black text-gray-900 tracking-tight">
+              {attendanceComputed.percentage}%
+            </div>
+            <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+              + Presensi
             </span>
           </div>
-          <div className="text-xs text-gray-500 font-medium">45 Hadir · 1 Izin · 0 Alfa</div>
+          <div className="text-xs text-gray-500 font-medium">
+            {attendanceComputed.hadir} Hadir · {attendanceComputed.izin} Izin · {attendanceComputed.sakit} Sakit · {attendanceComputed.alpa} Alfa
+          </div>
         </div>
 
-        {/* Metric 3 */}
+        {/* KPI 3: Jadwal Pelajaran Hari Ini */}
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Jadwal Pelajaran</span>
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+              {scheduleComputed.isWeekend ? "Jadwal Hari Senin" : "Pelajaran Hari Ini"}
+            </span>
             <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <BookOpen className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-gray-900 tracking-tight mb-1">4 Matpel</div>
-          <div className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md inline-block">
-            Next: Matematika @ 08:30 WIB
+          <div className="text-2xl font-black text-gray-900 tracking-tight mb-1">
+            {scheduleComputed.dayList.length} Mata Pelajaran
+          </div>
+          <div className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md inline-flex items-center gap-1 max-w-full truncate">
+            <Clock className="w-3 h-3 shrink-0" />
+            <span className="truncate">Next: {scheduleComputed.nextSubject} ({scheduleComputed.nextTime})</span>
           </div>
         </div>
 
-        {/* Metric 4 */}
+        {/* KPI 4: Ujian Semester Terdekat (UTS / UAS) */}
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Status SPP</span>
-            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
-              <CheckCircle2 className="w-5 h-5" />
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Ujian Semester (UTS/UAS)</span>
+            <div className="w-10 h-10 rounded-2xl bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+              <CalendarRange className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-emerald-600 tracking-tight mb-1">LUNAS</div>
-          <div className="text-xs text-gray-500 font-medium">SPP Bulan Mei 2026 (Terbayar)</div>
-        </div>
-
-      </div>
-
-      {/* Visual Data & Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Chart 1: Bar Chart Nilai per Mata Pelajaran (Spans 2 cols) */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-gray-100 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-lg font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
-                <BarChart2 className="w-5 h-5 text-[#531FFF]" />
-                Perkembangan Nilai per Mata Pelajaran
-              </h2>
-              <p className="text-xs text-gray-500 font-medium mt-0.5">Grafik pencapaian nilai vs Batas KKM (75)</p>
-            </div>
-            <span className="text-xs font-bold text-[#531FFF] bg-[#531FFF]/10 px-3 py-1 rounded-full border border-[#531FFF]/20">
-              Semester Genap
-            </span>
+          <div className="text-2xl font-black text-[#531FFF] tracking-tight mb-1 flex items-center gap-2">
+            <span>{upcomingExamsComputed.countdownLabel}</span>
           </div>
-
-          <div className="h-[280px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={STUDENT_GRADES_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                <XAxis dataKey="subject" tick={{ fontSize: 11, fill: '#64748B', fontWeight: 600 }} axisLine={false} tickLine={false} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
-                <RechartsTooltip 
-                  contentStyle={{ backgroundColor: '#1E293B', borderRadius: '12px', color: '#fff', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                  formatter={(val: any) => [`${val} / 100`, 'Nilai Siswa']}
-                />
-                <ReferenceLine y={75} stroke="#EF4444" strokeDasharray="4 4" label={{ value: 'Batas KKM (75)', fill: '#EF4444', fontSize: 10, fontWeight: 700 }} />
-                <Bar dataKey="score" radius={[8, 8, 0, 0]} fill="#531FFF">
-                  {STUDENT_GRADES_DATA.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.score >= 90 ? '#531FFF' : '#7B42FF'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between text-xs font-semibold text-gray-500">
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-md bg-[#531FFF]" /> Nilai di Atas 90
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-md bg-[#7B42FF]" /> Nilai KKM 75 - 89
-              </span>
-            </div>
-            <span className="text-emerald-600 font-bold">100% Lulus KKM</span>
-          </div>
-        </div>
-
-        {/* Chart 2: Pie Chart Presensi Kehadiran */}
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
-                <CalendarCheck className="w-5 h-5 text-emerald-500" />
-                Ringkasan Kehadiran
-              </h2>
-              <p className="text-xs text-gray-500 font-medium mt-0.5">Persentase kehadiran semester ini</p>
-            </div>
-          </div>
-
-          <div className="h-[200px] w-full relative flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={STUDENT_ATTENDANCE_DATA}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={85}
-                  paddingAngle={4}
-                  dataKey="value"
-                >
-                  {STUDENT_ATTENDANCE_DATA.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <RechartsTooltip formatter={(val: any) => [`${val}%`, 'Persentase']} />
-              </PieChart>
-            </ResponsiveContainer>
-
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-2xl font-extrabold text-gray-900">96.8%</span>
-              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Tinggi</span>
-            </div>
-          </div>
-
-          {/* Breakdown Legend */}
-          <div className="space-y-2 pt-2 border-t border-gray-100">
-            {STUDENT_ATTENDANCE_DATA.map(item => (
-              <div key={item.name} className="flex items-center justify-between text-xs font-medium">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="text-gray-700 font-bold">{item.name}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-gray-400">{item.count}</span>
-                  <span className="font-extrabold text-gray-900">{item.value}%</span>
-                </div>
-              </div>
-            ))}
+          <div className="text-xs text-gray-500 font-medium truncate">
+            {upcomingExamsComputed.nearest ? (
+              <span>{upcomingExamsComputed.nearest.subject} ({upcomingExamsComputed.nearest.examType})</span>
+            ) : (
+              <span>Tidak ada ujian minggu ini</span>
+            )}
           </div>
         </div>
 
       </div>
 
-      {/* Tables & Widgets Section */}
+      {/* Main Grid: Left Content (2 cols) and Right Sidebar (1 col) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Table 1: Jadwal Pelajaran Hari Ini (Spans 2 cols) */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-            <div>
-              <h2 className="text-base font-extrabold text-gray-900 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-[#531FFF]" />
-                Jadwal Pelajaran Hari Ini ({currentDay}, {currentDate})
-              </h2>
-              <p className="text-xs text-gray-500 font-medium mt-0.5">Daftar kelas & mata pelajaran yang harus diikuti hari ini</p>
-            </div>
-            <Link href="/admin/schedule" className="text-xs font-bold text-[#531FFF] hover:underline flex items-center gap-1">
-              Lihat Semua <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-gray-50 text-gray-400 uppercase tracking-wider font-extrabold border-b border-gray-100">
-                  <th className="py-3.5 px-6">Waktu</th>
-                  <th className="py-3.5 px-6">Mata Pelajaran</th>
-                  <th className="py-3.5 px-6">Ruangan</th>
-                  <th className="py-3.5 px-6">Guru Pengajar</th>
-                  <th className="py-3.5 px-6 text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 font-medium text-gray-700">
-                {TODAY_SCHEDULE.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="py-4 px-6 font-bold text-gray-900">{item.time}</td>
-                    <td className="py-4 px-6">
-                      <div className="font-bold text-gray-900 text-sm">{item.subject}</div>
-                      <span className="text-[10px] text-gray-400 font-semibold">{item.type}</span>
-                    </td>
-                    <td className="py-4 px-6">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-[#531FFF] rounded-lg font-bold">
-                        <MapPin className="w-3 h-3" /> {item.room}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 text-gray-600 font-semibold">{item.teacher}</td>
-                    <td className="py-4 px-6 text-right">
-                      {item.status === "Berlangsung" ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full font-bold">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                          Sedang Berlangsung
-                        </span>
-                      ) : item.status === "Selesai" ? (
-                        <span className="px-3 py-1 bg-gray-100 text-gray-500 rounded-full font-bold">
-                          Selesai
-                        </span>
-                      ) : (
-                        <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full font-bold">
-                          Selanjutnya
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Table 2: Nilai & Evaluasi Terbaru */}
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden flex flex-col justify-between">
-          <div>
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+        {/* LEFT COLUMN: Jadwal Hari Ini & Grafik Nilai */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* Widget 1: Jadwal Pelajaran Hari Ini */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden">
+            <div className="p-5 md:p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <div>
                 <h2 className="text-base font-extrabold text-gray-900 flex items-center gap-2">
-                  <Award className="w-5 h-5 text-amber-500" />
-                  Nilai Terbaru
+                  <Clock className="w-5 h-5 text-[#531FFF]" />
+                  <span>Jadwal Pelajaran {scheduleComputed.isWeekend ? "(Hari Senin Mendatang)" : `Hari Ini (${currentDay}, ${currentDate})`}</span>
                 </h2>
-                <p className="text-xs text-gray-500 font-medium mt-0.5">Hasil ujian & tugas terakhir</p>
+                <p className="text-xs text-gray-500 font-medium mt-0.5">
+                  Kelas {studentClass} · Jam masuk 07.00 s/d 14.00 WIB
+                </p>
               </div>
-              <Link href="/admin/grades" className="text-xs font-bold text-[#531FFF] hover:underline flex items-center gap-1">
-                Lihat Nilai <ChevronRight className="w-3.5 h-3.5" />
+              <Link href="/admin/schedule" className="text-xs font-bold text-[#531FFF] hover:underline flex items-center gap-1">
+                Semua Jadwal <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>
 
-            <div className="p-4 space-y-3">
-              {RECENT_EVALUATIONS.map((evalItem, i) => (
-                <div key={i} className="p-3.5 bg-gray-50/80 hover:bg-gray-50 border border-gray-100 rounded-2xl flex items-center justify-between transition-all">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-400 uppercase tracking-wider font-extrabold border-b border-gray-100">
+                    <th className="py-3 px-5">Waktu</th>
+                    <th className="py-3 px-5">Mata Pelajaran</th>
+                    <th className="py-3 px-5">Ruangan</th>
+                    <th className="py-3 px-5">Guru Pengajar</th>
+                    <th className="py-3 px-5 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 font-medium text-gray-700">
+                  {scheduleComputed.dayList.map((item, idx) => (
+                    <tr 
+                      key={idx} 
+                      className={cn(
+                        "transition-colors",
+                        item.status === "Berlangsung" 
+                          ? "bg-emerald-50/50 hover:bg-emerald-50/80 font-semibold" 
+                          : "hover:bg-gray-50/80"
+                      )}
+                    >
+                      <td className="py-3.5 px-5 font-bold text-gray-900 whitespace-nowrap">
+                        {item.time}
+                      </td>
+                      <td className="py-3.5 px-5">
+                        <div className="font-bold text-gray-900 text-sm">{item.subject}</div>
+                        <span className="text-[10px] text-gray-400 font-medium">{item.type || "Wajib"}</span>
+                      </td>
+                      <td className="py-3.5 px-5 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-[#531FFF] rounded-lg font-bold">
+                          <MapPin className="w-3 h-3 text-[#531FFF]" /> {item.room || "Ruang Kelas"}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-5 text-gray-600 font-semibold whitespace-nowrap">
+                        {item.teacher || "Guru Pengampu"}
+                      </td>
+                      <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                        {item.status === "Berlangsung" ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full font-extrabold shadow-xs">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            Sedang Berlangsung
+                          </span>
+                        ) : item.status === "Selesai" ? (
+                          <span className="px-3 py-1 bg-gray-100 text-gray-500 rounded-full font-bold">
+                            Selesai
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full font-bold">
+                            Selanjutnya
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Widget 2: Grafik Batang Pencapaian Nilai per Mata Pelajaran */}
+          <div className="bg-white p-5 md:p-6 rounded-3xl border border-gray-100 shadow-xs flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
+              <div>
+                <h2 className="text-base font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
+                  <BarChart2 className="w-5 h-5 text-[#531FFF]" />
+                  <span>Grafik Pencapaian Nilai per Mata Pelajaran</span>
+                </h2>
+                <p className="text-xs text-gray-500 font-medium mt-0.5">Perbandingan capaian nilai siswa terhadap batas standar KKM (75)</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-extrabold text-[#531FFF] bg-[#531FFF]/10 px-3 py-1 rounded-full border border-[#531FFF]/20">
+                  Semester Ganjil 2025/2026
+                </span>
+              </div>
+            </div>
+
+            <div className="h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={gradesComputed.gradesChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                  <XAxis dataKey="subject" tick={{ fontSize: 11, fill: '#64748B', fontWeight: 600 }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                  <RechartsTooltip 
+                    contentStyle={{ backgroundColor: '#1E293B', borderRadius: '12px', color: '#fff', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                    formatter={(val: any) => [`${val} / 100`, 'Nilai Siswa']}
+                  />
+                  <ReferenceLine y={75} stroke="#EF4444" strokeDasharray="4 4" label={{ value: 'Batas KKM (75)', fill: '#EF4444', fontSize: 10, fontWeight: 700 }} />
+                  <Bar dataKey="score" radius={[8, 8, 0, 0]} fill="#531FFF">
+                    {gradesComputed.gradesChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.score >= 90 ? '#531FFF' : entry.score >= 75 ? '#7B42FF' : '#F59E0B'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between text-xs font-semibold text-gray-500 gap-2">
+              <div className="flex items-center gap-4 flex-wrap">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-md bg-[#531FFF]" /> Nilai Istimewa (≥ 90)
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-md bg-[#7B42FF]" /> Tuntas KKM (75 - 89)
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-md bg-[#F59E0B]" /> Di Bawah KKM (&lt; 75)
+                </span>
+              </div>
+              <span className="text-emerald-600 font-bold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
+                {gradesComputed.passRate}% Lulus KKM
+              </span>
+            </div>
+          </div>
+
+        </div>
+
+        {/* RIGHT COLUMN: Ujian Mendatang, Pie Kehadiran, Nilai Terbaru, Pengumuman */}
+        <div className="space-y-6">
+          
+          {/* Card 1: Pengingat Ujian Semester (UTS/UAS) Khusus Kelas Anda */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-xs p-5 md:p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center">
+                  <CalendarRange className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-gray-900">Ujian Semester Mendatang</h3>
+                  <p className="text-[11px] text-gray-400 font-medium">Khusus Kelas {studentClass}</p>
+                </div>
+              </div>
+              <Link href="/admin/exams" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
+                Semua Ujian <ChevronRight className="w-3 h-3" />
+              </Link>
+            </div>
+
+            {upcomingExamsComputed.nearest ? (
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-50/80 via-white to-purple-50/40 border border-purple-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="px-2.5 py-1 rounded-md text-[10px] font-black bg-[#531FFF] text-white uppercase tracking-wider">
+                    {upcomingExamsComputed.nearest.examType || "UTS"}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
+                    {upcomingExamsComputed.countdownLabel}
+                  </span>
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-gray-900 text-sm">{upcomingExamsComputed.nearest.subject}</h4>
+                  <p className="text-xs text-gray-500 font-medium mt-0.5">{upcomingExamsComputed.nearest.title}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold text-gray-600 pt-2 border-t border-purple-100/60">
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                    <span>{upcomingExamsComputed.nearest.date}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-gray-400" />
+                    <span>{upcomingExamsComputed.nearest.startTime} - {upcomingExamsComputed.nearest.endTime}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 col-span-2">
+                    <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                    <span>{upcomingExamsComputed.nearest.room} · Pengawas: {upcomingExamsComputed.nearest.proctor}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6 text-gray-400 text-xs font-medium">
+                Belum ada jadwal UTS atau UAS yang dijadwalkan untuk kelas Anda.
+              </div>
+            )}
+          </div>
+
+          {/* Card 2: Donut Chart Ringkasan Kehadiran */}
+          <div className="bg-white p-5 md:p-6 rounded-3xl border border-gray-100 shadow-xs flex flex-col justify-between space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="text-sm font-extrabold text-gray-900 flex items-center gap-2">
+                  <CalendarCheck className="w-4 h-4 text-emerald-500" />
+                  <span>Proporsi Kehadiran Siswa</span>
+                </h3>
+                <p className="text-[11px] text-gray-400 font-medium">Rekap semester berjalan</p>
+              </div>
+              <Link href="/admin/attendance" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
+                Detail <ChevronRight className="w-3 h-3" />
+              </Link>
+            </div>
+
+            <div className="h-[180px] w-full relative flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={attendanceComputed.pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={80}
+                    paddingAngle={4}
+                    dataKey="value"
+                  >
+                    {attendanceComputed.pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip formatter={(val: any) => [`${val} Hari`, 'Total']} />
+                </PieChart>
+              </ResponsiveContainer>
+
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-2xl font-black text-gray-900">{attendanceComputed.percentage}%</span>
+                <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Hadir</span>
+              </div>
+            </div>
+
+            {/* Breakdown Legend */}
+            <div className="space-y-1.5 pt-2 border-t border-gray-100">
+              {attendanceComputed.pieData.map(item => (
+                <div key={item.name} className="flex items-center justify-between text-xs font-medium">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                    <span className="text-gray-700 font-bold">{item.name}</span>
+                  </div>
+                  <span className="font-extrabold text-gray-800">{item.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Card 3: Nilai & Evaluasi Terbaru */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-xs p-5 md:p-6 space-y-3">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Award className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-gray-900">Nilai & Evaluasi Terbaru</h3>
+                  <p className="text-[11px] text-gray-400 font-medium">Hasil tugas & ujian terakhir</p>
+                </div>
+              </div>
+              <Link href="/admin/grades" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
+                Lihat Nilai <ChevronRight className="w-3 h-3" />
+              </Link>
+            </div>
+
+            <div className="space-y-2.5">
+              {gradesComputed.recentEvaluations.map((evalItem, i) => (
+                <div key={i} className="p-3 bg-gray-50/80 hover:bg-gray-50 border border-gray-100 rounded-2xl flex items-center justify-between transition-all">
                   <div>
-                    <h3 className="text-xs font-bold text-gray-900">{evalItem.subject}</h3>
-                    <p className="text-[11px] text-gray-500 mt-0.5">{evalItem.type} · {evalItem.date}</p>
+                    <h4 className="text-xs font-bold text-gray-900">{evalItem.subject}</h4>
+                    <p className="text-[10px] text-gray-400 mt-0.5">{evalItem.type} · {evalItem.date}</p>
                   </div>
                   <div className="text-right">
-                    <div className="text-base font-extrabold text-[#531FFF]">{evalItem.score}</div>
-                    <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
-                      KKM {evalItem.kkm}
+                    <div className="text-sm font-black text-[#531FFF]">{evalItem.score}</div>
+                    <span className={cn(
+                      "text-[9px] font-extrabold px-1.5 py-0.5 rounded-md border inline-block mt-0.5",
+                      evalItem.score >= 75 
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                        : "bg-red-50 text-red-600 border-red-200"
+                    )}>
+                      {evalItem.status}
                     </span>
                   </div>
                 </div>
@@ -457,12 +1024,54 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
             </div>
           </div>
 
-          {/* Shortcut Quick Action Cards */}
-          <div className="p-4 border-t border-gray-100 bg-gray-50/30 grid grid-cols-2 gap-2 text-center text-xs font-bold">
-            <Link href="/admin/schedule" className="p-3 bg-white hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-xl text-[#531FFF] transition-all flex items-center justify-center gap-2">
+          {/* Card 4: Pengumuman Sekolah */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-xs p-5 md:p-6 space-y-3">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center">
+                  <Megaphone className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-gray-900">Pengumuman Sekolah</h3>
+                  <p className="text-[11px] text-gray-400 font-medium">Informasi resmi sekolah</p>
+                </div>
+              </div>
+              <Link href="/admin/announcements" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
+                Semua <ChevronRight className="w-3 h-3" />
+              </Link>
+            </div>
+
+            <div className="space-y-3">
+              {recentAnnouncements.map((ann, i) => (
+                <div key={ann.id || i} className="p-3 bg-gray-50/70 border border-gray-100 rounded-2xl space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className={cn(
+                      "px-2 py-0.5 rounded text-[9px] font-extrabold tracking-wide uppercase",
+                      ann.tag === "PENTING" ? "bg-red-100 text-red-700" : "bg-purple-100 text-purple-800"
+                    )}>
+                      {ann.tag || "INFORMASI"}
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-semibold">{ann.date || "Terbaru"}</span>
+                  </div>
+                  <h4 className="text-xs font-bold text-gray-900 leading-snug">{ann.title}</h4>
+                  <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">{ann.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Quick Academic Shortcuts */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-xs p-4 grid grid-cols-2 gap-2 text-center text-xs font-bold">
+            <Link href="/admin/schedule" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-2xl text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
               <Calendar className="w-4 h-4" /> Jadwal Pelajaran
             </Link>
-            <Link href="/admin/report-cards" className="p-3 bg-white hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-xl text-[#531FFF] transition-all flex items-center justify-center gap-2">
+            <Link href="/admin/exams" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-2xl text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
+              <CalendarRange className="w-4 h-4" /> Jadwal Ujian
+            </Link>
+            <Link href="/admin/grades" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-2xl text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
+              <Award className="w-4 h-4" /> Nilai Siswa
+            </Link>
+            <Link href="/admin/report-cards" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-2xl text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
               <FileText className="w-4 h-4" /> Rapor Digital
             </Link>
           </div>

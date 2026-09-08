@@ -72,16 +72,7 @@ service cloud.firestore {
     }
 
     match /students/{studentId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() 
-                    && isValidId(studentId)
-                    && isValidStudent(incoming())
-                    && incoming().keys().size() <= 5;
-      allow update: if isSignedIn()
-                    && isValidId(studentId)
-                    && isValidStudent(incoming())
-                    && incoming().diff(existing()).affectedKeys().hasOnly(['id', 'name', 'classId', 'status', 'imageUrl']);
-      allow delete: if isSignedIn() && isValidId(studentId);
+      allow read, write: if isSignedIn();
     }
     
     match /grades/{gradeId} {
@@ -128,6 +119,14 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
     match /examSchedules/{examId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /attendance/{attendanceId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /attendance_config/{configId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
     }

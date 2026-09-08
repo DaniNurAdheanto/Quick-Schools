@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
 import { useToast } from "@/context/ToastContext";
 import { db, storage } from "@/lib/firebase";
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, query, onSnapshot, setDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 
@@ -407,7 +407,23 @@ export default function DataSiswaPage() {
           createdAt: new Date().toISOString()
         };
 
-        await addDoc(collection(db, "students"), newStudentData);
+        const newUid = `siswa_${Date.now()}`;
+        // 1. Save strictly 5 keys to students collection (complying with Firestore rules)
+        await setDoc(doc(db, "students", newUid), {
+          id: newUid,
+          name: (data.name || "Siswa Baru").trim().slice(0, 100),
+          classId: (data.classId || "10 IPA 1").trim().slice(0, 50),
+          status: data.status || "Aktif",
+          imageUrl: (imageUrl || "").slice(0, 500)
+        });
+
+        // 2. Save full rich profile to users collection
+        await setDoc(doc(db, "users", newUid), {
+          ...newStudentData,
+          uid: newUid,
+          id: newUid,
+          role: "siswa"
+        });
       } else if (crudState.mode === "edit" && data._firestoreId) {
         const payload = {
           id: data.id || data.nisn || "",

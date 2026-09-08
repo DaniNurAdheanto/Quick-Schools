@@ -39,6 +39,7 @@ export default function StudentOnboardingPage() {
   const toast = useToast();
 
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -106,13 +107,15 @@ export default function StudentOnboardingPage() {
           const userSnap = await getDoc(doc(db, "users", user.uid));
           if (userSnap.exists()) {
             const uData = userSnap.data();
+            const role = uData.role || "";
+            setCurrentUserRole(role);
             setPribadi(prev => ({
               ...prev,
-              fullName: uData.name || "",
-              email: uData.email || user.email || ""
+              fullName: uData.fullName || uData.name || prev.fullName,
+              email: uData.email || user.email || prev.email
             }));
-            if (uData.onboardingCompleted) {
-              // Already completed onboarding
+            if (uData.onboardingCompleted && (role === "siswa" || role === "student")) {
+              // Only redirect if it is a student who already completed onboarding
               router.push("/admin/dashboard");
               return;
             }
@@ -162,136 +165,132 @@ export default function StudentOnboardingPage() {
     }
   };
 
-  // Final Submit Handler - Instant & Robust
+  // Final Submit Handler - Robust & Persistent
   const handleSubmitOnboarding = async () => {
+    // 0. Ensure user is authenticated
+    if (!currentUser && !auth.currentUser) {
+      toast.showError(
+        "Silakan masuk (login) atau daftar akun terlebih dahulu agar data onboarding dapat disimpan ke database.",
+        "Autentikasi Diperlukan"
+      );
+      return;
+    }
+
+    const finalFullName = (pribadi.fullName || "").trim();
+    if (!finalFullName) {
+      toast.showError("Nama lengkap siswa wajib diisi.", "Validasi Formulir");
+      setStep(1);
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       const photoUrl = await uploadPhotoIfAny();
-      const studentUid = currentUser?.uid || `siswa_${Date.now()}`;
-      const studentEmail = pribadi.email || currentUser?.email || `${pribadi.nisn || "siswa"}@quickschools.sch.id`;
+      const activeUser = currentUser || auth.currentUser;
+      
+      // Determine target student ID:
+      // If current user is a student completing their own registration, use their auth UID.
+      // If current user is an admin or teacher testing or registering a student, create a separate student UID.
+      const isAdminOrStaff = ["super-admin", "admin", "guru"].includes(currentUserRole);
+      const isSelfRegistration = !isAdminOrStaff && activeUser?.uid;
+      const targetStudentUid = isSelfRegistration ? activeUser.uid : `siswa_${Date.now()}`;
+      const studentEmail = pribadi.email || (isSelfRegistration ? activeUser?.email : "") || `${pribadi.nisn || targetStudentUid}@quickschools.sch.id`;
 
-      const studentData = {
-        id: studentUid,
-        uid: studentUid,
-        name: pribadi.fullName || "Siswa Baru",
-        fullName: pribadi.fullName || "Siswa Baru",
-        nickname: pribadi.nickname || "",
+      // 1. Strictly 5 keys payload for /students/{studentId} to satisfy Firestore security rules:
+      // isValidStudent: id, name, classId, status, and imageUrl (keys().size() <= 5)
+      const studentDocPayload: Record<string, string> = {
+        id: targetStudentUid,
+        name: finalFullName.slice(0, 100),
+        classId: (akademik.className || "10 IPA 1").trim().slice(0, 50),
+        status: "Aktif",
+        imageUrl: (photoUrl || "").slice(0, 500)
+      };
+
+      // 2. Comprehensive rich profile payload for /users/{userId}
+      const userDocPayload = {
+        uid: targetStudentUid,
+        id: targetStudentUid,
+        name: finalFullName,
+        fullName: finalFullName,
+        nickname: (pribadi.nickname || "").trim(),
         nisn: pribadi.nisn || `NISN-${Date.now().toString().slice(-6)}`,
+        nis: pribadi.nisn || `NIS-${Date.now().toString().slice(-6)}`,
         gender: pribadi.gender || "Laki-laki",
-        birthPlace: pribadi.birthPlace || "",
+        birthPlace: (pribadi.birthPlace || "").trim(),
         birthDate: pribadi.birthDate || "",
         religion: pribadi.religion || "Islam",
-        nik: pribadi.nik || "",
-        address: pribadi.address || "",
-        phone: pribadi.phone || "",
+        nik: (pribadi.nik || "").trim(),
+        address: (pribadi.address || "").trim(),
+        phone: (pribadi.phone || "").trim(),
         email: studentEmail,
-        photoUrl: photoUrl,
+        photoUrl: photoUrl || "",
+        imageUrl: photoUrl || "",
 
         // Academic
         entryYear: akademik.entryYear || "2025/2026",
         level: akademik.level || "SMA",
-        classId: akademik.className || "10 IPA 1",
-        className: akademik.className || "10 IPA 1",
+        classId: (akademik.className || "10 IPA 1").trim(),
+        className: (akademik.className || "10 IPA 1").trim(),
         major: akademik.major || "MIPA",
         studentStatus: akademik.studentStatus || "Siswa Baru",
-        previousSchool: akademik.previousSchool || "",
-        previousStudentId: akademik.previousStudentId || "",
+        previousSchool: (akademik.previousSchool || "").trim(),
+        previousStudentId: (akademik.previousStudentId || "").trim(),
 
         // Parent
-        fatherName: orangTua.fatherName || "",
-        motherName: orangTua.motherName || "",
-        guardianName: orangTua.guardianName || "",
+        fatherName: (orangTua.fatherName || "").trim(),
+        motherName: (orangTua.motherName || "").trim(),
+        guardianName: (orangTua.guardianName || "").trim(),
         relation: orangTua.relation || "Ayah",
-        parentPhone: orangTua.parentPhone || "",
-        parentEmail: orangTua.parentEmail || "",
-        parentAddress: orangTua.parentAddress || "",
-        parentJob: orangTua.parentJob || "",
+        parentPhone: (orangTua.parentPhone || "").trim(),
+        parentEmail: (orangTua.parentEmail || "").trim(),
+        parentAddress: (orangTua.parentAddress || "").trim(),
+        parentJob: (orangTua.parentJob || "").trim(),
         parentIncome: orangTua.parentIncome || "< 5 Juta",
 
         // Emergency Contact
-        emergencyName: darurat.contactName || "",
+        emergencyName: (darurat.contactName || "").trim(),
         emergencyRelation: darurat.relation || "",
-        emergencyPhone: darurat.contactPhone || "",
-        emergencyAddress: darurat.contactAddress || "",
+        emergencyPhone: (darurat.contactPhone || "").trim(),
+        emergencyAddress: (darurat.contactAddress || "").trim(),
 
         role: "siswa",
         status: "Aktif",
         onboardingCompleted: true,
-        imageUrl: photoUrl,
+        pendingOnboardingReminder: false,
+        hasPendingReminder: false,
         updatedAt: new Date().toISOString(),
         createdAt: new Date().toISOString()
       };
 
-      // 1. Save to LocalStorage immediately
+      // 3. Save to LocalStorage immediately for instant local availability
       try {
-        localStorage.setItem("quick_schools_student_profile", JSON.stringify(studentData));
+        localStorage.setItem("quick_schools_student_profile", JSON.stringify(userDocPayload));
         localStorage.setItem("onboarding_completed", "true");
       } catch (errLocal) {
         console.warn("LocalStorage save warning:", errLocal);
       }
 
-      // 2. Save to Cloud Firestore (setDoc with merge: true for both students and users collections)
-      const saveFirestore = async () => {
-        try {
-          // Save complete student document
-          await setDoc(doc(db, "students", studentUid), {
-            ...studentData,
-            status: "Aktif",
-            onboardingCompleted: true,
-            pendingOnboardingReminder: false
-          }, { merge: true });
+      // 4. Save to Cloud Firestore
+      // A. Save to students collection (5 keys strictly matching rule)
+      await setDoc(doc(db, "students", targetStudentUid), studentDocPayload, { merge: true });
 
-          // Save complete profile to users collection
-          await setDoc(doc(db, "users", studentUid), {
-            uid: studentUid,
-            name: pribadi.fullName || "Siswa Baru",
-            fullName: pribadi.fullName || "Siswa Baru",
-            nickname: pribadi.nickname || "",
-            email: studentEmail,
-            nisn: studentData.nisn,
-            gender: pribadi.gender || "Laki-laki",
-            birthPlace: pribadi.birthPlace || "",
-            birthDate: pribadi.birthDate || "",
-            religion: pribadi.religion || "Islam",
-            nik: pribadi.nik || "",
-            phone: pribadi.phone || "",
-            address: pribadi.address || "",
-            photoUrl: photoUrl,
-            imageUrl: photoUrl,
-            classId: akademik.className || "10 IPA 1",
-            className: akademik.className || "10 IPA 1",
-            major: akademik.major || "MIPA",
-            entryYear: akademik.entryYear || "2025/2026",
-            fatherName: orangTua.fatherName || "",
-            motherName: orangTua.motherName || "",
-            parentPhone: orangTua.parentPhone || "",
-            emergencyName: darurat.contactName || "",
-            emergencyPhone: darurat.contactPhone || "",
-            role: "siswa",
-            status: "Aktif",
-            onboardingCompleted: true,
-            pendingOnboardingReminder: false,
-            hasPendingReminder: false,
-            updatedAt: new Date().toISOString()
-          }, { merge: true });
-        } catch (dbErr) {
-          console.warn("Firestore sync warning, saved to local cache:", dbErr);
-        }
-      };
-
-      // Race Firestore save with 4s timeout so UI never hangs
-      const firestoreTimeout = new Promise((resolve) => setTimeout(resolve, 4000));
-      await Promise.race([saveFirestore(), firestoreTimeout]);
+      // B. Save to users collection (full profile fields)
+      await setDoc(doc(db, "users", targetStudentUid), userDocPayload, { merge: true });
 
       setSubmitting(false);
       setStep(6); // Selesai
-      toast.showSuccess("Data profil siswa berhasil disimpan & terverifikasi!", "Registrasi Selesai");
+      toast.showSuccess(
+        `Data profil siswa ${finalFullName} berhasil disimpan ke database!`,
+        "Registrasi Selesai"
+      );
     } catch (err: any) {
       console.error("Error submitting onboarding data:", err);
       setSubmitting(false);
-      setStep(6); // Advance to completion screen
-      toast.showSuccess("Data berhasil disimpan!", "Registrasi Selesai");
+      toast.showError(
+        err?.message ? `Gagal menyimpan data: ${err.message}` : "Gagal menyimpan data ke database. Silakan coba lagi.",
+        "Penyimpanan Gagal"
+      );
     }
   };
 
@@ -351,9 +350,18 @@ export default function StudentOnboardingPage() {
                 </span>
               </div>
             </div>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-lg text-xs font-bold shadow-2xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Sesi Terverifikasi
-            </span>
+            {currentUser ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-lg text-xs font-bold shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Sesi: {currentUser.email?.split("@")[0] || "Terverifikasi"}
+              </span>
+            ) : (
+              <a
+                href="/login?redirect=/onboarding"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200/80 rounded-lg text-xs font-bold shadow-2xs hover:bg-amber-100 transition-colors"
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-500" /> Masuk Akun
+              </a>
+            )}
           </div>
         </div>
 
@@ -363,6 +371,23 @@ export default function StudentOnboardingPage() {
             {/* Ambient background decoration */}
             <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#531FFF]/5 rounded-full blur-3xl pointer-events-none" />
             <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+
+            {!currentUser && (
+              <div className="max-w-xl mx-auto p-3.5 bg-amber-50 border border-amber-200/90 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-amber-900 text-left relative z-20">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping shrink-0" />
+                  <span className="font-medium">Anda belum masuk. Silakan login atau buat akun terlebih dahulu agar data pendaftaran tersimpan permanen.</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <a href="/login?redirect=/onboarding" className="px-3 py-1.5 bg-white border border-amber-300 rounded-lg font-bold text-amber-900 hover:bg-amber-100 text-[11px]">
+                    Masuk
+                  </a>
+                  <a href="/register?redirect=/onboarding" className="px-3 py-1.5 bg-[#531FFF] text-white rounded-lg font-bold hover:bg-[#4314cc] text-[11px]">
+                    Daftar
+                  </a>
+                </div>
+              </div>
+            )}
 
             <div className="w-20 h-20 rounded-3xl bg-[#F3F0FF] text-[#531FFF] flex items-center justify-center mx-auto border border-[#531FFF]/20 shadow-lg shadow-[#531FFF]/10 transform hover:scale-105 transition-transform duration-300">
               <Sparkles className="w-10 h-10" />

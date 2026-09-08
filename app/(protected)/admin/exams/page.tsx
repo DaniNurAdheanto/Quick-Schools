@@ -18,12 +18,13 @@ import { AlertBox, AlertType } from "@/components/ui/alert-box";
 
 // Initial sample data fallback
 const SAMPLE_EXAMS = [
+  // Class 10 MIPA 1 / 10 IPA 1 - UTS (Tengah Semester)
   {
-    id: "sample_1",
+    id: "sample_10_pts_1",
     title: "Penilaian Tengah Semester (PTS) Ganjil",
     examType: "PTS",
-    subject: "Matematika Utama",
-    classId: "10-A",
+    subject: "Matematika Wajib",
+    classId: "10 MIPA 1",
     date: "2025-09-15",
     startTime: "07:30",
     endTime: "09:00",
@@ -32,14 +33,14 @@ const SAMPLE_EXAMS = [
     totalDuration: "90 Menit",
     passingScore: 75,
     status: "Akan Datang",
-    instructions: "Wajib membawa pensil 2B, kartu ujian, dan datang 15 menit sebelum ujian dimulai."
+    instructions: "Wajib membawa pensil 2B, kartu ujian, dan hadir 15 menit sebelum bel masuk."
   },
   {
-    id: "sample_2",
+    id: "sample_10_pts_2",
     title: "Penilaian Tengah Semester (PTS) Ganjil",
     examType: "PTS",
     subject: "Bahasa Indonesia",
-    classId: "10-A",
+    classId: "10 MIPA 1",
     date: "2025-09-15",
     startTime: "09:30",
     endTime: "11:00",
@@ -48,39 +49,139 @@ const SAMPLE_EXAMS = [
     totalDuration: "90 Menit",
     passingScore: 75,
     status: "Akan Datang",
-    instructions: "HP dan tas dikumpulkan di meja depan sebelum soal dibagikan."
+    instructions: "HP dan tas diletakkan di loker/depan kelas sebelum soal dibagikan."
   },
   {
-    id: "sample_3",
-    title: "Penilaian Akhir Semester (PAS) Genap",
-    examType: "PAS",
+    id: "sample_10_pts_3",
+    title: "Penilaian Tengah Semester (PTS) Ganjil",
+    examType: "PTS",
     subject: "Fisika Dasar",
-    classId: "11-IPA-1",
+    classId: "10 MIPA 1",
     date: "2025-09-16",
     startTime: "07:30",
-    endTime: "09:30",
-    room: "Lab Fisika",
+    endTime: "09:00",
+    room: "Ruang R.101",
     proctor: "Dr. Budi Santoso, M.Si.",
-    totalDuration: "120 Menit",
+    totalDuration: "90 Menit",
     passingScore: 75,
     status: "Akan Datang",
-    instructions: "Kalkulator scientific diperbolehkan. Dilarang pinjam meminjam alat tulis."
+    instructions: "Kalkulator scientific diperbolehkan. Dilarang pinjam-meminjam alat tulis."
   },
+  // Class 10 MIPA 1 / 10 IPA 1 - UAS (Akhir Semester)
   {
-    id: "sample_4",
-    title: "Ujian Praktik Kimia",
-    examType: "Praktik",
-    subject: "Kimia Organik",
-    classId: "12-IPA-2",
-    date: "2025-09-17",
-    startTime: "08:00",
-    endTime: "10:00",
-    room: "Lab Kimia Utama",
-    proctor: "Hendra Wijaya, S.Si.",
+    id: "sample_10_pas_1",
+    title: "Penilaian Akhir Semester (PAS) Ganjil",
+    examType: "PAS",
+    subject: "Biologi Molekuler",
+    classId: "10 MIPA 1",
+    date: "2025-12-08",
+    startTime: "07:30",
+    endTime: "09:30",
+    room: "Lab Biologi",
+    proctor: "Dra. Nurul Aini, M.Pd.",
     totalDuration: "120 Menit",
     passingScore: 78,
     status: "Akan Datang",
-    instructions: "Wajib memakai jas laboratorium dan jas kacamata pengaman."
+    instructions: "Soal berbasis CBT di tablet sekolah. Bawa kartu ujian ber-barcode."
+  },
+  {
+    id: "sample_10_pas_2",
+    title: "Penilaian Akhir Semester (PAS) Ganjil",
+    examType: "PAS",
+    subject: "Bahasa Inggris",
+    classId: "10 MIPA 1",
+    date: "2025-12-09",
+    startTime: "07:30",
+    endTime: "09:30",
+    room: "Ruang R.102",
+    proctor: "John Doe, M.Ed.",
+    totalDuration: "120 Menit",
+    passingScore: 75,
+    status: "Akan Datang",
+    instructions: "Listening section dimulai tepat pukul 07:45. Pintu ditutup saat audio diputar."
+  },
+  // Class 12 MIPA 1 - UTS (Tengah Semester)
+  {
+    id: "sample_12_pts_1",
+    title: "Penilaian Tengah Semester (PTS) Ganjil",
+    examType: "PTS",
+    subject: "Matematika Peminatan",
+    classId: "12 MIPA 1",
+    date: "2025-09-15",
+    startTime: "07:30",
+    endTime: "09:30",
+    room: "Ruang R.301",
+    proctor: "Drs. Taufik Hidayat, M.Pd.",
+    totalDuration: "120 Menit",
+    passingScore: 80,
+    status: "Akan Datang",
+    instructions: "Wajib membawa kartu peserta ujian resmi kelas 12."
+  },
+  {
+    id: "sample_12_pts_2",
+    title: "Penilaian Tengah Semester (PTS) Ganjil",
+    examType: "PTS",
+    subject: "Fisika Kuantum & Inti",
+    classId: "12 MIPA 1",
+    date: "2025-09-16",
+    startTime: "07:30",
+    endTime: "09:30",
+    room: "Lab Fisika Modern",
+    proctor: "Dr. Budi Santoso, M.Si.",
+    totalDuration: "120 Menit",
+    passingScore: 78,
+    status: "Akan Datang",
+    instructions: "Disediakan lembar rumus resmi di lembar soal CBT."
+  },
+  // Class 12 MIPA 1 - UAS (Akhir Semester)
+  {
+    id: "sample_12_pas_1",
+    title: "Penilaian Akhir Semester (PAS) Ganjil",
+    examType: "PAS",
+    subject: "Kimia Terapan",
+    classId: "12 MIPA 1",
+    date: "2025-12-08",
+    startTime: "07:30",
+    endTime: "09:30",
+    room: "Ruang R.302",
+    proctor: "Hendra Wijaya, S.Si.",
+    totalDuration: "120 Menit",
+    passingScore: 80,
+    status: "Akan Datang",
+    instructions: "Ujian terstandarisasi kelulusan akhir semester ganjil."
+  },
+  // Non-Semester / Other class exams (Should be EXCLUDED for students)
+  {
+    id: "sample_10_quiz",
+    title: "Kuis Mingguan Aljabar",
+    examType: "Ulangan Harian",
+    subject: "Matematika Kuis",
+    classId: "10 MIPA 1",
+    date: "2025-09-10",
+    startTime: "08:00",
+    endTime: "09:00",
+    room: "Ruang R.101",
+    proctor: "Guru Pengampu",
+    totalDuration: "60 Menit",
+    passingScore: 70,
+    status: "Selesai",
+    instructions: "Latihan pemahaman bab aljabar."
+  },
+  {
+    id: "sample_11_pts_1",
+    title: "Penilaian Tengah Semester (PTS) Ganjil",
+    examType: "PTS",
+    subject: "Sosiologi Terapan",
+    classId: "11 IPS 1",
+    date: "2025-09-15",
+    startTime: "07:30",
+    endTime: "09:00",
+    room: "Ruang R.201",
+    proctor: "Dra. Siti Aminah",
+    totalDuration: "90 Menit",
+    passingScore: 75,
+    status: "Akan Datang",
+    instructions: "Ujian khusus kelas 11 IPS."
   }
 ];
 
@@ -94,7 +195,7 @@ export default function ExamSchedulePage() {
 
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>("admin");
-  const [userEmail, setUserEmail] = useState<string>("");
+  const [studentClass, setStudentClass] = useState<string>("");
 
   const [selectedClass, setSelectedClass] = useState<string>("All");
   const [selectedType, setSelectedType] = useState<string>("All");
@@ -126,7 +227,7 @@ export default function ExamSchedulePage() {
     title: "Penilaian Tengah Semester (PTS)",
     examType: "PTS",
     subject: "Matematika Utama",
-    classId: "10-A",
+    classId: "10 MIPA 1",
     date: new Date().toISOString().split("T")[0],
     startTime: "07:30",
     endTime: "09:00",
@@ -139,16 +240,36 @@ export default function ExamSchedulePage() {
 
   const isStudentRole = userRole === "student" || userRole === "siswa";
 
-  // Check user auth & role
+  // Check user auth & role & student class
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (u) => {
       if (u) {
-        setUserEmail(u.email || "");
         try {
+          // 1. Fetch user doc
           const userSnap = await getDoc(doc(db, "users", u.uid));
+          let r = "admin";
+          let sClass = "";
           if (userSnap.exists()) {
-            const r = userSnap.data().role || "admin";
-            setUserRole(r);
+            const data = userSnap.data();
+            r = (data.role || "admin").toLowerCase();
+            sClass = data.className || data.classId || data.kelas || "";
+          }
+
+          // 2. Also check students collection
+          try {
+            const studentSnap = await getDoc(doc(db, "students", u.uid));
+            if (studentSnap.exists()) {
+              const sData = studentSnap.data();
+              if (sData.classId || sData.className) {
+                sClass = sData.classId || sData.className;
+              }
+            }
+          } catch (e) {}
+
+          const roleNormalized = (r === "student" || r === "siswa") ? "siswa" : r;
+          setUserRole(roleNormalized);
+          if (sClass) {
+            setStudentClass(sClass);
           }
         } catch (e) {
           console.error("User role fetch error:", e);
@@ -204,6 +325,18 @@ export default function ExamSchedulePage() {
     };
   }, []);
 
+  // Fallback match student class from students list if not yet loaded
+  useEffect(() => {
+    if (isStudentRole && !studentClass && students.length > 0 && auth.currentUser) {
+      const uid = auth.currentUser.uid;
+      const email = auth.currentUser.email?.toLowerCase();
+      const match = students.find(s => s.id === uid || s.uid === uid || (s.email && s.email.toLowerCase() === email));
+      if (match && (match.classId || match.className)) {
+        setStudentClass(match.classId || match.className);
+      }
+    }
+  }, [isStudentRole, studentClass, students]);
+
   // Combined Exam List with Sample Fallback
   const allExams = useMemo(() => {
     const combined = [...examSchedulesList, ...schedulesList];
@@ -213,22 +346,67 @@ export default function ExamSchedulePage() {
     return result.length > 0 ? result : SAMPLE_EXAMS;
   }, [examSchedulesList, schedulesList]);
 
-  // Find student's class if logged in as student
-  const studentClassId = useMemo(() => {
-    if (!isStudentRole || !userEmail) return null;
-    const st = students.find(s => s.email && s.email.toLowerCase() === userEmail.toLowerCase());
-    return st?.classId || null;
-  }, [isStudentRole, userEmail, students]);
+  // Helper to check if exam is a Semester Exam (UTS/PTS or UAS/PAS)
+  const isSemesterExam = (exam: any): boolean => {
+    const type = (exam.examType || "").toUpperCase().trim();
+    const title = (exam.title || "").toUpperCase().trim();
+
+    const isUTS = 
+      type === "PTS" || type === "UTS" || type.includes("TENGAH") || 
+      title.includes("PTS") || title.includes("UTS") || title.includes("TENGAH");
+    
+    const isUAS = 
+      type === "PAS" || type === "UAS" || type === "PAT" || type.includes("AKHIR") || 
+      title.includes("PAS") || title.includes("UAS") || title.includes("AKHIR") || title.includes("PENILAIAN AKHIR");
+
+    return isUTS || isUAS;
+  };
+
+  // Helper to match class names flexibly (e.g. "10 MIPA 1" vs "10-MIPA-1" vs "10 IPA 1")
+  const matchClassId = (examClass: string, targetClass: string): boolean => {
+    if (!examClass || !targetClass) return false;
+    const cleanExam = examClass.toLowerCase().replace(/[\s\-_]/g, "");
+    const cleanTarget = targetClass.toLowerCase().replace(/[\s\-_]/g, "");
+    return cleanExam === cleanTarget || cleanExam.includes(cleanTarget) || cleanTarget.includes(cleanExam);
+  };
 
   // Filtered Exam List
   const filteredExams = useMemo(() => {
+    const effectiveStudentClass = studentClass || "10 MIPA 1";
+
     return allExams.filter(ex => {
-      const matchClass = selectedClass === "All" 
-        ? (studentClassId ? ex.classId === studentClassId : true)
-        : ex.classId === selectedClass;
-      
+      // 1. If user is Student:
+      // - Must ONLY show exam schedules for their own class
+      // - Must ONLY show Ujian Tengah Semester (UTS/PTS) and Ujian Akhir Semester (UAS/PAS)
+      if (isStudentRole) {
+        if (!isSemesterExam(ex)) return false;
+
+        if (!matchClassId(ex.classId, effectiveStudentClass)) return false;
+
+        const typeUpper = (ex.examType || "").toUpperCase();
+        const titleUpper = (ex.title || "").toUpperCase();
+        const isUTS = typeUpper === "PTS" || typeUpper === "UTS" || typeUpper.includes("TENGAH") || titleUpper.includes("PTS") || titleUpper.includes("UTS") || titleUpper.includes("TENGAH");
+        const isUAS = typeUpper === "PAS" || typeUpper === "UAS" || typeUpper === "PAT" || typeUpper.includes("AKHIR") || titleUpper.includes("PAS") || titleUpper.includes("UAS") || titleUpper.includes("AKHIR");
+
+        if ((selectedType === "PTS" || selectedType === "UTS") && !isUTS) return false;
+        if ((selectedType === "PAS" || selectedType === "UAS") && !isUAS) return false;
+
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          const matchQ = 
+            (ex.subject && ex.subject.toLowerCase().includes(q)) ||
+            (ex.title && ex.title.toLowerCase().includes(q)) ||
+            (ex.room && ex.room.toLowerCase().includes(q)) ||
+            (ex.proctor && ex.proctor.toLowerCase().includes(q));
+          if (!matchQ) return false;
+        }
+
+        return true;
+      }
+
+      // 2. Admin / Guru: Full access with standard class and type filters
+      const matchClass = selectedClass === "All" || ex.classId === selectedClass;
       const matchType = selectedType === "All" || ex.examType === selectedType;
-      
       const matchQuery = !searchQuery || 
         (ex.subject && ex.subject.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (ex.room && ex.room.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -237,7 +415,7 @@ export default function ExamSchedulePage() {
 
       return matchClass && matchType && matchQuery;
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [allExams, selectedClass, selectedType, searchQuery, studentClassId]);
+  }, [allExams, isStudentRole, studentClass, selectedClass, selectedType, searchQuery]);
 
   // Summary Metrics
   const metrics = useMemo(() => {
@@ -422,13 +600,16 @@ export default function ExamSchedulePage() {
               Semester Ganjil 2025/2026
             </span>
             {isStudentRole && (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                Mode Siswa (Read-Only)
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/20 flex items-center gap-1">
+                <School className="w-3.5 h-3.5" />
+                <span>Kelas {studentClass || "10 MIPA 1"}</span>
               </span>
             )}
           </div>
           <p className="text-gray-500 text-xs md:text-sm font-medium mt-1">
-            Pengaturan jadwal ujian, tata tertib, lokasi ruang, dan pengawas terintegrasi database master.
+            {isStudentRole 
+              ? `Jadwal resmi Ujian Tengah Semester (UTS/PTS) dan Ujian Akhir Semester (UAS/PAS) khusus untuk kelas ${studentClass || "Anda"}.`
+              : "Pengaturan jadwal ujian, tata tertib, lokasi ruang, dan pengawas terintegrasi database master."}
           </p>
         </div>
 
@@ -439,7 +620,7 @@ export default function ExamSchedulePage() {
             <button
               onClick={() => setViewMode("cards")}
               className={cn(
-                "flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                "flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
                 viewMode === "cards" ? "bg-white text-gray-900 shadow-xs" : "text-gray-500 hover:text-gray-900"
               )}
             >
@@ -449,7 +630,7 @@ export default function ExamSchedulePage() {
             <button
               onClick={() => setViewMode("table")}
               className={cn(
-                "flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                "flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
                 viewMode === "table" ? "bg-white text-[#531FFF] shadow-xs" : "text-gray-500 hover:text-gray-900"
               )}
             >
@@ -461,7 +642,7 @@ export default function ExamSchedulePage() {
           <button
             onClick={() => setIsPrintModalOpen(true)}
             disabled={filteredExams.length === 0}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-[0.98]"
+            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-[0.98] cursor-pointer disabled:opacity-40"
           >
             <Printer className="w-4 h-4" />
             <span>Cetak Jadwal (PDF)</span>
@@ -470,7 +651,7 @@ export default function ExamSchedulePage() {
           {!isStudentRole && (
             <button
               onClick={handleOpenAdd}
-              className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Tambah Jadwal Ujian</span>
@@ -486,7 +667,9 @@ export default function ExamSchedulePage() {
             <CalendarRange className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] font-bold text-gray-400 uppercase">Total Ujian</span>
+            <span className="text-[10px] font-bold text-gray-400 uppercase">
+              {isStudentRole ? "Ujian Semester Anda" : "Total Ujian"}
+            </span>
             <p className="text-lg font-extrabold text-gray-900 leading-none mt-1">{metrics.total}</p>
           </div>
         </div>
@@ -525,23 +708,30 @@ export default function ExamSchedulePage() {
       {/* Filter & Search Controls */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-4 mb-6 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Class Filter synchronized with Database */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-gray-500">Kelas:</span>
-            <select
-              value={selectedClass}
-              onChange={(e) => setSelectedClass(e.target.value)}
-              className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-xl py-2 px-3 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
-            >
-              <option value="All">Semua Kelas</option>
-              {classes.map(c => {
-                const cName = c.name || c.className || c.id;
-                return (
-                  <option key={c.id || cName} value={cName}>Kelas {cName}</option>
-                );
-              })}
-            </select>
-          </div>
+          {/* Class Filter (Hidden for students, showing locked badge instead) */}
+          {!isStudentRole ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gray-500">Kelas:</span>
+              <select
+                value={selectedClass}
+                onChange={(e) => setSelectedClass(e.target.value)}
+                className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-xl py-2 px-3 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
+              >
+                <option value="All">Semua Kelas</option>
+                {classes.map(c => {
+                  const cName = c.name || c.className || c.id;
+                  return (
+                    <option key={c.id || cName} value={cName}>Kelas {cName}</option>
+                  );
+                })}
+              </select>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-2 bg-[#F3F0FF] border border-[#531FFF]/20 rounded-xl text-xs font-extrabold text-[#531FFF]">
+              <School className="w-4 h-4" />
+              <span>Jadwal Kelas: {studentClass || "10 MIPA 1"}</span>
+            </div>
+          )}
 
           {/* Exam Type Filter */}
           <div className="flex items-center gap-2">
@@ -549,14 +739,24 @@ export default function ExamSchedulePage() {
             <select
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value)}
-              className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-xl py-2 px-3 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+              className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-xl py-2 px-3 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
             >
-              <option value="All">Semua Jenis Ujian</option>
-              <option value="PTS">PTS (Tengah Semester)</option>
-              <option value="PAS">PAS (Akhir Semester)</option>
-              <option value="PAT">PAT (Akhir Tahun)</option>
-              <option value="Praktik">Ujian Praktik</option>
-              <option value="Ulangan Harian">Ulangan Harian / Kuis</option>
+              {isStudentRole ? (
+                <>
+                  <option value="All">Semua Ujian Semester (UTS & UAS)</option>
+                  <option value="PTS">Ujian Tengah Semester (UTS / PTS)</option>
+                  <option value="PAS">Ujian Akhir Semester (UAS / PAS)</option>
+                </>
+              ) : (
+                <>
+                  <option value="All">Semua Jenis Ujian</option>
+                  <option value="PTS">PTS (Tengah Semester)</option>
+                  <option value="PAS">PAS (Akhir Semester)</option>
+                  <option value="PAT">PAT (Akhir Tahun)</option>
+                  <option value="Praktik">Ujian Praktik</option>
+                  <option value="Ulangan Harian">Ulangan Harian / Kuis</option>
+                </>
+              )}
             </select>
           </div>
         </div>
@@ -687,7 +887,16 @@ export default function ExamSchedulePage() {
               {filteredExams.length === 0 && (
                 <div className="col-span-full bg-white rounded-2xl border border-gray-100 p-12 text-center text-gray-400">
                   <CalendarRange className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-sm font-medium">Tidak ada jadwal ujian yang sesuai filter.</p>
+                  <p className="text-sm font-medium">
+                    {isStudentRole 
+                      ? `Tidak ada jadwal UTS atau UAS yang ditemukan untuk kelas ${studentClass || "Anda"}.`
+                      : "Tidak ada jadwal ujian yang sesuai filter."}
+                  </p>
+                  {isStudentRole && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Hanya Ujian Tengah Semester (UTS) dan Ujian Akhir Semester (UAS) untuk kelas Anda yang ditampilkan di menu ini.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -726,12 +935,22 @@ export default function ExamSchedulePage() {
                           <div className="text-[11px] text-gray-500">{exam.startTime} - {exam.endTime} ({exam.totalDuration || "90m"})</div>
                         </td>
                         <td className="py-3 px-4">
-                          <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
-                            {exam.room}
+                          <div className="flex items-center gap-1 font-semibold text-gray-800">
+                            <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                            <span>{exam.room}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1 text-gray-700">
+                            <User className="w-3.5 h-3.5 text-gray-400" />
+                            <span>{exam.proctor}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="px-2 py-0.5 rounded-full font-bold bg-gray-100 text-gray-700">
+                            {exam.passingScore || 75}
                           </span>
                         </td>
-                        <td className="py-3 px-4 font-semibold text-gray-700">{exam.proctor || "-"}</td>
-                        <td className="py-3 px-4 text-center font-extrabold text-gray-900">{exam.passingScore || 75}</td>
                         {!isStudentRole && (
                           <td className="py-3 px-4 text-center">
                             <div className="flex items-center justify-center gap-1">
@@ -755,8 +974,10 @@ export default function ExamSchedulePage() {
 
                     {filteredExams.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="py-8 text-center text-gray-400 text-xs">
-                          Belum ada jadwal ujian tercatat.
+                        <td colSpan={isStudentRole ? 7 : 8} className="py-8 text-center text-gray-400 text-xs">
+                          {isStudentRole 
+                            ? `Belum ada jadwal UTS atau UAS yang dijadwalkan untuk kelas ${studentClass || "Anda"}.`
+                            : "Belum ada jadwal ujian tercatat."}
                         </td>
                       </tr>
                     )}

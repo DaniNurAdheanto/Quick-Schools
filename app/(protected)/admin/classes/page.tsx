@@ -33,6 +33,7 @@ import {
   query, 
   onSnapshot, 
   addDoc, 
+  setDoc,
   updateDoc, 
   deleteDoc, 
   doc, 
@@ -407,15 +408,35 @@ export default function ClassesPage() {
         "1534528741775-53994a69daeb"
       ][Math.floor(Math.random() * 4)]}?q=80&w=250&auto=format&fit=crop`;
 
-      await addDoc(collection(db, "students"), {
-        name: newStudentForm.name.trim(),
-        fullName: newStudentForm.name.trim(),
-        nisn: newStudentForm.nisn.trim() || `SIS-${Date.now().toString().slice(-6)}`,
-        id: newStudentForm.nisn.trim() || `SIS-${Date.now().toString().slice(-6)}`,
+      const newStudentUid = `siswa_${Date.now()}`;
+      const studentNisn = newStudentForm.nisn.trim() || `SIS-${Date.now().toString().slice(-6)}`;
+      const studentName = newStudentForm.name.trim();
+
+      // 1. Strictly 5 keys for students collection
+      await setDoc(doc(db, "students", newStudentUid), {
+        id: newStudentUid,
+        name: studentName.slice(0, 100),
+        classId: managingClass.name.slice(0, 50),
+        status: "Aktif",
+        imageUrl: randomAvatar.slice(0, 500)
+      });
+
+      // 2. Full user profile for users collection
+      await setDoc(doc(db, "users", newStudentUid), {
+        uid: newStudentUid,
+        id: newStudentUid,
+        name: studentName,
+        fullName: studentName,
+        nisn: studentNisn,
+        nis: studentNisn,
         gender: newStudentForm.gender,
         classId: managingClass.name,
+        className: managingClass.name,
+        role: "siswa",
         status: "Aktif",
         imageUrl: randomAvatar,
+        photoUrl: randomAvatar,
+        onboardingCompleted: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
