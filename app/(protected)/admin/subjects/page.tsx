@@ -92,6 +92,8 @@ export default function SubjectsPage() {
   const [studentCategoryFilter, setStudentCategoryFilter] = useState("All");
   const [studentViewMode, setStudentViewMode] = useState<"grid" | "table">("grid");
 
+  const isGuru = currentUserRole === "guru" || currentUserRole === "teacher";
+
   const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete" | "view"; data?: any }>({
     open: false,
     mode: "create"
@@ -108,7 +110,7 @@ export default function SubjectsPage() {
             const uData = uSnap.data();
             setCurrentUserData(uData);
             const rawRole = (uData.role || "admin").toLowerCase();
-            const normRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : rawRole;
+            const normRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : (rawRole === "teacher" || rawRole === "guru") ? "guru" : rawRole;
             setCurrentUserRole(normRole);
             if (uData.classId || uData.className || uData.class) {
               setCurrentStudentClass(uData.classId || uData.className || uData.class);
@@ -269,6 +271,11 @@ export default function SubjectsPage() {
 
   // CRUD Submission Handler
   const handleCrudSubmit = async (data: any) => {
+    if (isGuru) {
+      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+      return;
+    }
+
     try {
       const payload = {
         code: (data.code || "").toUpperCase().trim(),
@@ -301,6 +308,7 @@ export default function SubjectsPage() {
 
   // Quick Apply Preset to New Form
   const handleApplyPreset = (preset: SubjectPreset) => {
+    if (isGuru) return;
     setCrudState({
       open: true,
       mode: "create",
@@ -320,6 +328,11 @@ export default function SubjectsPage() {
 
   // Batch Add Standard Curriculum Package
   const handleBatchAddPresets = async () => {
+    if (isGuru) {
+      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+      return;
+    }
+
     if (selectedBatchPresets.length === 0) {
       toast.showError("Pilih minimal 1 mata pelajaran untuk ditambahkan.", "Peringatan");
       return;
@@ -864,7 +877,7 @@ export default function SubjectsPage() {
         fields={subjectFields}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
-        onEditRequested={() => setCrudState(s => ({ ...s, mode: "edit" }))}
+        onEditRequested={isGuru ? undefined : () => setCrudState(s => ({ ...s, mode: "edit" }))}
       />
 
       {/* ================= HEADER SECTION ================= */}
@@ -875,9 +888,16 @@ export default function SubjectsPage() {
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-gray-900 tracking-tight">
-                Mata Pelajaran
-              </h1>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+                  Mata Pelajaran
+                </h1>
+                {isGuru && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                    Mode Lihat (Read-Only)
+                  </span>
+                )}
+              </div>
               <p className="text-[13px] text-gray-500 font-medium">
                 Kelola struktur kurikulum, alokasi jam pembelajaran (JP), KKM, dan penugasan guru pengampu.
               </p>
@@ -885,97 +905,101 @@ export default function SubjectsPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Batch Add Preset Button */}
-          <button
-            type="button"
-            onClick={() => {
-              // Preselect subjects that aren't yet in system
-              const unadded = STANDARD_PRESETS.filter(p => !existingCodes.has(p.code.toUpperCase())).map(p => p.code);
-              setSelectedBatchPresets(unadded);
-              setShowBatchModal(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 text-[#531FFF] hover:bg-purple-100 border border-purple-200/80 rounded-xl text-[13px] font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
-          >
-            <Sparkles className="w-4 h-4 text-[#531FFF]" />
-            <span>Paket Kurikulum Nasional</span>
-          </button>
+        {!isGuru && (
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Batch Add Preset Button */}
+            <button
+              type="button"
+              onClick={() => {
+                // Preselect subjects that aren't yet in system
+                const unadded = STANDARD_PRESETS.filter(p => !existingCodes.has(p.code.toUpperCase())).map(p => p.code);
+                setSelectedBatchPresets(unadded);
+                setShowBatchModal(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 text-[#531FFF] hover:bg-purple-100 border border-purple-200/80 rounded-xl text-[13px] font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+            >
+              <Sparkles className="w-4 h-4 text-[#531FFF]" />
+              <span>Paket Kurikulum Nasional</span>
+            </button>
 
-          {/* New Subject Button */}
-          <button 
-            type="button"
-            onClick={() => setCrudState({ 
-              open: true, 
-              mode: "create",
-              data: {
-                category: "Wajib",
-                creditHours: "3 JP",
-                kkm: 75,
-                level: "Semua Tingkat",
-                status: "Aktif",
-                teacher: "-"
-              }
-            })}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-[13px] font-bold shadow-md shadow-[#531FFF]/25 transition-all active:scale-95 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah Mapel Baru</span>
-          </button>
-        </div>
+            {/* New Subject Button */}
+            <button 
+              type="button"
+              onClick={() => setCrudState({ 
+                open: true, 
+                mode: "create",
+                data: {
+                  category: "Wajib",
+                  creditHours: "3 JP",
+                  kkm: 75,
+                  level: "Semua Tingkat",
+                  status: "Aktif",
+                  teacher: "-"
+                }
+              })}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-[13px] font-bold shadow-md shadow-[#531FFF]/25 transition-all active:scale-95 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah Mapel Baru</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ================= QUICK PRESET TEMPLATES BAR ================= */}
-      <div className="bg-white border border-gray-100 rounded-3xl p-4 sm:p-5 shadow-2xs space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[#531FFF]" />
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-800">
-              Template Cepat: Tambah Sekali Klik
-            </h3>
+      {!isGuru && (
+        <div className="bg-white border border-gray-100 rounded-3xl p-4 sm:p-5 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#531FFF]" />
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-800">
+                Template Cepat: Tambah Sekali Klik
+              </h3>
+            </div>
+            <span className="text-[11px] font-semibold text-gray-400">
+              Klik nama mapel untuk mengisi formulir otomatis
+            </span>
           </div>
-          <span className="text-[11px] font-semibold text-gray-400">
-            Klik nama mapel untuk mengisi formulir otomatis
-          </span>
-        </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
-          {STANDARD_PRESETS.slice(0, 10).map((preset) => {
-            const isAlreadyAdded = existingCodes.has(preset.code.toUpperCase());
-            return (
-              <button
-                key={preset.code}
-                type="button"
-                onClick={() => handleApplyPreset(preset)}
-                className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all border cursor-pointer",
-                  isAlreadyAdded 
-                    ? "bg-gray-50/80 text-gray-600 border-gray-200 hover:border-[#531FFF]/50 hover:text-[#531FFF]" 
-                    : "bg-purple-50/60 text-[#531FFF] border-purple-200 hover:bg-purple-100 hover:border-purple-300"
-                )}
-                title={preset.description}
-              >
-                <span>{preset.icon}</span>
-                <span>{preset.name}</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-white border text-gray-500 font-mono">
-                  {preset.code}
-                </span>
-                {isAlreadyAdded && (
-                  <Check className="w-3 h-3 text-emerald-500 shrink-0" />
-                )}
-              </button>
-            );
-          })}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+            {STANDARD_PRESETS.slice(0, 10).map((preset) => {
+              const isAlreadyAdded = existingCodes.has(preset.code.toUpperCase());
+              return (
+                <button
+                  key={preset.code}
+                  type="button"
+                  onClick={() => handleApplyPreset(preset)}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all border cursor-pointer",
+                    isAlreadyAdded 
+                      ? "bg-gray-50/80 text-gray-600 border-gray-200 hover:border-[#531FFF]/50 hover:text-[#531FFF]" 
+                      : "bg-purple-50/60 text-[#531FFF] border-purple-200 hover:bg-purple-100 hover:border-purple-300"
+                  )}
+                  title={preset.description}
+                >
+                  <span>{preset.icon}</span>
+                  <span>{preset.name}</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-white border text-gray-500 font-mono">
+                    {preset.code}
+                  </span>
+                  {isAlreadyAdded && (
+                    <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                  )}
+                </button>
+              );
+            })}
 
-          <button
-            type="button"
-            onClick={() => setShowBatchModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-[#531FFF] hover:underline shrink-0 cursor-pointer"
-          >
-            <span>Lihat Semua ({STANDARD_PRESETS.length})</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
+            <button
+              type="button"
+              onClick={() => setShowBatchModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-[#531FFF] hover:underline shrink-0 cursor-pointer"
+            >
+              <span>Lihat Semua ({STANDARD_PRESETS.length})</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ================= METRICS STATS TILES ================= */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -1159,7 +1183,7 @@ export default function SubjectsPage() {
               >
                 Reset Filter
               </button>
-            ) : (
+            ) : !isGuru ? (
               <>
                 <button
                   type="button"
@@ -1176,7 +1200,7 @@ export default function SubjectsPage() {
                   + Tambah Manual
                 </button>
               </>
-            )}
+            ) : null}
           </div>
         </div>
       ) : viewMode === "grid" ? (
@@ -1267,24 +1291,26 @@ export default function SubjectsPage() {
                     <span>Lihat Detail</span>
                   </button>
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                      className="p-2 rounded-xl text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-all cursor-pointer"
-                      title="Edit Mapel"
-                    >
-                      <PenTool className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
-                      className="p-2 rounded-xl text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
-                      title="Hapus Mapel"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  {!isGuru && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
+                        className="p-2 rounded-xl text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-all cursor-pointer"
+                        title="Edit Mapel"
+                      >
+                        <PenTool className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
+                        className="p-2 rounded-xl text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                        title="Hapus Mapel"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -1303,7 +1329,7 @@ export default function SubjectsPage() {
                   <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">Beban / KKM</th>
                   <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">Guru Pengampu</th>
                   <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider text-center">Status</th>
-                  <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider text-right">Aksi</th>
+                  <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider text-right">{isGuru ? "Detail" : "Aksi"}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -1359,22 +1385,26 @@ export default function SubjectsPage() {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
-                          title="Edit"
-                        >
-                          <PenTool className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                          title="Hapus"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {!isGuru && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
+                              title="Edit"
+                            >
+                              <PenTool className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              title="Hapus"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1386,7 +1416,7 @@ export default function SubjectsPage() {
       )}
 
       {/* ================= BATCH ADD MODAL (PAKET KURIKULUM NASIONAL) ================= */}
-      {showBatchModal && (
+      {!isGuru && showBatchModal && (
         <div className="fixed inset-0 z-50 p-3 sm:p-6 bg-gray-950/60 backdrop-blur-xs flex items-center justify-center animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[90vh] shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Modal Header */}

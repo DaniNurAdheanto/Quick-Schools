@@ -67,6 +67,7 @@ const ATTENDANCE_DATA = [
 ];
 
 import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal";
+import { TeacherDashboardView } from "@/components/dashboard/teacher-dashboard-view";
 
 const DISTRIBUTION_DATA = [
   { name: 'Average', value: 75, color: '#4ADE80' }, 
@@ -1087,6 +1088,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
 export default function DashboardPage() {
   const [userName, setUserName] = useState("Adiratna");
   const [userRole, setUserRole] = useState<string>("admin");
+  const [previewRole, setPreviewRole] = useState<string | null>(null);
   const [greeting, setGreeting] = useState("Selamat pagi");
   const [academicYear, setAcademicYear] = useState("2026 / 2027");
   const [currentDate, setCurrentDate] = useState("");
@@ -1133,11 +1135,15 @@ export default function DashboardPage() {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
             const data = userDoc.data();
-            if (data.name) setUserName(data.name);
+            if (data.name || data.fullName) setUserName(data.fullName || data.name);
             else setUserName(user.displayName || user.email?.split('@')[0] || "User");
 
-            const rawRole = data.role || "admin";
-            const role = (rawRole === "student" || rawRole === "siswa") ? "siswa" : rawRole;
+            const rawRole = (data.role || "admin").toLowerCase();
+            const role = (rawRole === "student" || rawRole === "siswa") 
+              ? "siswa" 
+              : (rawRole === "teacher" || rawRole === "guru")
+                ? "guru"
+                : rawRole;
             setUserRole(role);
           } else {
             setUserName(user.displayName || user.email?.split('@')[0] || "User");
@@ -1152,7 +1158,9 @@ export default function DashboardPage() {
     return () => unsubscribe();
   }, []);
 
-  if (userRole === "siswa") {
+  const activeRole = previewRole || userRole;
+
+  if (activeRole === "siswa") {
     return (
       <StudentDashboardView 
         userName={userName}
@@ -1161,6 +1169,34 @@ export default function DashboardPage() {
         currentDate={currentDate}
         currentDay={currentDay}
       />
+    );
+  }
+
+  if (activeRole === "guru" || activeRole === "teacher") {
+    return (
+      <div className="relative">
+        {previewRole && (
+          <div className="bg-amber-500 text-white px-6 py-2.5 text-xs font-bold flex items-center justify-between shadow-sm sticky top-0 z-30">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+              <span>Pratinjau Guru: Anda sedang melihat Dashboard sebagai <strong>Guru Pengajar</strong>.</span>
+            </div>
+            <button
+              onClick={() => setPreviewRole(null)}
+              className="px-3 py-1 bg-white text-amber-900 rounded-lg text-xs font-black hover:bg-amber-100 transition-colors cursor-pointer"
+            >
+              Kembali ke Mode Asli ({userRole})
+            </button>
+          </div>
+        )}
+        <TeacherDashboardView 
+          userName={userName}
+          greeting={greeting}
+          academicYear={academicYear}
+          currentDate={currentDate}
+          currentDay={currentDay}
+        />
+      </div>
     );
   }
 
@@ -1221,7 +1257,16 @@ export default function DashboardPage() {
         </div>
         
         {/* Action Buttons & Illustration area */}
-        <div className="z-10 relative flex flex-col items-end gap-3 min-w-[200px]">
+        <div className="z-10 relative flex flex-col items-end gap-2.5 min-w-[200px]">
+          {(userRole === "admin" || userRole === "super-admin" || userRole === "superadmin") && (
+            <button
+              onClick={() => setPreviewRole("guru")}
+              className="w-full flex items-center justify-center gap-2 bg-amber-400/90 hover:bg-amber-400 text-amber-950 px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer"
+            >
+              <GraduationCap className="w-4 h-4" />
+              Pratinjau Dashboard Guru
+            </button>
+          )}
           {userRole !== "siswa" && (
             <button className="w-full flex items-center justify-center gap-2 bg-white text-[#4E54C8] hover:bg-gray-50 px-5 py-3 rounded-xl text-sm font-bold transition-colors shadow-sm">
               <BarChart2 className="w-4 h-4" />

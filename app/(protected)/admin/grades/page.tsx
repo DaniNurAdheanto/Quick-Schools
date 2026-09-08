@@ -25,8 +25,9 @@ import {
   Printer,
   GraduationCap,
   BadgeCheck,
+  Users,
   MessageSquare,
-  Users
+  Lock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
@@ -125,7 +126,7 @@ export default function GradesPage() {
             const uData = userSnap.data();
             setCurrentUserData(uData);
             const role = (uData.role || "admin").toLowerCase();
-            const normRole = (role === "student" || role === "siswa") ? "siswa" : role;
+            const normRole = (role === "student" || role === "siswa") ? "siswa" : (role === "teacher" || role === "guru") ? "guru" : role;
             setUserRole(normRole);
             setStudentDoc(uData);
             if (normRole === "siswa") {
@@ -141,7 +142,81 @@ export default function GradesPage() {
     return () => unsubAuth();
   }, []);
 
-  // Realtime Listeners for Grades, Students, Users, Classes, Subjects, Teachers
+  // Determine if logged in user is Guru and their assigned Homeroom Class (Wali Kelas)
+  const isGuru = userRole === "guru" || userRole === "teacher";
+
+  const teacherClasses = useMemo(() => {
+    if (!isGuru) return null; // Non-guru users (admin, super-admin, etc.) are unrestricted
+    if (!currentUser && !currentUserData) return [];
+
+    const userObj = currentUserData || currentUser || {};
+    const teacherName = (userObj.fullName || userObj.name || "").trim().toLowerCase();
+    const teacherNip = (userObj.nip || userObj.id || "").trim().toLowerCase();
+    const teacherEmail = (userObj.email || "").trim().toLowerCase();
+    const teacherUid = currentUser?.uid || userObj.uid;
+
+    const matched = new Set<string>();
+
+    // 1. Match from classes collection
+    classes.forEach(c => {
+      const cName = c.name || c.id;
+      const cHomeroom = (c.homeroom || "").trim().toLowerCase();
+      const cNip = (c.homeroomNip || "").trim().toLowerCase();
+      const cId = (c.homeroomId || "").trim();
+
+      const matchName = teacherName && cHomeroom && (
+        cHomeroom === teacherName ||
+        (teacherName.length > 5 && cHomeroom.includes(teacherName)) ||
+        (cHomeroom.length > 5 && teacherName.includes(cHomeroom))
+      );
+      const matchNip = teacherNip && cNip && cNip === teacherNip;
+      const matchId = (teacherUid && cId && cId === teacherUid) || (userObj.id && cId === userObj.id);
+
+      if (matchName || matchNip || matchId) {
+        if (cName) matched.add(cName);
+      }
+    });
+
+    // 2. Direct field in users collection
+    const directClass = userObj.homeroomClass || userObj.homeroom || userObj.className || userObj.classId;
+    if (directClass && directClass !== "-" && classes.some(c => (c.name || c.id) === directClass)) {
+      matched.add(directClass);
+    }
+
+    // 3. Match from teachers collection
+    const teacherDoc = teachers.find(t => 
+      (teacherEmail && t.email?.toLowerCase() === teacherEmail) ||
+      (teacherNip && (t.nip === teacherNip || t.id === teacherNip)) ||
+      (teacherUid && (t.uid === teacherUid || t._firestoreId === teacherUid))
+    );
+    if (teacherDoc) {
+      const tClass = teacherDoc.homeroomClass || teacherDoc.homeroom || teacherDoc.class || teacherDoc.className;
+      if (tClass && tClass !== "-") {
+        matched.add(tClass);
+      }
+    }
+
+    return Array.from(matched);
+  }, [isGuru, currentUser, currentUserData, classes, teachers]);
+
+  const isTeacherWaliKelas = Boolean(isGuru && teacherClasses && teacherClasses.length > 0);
+  const primaryTeacherClass = teacherClasses && teacherClasses.length > 0 ? teacherClasses[0] : "";
+  const isSuperAdmin = userRole === "superadmin" || userRole === "super_admin" || userRole === "super-admin";
+
+  // Realtime School Configuration for KKM and Assessment Weights (managed by Super Admin)
+  const [schoolGrading, setSchoolGrading] = useState<{
+    kkmScore: number;
+    assignmentWeight: number;
+    midtermWeight: number;
+    finalWeight: number;
+  }>({
+    kkmScore: 75,
+    assignmentWeight: 30,
+    midtermWeight: 30,
+    finalWeight: 40
+  });
+
+  // Realtime Listeners for Grades, Students, Users, Classes, Subjects, Teachers, Settings
   useEffect(() => {
     const unsubGrades = onSnapshot(collection(db, "grades"), (snap) => {
       const data = snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() }));
@@ -164,20 +239,54 @@ export default function GradesPage() {
       setTeachers(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
     });
 
+    const unsubSettings = onSnapshot(doc(db, "settings", "school_configuration"), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data?.grading) {
+          setSchoolGrading({
+            kkmScore: Number(data.grading.kkmScore) || 75,
+            assignmentWeight: Number(data.grading.assignmentWeight) || 30,
+            midtermWeight: Number(data.grading.midtermWeight) || 30,
+            finalWeight: Number(data.grading.finalWeight) || 40,
+          });
+        }
+      }
+    });
+
     return () => {
       unsubGrades();
       unsubClasses();
       unsubSubjects();
       unsubTeachers();
+      unsubSettings();
     };
   }, []);
+
+  // Synchronize KKM from subject / settings set by Super Admin
+  useEffect(() => {
+    if (matrixSubject) {
+      const subjDoc = subjects.find(s => s.name?.toLowerCase().trim() === matrixSubject.toLowerCase().trim());
+      const kkmVal = Number(subjDoc?.kkm) || Number(schoolGrading?.kkmScore) || 75;
+      setMatrixKkm(kkmVal);
+    }
+  }, [matrixSubject, subjects, schoolGrading]);
 
   // Available Classes Options: dynamic count from synchronized students
   const availableClassOptions = useMemo(() => {
     const classNamesFromClasses = classes.map(c => c.name?.trim()).filter(Boolean);
     const classNamesFromStudents = students.map(s => (s.classId || s.className || s.class)?.trim()).filter(Boolean);
-    const uniqueClassNames = Array.from(new Set([...classNamesFromClasses, ...classNamesFromStudents])).sort();
+    let uniqueClassNames = Array.from(new Set([...classNamesFromClasses, ...classNamesFromStudents])).sort();
     
+    // For Guru role: strictly limit to their homeroom classes
+    if (isGuru) {
+      if (!teacherClasses || teacherClasses.length === 0) {
+        return [];
+      }
+      uniqueClassNames = uniqueClassNames.filter(cName => 
+        teacherClasses.some(tc => tc.trim().toLowerCase() === cName.toLowerCase())
+      );
+    }
+
     return uniqueClassNames.map(cName => {
       const count = students.filter(s => (s.classId || s.className || s.class)?.trim().toLowerCase() === cName.toLowerCase()).length;
       return {
@@ -186,7 +295,7 @@ export default function GradesPage() {
         studentCount: count
       };
     });
-  }, [classes, students]);
+  }, [classes, students, isGuru, teacherClasses]);
 
   // Available Subjects Options
   const availableSubjectOptions = useMemo(() => {
@@ -209,31 +318,51 @@ export default function GradesPage() {
   // Auto-initialize matrix class and subject smartly (prioritize class with enrolled students)
   useEffect(() => {
     if (availableClassOptions.length > 0) {
-      const currentClassHasStudents = students.some(s => (s.classId || s.className || s.class)?.trim().toLowerCase() === matrixClassId.trim().toLowerCase());
+      const isCurrentValid = availableClassOptions.some(opt => opt.value.toLowerCase() === matrixClassId.trim().toLowerCase());
       
-      if (!matrixClassId || !currentClassHasStudents) {
+      if (!matrixClassId || !isCurrentValid) {
         const classWithStudents = availableClassOptions.find(opt => opt.studentCount > 0);
         if (classWithStudents) {
           setMatrixClassId(classWithStudents.value);
-        } else if (!matrixClassId) {
+        } else {
           setMatrixClassId(availableClassOptions[0].value);
         }
       }
+    } else if (isGuru && (!teacherClasses || teacherClasses.length === 0)) {
+      setMatrixClassId("");
     }
+
     if (availableSubjectOptions.length > 0 && !matrixSubject) {
       setMatrixSubject(availableSubjectOptions[0].value);
     }
-  }, [availableClassOptions, availableSubjectOptions, matrixClassId, matrixSubject, students]);
+  }, [availableClassOptions, availableSubjectOptions, matrixClassId, matrixSubject, isGuru, teacherClasses]);
+
+  // Sync selectedClass and matrixClassId for Guru
+  useEffect(() => {
+    if (isGuru && teacherClasses && teacherClasses.length > 0) {
+      if (selectedClass !== "All" && !teacherClasses.some(tc => tc.trim().toLowerCase() === selectedClass.trim().toLowerCase())) {
+        setSelectedClass(teacherClasses[0]);
+      }
+      if (!teacherClasses.some(tc => tc.trim().toLowerCase() === matrixClassId.trim().toLowerCase())) {
+        setMatrixClassId(teacherClasses[0]);
+      }
+    }
+  }, [isGuru, teacherClasses, selectedClass, matrixClassId]);
 
   // Students enrolled in selected matrixClassId (trimmed, case-insensitive)
   const matrixStudents = useMemo(() => {
     if (!matrixClassId) return [];
+    if (isGuru) {
+      if (!teacherClasses || teacherClasses.length === 0) return [];
+      const isAllowed = teacherClasses.some(tc => tc.trim().toLowerCase() === matrixClassId.trim().toLowerCase());
+      if (!isAllowed) return [];
+    }
     const target = matrixClassId.trim().toLowerCase();
     return students.filter(s => {
       const c = (s.classId || s.className || s.class || "").trim().toLowerCase();
       return c === target;
     });
-  }, [students, matrixClassId]);
+  }, [students, matrixClassId, isGuru, teacherClasses]);
 
   // Pre-populate gridValues from Firestore grades when matrix filters change or grades update
   useEffect(() => {
@@ -353,6 +482,18 @@ export default function GradesPage() {
 
   // Save Matrix to Firestore (Writes all edited/filled cells simultaneously, or even just 1 cell!)
   const handleSaveMatrix = async () => {
+    if (isGuru) {
+      if (!teacherClasses || teacherClasses.length === 0) {
+        toast.showError("Anda belum ditugaskan sebagai wali kelas untuk kelas manapun.", "Akses Ditolak");
+        return;
+      }
+      const isMyClass = teacherClasses.some(tc => tc.trim().toLowerCase() === matrixClassId.trim().toLowerCase());
+      if (!isMyClass) {
+        toast.showError(`Anda hanya memiliki wewenang penilaian untuk kelas ${teacherClasses.join(", ")}.`, "Akses Ditolak");
+        return;
+      }
+    }
+
     if (!matrixClassId || !matrixSubject) {
       toast.showError("Pilih kelas dan mata pelajaran terlebih dahulu.", "Data Belum Lengkap");
       return;
@@ -473,7 +614,16 @@ export default function GradesPage() {
         if (!matchesId && !matchesEmail && !matchesName) return false;
       }
 
-      // 2. Type Filter
+      // 2. RBAC for Guru Wali Kelas Role
+      if (isGuru) {
+        if (!teacherClasses || teacherClasses.length === 0) return false;
+        const student = getStudentByIdOrName(g.studentId) || getStudentByIdOrName(g.studentName);
+        const studentClass = (g.classId || student?.classId || student?.className || student?.class || "").trim().toLowerCase();
+        const isBelong = teacherClasses.some(tc => tc.trim().toLowerCase() === studentClass);
+        if (!isBelong) return false;
+      }
+
+      // 3. Type Filter
       if (selectedType !== "Semua") {
         const normalizedGType = g.type || "";
         if (selectedType === "PTS" && !normalizedGType.includes("PTS") && !normalizedGType.includes("Tengah") && normalizedGType !== "UTS") return false;
@@ -483,25 +633,25 @@ export default function GradesPage() {
         if (selectedType !== "PTS" && selectedType !== "PAS" && selectedType !== "Ulangan Harian" && selectedType !== "Asesmen Akhir" && normalizedGType !== selectedType) return false;
       }
 
-      // 3. Class Filter
+      // 4. Class Filter
       if (selectedClass !== "All") {
         const student = getStudentByIdOrName(g.studentId) || getStudentByIdOrName(g.studentName);
-        const studentClass = (g.classId || student?.classId || student?.className || "").trim().toLowerCase();
+        const studentClass = (g.classId || student?.classId || student?.className || student?.class || "").trim().toLowerCase();
         if (studentClass !== selectedClass.trim().toLowerCase()) return false;
       }
 
-      // 4. Subject Filter
+      // 5. Subject Filter
       if (selectedSubject !== "All" && g.subject !== selectedSubject) {
         return false;
       }
 
-      // 5. KKM Status Filter
+      // 6. KKM Status Filter
       const kkm = Number(g.kkm) || 75;
       const score = Number(g.score) || 0;
       if (selectedKkmStatus === "Lulus" && score < kkm) return false;
       if (selectedKkmStatus === "Remedial" && score >= kkm) return false;
 
-      // 6. Search Query
+      // 7. Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const sName = (g.studentName || "").toLowerCase();
@@ -513,17 +663,33 @@ export default function GradesPage() {
 
       return true;
     });
-  }, [grades, isStudentRole, studentDoc, currentUser, selectedType, selectedClass, selectedSubject, selectedKkmStatus, searchQuery, getStudentByIdOrName]);
+  }, [grades, isStudentRole, studentDoc, currentUser, isGuru, teacherClasses, selectedType, selectedClass, selectedSubject, selectedKkmStatus, searchQuery, getStudentByIdOrName]);
 
   // Single Grade Submit Handler (CrudSheet)
   const handleCrudSubmit = async (data: any) => {
     if (isStudentRole) return;
+
+    if (isGuru) {
+      if (!teacherClasses || teacherClasses.length === 0) {
+        toast.showError("Anda belum ditugaskan sebagai wali kelas untuk kelas manapun.", "Akses Ditolak");
+        return;
+      }
+      const targetStudent = getStudentByIdOrName(data.studentId);
+      const studentClass = (data.classId || targetStudent?.classId || targetStudent?.className || targetStudent?.class || "").trim().toLowerCase();
+      const belongsToMyClass = teacherClasses.some(tc => tc.trim().toLowerCase() === studentClass);
+      if (!belongsToMyClass) {
+        toast.showError(`Anda hanya dapat memberikan atau mengubah nilai untuk siswa di kelas ${teacherClasses.join(", ")}.`, "Akses Ditolak");
+        return;
+      }
+    }
 
     try {
       const firestoreType = mapTypeToFirestore(data.type || "Tugas");
       const numScore = Math.min(Math.max(Number(data.score) || 0, 0), 100);
       const targetStudent = getStudentByIdOrName(data.studentId);
       const studentName = targetStudent ? (targetStudent.fullName || targetStudent.name) : (data.studentName || "Siswa");
+      const targetSubject = subjects.find(s => s.name?.toLowerCase().trim() === (data.subject || "").toLowerCase().trim());
+      const officialKkm = Number(targetSubject?.kkm) || Number(schoolGrading.kkmScore) || 75;
 
       if (crudState.mode === "create") {
         const newDocRef = doc(collection(db, "grades"));
@@ -533,6 +699,7 @@ export default function GradesPage() {
           subject: data.subject || "Matematika Wajib",
           type: firestoreType,
           score: numScore,
+          kkm: officialKkm,
           semester: data.semester || "Ganjil",
           academicYear: data.academicYear || "2025/2026",
           createdAt: serverTimestamp(),
@@ -546,6 +713,7 @@ export default function GradesPage() {
           subject: data.subject || crudState.data.subject,
           type: firestoreType,
           score: numScore,
+          kkm: officialKkm,
           semester: data.semester || crudState.data.semester,
           academicYear: data.academicYear || crudState.data.academicYear,
           updatedAt: serverTimestamp()
@@ -566,9 +734,19 @@ export default function GradesPage() {
   const gradebookData = useMemo(() => {
     const studentMap = new Map<string, any>();
     const target = selectedClass.trim().toLowerCase();
+
+    let baseStudentList = students;
+    if (isGuru) {
+      if (!teacherClasses || teacherClasses.length === 0) return [];
+      baseStudentList = students.filter(s => {
+        const c = (s.classId || s.className || s.class || "").trim().toLowerCase();
+        return teacherClasses.some(tc => tc.trim().toLowerCase() === c);
+      });
+    }
+
     const targetStudents = selectedClass === "All" 
-      ? students 
-      : students.filter(s => (s.classId || s.className || s.class || "").trim().toLowerCase() === target);
+      ? baseStudentList 
+      : baseStudentList.filter(s => (s.classId || s.className || s.class || "").trim().toLowerCase() === target);
 
     targetStudents.forEach(s => {
       const key = s.id || s._firestoreId || s.uid;
@@ -612,16 +790,36 @@ export default function GradesPage() {
       const avgPAS = calcAvg(item.scoresByType["PAS"]);
       const avgAkhir = calcAvg(item.scoresByType["Asesmen Akhir"]);
 
-      const validComponents = [avgTugas, avgKuis, avgUH, avgPTS, avgPAS, avgAkhir].filter(v => v !== null) as number[];
-      const finalScore = validComponents.length > 0 
-        ? Math.round(validComponents.reduce((a, b) => a + b, 0) / validComponents.length)
-        : null;
+      // Calculate weighted final score using Super Admin's official weights
+      let weightedSum = 0;
+      let totalWeights = 0;
+
+      const harianScores = [avgTugas, avgKuis, avgUH].filter(v => v !== null) as number[];
+      const avgHarian = harianScores.length > 0 ? Math.round(harianScores.reduce((a, b) => a + b, 0) / harianScores.length) : null;
+      if (avgHarian !== null) {
+        weightedSum += avgHarian * (schoolGrading.assignmentWeight || 30);
+        totalWeights += (schoolGrading.assignmentWeight || 30);
+      }
+
+      if (avgPTS !== null) {
+        weightedSum += avgPTS * (schoolGrading.midtermWeight || 30);
+        totalWeights += (schoolGrading.midtermWeight || 30);
+      }
+
+      const akhirScores = [avgPAS, avgAkhir].filter(v => v !== null) as number[];
+      const avgAkhirTotal = akhirScores.length > 0 ? Math.round(akhirScores.reduce((a, b) => a + b, 0) / akhirScores.length) : null;
+      if (avgAkhirTotal !== null) {
+        weightedSum += avgAkhirTotal * (schoolGrading.finalWeight || 40);
+        totalWeights += (schoolGrading.finalWeight || 40);
+      }
+
+      const finalScore = totalWeights > 0 ? Math.round(weightedSum / totalWeights) : null;
 
       let predicate = "-";
       if (finalScore !== null) {
         if (finalScore >= 90) predicate = "A (Sangat Baik)";
         else if (finalScore >= 80) predicate = "B (Baik)";
-        else if (finalScore >= 75) predicate = "C (Cukup)";
+        else if (finalScore >= (schoolGrading.kkmScore || 75)) predicate = "C (Cukup)";
         else predicate = "D (Perlu Bimbingan)";
       }
 
@@ -637,12 +835,21 @@ export default function GradesPage() {
         predicate
       };
     });
-  }, [students, accessibleGrades, selectedClass, getStudentByIdOrName]);
+  }, [students, accessibleGrades, selectedClass, isGuru, teacherClasses, getStudentByIdOrName, schoolGrading]);
 
   // Single Form Configuration for CrudSheet
   const filteredStudentsForSingleForm = useMemo(() => {
+    let pool = students;
+    if (isGuru) {
+      if (!teacherClasses || teacherClasses.length === 0) return [];
+      pool = students.filter(s => {
+        const c = (s.classId || s.className || s.class || "").trim().toLowerCase();
+        return teacherClasses.some(tc => tc.trim().toLowerCase() === c);
+      });
+    }
+
     if (!currentFormData.classId) {
-      return students.map(s => {
+      return pool.map(s => {
         const c = s.classId || s.className || s.class || "Tanpa Kelas";
         return { 
           label: `${s.fullName || s.name} (${c})`, 
@@ -651,10 +858,10 @@ export default function GradesPage() {
       });
     }
     const target = currentFormData.classId.trim().toLowerCase();
-    return students
+    return pool
       .filter(s => (s.classId || s.className || s.class || "").trim().toLowerCase() === target)
       .map(s => ({ label: `${s.fullName || s.name} (NISN: ${s.nisn || s.id})`, value: s.id }));
-  }, [students, currentFormData.classId]);
+  }, [students, currentFormData.classId, isGuru, teacherClasses]);
 
   const singleGradeFields: CrudField[] = useMemo(() => [
     { 
@@ -707,9 +914,12 @@ export default function GradesPage() {
     },
     { 
       name: "kkm", 
-      label: "Nilai KKM", 
+      label: "Nilai KKM (Ditetapkan Super Admin)", 
       type: "number", 
-      placeholder: "75",
+      disabled: true,
+      readOnly: true,
+      helperText: "Batas KKM dan bobot nilai diatur oleh Super Admin pada kurikulum mata pelajaran",
+      placeholder: String(subjects.find(s => s.name?.toLowerCase().trim() === (currentFormData.subject || "").toLowerCase().trim())?.kkm || schoolGrading.kkmScore || 75),
       category: "akademik",
       colSpan: 1
     },
@@ -731,7 +941,7 @@ export default function GradesPage() {
       category: "pribadi",
       colSpan: 2
     }
-  ], [availableClassOptions, availableSubjectOptions, filteredStudentsForSingleForm, currentFormData.classId]);
+  ], [availableClassOptions, availableSubjectOptions, filteredStudentsForSingleForm, currentFormData.classId, currentFormData.subject, subjects, schoolGrading]);
 
   // =========================================================================
   // LOGIKA RESOLUSI DATA SISWA UNTUK PORTAL SISWA
@@ -1724,6 +1934,16 @@ export default function GradesPage() {
                   <span className="px-2.5 py-0.5 text-xs font-bold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20 flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5" /> Portal Siswa
                   </span>
+                ) : isGuru ? (
+                  <span className={cn(
+                    "px-2.5 py-0.5 text-xs font-bold rounded-full border flex items-center gap-1.5",
+                    isTeacherWaliKelas 
+                      ? "bg-purple-50 text-[#531FFF] border-purple-200" 
+                      : "bg-amber-50 text-amber-700 border-amber-200"
+                  )}>
+                    <GraduationCap className="w-3.5 h-3.5" />
+                    {isTeacherWaliKelas ? `Wali Kelas: ${teacherClasses?.join(", ")}` : "Guru (Bukan Wali Kelas)"}
+                  </span>
                 ) : (
                   <span className="px-2.5 py-0.5 text-xs font-bold bg-purple-50 text-[#531FFF] rounded-full border border-purple-200">
                     Input Cepat Multi-Penilaian
@@ -1733,6 +1953,8 @@ export default function GradesPage() {
               <p className="text-[13px] text-gray-500 font-medium">
                 {isStudentRole
                   ? "Lihat riwayat capaian hasil belajar, nilai ujian, dan progres KKM Anda."
+                  : isGuru
+                  ? `Penginputan dan pengecekan nilai khusus siswa kelas ${isTeacherWaliKelas ? teacherClasses?.join(", ") : "binaan Anda"}.`
                   : "Input seluruh atau sebagian nilai siswa (Tugas, Kuis, UH, PTS, PAS, Asesmen Akhir) dalam satu tampilan spreadsheet yang fleksibel."}
               </p>
             </div>
@@ -1747,9 +1969,9 @@ export default function GradesPage() {
               <button
                 type="button"
                 onClick={handleSaveMatrix}
-                disabled={isSavingMatrix}
+                disabled={isSavingMatrix || (isGuru && !isTeacherWaliKelas)}
                 className={cn(
-                  "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-[13px] font-extrabold shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50",
+                  "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-[13px] font-extrabold shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
                   hasUnsavedChanges
                     ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-500/25 ring-2 ring-emerald-400/50 animate-pulse"
                     : "bg-[#531FFF] hover:bg-[#4314cc] text-white shadow-[#531FFF]/25"
@@ -1772,18 +1994,19 @@ export default function GradesPage() {
             {/* Single Entry Button */}
             <button 
               type="button"
+              disabled={isGuru && !isTeacherWaliKelas}
               onClick={() => setCrudState({ 
                 open: true, 
                 mode: "create",
                 data: {
-                  kkm: 75,
+                  kkm: schoolGrading?.kkmScore || 75,
                   semester: "Ganjil",
                   academicYear: "2025/2026",
                   type: "Tugas",
-                  classId: matrixClassId || availableClassOptions[0]?.value || ""
+                  classId: matrixClassId || primaryTeacherClass || availableClassOptions[0]?.value || ""
                 }
               })}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-[13px] font-bold shadow-2xs transition-all active:scale-95 cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-[13px] font-bold shadow-2xs transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4" />
               <span>Entri Nilai Tunggal</span>
@@ -1791,6 +2014,19 @@ export default function GradesPage() {
           </div>
         )}
       </div>
+
+      {/* Warning Notice for Guru who is not assigned as homeroom teacher */}
+      {isGuru && !isTeacherWaliKelas && !loading && (
+        <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 flex items-start gap-3.5 shadow-2xs">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-xs text-amber-800 space-y-1">
+            <p className="font-extrabold text-sm text-amber-900">Akses Terbatas: Belum Ditugaskan Sebagai Wali Kelas</p>
+            <p className="text-amber-700 font-medium">
+              Akun Anda terdaftar dengan role Guru, namun saat ini belum ditugaskan sebagai wali kelas di rombel manapun. Pemberian dan pengecekan nilai hanya dapat dilakukan oleh wali kelas untuk rombel binaannya. Silakan hubungi Administrator untuk penugasan wali kelas.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ================= VIEW MODE SELECTOR BAR ================= */}
       <div className="bg-white border border-gray-100 rounded-2xl p-2.5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -1874,11 +2110,16 @@ export default function GradesPage() {
               <select
                 value={matrixClassId}
                 onChange={(e) => setMatrixClassId(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
+                disabled={isGuru && availableClassOptions.length <= 1}
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
-                {availableClassOptions.map(c => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
+                {availableClassOptions.length === 0 ? (
+                  <option value="">(Belum Ada Kelas Ditugaskan)</option>
+                ) : (
+                  availableClassOptions.map(c => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))
+                )}
               </select>
             </div>
 
@@ -1924,13 +2165,60 @@ export default function GradesPage() {
 
             {/* 5. KKM Standar */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-black uppercase tracking-wider text-gray-500">KKM Standar</label>
-              <input
-                type="number"
-                value={matrixKkm}
-                onChange={(e) => setMatrixKkm(Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-black text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-black uppercase tracking-wider text-gray-500">KKM Standar</label>
+                <span className={cn(
+                  "text-[9px] font-extrabold px-1.5 py-0.5 rounded border",
+                  isSuperAdmin ? "text-[#531FFF] bg-purple-50 border-purple-200" : "text-amber-700 bg-amber-50 border-amber-200"
+                )}>
+                  {isSuperAdmin ? "Super Admin" : "Diatur Super Admin"}
+                </span>
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={matrixKkm}
+                  disabled={!isSuperAdmin}
+                  readOnly={!isSuperAdmin}
+                  onChange={(e) => isSuperAdmin && setMatrixKkm(Number(e.target.value))}
+                  title={!isSuperAdmin ? "Nilai KKM ditentukan oleh Super Admin pada kurikulum mata pelajaran" : "Ubah KKM"}
+                  className={cn(
+                    "w-full px-3.5 py-2.5 rounded-xl text-xs font-black transition-all",
+                    !isSuperAdmin 
+                      ? "bg-gray-100/90 border border-gray-200 text-gray-500 cursor-not-allowed select-none pl-8" 
+                      : "bg-gray-50 border border-gray-200 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                  )}
+                />
+                {!isSuperAdmin && (
+                  <Lock className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Bobot Penilaian & KKM Info Bar (Ditetapkan Super Admin) */}
+          <div className="bg-gradient-to-r from-purple-50/70 via-indigo-50/40 to-white border border-purple-100/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs shadow-2xs">
+            <div className="flex items-center gap-2 text-purple-950 font-bold">
+              <ShieldCheck className="w-4 h-4 text-[#531FFF]" />
+              <span>Standar KKM & Bobot Penilaian Resmi (Ditetapkan Super Admin):</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-3 py-1.5 bg-white border border-purple-200 rounded-xl text-[11px] font-extrabold text-[#531FFF] shadow-2xs flex items-center gap-1.5">
+                <span className="text-gray-400 font-semibold">KKM:</span>
+                <span className="font-black text-xs">{matrixKkm}</span>
+              </span>
+              <span className="px-3 py-1.5 bg-white border border-purple-200 rounded-xl text-[11px] font-semibold text-gray-700 shadow-2xs flex items-center gap-1.5">
+                <span className="text-gray-400">Tugas / Harian:</span>
+                <strong className="text-gray-900 font-black">{schoolGrading.assignmentWeight}%</strong>
+              </span>
+              <span className="px-3 py-1.5 bg-white border border-purple-200 rounded-xl text-[11px] font-semibold text-gray-700 shadow-2xs flex items-center gap-1.5">
+                <span className="text-gray-400">PTS (Tengah Semester):</span>
+                <strong className="text-gray-900 font-black">{schoolGrading.midtermWeight}%</strong>
+              </span>
+              <span className="px-3 py-1.5 bg-white border border-purple-200 rounded-xl text-[11px] font-semibold text-gray-700 shadow-2xs flex items-center gap-1.5">
+                <span className="text-gray-400">PAS (Akhir Semester):</span>
+                <strong className="text-gray-900 font-black">{schoolGrading.finalWeight}%</strong>
+              </span>
             </div>
           </div>
 
@@ -2283,9 +2571,13 @@ export default function GradesPage() {
                   <select
                     value={selectedClass}
                     onChange={(e) => setSelectedClass(e.target.value)}
-                    className="w-full sm:w-auto px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer"
+                    disabled={isGuru && availableClassOptions.length <= 1}
+                    className="w-full sm:w-auto px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
-                    <option value="All">Semua Kelas</option>
+                    {!isGuru && <option value="All">Semua Kelas</option>}
+                    {isGuru && teacherClasses && teacherClasses.length > 1 && (
+                      <option value="All">Semua Kelas Binaan ({teacherClasses.join(", ")})</option>
+                    )}
                     {availableClassOptions.map(c => (
                       <option key={c.value} value={c.value}>{c.label}</option>
                     ))}
@@ -2486,13 +2778,39 @@ export default function GradesPage() {
               <select
                 value={selectedClass}
                 onChange={(e) => setSelectedClass(e.target.value)}
-                className="px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700"
+                disabled={isGuru && availableClassOptions.length <= 1}
+                className="px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 disabled:bg-gray-100 disabled:cursor-not-allowed cursor-pointer"
               >
-                <option value="All">Semua Kelas</option>
+                {!isGuru && <option value="All">Semua Kelas</option>}
+                {isGuru && teacherClasses && teacherClasses.length > 1 && (
+                  <option value="All">Semua Kelas Binaan ({teacherClasses.join(", ")})</option>
+                )}
                 {availableClassOptions.map(c => (
                   <option key={c.value} value={c.value}>{c.label}</option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* Bobot Penilaian & KKM Info Bar (Ditetapkan Super Admin) */}
+          <div className="p-3.5 sm:p-4 bg-purple-50/50 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 text-purple-950 font-bold">
+              <ShieldCheck className="w-4 h-4 text-[#531FFF]" />
+              <span>Rumus Nilai Rapor Akhir Ditetapkan Super Admin:</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2.5 py-1 bg-white border border-purple-200 rounded-lg text-[11px] font-semibold text-gray-700 shadow-2xs">
+                Harian (Tugas/Kuis/UH): <strong className="text-gray-900 font-black">{schoolGrading.assignmentWeight}%</strong>
+              </span>
+              <span className="px-2.5 py-1 bg-white border border-purple-200 rounded-lg text-[11px] font-semibold text-gray-700 shadow-2xs">
+                PTS (Tengah Semester): <strong className="text-gray-900 font-black">{schoolGrading.midtermWeight}%</strong>
+              </span>
+              <span className="px-2.5 py-1 bg-white border border-purple-200 rounded-lg text-[11px] font-semibold text-gray-700 shadow-2xs">
+                PAS / Akhir: <strong className="text-gray-900 font-black">{schoolGrading.finalWeight}%</strong>
+              </span>
+              <span className="px-2.5 py-1 bg-white border border-purple-200 rounded-lg text-[11px] font-extrabold text-[#531FFF] shadow-2xs">
+                Standar KKM: {schoolGrading.kkmScore}
+              </span>
             </div>
           </div>
 

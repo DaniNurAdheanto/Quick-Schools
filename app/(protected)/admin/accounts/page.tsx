@@ -16,6 +16,8 @@ import {
   Edit3, 
   Trash2, 
   Eye, 
+  EyeOff,
+  Lock,
   CheckCircle2, 
   Clock, 
   AlertTriangle, 
@@ -29,6 +31,7 @@ import {
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { isSuperAdminRole } from "@/lib/roles-config";
+import { createAuthAccount } from "@/lib/create-user-auth";
 import { 
   collection, 
   onSnapshot, 
@@ -93,9 +96,61 @@ export default function AccountManagementPage() {
   // Form states for Create / Edit
   const [formName, setFormName] = useState("");
   const [formEmail, setFormEmail] = useState("");
-  const [formRole, setFormRole] = useState("siswa");
+  const [formPassword, setFormPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [formRole, setFormRole] = useState("guru");
   const [formStatus, setFormStatus] = useState("Aktif");
+  const [formNip, setFormNip] = useState("");
+  const [formSubject, setFormSubject] = useState("");
+  const [formStudentName, setFormStudentName] = useState("");
+  const [formStudentId, setFormStudentId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Live password strength calculation
+  const passwordStrength = useMemo(() => {
+    if (!formPassword) {
+      return { score: 0, label: "Minimal 6 karakter", color: "text-gray-400", barColor: "bg-gray-200", width: "w-0" };
+    }
+    if (formPassword.length < 6) {
+      return { 
+        score: 1, 
+        label: `Kurang (${formPassword.length}/6 karakter)`, 
+        color: "text-rose-500 font-bold", 
+        barColor: "bg-rose-500", 
+        width: "w-1/4" 
+      };
+    }
+    const hasLetters = /[a-zA-Z]/.test(formPassword);
+    const hasNumbers = /[0-9]/.test(formPassword);
+    const hasSymbols = /[^a-zA-Z0-9]/.test(formPassword);
+    const isLong = formPassword.length >= 8;
+
+    if (isLong && hasLetters && hasNumbers && hasSymbols) {
+      return { 
+        score: 3, 
+        label: "Kuat & Sangat Aman", 
+        color: "text-emerald-600 font-bold", 
+        barColor: "bg-emerald-500", 
+        width: "w-full" 
+      };
+    }
+    if (formPassword.length >= 6 && hasLetters && hasNumbers) {
+      return { 
+        score: 2, 
+        label: "Sedang (Aman untuk login)", 
+        color: "text-amber-600 font-bold", 
+        barColor: "bg-amber-500", 
+        width: "w-2/3" 
+      };
+    }
+    return { 
+      score: 2, 
+      label: "Cukup (Minimal terpenuhi)", 
+      color: "text-amber-600 font-bold", 
+      barColor: "bg-amber-400", 
+      width: "w-1/2" 
+    };
+  }, [formPassword]);
 
   const [currentUserRole, setCurrentUserRole] = useState<string>("");
 
@@ -239,9 +294,19 @@ export default function AccountManagementPage() {
         }
       } catch (e) {}
 
-      toast.showEdit(
-        `Status akun ${user.name} berhasil diubah menjadi "${nextStatus}".`,
-        "Status Diperbarui"
+      // Also update matching teacher document if role is guru
+      if (user.role === "guru") {
+        try {
+          const teacherSnap = await getDocs(query(collection(db, "teachers"), where("uid", "==", user.uid)));
+          for (const tDoc of teacherSnap.docs) {
+            await updateDoc(doc(db, "teachers", tDoc.id), { status: nextStatus });
+          }
+        } catch (e) {}
+      }
+
+      toast.showSuccess(
+        `Akun ${user.name} berhasil diubah menjadi status "${nextStatus}".`,
+        nextStatus === "Aktif" ? "Akun Diaktifkan" : "Akun Dinonaktifkan"
       );
     } catch (err: any) {
       console.error("Failed to update status in Firestore:", err);
@@ -392,64 +457,95 @@ export default function AccountManagementPage() {
     }
   };
 
-  // Create New Account
+  // Create New Account (Firebase Auth + Firestore)
   const handleSaveCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formEmail.trim() || !formName.trim()) {
-      toast.showError("Nama dan Email wajib diisi.", "Validasi Gagal");
+    if (!formName.trim() || !formEmail.trim()) {
+      toast.showError("Nama Lengkap dan Email wajib diisi.", "Validasi Gagal");
+      return;
+    }
+    if (!formPassword || formPassword.length < 6) {
+      toast.showError("Kata sandi (password) wajib diisi minimal 6 karakter.", "Validasi Gagal");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const newDocRef = doc(collection(db, "users"));
-      const newAccountData = {
-        uid: newDocRef.id,
+      // 1. Create in Firebase Authentication via isolated secondary app
+      const authResult = await createAuthAccount(
+        formEmail.trim().toLowerCase(),
+        formPassword,
+        formName.trim()
+      );
+
+      // 2. Prepare user payload for Firestore users collection
+      const userPayload: any = {
+        uid: authResult.uid,
         name: formName.trim(),
         email: formEmail.trim().toLowerCase(),
         role: formRole,
         status: formStatus,
-        onboardingCompleted: formStatus === "Belum Onboarding" ? false : true,
+        onboardingCompleted: formStatus === "Aktif",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
 
-      await setDoc(newDocRef, newAccountData);
+      if (formRole === "guru") {
+        if (formNip.trim()) userPayload.nip = formNip.trim();
+        if (formSubject.trim()) userPayload.subject = formSubject.trim();
+      } else if (formRole === "orang-tua") {
+        if (formStudentName.trim()) userPayload.studentName = formStudentName.trim();
+        if (formStudentId.trim()) userPayload.studentId = formStudentId.trim();
+      }
 
-      // If role is siswa, create companion in students collection
-      if (formRole === "siswa") {
+      // 3. Save to Firestore users collection
+      await setDoc(doc(db, "users", authResult.uid), userPayload);
+
+      // 4. Companion document synchronization
+      if (formRole === "guru") {
+        try {
+          await addDoc(collection(db, "teachers"), {
+            id: formNip.trim() || authResult.uid,
+            uid: authResult.uid,
+            nip: formNip.trim() || "-",
+            name: formName.trim(),
+            role: formSubject.trim() || "Guru Pengajar",
+            subject: formSubject.trim() || "Mata Pelajaran Umum",
+            status: formStatus === "Nonaktif" ? "Nonaktif" : "Aktif"
+          });
+        } catch (e) {}
+      } else if (formRole === "siswa") {
         try {
           await addDoc(collection(db, "students"), {
             id: String(Math.floor(100000 + Math.random() * 900000)),
+            uid: authResult.uid,
             name: formName.trim(),
             classId: "10 MIPA 1",
             status: formStatus === "Nonaktif" ? "Nonaktif" : "Aktif"
           });
         } catch (e) {}
-      } else if (formRole === "guru") {
-        try {
-          await addDoc(collection(db, "teachers"), {
-            name: formName.trim(),
-            subject: "Mata Pelajaran Umum",
-            status: formStatus === "Nonaktif" ? "Nonaktif" : "Aktif"
-          });
-        } catch (e) {}
       }
 
-      toast.showSuccess(`Akun ${formName} (${formRole}) berhasil dibuat.`, "Akun Dibuat");
+      toast.showSuccess(
+        `Akun ${formName} (${ROLE_CONFIG[formRole]?.label || formRole}) berhasil dibuat dan ${formStatus === "Aktif" ? "langsung aktif untuk login" : "disimpan"}.`,
+        "Akun Berhasil Dibuat"
+      );
+
+      // Reset form states
       setCreateModal(false);
       setFormName("");
       setFormEmail("");
+      setFormPassword("");
+      setShowPassword(false);
+      setFormNip("");
+      setFormSubject("");
+      setFormStudentName("");
+      setFormStudentId("");
+      setFormRole("guru");
+      setFormStatus("Aktif");
     } catch (err: any) {
       console.error("Create account error:", err);
-      if (err.code === "permission-denied") {
-        toast.showError(
-          "Izin ditolak oleh Cloud Firestore. Silakan pastikan akun admin sudah login dan firestore.rules telah dipublish.",
-          "Permission Denied"
-        );
-      } else {
-        toast.showError("Gagal membuat akun: " + err.message, "Error");
-      }
+      toast.showError(err.message || "Gagal membuat akun.", "Pendaftaran Gagal");
     } finally {
       setIsSubmitting(false);
     }
@@ -959,6 +1055,30 @@ export default function AccountManagementPage() {
                       {/* Actions */}
                       <td className="px-6 py-4.5 sm:py-5 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Quick Toggle Activate / Deactivate Button */}
+                          <button
+                            onClick={() => handleToggleStatus(user)}
+                            title={isAktif ? "Nonaktifkan Akun" : "Aktifkan Akun (Izinkan Login)"}
+                            className={cn(
+                              "p-2 rounded-xl transition-all cursor-pointer border shadow-2xs active:scale-95 flex items-center gap-1 text-xs font-bold",
+                              isAktif 
+                                ? "text-amber-700 hover:text-amber-800 bg-amber-50/70 hover:bg-amber-100 border-amber-200" 
+                                : "text-emerald-700 hover:text-emerald-800 bg-emerald-50/70 hover:bg-emerald-100 border-emerald-200"
+                            )}
+                          >
+                            {isAktif ? (
+                              <>
+                                <UserX className="w-3.5 h-3.5" />
+                                <span className="hidden xl:inline text-[11px]">Nonaktifkan</span>
+                              </>
+                            ) : (
+                              <>
+                                <UserCheck className="w-3.5 h-3.5" />
+                                <span className="hidden xl:inline text-[11px]">Aktifkan</span>
+                              </>
+                            )}
+                          </button>
+
                           {(user.status === "Belum Onboarding" || user.onboardingCompleted === false) && (
                             <button
                               onClick={() => handleSendReminder(user)}
@@ -1112,94 +1232,250 @@ export default function AccountManagementPage() {
 
       {/* ================= CREATE MODAL ================= */}
       {createModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 my-8">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/40">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-50 text-[#531FFF] border border-purple-100 flex items-center justify-center font-bold">
-                  <Plus className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-2xl bg-[#531FFF] text-white shadow-md shadow-[#531FFF]/20 flex items-center justify-center font-bold">
+                  <UserCheck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900 text-base">Tambah Akun Pengguna Baru</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">Buat entri profil akun pengguna baru</p>
+                  <h3 className="font-extrabold text-gray-900 text-base">Tambah & Aktifkan Akun Pengguna</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Buat akun dengan hak akses role dan kredensial login</p>
                 </div>
               </div>
               <button 
                 onClick={() => setCreateModal(false)}
-                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100"
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSaveCreate} className="p-6 space-y-4 text-xs">
+              {/* Role Selection */}
               <div>
-                <label className="font-bold text-gray-700 block mb-1">Nama Lengkap</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Ahmad Subagyo"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-medium focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-gray-700 block mb-1">Email Pengguna</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="ahmad@sekolah.sch.id"
-                  value={formEmail}
-                  onChange={(e) => setFormEmail(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-medium focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-gray-700 block mb-1">Role / Peranan Sistem</label>
+                <label className="font-bold text-gray-700 block mb-1.5 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#531FFF]" />
+                  <span>Pilih Peranan / Hak Akses (Role)</span>
+                  <span className="text-rose-500">*</span>
+                </label>
                 <select
                   value={formRole}
                   onChange={(e) => setFormRole(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-800 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none cursor-pointer"
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-800 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none cursor-pointer bg-white"
                 >
-                  <option value="siswa">Siswa</option>
-                  <option value="guru">Guru Pengajar</option>
-                  <option value="admin">Admin Sekolah / TU</option>
-                  <option value="orang-tua">Orang Tua / Wali</option>
-                  <option value="kepala-sekolah">Kepala Sekolah</option>
-                  <option value="super-admin">Super Admin</option>
+                  <option value="guru">Guru Pengajar (Akses Penilaian, Presensi, Jadwal)</option>
+                  <option value="admin">Admin Sekolah / TU (Akses Master Data & Operasional)</option>
+                  <option value="orang-tua">Orang Tua / Wali (Monitoring Nilai, Presensi, & SPP)</option>
+                  <option value="kepala-sekolah">Kepala Sekolah (Monitoring Eksekutif & Laporan)</option>
+                  <option value="siswa">Siswa (Portal Akademik & Rapor)</option>
+                  <option value="super-admin">Super Admin (Akses Penuh Seluruh Modul)</option>
                 </select>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Menu di bilah samping akan otomatis menyesuaikan dengan role pengguna saat login.
+                </p>
               </div>
 
+              {/* Nama Lengkap & Email */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">
+                    Nama Lengkap <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Budi Santoso, M.Pd."
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-medium focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">
+                    Email Pengguna (Login) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="budi@sekolah.sch.id"
+                    value={formEmail}
+                    onChange={(e) => setFormEmail(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-medium focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Password Input with Show/Hide & Validation */}
+              <div className="bg-gray-50/70 p-4 rounded-2xl border border-gray-200/70 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-gray-700 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-[#531FFF]" />
+                    <span>Kata Sandi (Password Akun)</span>
+                    <span className="text-rose-500">*</span>
+                  </label>
+                  <span className={cn("text-[10px]", passwordStrength.color)}>
+                    {passwordStrength.label}
+                  </span>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    placeholder="Masukkan minimal 6 karakter kata sandi..."
+                    value={formPassword}
+                    onChange={(e) => setFormPassword(e.target.value)}
+                    className="w-full px-3.5 py-2.5 pr-10 border border-gray-200 rounded-xl font-medium bg-white focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1.5 rounded-lg transition-colors cursor-pointer"
+                    title={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {/* Password Strength Progress Bar */}
+                {formPassword.length > 0 && (
+                  <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden mt-1">
+                    <div className={cn("h-full transition-all duration-300", passwordStrength.barColor, passwordStrength.width)} />
+                  </div>
+                )}
+                <p className="text-[10px] text-gray-400">
+                  Pengguna akan menggunakan email dan kata sandi ini untuk login di halaman masuk sekolah.
+                </p>
+              </div>
+
+              {/* Conditional Fields based on Role */}
+              {formRole === "guru" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-3.5 bg-emerald-50/40 rounded-2xl border border-emerald-100 animate-in fade-in duration-150">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">NIP Guru (Opsional)</label>
+                    <input
+                      type="text"
+                      placeholder="19850312 201001 1 002"
+                      value={formNip}
+                      onChange={(e) => setFormNip(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-medium bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Mata Pelajaran yang Diampu</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Matematika / Biologi"
+                      value={formSubject}
+                      onChange={(e) => setFormSubject(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-medium bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:outline-none text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {formRole === "orang-tua" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-3.5 bg-amber-50/40 rounded-2xl border border-amber-100 animate-in fade-in duration-150">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Nama Siswa / Anak</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Bintang Pratama"
+                      value={formStudentName}
+                      onChange={(e) => setFormStudentName(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-medium bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">NISN / ID Siswa</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: 0081234567"
+                      value={formStudentId}
+                      onChange={(e) => setFormStudentId(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-medium bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Status Awal Akun */}
               <div>
-                <label className="font-bold text-gray-700 block mb-1">Status Awal</label>
-                <select
-                  value={formStatus}
-                  onChange={(e) => setFormStatus(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-800 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none cursor-pointer"
-                >
-                  <option value="Aktif">Aktif</option>
-                  <option value="Nonaktif">Nonaktif</option>
-                  <option value="Belum Onboarding">Belum Onboarding</option>
-                </select>
+                <label className="font-bold text-gray-700 block mb-1.5 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Status Aktivasi Akun</span>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className={cn(
+                    "flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all",
+                    formStatus === "Aktif" 
+                      ? "border-emerald-300 bg-emerald-50/50 text-emerald-900 font-bold" 
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  )}>
+                    <input
+                      type="radio"
+                      name="accountStatus"
+                      value="Aktif"
+                      checked={formStatus === "Aktif"}
+                      onChange={() => setFormStatus("Aktif")}
+                      className="text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <div>
+                      <span className="block text-xs font-extrabold">Aktif Langsung</span>
+                      <span className="block text-[10px] text-gray-400 font-normal">Dapat login sekarang</span>
+                    </div>
+                  </label>
+
+                  <label className={cn(
+                    "flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all",
+                    formStatus === "Nonaktif" 
+                      ? "border-rose-300 bg-rose-50/50 text-rose-900 font-bold" 
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  )}>
+                    <input
+                      type="radio"
+                      name="accountStatus"
+                      value="Nonaktif"
+                      checked={formStatus === "Nonaktif"}
+                      onChange={() => setFormStatus("Nonaktif")}
+                      className="text-rose-600 focus:ring-rose-500"
+                    />
+                    <div>
+                      <span className="block text-xs font-extrabold">Nonaktif</span>
+                      <span className="block text-[10px] text-gray-400 font-normal">Terkunci sementara</span>
+                    </div>
+                  </label>
+                </div>
               </div>
 
+              {/* Action Buttons */}
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setCreateModal(false)}
-                  className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-all"
+                  className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-all cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl font-bold transition-all shadow-md shadow-[#531FFF]/20"
+                  disabled={isSubmitting || formPassword.length < 6}
+                  className="px-5 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl font-bold transition-all shadow-md shadow-[#531FFF]/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {isSubmitting ? "Memproses..." : "Buat Akun"}
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Mendaftarkan Akun...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="w-4 h-4" />
+                      <span>Buat & Aktifkan Akun</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

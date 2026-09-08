@@ -41,6 +41,9 @@ export interface CrudField {
   options?: { label: string; value: string }[];
   category?: "pribadi" | "akademik" | "orangTua" | "darurat" | "lainnya" | string;
   colSpan?: 1 | 2;
+  disabled?: boolean;
+  readOnly?: boolean;
+  helperText?: string;
 }
 
 export interface CrudSheetProps {
@@ -899,7 +902,7 @@ export function CrudSheet({
                         value={formData[field.name] || ""}
                         onChange={(e) => handleChange(field.name, e.target.value)}
                         className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium appearance-none bg-white cursor-pointer"
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || field.disabled || field.readOnly}
                       >
                         <option value="" disabled>{field.placeholder || `Pilih ${field.label.toLowerCase()}`}</option>
                         {field.options?.map((opt) => (
@@ -919,8 +922,8 @@ export function CrudSheet({
                             handleChange(field.name, file);
                           }
                         }}
-                        disabled={isSubmitting}
-                        className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#531FFF]/10 file:text-[#531FFF] hover:file:bg-[#531FFF]/20 cursor-pointer"
+                        disabled={isSubmitting || field.disabled || field.readOnly}
+                        className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#531FFF]/10 file:text-[#531FFF] hover:file:bg-[#531FFF]/20 cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
                       />
                     ) : (
                       <input
@@ -929,9 +932,16 @@ export function CrudSheet({
                         placeholder={field.placeholder || `Masukkan ${field.label.toLowerCase()}`}
                         value={formData[field.name] || ""}
                         onChange={(e) => handleChange(field.name, e.target.value)}
-                        disabled={isSubmitting}
-                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium"
+                        disabled={isSubmitting || field.disabled || field.readOnly}
+                        readOnly={field.readOnly}
+                        className={cn(
+                          "w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium",
+                          (field.disabled || field.readOnly) && "bg-gray-100/90 text-gray-500 cursor-not-allowed select-none"
+                        )}
                       />
+                    )}
+                    {field.helperText && (
+                      <p className="text-[11px] text-gray-400 font-medium">{field.helperText}</p>
                     )}
                   </div>
                 );

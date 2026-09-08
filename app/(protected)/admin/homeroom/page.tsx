@@ -33,7 +33,8 @@ import {
   onSnapshot, 
   updateDoc, 
   doc, 
-  serverTimestamp 
+  serverTimestamp,
+  getDoc 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
@@ -45,6 +46,9 @@ export default function HomeroomPage() {
   const [classes, setClasses] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string>("admin");
+
+  const isGuru = userRole === "guru" || userRole === "teacher";
 
   // Filters state for Classes Tab
   const [searchQuery, setSearchQuery] = useState("");
@@ -83,8 +87,19 @@ export default function HomeroomPage() {
 
   // Listen to classes and teachers
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        try {
+          const userDocSnap = await getDoc(doc(db, "users", user.uid));
+          if (userDocSnap.exists()) {
+            const data = userDocSnap.data();
+            const r = (data.role || "admin").toLowerCase();
+            setUserRole(r === "teacher" || r === "guru" ? "guru" : r);
+          }
+        } catch (err) {
+          console.warn("Error fetching user role in homeroom:", err);
+        }
+
         const qClasses = query(collection(db, "classes"));
         const unsubClasses = onSnapshot(qClasses, (snapshot) => {
           const classesData = snapshot.docs.map(doc => ({
@@ -129,6 +144,7 @@ export default function HomeroomPage() {
       } else {
         setClasses([]);
         setTeachers([]);
+        setUserRole("admin");
         setLoading(false);
       }
     });
@@ -207,6 +223,7 @@ export default function HomeroomPage() {
 
   // Open assign modal for a specific class
   const handleOpenAssignModal = (cls: any) => {
+    if (isGuru) return;
     const currentTeacher = teachers.find(
       t => String(t.name).trim().toLowerCase() === String(cls.homeroom).trim().toLowerCase()
     );
@@ -222,6 +239,7 @@ export default function HomeroomPage() {
 
   // Open assign modal for a teacher to choose a class
   const handleAssignTeacherToClass = (teacher: any) => {
+    if (isGuru) return;
     setSelectedTeacherId(teacher._firestoreId);
     setModalSearch("");
     setModalFilter("all");
@@ -236,6 +254,11 @@ export default function HomeroomPage() {
 
   // Execute assignment
   const handleSaveAssignment = async () => {
+    if (isGuru) {
+      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+      return;
+    }
+
     if (!assignModal.targetClass?._firestoreId) {
       toast.showError("Target kelas tidak valid.", "Gagal");
       return;
@@ -293,6 +316,11 @@ export default function HomeroomPage() {
 
   // Execute unassign
   const handleConfirmUnassign = async () => {
+    if (isGuru) {
+      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+      return;
+    }
+
     if (!unassignModal.targetClass?._firestoreId) return;
 
     try {
@@ -406,6 +434,11 @@ export default function HomeroomPage() {
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Sistem Penugasan
               </span>
+              {isGuru && (
+                <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                  Mode Lihat (Read-Only)
+                </span>
+              )}
             </div>
             <p className="text-gray-500 text-xs sm:text-sm font-medium mt-1">
               Atur penetapan staf pengajar sebagai wali kelas, pantau rasio kelas terisi, dan koordinasikan pendampingan siswa.
@@ -810,35 +843,37 @@ export default function HomeroomPage() {
                         </div>
 
                         {/* Card Action Footer */}
-                        <div className="p-4 pt-3 border-t border-gray-100/90 flex items-center gap-2 bg-gray-50/50 rounded-b-3xl">
-                          {hasHomeroom ? (
-                            <>
+                        {!isGuru && (
+                          <div className="p-4 pt-3 border-t border-gray-100/90 flex items-center gap-2 bg-gray-50/50 rounded-b-3xl">
+                            {hasHomeroom ? (
+                              <>
+                                <button
+                                  onClick={() => handleOpenAssignModal(item)}
+                                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-white hover:bg-[#531FFF] text-gray-700 hover:text-white border border-gray-200 hover:border-[#531FFF] text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                                >
+                                  <PenTool className="w-3.5 h-3.5 text-[#531FFF] group-hover:text-white" />
+                                  <span>Ganti Wali</span>
+                                </button>
+                                
+                                <button
+                                  onClick={() => setUnassignModal({ open: true, targetClass: item })}
+                                  className="p-2.5 rounded-xl bg-white hover:bg-rose-50 text-gray-400 hover:text-rose-600 border border-gray-200 hover:border-rose-200 transition-colors shadow-2xs cursor-pointer"
+                                  title="Lepas Penugasan Wali Kelas"
+                                >
+                                  <UserMinus className="w-4 h-4" />
+                                </button>
+                              </>
+                            ) : (
                               <button
                                 onClick={() => handleOpenAssignModal(item)}
-                                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-white hover:bg-[#531FFF] text-gray-700 hover:text-white border border-gray-200 hover:border-[#531FFF] text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-extrabold shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer active:scale-95"
                               >
-                                <PenTool className="w-3.5 h-3.5 text-[#531FFF] group-hover:text-white" />
-                                <span>Ganti Wali</span>
+                                <Plus className="w-4 h-4" />
+                                <span>Tetapkan Wali Kelas</span>
                               </button>
-                              
-                              <button
-                                onClick={() => setUnassignModal({ open: true, targetClass: item })}
-                                className="p-2.5 rounded-xl bg-white hover:bg-rose-50 text-gray-400 hover:text-rose-600 border border-gray-200 hover:border-rose-200 transition-colors shadow-2xs cursor-pointer"
-                                title="Lepas Penugasan Wali Kelas"
-                              >
-                                <UserMinus className="w-4 h-4" />
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => handleOpenAssignModal(item)}
-                              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-extrabold shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer active:scale-95"
-                            >
-                              <Plus className="w-4 h-4" />
-                              <span>Tetapkan Wali Kelas</span>
-                            </button>
-                          )}
-                        </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -858,7 +893,7 @@ export default function HomeroomPage() {
                           <th className="py-4 px-6">Wali Kelas Ditetapkan</th>
                           <th className="py-4 px-6">Kontak WhatsApp</th>
                           <th className="py-4 px-6">Status</th>
-                          <th className="py-4 px-6 text-right">Aksi</th>
+                          {!isGuru && <th className="py-4 px-6 text-right">Aksi</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -925,36 +960,38 @@ export default function HomeroomPage() {
                                   {hasHomeroom ? "Terisi" : "Belum Ada"}
                                 </span>
                               </td>
-                              <td className="py-4 px-6 text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  {hasHomeroom ? (
-                                    <>
+                              {!isGuru && (
+                                <td className="py-4 px-6 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    {hasHomeroom ? (
+                                      <>
+                                        <button
+                                          onClick={() => handleOpenAssignModal(item)}
+                                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 rounded-xl transition-colors cursor-pointer"
+                                        >
+                                          <PenTool className="w-3.5 h-3.5" />
+                                          <span>Ganti</span>
+                                        </button>
+                                        <button
+                                          onClick={() => setUnassignModal({ open: true, targetClass: item })}
+                                          className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                          title="Lepas Wali"
+                                        >
+                                          <UserMinus className="w-3.5 h-3.5" />
+                                        </button>
+                                      </>
+                                    ) : (
                                       <button
                                         onClick={() => handleOpenAssignModal(item)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 rounded-xl transition-colors cursor-pointer"
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4314cc] rounded-xl transition-all shadow-xs cursor-pointer"
                                       >
-                                        <PenTool className="w-3.5 h-3.5" />
-                                        <span>Ganti</span>
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Tetapkan</span>
                                       </button>
-                                      <button
-                                        onClick={() => setUnassignModal({ open: true, targetClass: item })}
-                                        className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                        title="Lepas Wali"
-                                      >
-                                        <UserMinus className="w-3.5 h-3.5" />
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <button
-                                      onClick={() => handleOpenAssignModal(item)}
-                                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4314cc] rounded-xl transition-all shadow-xs cursor-pointer"
-                                    >
-                                      <Plus className="w-3.5 h-3.5" />
-                                      <span>Tetapkan</span>
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
+                                    )}
+                                  </div>
+                                </td>
+                              )}
                             </tr>
                           );
                         })}
@@ -1129,24 +1166,26 @@ export default function HomeroomPage() {
                   </div>
 
                   {/* Teacher Matrix Actions */}
-                  <div className="pt-4 border-t border-gray-100 mt-4 flex items-center gap-2">
-                    {isAssigned ? (
-                      <button
-                        onClick={() => handleOpenAssignModal(assignedClass)}
-                        className="w-full py-2 px-3 rounded-xl bg-gray-100 hover:bg-[#531FFF]/10 text-gray-700 hover:text-[#531FFF] text-xs font-extrabold transition-all cursor-pointer"
-                      >
-                        Ubah Kelas ({assignedClass.name})
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleAssignTeacherToClass(teacher)}
-                        className="w-full py-2 px-3 rounded-xl bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Tugaskan ke Kelas</span>
-                      </button>
-                    )}
-                  </div>
+                  {!isGuru && (
+                    <div className="pt-4 border-t border-gray-100 mt-4 flex items-center gap-2">
+                      {isAssigned ? (
+                        <button
+                          onClick={() => handleOpenAssignModal(assignedClass)}
+                          className="w-full py-2 px-3 rounded-xl bg-gray-100 hover:bg-[#531FFF]/10 text-gray-700 hover:text-[#531FFF] text-xs font-extrabold transition-all cursor-pointer"
+                        >
+                          Ubah Kelas ({assignedClass.name})
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleAssignTeacherToClass(teacher)}
+                          className="w-full py-2 px-3 rounded-xl bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Tugaskan ke Kelas</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1157,7 +1196,7 @@ export default function HomeroomPage() {
       {/* ========================================================================= */}
       {/* QUICK ASSIGN MODAL (MODAL PENETAPAN WALI KELAS)                           */}
       {/* ========================================================================= */}
-      {assignModal.open && assignModal.targetClass && (
+      {!isGuru && assignModal.open && assignModal.targetClass && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             
@@ -1405,7 +1444,7 @@ export default function HomeroomPage() {
       {/* ========================================================================= */}
       {/* CONFIRMATION UNASSIGN MODAL                                               */}
       {/* ========================================================================= */}
-      {unassignModal.open && unassignModal.targetClass && (
+      {!isGuru && unassignModal.open && unassignModal.targetClass && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-gray-100 overflow-hidden p-6 space-y-4 animate-in zoom-in-95 duration-200">
             <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">

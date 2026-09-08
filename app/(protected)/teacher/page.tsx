@@ -1,8 +1,21 @@
-export default function TeacherDashboard() {
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+export default function TeacherPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/admin/dashboard");
+  }, [router]);
+
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-4">Teacher Portal</h1>
-      <p>Subject classes and grade management.</p>
+    <div className="flex items-center justify-center min-h-[60vh] text-gray-400 text-sm font-medium">
+      <div className="flex items-center gap-2">
+        <div className="w-4 h-4 border-2 border-[#531FFF] border-t-transparent rounded-full animate-spin" />
+        <span>Memuat Portal Guru...</span>
+      </div>
     </div>
   );
 }

@@ -23,15 +23,20 @@ import {
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
 import { db, auth, storage } from "@/lib/firebase";
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { useToast } from "@/context/ToastContext";
 
 export default function TeachersPage() {
+  const toast = useToast();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [teachers, setTeachers] = useState<any[]>([]);
   const [subjectsList, setSubjectsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string>("admin");
+
+  const isGuru = userRole === "guru" || userRole === "teacher";
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState("");
@@ -44,8 +49,19 @@ export default function TeachersPage() {
   });
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        try {
+          const userDocSnap = await getDoc(doc(db, "users", user.uid));
+          if (userDocSnap.exists()) {
+            const data = userDocSnap.data();
+            const r = (data.role || "admin").toLowerCase();
+            setUserRole(r === "teacher" || r === "guru" ? "guru" : r);
+          }
+        } catch (err) {
+          console.warn("Error fetching user role:", err);
+        }
+
         const qTeachers = query(collection(db, "teachers"));
         const unsubscribeTeachers = onSnapshot(qTeachers, (snapshot) => {
           const teachersData = snapshot.docs.map(doc => {
@@ -84,6 +100,7 @@ export default function TeachersPage() {
       } else {
         setTeachers([]);
         setSubjectsList([]);
+        setUserRole("admin");
         setLoading(false);
       }
     });
@@ -121,6 +138,10 @@ export default function TeachersPage() {
   ];
 
   const handleCrudSubmit = async (data: any) => {
+    if (isGuru) {
+      toast.showError("Anda tidak memiliki hak akses untuk mengubah data staff guru.", "Akses Ditolak");
+      return;
+    }
     try {
       let imageUrl = data.imageUrl || "";
 
@@ -299,7 +320,7 @@ export default function TeachersPage() {
         fields={teacherFields}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
-        onEditRequested={() => setCrudState(s => ({ ...s, mode: "edit", open: true }))}
+        onEditRequested={isGuru ? undefined : () => setCrudState(s => ({ ...s, mode: "edit", open: true }))}
       />
 
       {/* Page Header Card */}
@@ -309,7 +330,14 @@ export default function TeachersPage() {
             <Users className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Staff Guru</h1>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Staff Guru</h1>
+              {isGuru && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                  Mode Lihat (Read-Only)
+                </span>
+              )}
+            </div>
             <p className="text-gray-500 text-xs md:text-sm font-medium mt-0.5">
               Kelola direktori pengajar, penetapan mata pelajaran, dan informasi kontak resmi.
             </p>
@@ -317,13 +345,15 @@ export default function TeachersPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setCrudState({ open: true, mode: "create" })}
-            className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah Guru</span>
-          </button>
+          {!isGuru && (
+            <button 
+              onClick={() => setCrudState({ open: true, mode: "create" })}
+              className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah Guru</span>
+            </button>
+          )}
           
           <button 
             onClick={handleExportCSV}
@@ -544,20 +574,24 @@ export default function TeachersPage() {
                       >
                         <Eye className="w-3.5 h-3.5" />
                       </button>
-                      <button 
-                        onClick={() => setCrudState({ open: true, mode: "edit", data: teacher })}
-                        className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
-                        title="Edit Data Guru"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button 
-                        onClick={() => setCrudState({ open: true, mode: "delete", data: teacher })}
-                        className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-rose-50 text-gray-500 hover:text-rose-600 transition-all flex items-center justify-center"
-                        title="Hapus Data Guru"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {!isGuru && (
+                        <>
+                          <button 
+                            onClick={() => setCrudState({ open: true, mode: "edit", data: teacher })}
+                            className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
+                            title="Edit Data Guru"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={() => setCrudState({ open: true, mode: "delete", data: teacher })}
+                            className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-rose-50 text-gray-500 hover:text-rose-600 transition-all flex items-center justify-center"
+                            title="Hapus Data Guru"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -639,20 +673,24 @@ export default function TeachersPage() {
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => setCrudState({ open: true, mode: "edit", data: teacher })}
-                              className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-xl transition-colors"
-                              title="Edit"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setCrudState({ open: true, mode: "delete", data: teacher })}
-                              className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
-                              title="Hapus"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {!isGuru && (
+                              <>
+                                <button
+                                  onClick={() => setCrudState({ open: true, mode: "edit", data: teacher })}
+                                  className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-xl transition-colors"
+                                  title="Edit"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => setCrudState({ open: true, mode: "delete", data: teacher })}
+                                  className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                                  title="Hapus"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -675,6 +713,8 @@ export default function TeachersPage() {
               <p className="text-gray-500 text-sm max-w-sm mb-5 font-medium">
                 {isFiltered 
                   ? "Coba ubah kata kunci pencarian atau reset filter untuk menampilkan pengajar lainnya."
+                  : isGuru
+                  ? "Belum ada data staf guru yang terdaftar."
                   : "Silakan tambahkan data guru baru ke dalam direktori pengajar sekolah."
                 }
               </p>
@@ -686,14 +726,14 @@ export default function TeachersPage() {
                 >
                   Reset Filter
                 </button>
-              ) : (
+              ) : !isGuru ? (
                 <button 
                   onClick={() => setCrudState({ open: true, mode: "create" })}
                   className="bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-[#531FFF]/20"
                 >
                   + Tambah Guru Baru
                 </button>
-              )}
+              ) : null}
             </div>
           )}
         </>

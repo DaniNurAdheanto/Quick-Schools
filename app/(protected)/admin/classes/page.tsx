@@ -99,6 +99,8 @@ export default function ClassesPage() {
 
   const toast = useToast();
 
+  const isGuru = currentUserRole === "guru" || currentUserRole === "teacher";
+
   const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete" | "view"; data?: any }>({
     open: false,
     mode: "create"
@@ -115,7 +117,7 @@ export default function ClassesPage() {
             const uData = uSnap.data();
             setCurrentUserData(uData);
             const rawRole = (uData.role || "admin").toLowerCase();
-            const normRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : rawRole;
+            const normRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : (rawRole === "teacher" || rawRole === "guru") ? "guru" : rawRole;
             setCurrentUserRole(normRole);
             if (uData.classId || uData.className || uData.class) {
               setCurrentStudentClass(uData.classId || uData.className || uData.class);
@@ -264,6 +266,11 @@ export default function ClassesPage() {
 
   // Handle Create / Edit / Delete Class
   const handleCrudSubmit = async (data: any) => {
+    if (isGuru) {
+      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+      return;
+    }
+
     try {
       const payload = {
         name: (data.name || "").trim(),
@@ -294,6 +301,7 @@ export default function ClassesPage() {
 
   // Quick Preset Add Class
   const handleApplyClassPreset = async (preset: typeof STANDARD_CLASS_PRESETS[0]) => {
+    if (isGuru) return;
     try {
       // Check if already exists
       const exists = classes.some(c => c.name.toLowerCase() === preset.name.toLowerCase());
@@ -325,6 +333,10 @@ export default function ClassesPage() {
 
   // 1. Unassign student from class
   const handleRemoveStudentFromClass = async (student: any) => {
+    if (isGuru) {
+      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+      return;
+    }
     if (!student?._firestoreId) return;
 
     try {
@@ -367,6 +379,10 @@ export default function ClassesPage() {
 
   // 2. Add single student to managingClass
   const handleAddSingleStudent = async (student: any) => {
+    if (isGuru) {
+      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+      return;
+    }
     if (!student?._firestoreId || !managingClass?.name) return;
 
     try {
@@ -410,6 +426,10 @@ export default function ClassesPage() {
 
   // 3. Bulk Add selected students to managingClass
   const handleBulkAddStudents = async () => {
+    if (isGuru) {
+      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+      return;
+    }
     if (selectedStudentIdsToAdd.length === 0 || !managingClass?.name) return;
 
     try {
@@ -439,6 +459,10 @@ export default function ClassesPage() {
   // 4. Quick Add brand new student directly to class
   const handleQuickCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isGuru) {
+      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+      return;
+    }
     if (!newStudentForm.name.trim() || !managingClass?.name) {
       toast.showError("Nama lengkap siswa wajib diisi.", "Peringatan");
       return;
@@ -499,6 +523,10 @@ export default function ClassesPage() {
 
   // 5. Transfer student to another class
   const handleTransferStudent = async () => {
+    if (isGuru) {
+      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+      return;
+    }
     if (!transferringStudent?._firestoreId || !targetClassId) return;
 
     try {
@@ -1117,7 +1145,7 @@ export default function ClassesPage() {
         fields={classFields}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
-        onEditRequested={() => setCrudState(s => ({ ...s, mode: "edit" }))}
+        onEditRequested={isGuru ? undefined : () => setCrudState(s => ({ ...s, mode: "edit" }))}
       />
 
       {/* ================= HEADER SECTION ================= */}
@@ -1128,9 +1156,16 @@ export default function ClassesPage() {
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-gray-900 tracking-tight">
-                Manajemen Kelas &amp; Siswa
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+                  Manajemen Kelas &amp; Siswa
+                </h1>
+                {isGuru && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                    Mode Lihat (Read-Only)
+                  </span>
+                )}
+              </div>
               <p className="text-[13px] text-gray-500 font-medium">
                 Kelola rombongan belajar, penugasan wali kelas, dan pembagian siswa ke dalam setiap kelas.
               </p>
@@ -1138,71 +1173,75 @@ export default function ClassesPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* New Class Button */}
-          <button 
-            type="button"
-            onClick={() => setCrudState({ 
-              open: true, 
-              mode: "create",
-              data: {
-                level: "Kelas 10",
-                major: "IPA",
-                homeroom: "",
-                maxCapacity: 36,
-                status: "Aktif"
-              }
-            })}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-[13px] font-bold shadow-md shadow-[#531FFF]/25 transition-all active:scale-95 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah Kelas Baru</span>
-          </button>
-        </div>
+        {!isGuru && (
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* New Class Button */}
+            <button 
+              type="button"
+              onClick={() => setCrudState({ 
+                open: true, 
+                mode: "create",
+                data: {
+                  level: "Kelas 10",
+                  major: "IPA",
+                  homeroom: "",
+                  maxCapacity: 36,
+                  status: "Aktif"
+                }
+              })}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-[13px] font-bold shadow-md shadow-[#531FFF]/25 transition-all active:scale-95 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah Kelas Baru</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ================= QUICK PRESET TEMPLATES BAR ================= */}
-      <div className="bg-white border border-gray-100 rounded-3xl p-4 sm:p-5 shadow-2xs space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[#531FFF]" />
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-800">
-              Template Rombel Siap Pakai
-            </h3>
+      {!isGuru && (
+        <div className="bg-white border border-gray-100 rounded-3xl p-4 sm:p-5 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#531FFF]" />
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-800">
+                Template Rombel Siap Pakai
+              </h3>
+            </div>
+            <span className="text-[11px] font-semibold text-gray-400">
+              Klik nama rombel untuk langsung membuat kelas
+            </span>
           </div>
-          <span className="text-[11px] font-semibold text-gray-400">
-            Klik nama rombel untuk langsung membuat kelas
-          </span>
-        </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
-          {STANDARD_CLASS_PRESETS.map((preset) => {
-            const isAlreadyAdded = classes.some(c => c.name.toLowerCase() === preset.name.toLowerCase());
-            return (
-              <button
-                key={preset.name}
-                type="button"
-                onClick={() => handleApplyClassPreset(preset)}
-                className={cn(
-                  "flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all border cursor-pointer",
-                  isAlreadyAdded 
-                    ? "bg-gray-50/80 text-gray-600 border-gray-200 hover:border-[#531FFF]/50" 
-                    : "bg-purple-50/60 text-[#531FFF] border-purple-200 hover:bg-purple-100 hover:border-purple-300"
-                )}
-                title={`Kapasitas: ${preset.maxCapacity} siswa`}
-              >
-                <span>{preset.name}</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-white border text-gray-500">
-                  {preset.major}
-                </span>
-                {isAlreadyAdded && (
-                  <Check className="w-3 h-3 text-emerald-500 shrink-0" />
-                )}
-              </button>
-            );
-          })}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+            {STANDARD_CLASS_PRESETS.map((preset) => {
+              const isAlreadyAdded = classes.some(c => c.name.toLowerCase() === preset.name.toLowerCase());
+              return (
+                <button
+                  key={preset.name}
+                  type="button"
+                  onClick={() => handleApplyClassPreset(preset)}
+                  className={cn(
+                    "flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all border cursor-pointer",
+                    isAlreadyAdded 
+                      ? "bg-gray-50/80 text-gray-600 border-gray-200 hover:border-[#531FFF]/50" 
+                      : "bg-purple-50/60 text-[#531FFF] border-purple-200 hover:bg-purple-100 hover:border-purple-300"
+                  )}
+                  title={`Kapasitas: ${preset.maxCapacity} siswa`}
+                >
+                  <span>{preset.name}</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-white border text-gray-500">
+                    {preset.major}
+                  </span>
+                  {isAlreadyAdded && (
+                    <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ================= METRICS STATS TILES ================= */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -1535,7 +1574,7 @@ export default function ClassesPage() {
                     className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-purple-50 hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer group/btn"
                   >
                     <Users className="w-3.5 h-3.5" />
-                    <span>Kelola Siswa ({enrolled.length})</span>
+                    <span>{isGuru ? "Lihat Siswa" : "Kelola Siswa"} ({enrolled.length})</span>
                   </button>
 
                   <div className="flex items-center gap-1">
@@ -1547,22 +1586,26 @@ export default function ClassesPage() {
                     >
                       <Eye className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                      className="p-2 rounded-xl text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-all cursor-pointer"
-                      title="Edit Kelas"
-                    >
-                      <PenTool className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
-                      className="p-2 rounded-xl text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
-                      title="Hapus Kelas"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {!isGuru && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
+                          className="p-2 rounded-xl text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-all cursor-pointer"
+                          title="Edit Kelas"
+                        >
+                          <PenTool className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
+                          className="p-2 rounded-xl text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                          title="Hapus Kelas"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1582,7 +1625,7 @@ export default function ClassesPage() {
                   <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">Wali Kelas</th>
                   <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider text-center">Siswa / Kapasitas</th>
                   <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider text-center">Status</th>
-                  <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider text-right">Aksi</th>
+                  <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider text-right">{isGuru ? "Detail" : "Aksi"}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -1650,10 +1693,10 @@ export default function ClassesPage() {
                               setManageSearch("");
                             }}
                             className="px-3 py-1.5 bg-purple-50 hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                            title="Kelola Siswa di Kelas Ini"
+                            title={isGuru ? "Lihat Siswa di Kelas Ini" : "Kelola Siswa di Kelas Ini"}
                           >
                             <Users className="w-3.5 h-3.5" />
-                            <span>Kelola ({enrolled.length})</span>
+                            <span>{isGuru ? "Lihat Siswa" : "Kelola"} ({enrolled.length})</span>
                           </button>
                           <button
                             type="button"
@@ -1663,22 +1706,26 @@ export default function ClassesPage() {
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
-                            title="Edit"
-                          >
-                            <PenTool className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                            title="Hapus"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {!isGuru && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
+                                title="Edit"
+                              >
+                                <PenTool className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
+                                className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                title="Hapus"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1706,7 +1753,7 @@ export default function ClassesPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-xl font-black text-gray-900 tracking-tight">
-                      Kelola Siswa: Kelas {managingClass.name}
+                      {isGuru ? "Daftar Siswa:" : "Kelola Siswa:"} Kelas {managingClass.name}
                     </h3>
                     <span className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
                       {managingClass.level} • {managingClass.major}
@@ -1755,33 +1802,37 @@ export default function ClassesPage() {
                   </span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setManageTab("add")}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer",
-                    manageTab === "add"
-                      ? "bg-[#531FFF] text-white shadow-sm shadow-[#531FFF]/25"
-                      : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
-                  )}
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>Tambah dari Database Siswa</span>
-                </button>
+                {!isGuru && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setManageTab("add")}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer",
+                        manageTab === "add"
+                          ? "bg-[#531FFF] text-white shadow-sm shadow-[#531FFF]/25"
+                          : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                      )}
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span>Tambah dari Database Siswa</span>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => setManageTab("quickAdd")}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer",
-                    manageTab === "quickAdd"
-                      ? "bg-[#531FFF] text-white shadow-sm shadow-[#531FFF]/25"
-                      : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
-                  )}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Pendaftaran Siswa Baru</span>
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => setManageTab("quickAdd")}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer",
+                        manageTab === "quickAdd"
+                          ? "bg-[#531FFF] text-white shadow-sm shadow-[#531FFF]/25"
+                          : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                      )}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Pendaftaran Siswa Baru</span>
+                    </button>
+                  </>
+                )}
               </div>
 
               {manageTab === "enrolled" && (
@@ -1804,15 +1855,19 @@ export default function ClassesPage() {
                       </div>
                       <h4 className="text-base font-extrabold text-gray-900">Belum ada siswa di kelas ini</h4>
                       <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                        Kelas ini masih kosong. Klik tab &ldquo;Tambah dari Database Siswa&rdquo; untuk memasukkan siswa ke kelas ini.
+                        {isGuru 
+                          ? "Belum ada siswa yang terdaftar di kelas ini." 
+                          : "Kelas ini masih kosong. Klik tab “Tambah dari Database Siswa” untuk memasukkan siswa ke kelas ini."}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => setManageTab("add")}
-                        className="px-4 py-2 bg-[#531FFF] text-white rounded-xl text-xs font-bold hover:bg-[#4314cc] transition-all cursor-pointer"
-                      >
-                        + Tambah Siswa Sekarang
-                      </button>
+                      {!isGuru && (
+                        <button
+                          type="button"
+                          onClick={() => setManageTab("add")}
+                          className="px-4 py-2 bg-[#531FFF] text-white rounded-xl text-xs font-bold hover:bg-[#4314cc] transition-all cursor-pointer"
+                        >
+                          + Tambah Siswa Sekarang
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-2.5">
@@ -1855,33 +1910,35 @@ export default function ClassesPage() {
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 justify-end">
-                            {/* Pindah Kelas Button */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setTransferringStudent(s);
-                                setTargetClassId("");
-                              }}
-                              className="px-3 py-1.5 bg-gray-100 hover:bg-purple-50 text-gray-700 hover:text-[#531FFF] rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                              title="Pindahkan ke kelas lain"
-                            >
-                              <ArrowRightLeft className="w-3.5 h-3.5" />
-                              <span>Pindah Kelas</span>
-                            </button>
+                          {!isGuru && (
+                            <div className="flex items-center gap-2 justify-end">
+                              {/* Pindah Kelas Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTransferringStudent(s);
+                                  setTargetClassId("");
+                                }}
+                                className="px-3 py-1.5 bg-gray-100 hover:bg-purple-50 text-gray-700 hover:text-[#531FFF] rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                                title="Pindahkan ke kelas lain"
+                              >
+                                <ArrowRightLeft className="w-3.5 h-3.5" />
+                                <span>Pindah Kelas</span>
+                              </button>
 
-                            {/* Keluarkan Button */}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveStudentFromClass(s)}
-                              disabled={isProcessingStudent}
-                              className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                              title="Keluarkan dari kelas"
-                            >
-                              <UserMinus className="w-3.5 h-3.5" />
-                              <span>Keluarkan</span>
-                            </button>
-                          </div>
+                              {/* Keluarkan Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveStudentFromClass(s)}
+                                disabled={isProcessingStudent}
+                                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                                title="Keluarkan dari kelas"
+                              >
+                                <UserMinus className="w-3.5 h-3.5" />
+                                <span>Keluarkan</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -2144,7 +2201,7 @@ export default function ClassesPage() {
       {/* ========================================================================= */}
       {/* ================= TRANSFER STUDENT TO ANOTHER CLASS MODAL =============== */}
       {/* ========================================================================= */}
-      {transferringStudent && (
+      {transferringStudent && !isGuru && (
         <div className="fixed inset-0 z-60 p-4 bg-gray-950/70 backdrop-blur-xs flex items-center justify-center animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl border border-gray-100 space-y-4 animate-in zoom-in-95 duration-150">
             <div className="flex items-center gap-3">

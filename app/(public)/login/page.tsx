@@ -5,7 +5,8 @@ import Link from "next/link";
 
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -21,10 +22,34 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Check account activation status in Firestore
+      try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          const uData = userDoc.data();
+          if (uData.status === "Nonaktif") {
+            await auth.signOut();
+            setError("Akun Anda berstatus Nonaktif. Silakan hubungi Super Admin untuk mengaktifkan akun Anda.");
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (checkErr) {
+        console.warn("Status check warning:", checkErr);
+      }
+
       router.push("/admin/dashboard");
     } catch (err: any) {
-      setError(err.message || "Gagal masuk");
+      if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
+        setError("Email atau kata sandi salah. Silakan periksa kembali.");
+      } else if (err.code === "auth/too-many-requests") {
+        setError("Terlalu banyak percobaan masuk yang gagal. Silakan coba beberapa saat lagi.");
+      } else {
+        setError(err.message || "Gagal masuk");
+      }
     } finally {
       setLoading(false);
     }
