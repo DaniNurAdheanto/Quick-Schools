@@ -6,9 +6,8 @@ import {
   Camera, 
   MapPin, 
   CheckCircle2, 
-  XCircle, 
-  RefreshCw, 
-  Sparkles 
+  XCircle,
+  RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { auth, db } from "@/lib/firebase";

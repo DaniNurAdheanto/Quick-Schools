@@ -16,19 +16,15 @@ import {
   RefreshCw,
   List,
   Download,
-  Filter,
   ChevronDown,
   LayoutGrid,
   ShieldCheck,
   Building2,
-  ExternalLink,
-  SlidersHorizontal,
-  Check,
-  AlertCircle
+  ExternalLink
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { db, auth } from "@/lib/firebase";
-import { collection, query, onSnapshot, orderBy } from "firebase/firestore";
+import { collection, query, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useToast } from "@/context/ToastContext";
 

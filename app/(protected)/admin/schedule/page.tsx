@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { 
   Plus, PenTool, Trash2, Loader2, Calendar, Clock, LayoutGrid, List, Table,
-  Search, Filter, Sparkles, AlertTriangle, CheckCircle2, User, BookOpen, GraduationCap, X, ChevronRight,
-  BadgeCheck, AlertCircle, CalendarDays
+  Search, Filter, AlertTriangle, User, BookOpen, GraduationCap, X,
+  BadgeCheck, AlertCircle
 } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc } from "firebase/firestore";

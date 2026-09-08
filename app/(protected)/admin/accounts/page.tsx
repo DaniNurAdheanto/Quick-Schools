@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { isSuperAdminRole } from "@/lib/roles-config";
 import { 
   collection, 
   onSnapshot, 
@@ -124,13 +125,7 @@ export default function AccountManagementPage() {
     return () => unsubAuth();
   }, []);
 
-  const normalizedRole = (currentUserRole || "").toLowerCase().trim().replace(/[\s_-]+/g, "");
-  const isSuperAdmin = 
-    normalizedRole === "superadmin" || 
-    normalizedRole === "admin" ||
-    currentUserRole === "super-admin" || 
-    currentUserRole === "superadmin" || 
-    currentUserRole === "super_admin";
+  const isSuperAdmin = isSuperAdminRole(currentUserRole) || (currentUserRole || "").toLowerCase() === "admin";
 
   // 2. Subscribe to real-time users collection once authenticated
   useEffect(() => {

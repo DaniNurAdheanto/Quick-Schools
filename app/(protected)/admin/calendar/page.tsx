@@ -2,22 +2,21 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { 
-  Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronDown, 
-  Download, Plus, Sun, ClipboardCheck, Flag, BookOpen, Filter, 
-  Sparkles, Trash2, Edit3, Search, Clock, MapPin, Users, Printer, 
-  X, Check, Loader2, Tag, ArrowRight, Layers, FileText, CheckCircle2, AlertTriangle, School, Save
+  Calendar as CalendarIcon, ChevronLeft, ChevronRight, 
+  Plus, Sun, ClipboardCheck, Flag, BookOpen, 
+  Sparkles, Trash2, Edit3, Search, Printer, 
+  X, Loader2, FileText, School, Save
 } from "lucide-react";
 import { 
   ResponsiveContainer, PieChart, Pie, Cell 
 } from "recharts";
 import { 
   format, addMonths, subMonths, startOfMonth, endOfMonth, 
-  startOfWeek, endOfWeek, isSameMonth, isSameDay, addDays, 
-  parseISO, isWithinInterval 
+  startOfWeek, endOfWeek, isSameMonth, isSameDay, addDays 
 } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { 
-  collection, onSnapshot, doc, getDoc, setDoc, addDoc, deleteDoc, updateDoc, serverTimestamp 
+  collection, onSnapshot, doc, getDoc, addDoc, deleteDoc, updateDoc, serverTimestamp 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
@@ -94,7 +93,6 @@ const SAMPLE_CALENDAR_EVENTS = [
 
 export default function CalendarPage() {
   const [events, setEvents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [userRole, setUserRole] = useState<string>("admin");
   const isStudent = userRole === "siswa" || userRole === "student";
@@ -165,13 +163,11 @@ export default function CalendarPage() {
     });
 
     const unsub = onSnapshot(collection(db, "calendar_events"), (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setEvents(list.length > 0 ? list : SAMPLE_CALENDAR_EVENTS);
-      setLoading(false);
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setEvents(docs.length > 0 ? docs : SAMPLE_CALENDAR_EVENTS);
     }, (err) => {
-      console.warn("Calendar events fetch error:", err);
+      console.warn("Calendar listener error:", err);
       setEvents(SAMPLE_CALENDAR_EVENTS);
-      setLoading(false);
     });
 
     return () => {

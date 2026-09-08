@@ -1,12 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { 
-  ArrowRight, Sparkles, CheckCircle2, ChevronRight, Menu, Star,
+  ArrowRight, Sparkles, CheckCircle2, ChevronRight, Menu,
   Calendar, GraduationCap, Bot, LineChart, Check,
-  ShieldCheck, Zap, Globe2, Heart, Award, User, CheckSquare, Clock, CreditCard, MessageCircle,
-  Play, Users, BookOpen, Layers, Shield, Globe
+  ShieldCheck, Zap, Globe2, User, CheckSquare, CreditCard, MessageCircle,
+  Play, Users, BookOpen, Shield
 } from "lucide-react";
 
 import { motion } from "motion/react";

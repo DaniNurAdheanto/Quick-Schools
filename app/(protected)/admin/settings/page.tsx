@@ -1,23 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { 
   Building2, 
   Palette, 
   Sliders, 
-  BookOpen, 
-  CalendarDays, 
   Award, 
-  Calendar, 
-  GraduationCap, 
   FileCheck, 
-  Users, 
-  Megaphone, 
   UserCog, 
-  Bell, 
-  CreditCard, 
   ShieldAlert, 
   History, 
   ShieldCheck, 
@@ -25,36 +17,18 @@ import {
   Save, 
   RotateCcw, 
   Upload, 
-  Check, 
   XCircle, 
   AlertTriangle, 
-  CheckCircle2, 
-  Plus, 
-  Trash2, 
-  Edit3, 
-  Eye, 
-  Lock, 
-  Globe, 
-  Mail, 
-  Phone, 
   MapPin, 
-  Clock, 
-  Key, 
   Download, 
-  FileText, 
   Sparkles, 
   ChevronRight, 
-  ExternalLink,
-  Info,
-  CheckSquare,
-  Square,
   RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
 import { db, auth } from "@/lib/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 
 type SettingCategory = 
   | "profile" 
@@ -201,7 +175,7 @@ export default function SettingsPage() {
     defaultLandingPage: "/admin/dashboard"
   });
 
-  const [academic, setAcademic] = useState({
+  const [academic] = useState({
     academicYear: "2026 / 2027",
     activeSemester: "Genap",
     educationLevel: "SMA",
@@ -234,7 +208,7 @@ export default function SettingsPage() {
     signatureName: "Dr. Danur Adhi, M.Pd"
   });
 
-  const [schedule, setSchedule] = useState({
+  const [schedule] = useState({
     workingDays: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
     schoolStartTime: "07:00",
     schoolEndTime: "15:00",
@@ -252,7 +226,7 @@ export default function SettingsPage() {
     settings: { read: true, write: true, delete: false }
   });
 
-  const [notifications, setNotifications] = useState({
+  const [notifications] = useState({
     channelInApp: true,
     channelEmail: true,
     channelPush: true,
@@ -264,7 +238,7 @@ export default function SettingsPage() {
     eventAnnouncements: true
   });
 
-  const [finance, setFinance] = useState({
+  const [finance] = useState({
     currency: "Rp (Rupiah)",
     monthlyTuitionSpp: 750000,
     registrationFee: 2500000,
@@ -273,14 +247,14 @@ export default function SettingsPage() {
     allowPartialPayment: true
   });
 
-  const [lms, setLms] = useState({
+  const [lms] = useState({
     maxFileSizeMb: 25,
     allowedExtensions: [".pdf", ".docx", ".pptx", ".zip", ".jpg", ".png", ".mp4"],
     strictDeadline: true,
     autoGradingQuiz: true
   });
 
-  const [portalAccess, setPortalAccess] = useState({
+  const [portalAccess] = useState({
     studentViewGrades: true,
     studentViewAttendance: true,
     studentViewSchedule: true,
@@ -302,7 +276,7 @@ export default function SettingsPage() {
     enable2FA: true
   });
 
-  const [privacy, setPrivacy] = useState({
+  const [privacy] = useState({
     dataRetentionYears: 3,
     autoCloudBackup: "Daily (02:00 WIB)",
     allowDataExport: true

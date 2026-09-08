@@ -6,21 +6,20 @@ import {
   User, 
   Mail, 
   Phone, 
-  MapPin, 
   Calendar, 
-  Edit3, 
-  Save, 
-  X, 
-  Loader2, 
   Key, 
+  Save, 
+  Edit3,
+  MessageCircle,
+  AlertCircle, 
+  Loader2, 
+  ShieldCheck, 
+  BadgeCheck, 
   Copy, 
   Check, 
+  X, 
   Eye, 
-  EyeOff, 
-  AlertCircle, 
-  MessageCircle, 
-  BadgeCheck, 
-  ShieldCheck 
+  EyeOff 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
@@ -36,7 +35,7 @@ import {
   updateDoc, 
   serverTimestamp 
 } from "firebase/firestore";
-import { ROLES } from "../roles/page";
+import { ROLES } from "@/lib/roles-config";
 
 type ProfileTab = "biodata" | "security";
 
@@ -118,7 +117,7 @@ export default function ProfilePage() {
 
           // 2. Synchronize teacher record if guru
           try {
-            let teacherFound = null;
+            let teacherFound: any = null;
             const tDoc = await getDoc(doc(db, "teachers", user.uid));
             if (tDoc.exists()) {
               teacherFound = { _id: tDoc.id, ...tDoc.data() };
@@ -157,7 +156,7 @@ export default function ProfilePage() {
   // Matched Role Definition from ROLES configuration in admin/roles
   const roleDefinition = React.useMemo(() => {
     const roleId = profileData.role;
-    return ROLES.find(r => r.id === roleId) || ROLES.find(r => r.id === "admin") || {
+    return ROLES.find((r: any) => r.id === roleId) || ROLES.find((r: any) => r.id === "admin") || {
       id: roleId,
       name: roleId.charAt(0).toUpperCase() + roleId.slice(1),
       icon: ShieldCheck,

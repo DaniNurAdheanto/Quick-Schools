@@ -28,11 +28,7 @@ import {
   Award,
   BookOpen,
   MapPin,
-  Camera,
-  ScanFace,
-  XCircle,
-  RefreshCw,
-  ShieldCheck
+  ScanFace
 } from "lucide-react";
 import { 
   LineChart, 
@@ -50,12 +46,10 @@ import {
   ReferenceLine
 } from 'recharts';
 import Image from "next/image";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { useToast } from "@/context/ToastContext";
-import { cn } from "@/lib/utils";
 
 const ATTENDANCE_DATA = [
   { date: '15 Mei', value: 40 },

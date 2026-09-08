@@ -21,12 +21,9 @@ import {
   Table as TableIcon,
   AlertCircle,
   Layers,
-  Phone,
   MessageCircle,
-  User,
   BookOpen,
-  BadgeCheck,
-  ShieldCheck
+  BadgeCheck
 } from "lucide-react";
 import Image from "next/image";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";

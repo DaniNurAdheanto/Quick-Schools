@@ -54,7 +54,10 @@ export function AlertBox({ type, title, message, onClose, className }: AlertBoxP
           <IconComponent className="w-5 h-5" />
         </div>
 
-        <p className="text-xs md:text-sm font-bold leading-relaxed">{message}</p>
+        <div>
+          {title && <h4 className="text-[11px] font-bold uppercase tracking-wider opacity-80 mb-0.5">{title}</h4>}
+          <p className="text-xs md:text-sm font-bold leading-relaxed">{message}</p>
+        </div>
       </div>
 
       {onClose && (

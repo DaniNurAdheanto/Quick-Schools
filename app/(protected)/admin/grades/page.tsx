@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   Plus, 
   Search, 
@@ -44,6 +44,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
 import { useToast } from "@/context/ToastContext";
+import { useUnifiedStudents } from "@/hooks/use-unified-students";
 
 // 6 Core Assessment Types requested by user
 const ASSESSMENT_TYPES = [
@@ -60,15 +61,11 @@ export default function GradesPage() {
 
   // Firestore Realtime Collections
   const [grades, setGrades] = useState<any[]>([]);
-  const [students, setStudents] = useState<any[]>([]);
+  const { students, getStudentByIdOrName } = useUnifiedStudents();
   const [classes, setClasses] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Raw refs for unified student synchronization (exactly aligned with data-siswa)
-  const rawStudentsRef = useRef<any[]>([]);
-  const rawUsersRef = useRef<any[]>([]);
 
   // User Auth & Role State
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -117,109 +114,6 @@ export default function GradesPage() {
 
   const isStudentRole = userRole === "siswa" || userRole === "student";
 
-  // Unified Student Sync: merges `students` and `users` (role: siswa/student) in sync with data-siswa
-  const updateCombinedStudents = useCallback(() => {
-    const studentMap = new Map<string, any>();
-
-    // 1. Process items from `students` collection
-    rawStudentsRef.current.forEach(item => {
-      const key = item.uid || item.email?.toLowerCase() || item._firestoreId;
-      studentMap.set(key, {
-        ...item,
-        _firestoreId: item._firestoreId,
-        _allDocIds: [item._firestoreId],
-        uid: item.uid || item._firestoreId,
-        id: item.nisn || item.nis || item.id || item._firestoreId || "-",
-        nis: item.nis || item.id || "-",
-        nisn: item.nisn || item.id || "-",
-        name: item.fullName || item.name || "",
-        fullName: item.fullName || item.name || "",
-        nickname: item.nickname || "",
-        email: item.email || "",
-        gender: item.gender || "Laki-laki",
-        classId: item.classId || item.className || item.class || "",
-        className: item.className || item.classId || item.class || "",
-        status: item.status || "Aktif",
-        imageUrl: item.imageUrl || item.photoUrl || "",
-        photoUrl: item.photoUrl || item.imageUrl || ""
-      });
-    });
-
-    // 2. Merge items from `users` collection where role is "siswa" or "student"
-    rawUsersRef.current.forEach(u => {
-      const role = (u.role || "").toLowerCase();
-      if (role === "siswa" || role === "student") {
-        const uEmail = (u.email || "").toLowerCase();
-        const uUid = u.uid || u._firestoreId;
-
-        let existingKey: string | undefined;
-        for (const [k, v] of studentMap.entries()) {
-          if (
-            (uUid && (k === uUid || v.uid === uUid || v._firestoreId === uUid)) ||
-            (uEmail && v.email?.toLowerCase() === uEmail)
-          ) {
-            existingKey = k;
-            break;
-          }
-        }
-
-        if (existingKey) {
-          const existing = studentMap.get(existingKey)!;
-          if (!existing._allDocIds.includes(u._firestoreId)) {
-            existing._allDocIds.push(u._firestoreId);
-          }
-          Object.keys(u).forEach(k => {
-            if ((existing[k] === undefined || existing[k] === "" || existing[k] === "-") && u[k]) {
-              existing[k] = u[k];
-            }
-          });
-          if (!existing.name || existing.name === "Siswa Baru") existing.name = u.fullName || u.name || existing.name;
-          if (!existing.fullName) existing.fullName = u.fullName || u.name || existing.name;
-          if (!existing.classId && (u.classId || u.className || u.class)) {
-            existing.classId = u.classId || u.className || u.class;
-            existing.className = u.className || u.classId || u.class;
-          }
-        } else {
-          const newKey = uUid || uEmail || u._firestoreId;
-          studentMap.set(newKey, {
-            ...u,
-            _firestoreId: u._firestoreId,
-            _allDocIds: [u._firestoreId],
-            uid: uUid,
-            id: u.nisn || u.nis || u.id || u._firestoreId || "-",
-            nis: u.nis || "-",
-            nisn: u.nisn || "-",
-            name: u.fullName || u.name || u.email?.split("@")[0] || "Siswa Baru",
-            fullName: u.fullName || u.name || "",
-            email: u.email || "",
-            gender: u.gender || "Laki-laki",
-            classId: u.classId || u.className || u.class || "",
-            className: u.className || u.classId || u.class || "",
-            status: u.status || "Aktif",
-            imageUrl: u.imageUrl || u.photoUrl || "",
-            photoUrl: u.photoUrl || u.imageUrl || ""
-          });
-        }
-      }
-    });
-
-    setStudents(Array.from(studentMap.values()));
-  }, []);
-
-  // Universal helper to find a student by any identifier (id, _firestoreId, uid, nisn, or name)
-  const getStudentByIdOrName = useCallback((targetIdOrName?: string) => {
-    if (!targetIdOrName) return null;
-    const target = targetIdOrName.toString().trim().toLowerCase();
-    return students.find(s => 
-      s.id === targetIdOrName ||
-      s._firestoreId === targetIdOrName ||
-      s.uid === targetIdOrName ||
-      (s.nisn && s.nisn !== "-" && s.nisn.toString().toLowerCase() === target) ||
-      (s.nis && s.nis !== "-" && s.nis.toString().toLowerCase() === target) ||
-      ((s.fullName || s.name) && (s.fullName || s.name).toString().trim().toLowerCase() === target)
-    ) || null;
-  }, [students]);
-
   // Auth & Role Listener
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
@@ -258,20 +152,6 @@ export default function GradesPage() {
       setLoading(false);
     });
 
-    const unsubStudents = onSnapshot(collection(db, "students"), (snap) => {
-      rawStudentsRef.current = snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() }));
-      updateCombinedStudents();
-    }, (error) => {
-      console.warn("Students listener error:", error);
-    });
-
-    const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
-      rawUsersRef.current = snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() }));
-      updateCombinedStudents();
-    }, (error) => {
-      console.warn("Users listener error:", error);
-    });
-
     const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
       setClasses(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
     });
@@ -286,13 +166,11 @@ export default function GradesPage() {
 
     return () => {
       unsubGrades();
-      unsubStudents();
-      unsubUsers();
       unsubClasses();
       unsubSubjects();
       unsubTeachers();
     };
-  }, [updateCombinedStudents]);
+  }, []);
 
   // Available Classes Options: dynamic count from synchronized students
   const availableClassOptions = useMemo(() => {

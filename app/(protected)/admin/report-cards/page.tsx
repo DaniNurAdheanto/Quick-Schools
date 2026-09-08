@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { 
-  Award, Search, Filter, Printer, Save, User, CheckCircle2, 
-  AlertCircle, BookOpen, GraduationCap, ChevronRight, FileText, Sparkles, 
-  Loader2, Edit3, ShieldCheck, Check, Calendar, ArrowUpRight, School, Plus, Trash2, Heart,
-  BarChart3, PieChart, TrendingUp, RefreshCw, Layers, ThumbsUp, HelpCircle
+  Award, Search, Printer, Save, CheckCircle2, 
+  BookOpen, FileText, Sparkles, 
+  Loader2, Edit3, ShieldCheck, Check, Calendar, School, Trash2,
+  BarChart3, TrendingUp
 } from "lucide-react";
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart, 
@@ -267,14 +267,6 @@ export default function ReportCardsPage() {
     }).sort((a, b) => b.score - a.score);
   }, [currentStudent, grades, subjects, subjectNotes]);
 
-  // Split subjects into Kelompok A and Kelompok B for Kurikulum Merdeka / K13 presentation
-  const kelompokA = useMemo(() => {
-    return studentSubjectScores.filter(s => s.category.includes("Kelompok A") || s.category.includes("Wajib") || s.category.includes("Umum"));
-  }, [studentSubjectScores]);
-
-  const kelompokB = useMemo(() => {
-    return studentSubjectScores.filter(s => !kelompokA.includes(s));
-  }, [studentSubjectScores, kelompokA]);
 
   // Overall Average Score
   const overallAverage = useMemo(() => {

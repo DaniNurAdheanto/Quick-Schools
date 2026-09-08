@@ -30,7 +30,7 @@ import {
 import { cn } from "@/lib/utils";
 import { auth, db, storage } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useToast } from "@/context/ToastContext";
 
@@ -471,7 +471,6 @@ export default function StudentOnboardingPage() {
 
                 <div className="space-y-2">
                   {stepsList.map((s) => {
-                    const Icon = s.icon;
                     const isActive = step === s.num;
                     const isCompleted = step > s.num;
 

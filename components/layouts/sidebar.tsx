@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { DEFAULT_PERMISSIONS } from "@/app/(protected)/admin/roles/page";
+import { DEFAULT_PERMISSIONS, isSuperAdminRole } from "@/lib/roles-config";
 
 const NAV_MODULE_MAP: Record<string, string> = {
   "/admin/dashboard": "dashboard",
@@ -98,13 +98,7 @@ function NavGroup({ title, items, currentPath, isCollapsed, userPermissions, use
   userRole?: string;
   isFooter?: boolean 
 }) {
-  const normalizedRole = (userRole || "").toLowerCase().trim().replace(/[\s_-]+/g, "");
-  const isSuperAdmin = 
-    normalizedRole === "superadmin" || 
-    normalizedRole === "admin" ||
-    userRole === "super-admin" || 
-    userRole === "superadmin" || 
-    userRole === "super_admin";
+  const isSuperAdmin = isSuperAdminRole(userRole) || (userRole || "").toLowerCase() === "admin";
 
   // Filter items based on permissions
   const visibleItems = items.filter(item => {

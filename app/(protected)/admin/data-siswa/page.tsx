@@ -1,52 +1,42 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { 
   User, 
   Download, 
-  MoreHorizontal, 
-  TrendingUp, 
   Search, 
   ChevronDown, 
   LayoutGrid, 
   List,
-  Edit2,
-  Trash2,
-  Loader2,
-  X,
-  Filter,
-  RefreshCw,
-  Users,
-  GraduationCap,
-  CheckCircle2,
-  XCircle,
-  Plus,
-  Eye,
-  Bell,
-  Send,
-  AlertTriangle,
+  Edit2, 
+  Trash2, 
+  Loader2, 
+  X, 
+  RefreshCw, 
+  Users, 
+  CheckCircle2, 
+  XCircle, 
+  Plus, 
+  Eye, 
+  Bell, 
+  AlertTriangle, 
   Clock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CrudSheet } from "@/components/layouts/crud-sheet";
+import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
 import { useToast } from "@/context/ToastContext";
-import { db, auth, storage } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase";
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { useUnifiedStudents } from "@/hooks/use-unified-students";
 
 export default function DataSiswaPage() {
   const toast = useToast();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [students, setStudents] = useState<any[]>([]);
+  const { students, setStudents, loading, rawStudents, rawUsers } = useUnifiedStudents();
   const [classes, setClasses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [cleaning, setCleaning] = useState(false);
-
-  // Refs to hold active raw collections from Firestore
-  const rawStudentsRef = useRef<any[]>([]);
-  const rawUsersRef = useRef<any[]>([]);
 
   // Count unboarded students
   const unboardedCount = useMemo(() => {
@@ -80,7 +70,7 @@ export default function DataSiswaPage() {
         const targetEmail = (student.email || "").toLowerCase();
         const targetId = student.id || student.nis || student.nisn;
 
-        rawStudentsRef.current.forEach((s) => {
+        rawStudents.forEach((s) => {
           if (
             (targetEmail && s.email?.toLowerCase() === targetEmail) ||
             (student.uid && (s.uid === student.uid || s._firestoreId === student.uid)) ||
@@ -90,7 +80,7 @@ export default function DataSiswaPage() {
           }
         });
 
-        rawUsersRef.current.forEach((u) => {
+        rawUsers.forEach((u) => {
           if (
             (targetEmail && u.email?.toLowerCase() === targetEmail) ||
             (student.uid && (u.uid === student.uid || u._firestoreId === student.uid)) ||
@@ -133,198 +123,18 @@ export default function DataSiswaPage() {
   });
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        const qStudents = query(collection(db, "students"));
-        const qUsers = query(collection(db, "users"));
-
-        const updateCombinedList = () => {
-          const studentMap = new Map<string, any>();
-
-          // 1. Process items from `students` collection
-          rawStudentsRef.current.forEach(item => {
-            const key = item.uid || item.email?.toLowerCase() || item._firestoreId;
-            const isUnboarded = item.status === "Belum Onboarding" || item.onboardingCompleted === false;
-            
-            studentMap.set(key, {
-              ...item,
-              _firestoreId: item._firestoreId,
-              _allDocIds: [item._firestoreId],
-              uid: item.uid || item._firestoreId,
-              id: item.nisn || item.nis || item.id || "-",
-              nis: item.nis || item.id || "-",
-              nisn: item.nisn || item.id || "-",
-              name: item.fullName || item.name || "",
-              fullName: item.fullName || item.name || "",
-              nickname: item.nickname || "",
-              email: item.email || "",
-              gender: item.gender || "Laki-laki",
-              birthPlace: item.birthPlace || "",
-              birthDate: item.birthDate || "",
-              religion: item.religion || "Islam",
-              nik: item.nik || "",
-              address: item.address || "",
-              phone: item.phone || "-",
-              classId: item.classId || item.className || "10 IPA 1",
-              className: item.className || item.classId || "10 IPA 1",
-              major: item.major || "MIPA",
-              entryYear: item.entryYear || "2025/2026",
-              level: item.level || "SMA",
-              studentStatus: item.studentStatus || "Siswa Baru",
-              previousSchool: item.previousSchool || "",
-              fatherName: item.fatherName || "",
-              motherName: item.motherName || "",
-              guardianName: item.guardianName || "",
-              parentPhone: item.parentPhone || "",
-              parentJob: item.parentJob || "",
-              parentIncome: item.parentIncome || "",
-              parentAddress: item.parentAddress || "",
-              emergencyName: item.emergencyName || "",
-              emergencyPhone: item.emergencyPhone || "",
-              emergencyRelation: item.emergencyRelation || "",
-              status: isUnboarded ? "Belum Onboarding" : (item.status || "Aktif"),
-              onboardingCompleted: !isUnboarded,
-              imageUrl: item.imageUrl || item.photoUrl || "",
-              photoUrl: item.photoUrl || item.imageUrl || "",
-              pendingOnboardingReminder: item.pendingOnboardingReminder || false,
-              reminderSentAt: item.reminderSentAt || null
-            });
-          });
-
-          // 2. Merge items from `users` collection where role is "siswa" or "student"
-          rawUsersRef.current.forEach(u => {
-            const role = (u.role || "").toLowerCase();
-            if (role === "siswa" || role === "student") {
-              const uEmail = (u.email || "").toLowerCase();
-              const uUid = u.uid || u._firestoreId;
-              const isUnboarded = u.onboardingCompleted === false || u.status === "Belum Onboarding";
-
-              let existingKey: string | undefined;
-              for (const [k, v] of studentMap.entries()) {
-                if (
-                  (uUid && (k === uUid || v.uid === uUid || v._firestoreId === uUid)) ||
-                  (uEmail && v.email?.toLowerCase() === uEmail)
-                ) {
-                  existingKey = k;
-                  break;
-                }
-              }
-
-              if (existingKey) {
-                const existing = studentMap.get(existingKey)!;
-                if (!existing._allDocIds.includes(u._firestoreId)) {
-                  existing._allDocIds.push(u._firestoreId);
-                }
-                // Merge fields from user profile if missing
-                Object.keys(u).forEach(k => {
-                  if ((existing[k] === undefined || existing[k] === "" || existing[k] === "-") && u[k]) {
-                    existing[k] = u[k];
-                  }
-                });
-                if (!existing.name || existing.name === "Siswa Baru") existing.name = u.fullName || u.name || existing.name;
-                if (!existing.email) existing.email = u.email || "";
-                if (!existing.imageUrl && (u.imageUrl || u.photoUrl)) existing.imageUrl = u.imageUrl || u.photoUrl;
-                if (u.pendingOnboardingReminder) existing.pendingOnboardingReminder = true;
-                if (u.reminderSentAt) existing.reminderSentAt = u.reminderSentAt;
-              } else {
-                const newKey = uUid || uEmail || u._firestoreId;
-                studentMap.set(newKey, {
-                  ...u,
-                  _firestoreId: u._firestoreId,
-                  _allDocIds: [u._firestoreId],
-                  uid: uUid,
-                  id: u.nisn || u.nis || u.id || "-",
-                  nis: u.nis || "-",
-                  nisn: u.nisn || "-",
-                  name: u.fullName || u.name || u.email?.split('@')[0] || "Siswa Baru",
-                  fullName: u.fullName || u.name || "",
-                  nickname: u.nickname || "",
-                  email: u.email || "",
-                  gender: u.gender || "Laki-laki",
-                  birthPlace: u.birthPlace || "",
-                  birthDate: u.birthDate || "",
-                  religion: u.religion || "Islam",
-                  nik: u.nik || "",
-                  address: u.address || "",
-                  phone: u.phone || "-",
-                  classId: u.classId || u.className || "10 IPA 1",
-                  className: u.className || u.classId || "10 IPA 1",
-                  major: u.major || "MIPA",
-                  entryYear: u.entryYear || "2025/2026",
-                  level: u.level || "SMA",
-                  studentStatus: u.studentStatus || "Siswa Baru",
-                  previousSchool: u.previousSchool || "",
-                  fatherName: u.fatherName || "",
-                  motherName: u.motherName || "",
-                  guardianName: u.guardianName || "",
-                  parentPhone: u.parentPhone || "",
-                  parentJob: u.parentJob || "",
-                  parentIncome: u.parentIncome || "",
-                  parentAddress: u.parentAddress || "",
-                  emergencyName: u.emergencyName || "",
-                  emergencyPhone: u.emergencyPhone || "",
-                  emergencyRelation: u.emergencyRelation || "",
-                  status: isUnboarded ? "Belum Onboarding" : (u.status || "Aktif"),
-                  onboardingCompleted: !isUnboarded,
-                  grade: u.grade || "X",
-                  photoUrl: u.photoUrl || u.imageUrl || "",
-                  imageUrl: u.photoUrl || u.imageUrl || "",
-                  pendingOnboardingReminder: u.pendingOnboardingReminder || false,
-                  reminderSentAt: u.reminderSentAt || null
-                });
-              }
-            }
-          });
-
-          setStudents(Array.from(studentMap.values()));
-          setLoading(false);
-        };
-
-        const unsubscribeStudents = onSnapshot(qStudents, (snapshot) => {
-          rawStudentsRef.current = snapshot.docs.map(doc => ({
-            _firestoreId: doc.id,
-            ...doc.data()
-          }));
-          updateCombinedList();
-        }, (error) => {
-          console.error("Error fetching students:", error);
-          setLoading(false);
-        });
-
-        const unsubscribeUsers = onSnapshot(qUsers, (snapshot) => {
-          rawUsersRef.current = snapshot.docs.map(doc => ({
-            _firestoreId: doc.id,
-            ...doc.data()
-          }));
-          updateCombinedList();
-        }, (error) => {
-          console.error("Error fetching users:", error);
-        });
-
-        const qClasses = query(collection(db, "classes"));
-        const unsubscribeClasses = onSnapshot(qClasses, (snapshot) => {
-          const classesData = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-          setClasses(classesData);
-        }, (error) => {
-          console.error("Error fetching classes:", error);
-        });
-        
-        return () => {
-          unsubscribeStudents();
-          unsubscribeUsers();
-          unsubscribeClasses();
-        };
-      } else {
-        setStudents([]);
-        setClasses([]);
-        setLoading(false);
-      }
+    const qClasses = query(collection(db, "classes"));
+    const unsubscribeClasses = onSnapshot(qClasses, (snapshot) => {
+      const classesData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setClasses(classesData);
+    }, (error) => {
+      console.error("Error fetching classes:", error);
     });
-
-    return () => unsubscribeAuth();
+    
+    return () => unsubscribeClasses();
   }, []);
 
   // Send Onboarding Reminder to a specific student
@@ -668,8 +478,8 @@ export default function DataSiswaPage() {
         const targetEmail = (data.email || "").toLowerCase();
         const targetId = data.id || data.nis || data.nisn;
 
-        // Scan rawStudentsRef and rawUsersRef for any matching doc IDs
-        rawStudentsRef.current.forEach(s => {
+        // Scan rawStudents and rawUsers for any matching doc IDs
+        rawStudents.forEach(s => {
           if (
             (targetEmail && s.email?.toLowerCase() === targetEmail) ||
             (data.uid && (s.uid === data.uid || s._firestoreId === data.uid)) ||
@@ -679,7 +489,7 @@ export default function DataSiswaPage() {
           }
         });
 
-        rawUsersRef.current.forEach(u => {
+        rawUsers.forEach(u => {
           if (
             (targetEmail && u.email?.toLowerCase() === targetEmail) ||
             (data.uid && (u.uid === data.uid || u._firestoreId === data.uid)) ||

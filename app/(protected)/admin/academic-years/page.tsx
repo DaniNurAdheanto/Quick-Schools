@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { 
-  Calendar, CheckCircle2, Plus, Edit3, Trash2, GraduationCap, 
-  ArrowRight, ShieldCheck, RefreshCw, AlertTriangle, Layers, 
-  Users, School, Sparkles, BookOpen, Loader2, Save, FileText, ChevronRight, ShieldAlert
+  Calendar, Plus, GraduationCap, 
+  ArrowRight, RefreshCw, 
+  Users, School, Loader2, ShieldAlert
 } from "lucide-react";
-import { collection, onSnapshot, doc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch, getDocs, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, serverTimestamp, writeBatch, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
@@ -14,13 +14,12 @@ import { useAcademicYear } from "@/context/AcademicYearContext";
 import { AlertBox, AlertType } from "@/components/ui/alert-box";
 
 export default function AcademicYearsPage() {
-  const { activeAcademicYear, activeSemester, availableYears, setActiveAcademicYear, setActiveSemester } = useAcademicYear();
+  const { activeAcademicYear, activeSemester, setActiveAcademicYear, setActiveSemester } = useAcademicYear();
 
   const [userRole, setUserRole] = useState<string>("admin");
   const [students, setStudents] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [dbYears, setDbYears] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const [activeTab, setActiveTab] = useState<"list" | "promotion" | "archive">("list");
@@ -66,7 +65,6 @@ export default function AcademicYearsPage() {
     const unsubYears = onSnapshot(collection(db, "academicYears"), (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setDbYears(list);
-      setLoading(false);
     });
 
     const unsubStudents = onSnapshot(collection(db, "students"), (snap) => {

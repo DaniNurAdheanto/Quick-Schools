@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { 
-  CalendarRange, Search, Filter, Plus, Edit3, Trash2, Printer, 
-  Clock, MapPin, User, FileText, CheckCircle2, AlertTriangle, 
-  Calendar as CalendarIcon, ShieldAlert, Sparkles, BookOpen, 
-  GraduationCap, School, X, Loader2, ArrowRight, Check, Layers, Save
+  CalendarRange, Search, Plus, Edit3, Trash2, Printer, 
+  Clock, MapPin, User, FileText, 
+  Calendar as CalendarIcon, 
+  School, X, Loader2, Layers, Save
 } from "lucide-react";
 import { 
   collection, onSnapshot, doc, setDoc, addDoc, deleteDoc, 
