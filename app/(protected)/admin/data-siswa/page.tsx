@@ -21,13 +21,15 @@ import {
   Eye, 
   Bell, 
   AlertTriangle, 
-  Clock
+  Clock,
+  GraduationCap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
 import { useToast } from "@/context/ToastContext";
-import { db, storage } from "@/lib/firebase";
-import { collection, query, onSnapshot, setDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { db, storage, auth } from "@/lib/firebase";
+import { collection, query, onSnapshot, setDoc, updateDoc, deleteDoc, doc, getDoc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 
@@ -36,19 +38,132 @@ export default function DataSiswaPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const { students, setStudents, loading, rawStudents, rawUsers } = useUnifiedStudents();
   const [classes, setClasses] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
   const [cleaning, setCleaning] = useState(false);
+
+  // User auth & role detection
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string>("admin");
+
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        try {
+          const userDocSnap = await getDoc(doc(db, "users", u.uid));
+          if (userDocSnap.exists()) {
+            const uData = userDocSnap.data();
+            setCurrentUser({ uid: u.uid, email: u.email, ...uData });
+            const r = (uData.role || "admin").toLowerCase();
+            setUserRole(r === "teacher" ? "guru" : r);
+          } else {
+            setCurrentUser({ uid: u.uid, email: u.email, role: "admin" });
+            setUserRole("admin");
+          }
+        } catch (err) {
+          console.error("Fetch current user error:", err);
+        }
+      } else {
+        setCurrentUser(null);
+        setUserRole("admin");
+      }
+    });
+
+    const unsubTeachers = onSnapshot(collection(db, "teachers"), (snap) => {
+      setTeachers(snap.docs.map(d => ({ _firestoreId: d.id, ...d.data() })));
+    }, (err) => {
+      console.error("Fetch teachers error:", err);
+    });
+
+    return () => {
+      unsubAuth();
+      unsubTeachers();
+    };
+  }, []);
+
+  // Determine if logged in user is Guru and their assigned Homeroom Class (Wali Kelas)
+  const isGuru = userRole === "guru" || userRole === "teacher";
+
+  const teacherClasses = useMemo(() => {
+    if (!isGuru) return null; // Non-guru users (admin, super-admin, etc.) are unrestricted
+    if (!currentUser) return [];
+
+    const teacherName = (currentUser.fullName || currentUser.name || "").trim().toLowerCase();
+    const teacherNip = (currentUser.nip || currentUser.id || "").trim().toLowerCase();
+    const teacherEmail = (currentUser.email || "").trim().toLowerCase();
+    const teacherUid = currentUser.uid;
+
+    const matched = new Set<string>();
+
+    // 1. Match from classes collection
+    classes.forEach(c => {
+      const cName = c.name || c.id;
+      const cHomeroom = (c.homeroom || "").trim().toLowerCase();
+      const cNip = (c.homeroomNip || "").trim().toLowerCase();
+      const cId = (c.homeroomId || "").trim();
+
+      const matchName = teacherName && cHomeroom && (
+        cHomeroom === teacherName ||
+        (teacherName.length > 5 && cHomeroom.includes(teacherName)) ||
+        (cHomeroom.length > 5 && teacherName.includes(cHomeroom))
+      );
+      const matchNip = teacherNip && cNip && cNip === teacherNip;
+      const matchId = (teacherUid && cId && cId === teacherUid) || (currentUser.id && cId === currentUser.id);
+
+      if (matchName || matchNip || matchId) {
+        if (cName) matched.add(cName);
+      }
+    });
+
+    // 2. Direct field in users collection
+    const directClass = currentUser.homeroomClass || currentUser.homeroom || currentUser.className || currentUser.classId;
+    if (directClass && directClass !== "-" && classes.some(c => (c.name || c.id) === directClass)) {
+      matched.add(directClass);
+    }
+
+    // 3. Match from teachers collection
+    const teacherDoc = teachers.find(t => 
+      (teacherEmail && t.email?.toLowerCase() === teacherEmail) ||
+      (teacherNip && (t.nip === teacherNip || t.id === teacherNip)) ||
+      (teacherUid && (t.uid === teacherUid || t._firestoreId === teacherUid))
+    );
+    if (teacherDoc) {
+      const tClass = teacherDoc.homeroomClass || teacherDoc.homeroom || teacherDoc.class || teacherDoc.className;
+      if (tClass && tClass !== "-") {
+        matched.add(tClass);
+      }
+    }
+
+    return Array.from(matched);
+  }, [isGuru, currentUser, classes, teachers]);
+
+  const isTeacherWaliKelas = Boolean(isGuru && teacherClasses && teacherClasses.length > 0);
+  const primaryTeacherClass = teacherClasses && teacherClasses.length > 0 ? teacherClasses[0] : "";
+
+  // Base students scoped to teacher's homeroom class if user is guru
+  const baseStudents = useMemo(() => {
+    if (isGuru) {
+      if (!teacherClasses || teacherClasses.length === 0) {
+        return []; // Guru not assigned as wali kelas sees 0 students
+      }
+      return students.filter(s => {
+        const sc = (s.classId || s.className || s.kelas || s.class || "").trim().toLowerCase();
+        return teacherClasses.some(tc => tc.trim().toLowerCase() === sc);
+      });
+    }
+    return students;
+  }, [students, isGuru, teacherClasses]);
 
   // Count unboarded students
   const unboardedCount = useMemo(() => {
-    return students.filter(
+    return baseStudents.filter(
       (s) => (s.status || "") === "Belum Onboarding" || s.onboardingCompleted === false
     ).length;
-  }, [students]);
+  }, [baseStudents]);
 
   const handleCleanUnboardedStudents = async () => {
     try {
       setCleaning(true);
-      const unboarded = students.filter(
+      const unboarded = baseStudents.filter(
         (s) => (s.status || "") === "Belum Onboarding" || s.onboardingCompleted === false
       );
 
@@ -178,7 +293,7 @@ export default function DataSiswaPage() {
 
   // Send Onboarding Reminder to ALL unboarded students
   const handleSendBulkReminders = async () => {
-    const unboarded = students.filter(
+    const unboarded = baseStudents.filter(
       s => (s.status || "") === "Belum Onboarding" || s.onboardingCompleted === false
     );
 
@@ -272,15 +387,17 @@ export default function DataSiswaPage() {
       category: "akademik",
       type: "select",
       placeholder: "Pilih Kelas",
-      options: classes.length > 0 
-        ? classes.map(c => ({ label: c.name || c.id, value: c.name || c.id }))
-        : [
-            { label: "10 IPA 1", value: "10 IPA 1" },
-            { label: "10 IPA 2", value: "10 IPA 2" },
-            { label: "10 IPS 1", value: "10 IPS 1" },
-            { label: "11 MIPA 1", value: "11 MIPA 1" },
-            { label: "12 MIPA 1", value: "12 MIPA 1" }
-          ]
+      options: isTeacherWaliKelas && teacherClasses && teacherClasses.length > 0
+        ? teacherClasses.map(c => ({ label: c, value: c }))
+        : classes.length > 0 
+          ? classes.map(c => ({ label: c.name || c.id, value: c.name || c.id }))
+          : [
+              { label: "10 IPA 1", value: "10 IPA 1" },
+              { label: "10 IPA 2", value: "10 IPA 2" },
+              { label: "10 IPS 1", value: "10 IPS 1" },
+              { label: "11 MIPA 1", value: "11 MIPA 1" },
+              { label: "12 MIPA 1", value: "12 MIPA 1" }
+            ]
     },
     { 
       name: "major", 
@@ -424,64 +541,163 @@ export default function DataSiswaPage() {
           id: newUid,
           role: "siswa"
         });
-      } else if (crudState.mode === "edit" && data._firestoreId) {
-        const payload = {
-          id: data.id || data.nisn || "",
-          nis: data.id || data.nisn || "",
-          nisn: data.nisn || data.id || "",
-          name: data.name || "",
-          fullName: data.name || "",
-          nickname: data.nickname || "",
-          gender: data.gender || "Laki-laki",
-          birthPlace: data.birthPlace || "",
-          birthDate: data.birthDate || "",
-          religion: data.religion || "Islam",
-          nik: data.nik || "",
-          address: data.address || "",
-          phone: data.phone || "",
-          email: data.email || "",
-          classId: data.classId || "",
-          className: data.classId || "",
-          major: data.major || "MIPA",
-          entryYear: data.entryYear || "2025/2026",
-          level: data.level || "SMA",
-          studentStatus: data.studentStatus || "Siswa Baru",
-          previousSchool: data.previousSchool || "",
-          fatherName: data.fatherName || "",
-          motherName: data.motherName || "",
-          guardianName: data.guardianName || "",
-          parentPhone: data.parentPhone || "",
-          parentJob: data.parentJob || "",
-          parentIncome: data.parentIncome || "",
-          parentAddress: data.parentAddress || "",
-          emergencyName: data.emergencyName || "",
-          emergencyPhone: data.emergencyPhone || "",
-          emergencyRelation: data.emergencyRelation || "",
-          status: data.status || "Aktif",
-          onboardingCompleted: data.status !== "Belum Onboarding",
+      } else if (crudState.mode === "edit") {
+        const original = crudState.data || {};
+        const mergedData = { ...original, ...data };
+        const selectedClass = (mergedData.classId || mergedData.className || mergedData.kelas || mergedData.class || "10 IPA 1").trim();
+        const studentName = (mergedData.name || mergedData.fullName || "Siswa").trim();
+        const studentStatus = (mergedData.status || "Aktif").trim();
+
+        // 1. Gather all student & user doc IDs associated with this student
+        const targetStudentDocIds = new Set<string>();
+        const targetUserDocIds = new Set<string>();
+
+        if (original._firestoreId) targetStudentDocIds.add(original._firestoreId);
+        if (data._firestoreId) targetStudentDocIds.add(data._firestoreId);
+        if (original.uid) {
+          targetUserDocIds.add(original.uid);
+          targetStudentDocIds.add(original.uid);
+        }
+        if (data.uid) {
+          targetUserDocIds.add(data.uid);
+          targetStudentDocIds.add(data.uid);
+        }
+        if (Array.isArray(original._allDocIds)) {
+          original._allDocIds.forEach((id: string) => {
+            targetStudentDocIds.add(id);
+            targetUserDocIds.add(id);
+          });
+        }
+        if (Array.isArray(data._allDocIds)) {
+          data._allDocIds.forEach((id: string) => {
+            targetStudentDocIds.add(id);
+            targetUserDocIds.add(id);
+          });
+        }
+
+        const targetEmail = (mergedData.email || "").toLowerCase().trim();
+        const targetId = mergedData.id || mergedData.nis || mergedData.nisn;
+        const targetUid = mergedData.uid || original.uid;
+
+        // Also check rawStudents
+        rawStudents.forEach(s => {
+          if (
+            (targetEmail && s.email?.toLowerCase() === targetEmail) ||
+            (targetUid && (s.uid === targetUid || s._firestoreId === targetUid || s.id === targetUid)) ||
+            (targetId && targetId !== "-" && (s.id === targetId || s.nis === targetId || s.nisn === targetId))
+          ) {
+            if (s._firestoreId) targetStudentDocIds.add(s._firestoreId);
+          }
+        });
+
+        // Also check rawUsers
+        rawUsers.forEach(u => {
+          if (
+            (targetEmail && u.email?.toLowerCase() === targetEmail) ||
+            (targetUid && (u.uid === targetUid || u._firestoreId === targetUid || u.id === targetUid)) ||
+            (targetId && targetId !== "-" && (u.id === targetId || u.nis === targetId || u.nisn === targetId))
+          ) {
+            if (u._firestoreId) targetUserDocIds.add(u._firestoreId);
+            if (u.uid) targetUserDocIds.add(u.uid);
+          }
+        });
+
+        // If no ID was resolved, fallback to a sensible key
+        const fallbackId = targetUid || mergedData.id || mergedData.nisn || `siswa_${Date.now()}`;
+        if (targetStudentDocIds.size === 0) targetStudentDocIds.add(fallbackId);
+        if (targetUserDocIds.size === 0) targetUserDocIds.add(fallbackId);
+
+        // 2. Write strictly compliant 5 keys to students collection using setDoc with merge: true
+        for (const sDocId of Array.from(targetStudentDocIds)) {
+          try {
+            await setDoc(doc(db, "students", sDocId), {
+              id: sDocId,
+              name: studentName.slice(0, 100),
+              classId: selectedClass.slice(0, 50),
+              status: studentStatus,
+              imageUrl: (imageUrl || "").slice(0, 500)
+            }, { merge: true });
+          } catch (err) {
+            console.warn("Update students collection warning:", sDocId, err);
+          }
+        }
+
+        // 3. Write rich profile to users collection using setDoc with merge: true
+        const userPayload = {
+          id: targetId || fallbackId,
+          uid: targetUid || fallbackId,
+          nis: mergedData.nis || mergedData.id || mergedData.nisn || "",
+          nisn: mergedData.nisn || mergedData.id || "",
+          name: studentName,
+          fullName: mergedData.fullName || studentName,
+          nickname: mergedData.nickname || "",
+          gender: mergedData.gender || "Laki-laki",
+          birthPlace: mergedData.birthPlace || "",
+          birthDate: mergedData.birthDate || "",
+          religion: mergedData.religion || "Islam",
+          nik: mergedData.nik || "",
+          address: mergedData.address || "",
+          phone: mergedData.phone || "",
+          email: mergedData.email || "",
+          classId: selectedClass,
+          className: selectedClass,
+          kelas: selectedClass,
+          class: selectedClass,
+          major: mergedData.major || "MIPA",
+          entryYear: mergedData.entryYear || "2025/2026",
+          level: mergedData.level || "SMA",
+          studentStatus: mergedData.studentStatus || "Siswa Baru",
+          previousSchool: mergedData.previousSchool || "",
+          fatherName: mergedData.fatherName || "",
+          motherName: mergedData.motherName || "",
+          guardianName: mergedData.guardianName || "",
+          parentPhone: mergedData.parentPhone || "",
+          parentJob: mergedData.parentJob || "",
+          parentIncome: mergedData.parentIncome || "",
+          parentAddress: mergedData.parentAddress || "",
+          emergencyName: mergedData.emergencyName || "",
+          emergencyPhone: mergedData.emergencyPhone || "",
+          emergencyRelation: mergedData.emergencyRelation || "",
+          status: studentStatus,
+          onboardingCompleted: studentStatus !== "Belum Onboarding",
           imageUrl: imageUrl,
           photoUrl: imageUrl,
+          role: "siswa",
           updatedAt: new Date().toISOString()
         };
 
-        const targetIds = Array.from(new Set([
-          data._firestoreId, 
-          data.uid, 
-          ...(data._allDocIds || [])
-        ].filter(Boolean)));
-
-        for (const tId of targetIds) {
+        for (const uDocId of Array.from(targetUserDocIds)) {
           try {
-            await updateDoc(doc(db, "students", tId as string), payload);
+            await setDoc(doc(db, "users", uDocId), userPayload, { merge: true });
           } catch (err) {
-            console.warn("Update students collection warning:", err);
-          }
-          try {
-            await updateDoc(doc(db, "users", tId as string), payload);
-          } catch (err) {
-            console.warn("Update users collection warning:", err);
+            console.warn("Update users collection warning:", uDocId, err);
           }
         }
+
+        // 4. Optimistically update local state immediately
+        setStudents(prev => prev.map(s => {
+          const isMatch = (
+            (s._firestoreId && (targetStudentDocIds.has(s._firestoreId) || targetUserDocIds.has(s._firestoreId))) ||
+            (s.uid && (targetUserDocIds.has(s.uid) || targetStudentDocIds.has(s.uid))) ||
+            (targetEmail && s.email?.toLowerCase() === targetEmail) ||
+            (targetId && (s.id === targetId || s.nisn === targetId))
+          );
+          if (isMatch) {
+            return {
+              ...s,
+              ...userPayload,
+              classId: selectedClass,
+              className: selectedClass,
+              kelas: selectedClass,
+              class: selectedClass,
+              name: studentName,
+              fullName: userPayload.fullName,
+              imageUrl: imageUrl,
+              photoUrl: imageUrl,
+            };
+          }
+          return s;
+        }));
       } else if (crudState.mode === "delete" && data) {
         const allDocIdsToDelete = new Set<string>();
 
@@ -547,9 +763,9 @@ export default function DataSiswaPage() {
     }
   };
 
-  // Filtered Students List
+  // Filtered Students List scoped to baseStudents
   const filteredStudents = useMemo(() => {
-    return students.filter(student => {
+    return baseStudents.filter(student => {
       const matchSearch = !searchQuery || 
         (student.name && student.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (student.id && student.id.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -560,25 +776,37 @@ export default function DataSiswaPage() {
 
       return matchSearch && matchClass && matchStatus;
     });
-  }, [students, searchQuery, selectedClass, selectedStatus]);
+  }, [baseStudents, searchQuery, selectedClass, selectedStatus]);
+
+  // Synchronize selectedClass for Wali Kelas
+  useEffect(() => {
+    if (isTeacherWaliKelas && teacherClasses && teacherClasses.length > 0) {
+      if (!teacherClasses.includes(selectedClass)) {
+        setSelectedClass(teacherClasses[0]);
+      }
+    }
+  }, [isTeacherWaliKelas, teacherClasses, selectedClass]);
 
   // Dynamic Statistics
   const dynamicStats = [
-    { label: "Total Siswa", value: students.length.toString(), icon: Users, color: "text-[#531FFF] bg-[#531FFF]/10" },
-    { label: "Siswa Aktif", value: students.filter(s => (s.status || "Aktif") === "Aktif").length.toString(), icon: CheckCircle2, color: "text-emerald-600 bg-emerald-100" },
+    { label: "Total Siswa", value: baseStudents.length.toString(), icon: Users, color: "text-[#531FFF] bg-[#531FFF]/10" },
+    { label: "Siswa Aktif", value: baseStudents.filter(s => (s.status || "Aktif") === "Aktif").length.toString(), icon: CheckCircle2, color: "text-emerald-600 bg-emerald-100" },
     { label: "Belum Onboarding", value: unboardedCount.toString(), icon: Clock, color: "text-amber-600 bg-amber-100" },
-    { label: "Siswa Nonaktif", value: students.filter(s => s.status === "Nonaktif").length.toString(), icon: XCircle, color: "text-rose-600 bg-rose-100" },
+    { label: "Siswa Nonaktif", value: baseStudents.filter(s => s.status === "Nonaktif").length.toString(), icon: XCircle, color: "text-rose-600 bg-rose-100" },
   ];
 
   // Unique classes options for filter
   const classOptions = useMemo(() => {
+    if (isTeacherWaliKelas && teacherClasses && teacherClasses.length > 0) {
+      return teacherClasses;
+    }
     const list = Array.from(new Set(students.map(s => s.classId).filter(Boolean)));
     classes.forEach(c => {
       const name = c.name || c.id;
       if (name && !list.includes(name)) list.push(name);
     });
     return list.sort();
-  }, [students, classes]);
+  }, [students, classes, isTeacherWaliKelas, teacherClasses]);
 
   // CSV Export Handler
   const handleExportCSV = () => {
@@ -600,11 +828,14 @@ export default function DataSiswaPage() {
     document.body.removeChild(link);
   };
 
-  const isFiltered = searchQuery !== "" || selectedClass !== "All" || selectedStatus !== "All";
+  const isFiltered = searchQuery !== "" || 
+    (!isTeacherWaliKelas && selectedClass !== "All") || 
+    (isTeacherWaliKelas && teacherClasses && teacherClasses.length > 1 && selectedClass !== teacherClasses[0]) || 
+    selectedStatus !== "All";
 
   const handleResetFilters = () => {
     setSearchQuery("");
-    setSelectedClass("All");
+    setSelectedClass(isTeacherWaliKelas && teacherClasses && teacherClasses.length > 0 ? teacherClasses[0] : "All");
     setSelectedStatus("All");
   };
 
@@ -628,20 +859,36 @@ export default function DataSiswaPage() {
             <User className="w-6 h-6 fill-current" />
           </div>
           <div>
-            <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Data Siswa</h1>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Data Siswa</h1>
+              {isTeacherWaliKelas && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  Wali Kelas: {teacherClasses?.join(", ")}
+                </span>
+              )}
+            </div>
             <p className="text-gray-500 text-xs md:text-sm font-medium mt-0.5">
-              Manajemen direktori peserta didik, pencarian NISN, dan pengelompokan kelas.
+              {isTeacherWaliKelas 
+                ? `Menampilkan direktori peserta didik untuk kelas binaan Anda (${teacherClasses?.join(", ")}).`
+                : isGuru 
+                  ? "Direktori peserta didik sekolah. Akun Anda belum memiliki penugasan kelas binaan."
+                  : "Manajemen direktori peserta didik, pencarian NISN, dan pengelompokan kelas."}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           <button 
-            onClick={() => setCrudState({ open: true, mode: "create" })}
+            onClick={() => setCrudState({ 
+              open: true, 
+              mode: "create",
+              data: isTeacherWaliKelas ? { classId: primaryTeacherClass, className: primaryTeacherClass } : undefined
+            })}
             className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <Plus className="w-4 h-4" />
-            <span>Tambah Siswa</span>
+            <span>Tambah Siswa {isTeacherWaliKelas ? `(${primaryTeacherClass})` : ""}</span>
           </button>
           
           <button 
@@ -654,6 +901,23 @@ export default function DataSiswaPage() {
           </button>
         </div>
       </div>
+
+      {/* Notice for Guru with no homeroom assigned */}
+      {isGuru && (!teacherClasses || teacherClasses.length === 0) && (
+        <div className="bg-amber-50/90 border border-amber-200/80 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-amber-100 border border-amber-200 text-amber-700 flex items-center justify-center shrink-0">
+            <GraduationCap className="w-5 h-5" />
+          </div>
+          <div className="space-y-0.5">
+            <h4 className="text-sm font-bold text-amber-900">
+              Akun Guru Belum Ditetapkan Sebagai Wali Kelas
+            </h4>
+            <p className="text-xs text-amber-700 font-medium leading-relaxed">
+              Anda saat ini masuk dengan peran <strong>Guru Pengajar</strong>, namun belum memiliki penugasan Wali Kelas di kelas manapun. Sesuai aturan sistem, data siswa dibatasi hanya untuk kelas binaan Anda. Hubungi Administrator untuk menetapkan penugasan Wali Kelas Anda di menu <strong>Wali Kelas</strong>.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Interactive Unboarded Students Reminder Banner */}
       {unboardedCount > 0 && (
@@ -743,11 +1007,17 @@ export default function DataSiswaPage() {
             <select
               value={selectedClass}
               onChange={(e) => setSelectedClass(e.target.value)}
-              className="w-full pl-4 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] appearance-none cursor-pointer"
+              disabled={Boolean(isTeacherWaliKelas && teacherClasses && teacherClasses.length === 1)}
+              className={cn(
+                "w-full pl-4 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] appearance-none cursor-pointer",
+                isTeacherWaliKelas && teacherClasses && teacherClasses.length === 1 && "bg-gray-50/80 cursor-default opacity-90 text-[#531FFF] font-bold"
+              )}
             >
-              <option value="All">Semua Kelas</option>
+              {!isTeacherWaliKelas && <option value="All">Semua Kelas</option>}
               {classOptions.map(c => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>
+                  {isTeacherWaliKelas ? `Kelas: ${c}` : c}
+                </option>
               ))}
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -784,7 +1054,7 @@ export default function DataSiswaPage() {
         {/* View Mode Switcher Right */}
         <div className="flex items-center justify-between md:justify-end gap-3">
           <span className="text-xs font-bold text-gray-400">
-            {filteredStudents.length} dari {students.length} Siswa
+            {filteredStudents.length} dari {baseStudents.length} Siswa
           </span>
 
           <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0 border border-gray-200">
@@ -1047,15 +1317,29 @@ export default function DataSiswaPage() {
           {filteredStudents.length === 0 && (
             <div className="py-20 bg-white rounded-2xl border border-gray-100 text-center flex flex-col items-center justify-center p-6 shadow-xs">
               <div className="w-16 h-16 bg-purple-50 text-[#531FFF] rounded-full flex items-center justify-center mb-4">
-                <User className="w-8 h-8" />
+                {isGuru && (!teacherClasses || teacherClasses.length === 0) ? (
+                  <GraduationCap className="w-8 h-8" />
+                ) : (
+                  <User className="w-8 h-8" />
+                )}
               </div>
               <h3 className="text-gray-900 font-extrabold text-base mb-1">
-                {isFiltered ? "Siswa tidak ditemukan" : "Belum ada data siswa"}
+                {isGuru && (!teacherClasses || teacherClasses.length === 0)
+                  ? "Belum Ada Kelas Binaan"
+                  : isFiltered 
+                    ? "Siswa tidak ditemukan" 
+                    : isTeacherWaliKelas
+                      ? `Belum ada data siswa di kelas ${teacherClasses?.join(", ")}`
+                      : "Belum ada data siswa"}
               </h3>
               <p className="text-gray-500 text-sm max-w-sm mb-5 font-medium">
-                {isFiltered 
-                  ? "Coba ubah kata kunci pencarian atau reset filter untuk menampilkan siswa lainnya."
-                  : "Silakan tambahkan siswa baru ke dalam sistem direktori sekolah."
+                {isGuru && (!teacherClasses || teacherClasses.length === 0)
+                  ? "Akun Anda belum ditetapkan sebagai Wali Kelas. Data siswa akan otomatis tampil di sini setelah Anda ditugaskan ke sebuah kelas binaan."
+                  : isFiltered 
+                    ? "Coba ubah kata kunci pencarian atau reset filter untuk menampilkan siswa lainnya."
+                    : isTeacherWaliKelas
+                      ? `Silakan tambahkan siswa baru ke kelas binaan Anda (${teacherClasses?.join(", ")}).`
+                      : "Silakan tambahkan siswa baru ke dalam sistem direktori sekolah."
                 }
               </p>
               
@@ -1066,14 +1350,18 @@ export default function DataSiswaPage() {
                 >
                   Reset Filter
                 </button>
-              ) : (
+              ) : !(isGuru && (!teacherClasses || teacherClasses.length === 0)) ? (
                 <button 
-                  onClick={() => setCrudState({ open: true, mode: "create" })}
+                  onClick={() => setCrudState({ 
+                    open: true, 
+                    mode: "create",
+                    data: isTeacherWaliKelas ? { classId: primaryTeacherClass, className: primaryTeacherClass } : undefined
+                  })}
                   className="bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-[#531FFF]/20"
                 >
-                  + Tambah Siswa Baru
+                  + Tambah Siswa Baru {isTeacherWaliKelas ? `(${primaryTeacherClass})` : ""}
                 </button>
-              )}
+              ) : null}
             </div>
           )}
         </>

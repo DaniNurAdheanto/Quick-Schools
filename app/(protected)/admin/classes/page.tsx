@@ -329,10 +329,32 @@ export default function ClassesPage() {
 
     try {
       setIsProcessingStudent(true);
-      await updateDoc(doc(db, "students", student._firestoreId), {
-        classId: "",
-        updatedAt: new Date().toISOString()
-      });
+      const studentId = student._firestoreId;
+      const studentName = (student.fullName || student.name || "Siswa").trim();
+      const studentStatus = student.status || "Aktif";
+      const payload: any = {
+        id: studentId,
+        name: studentName.slice(0, 100),
+        classId: "-",
+        status: studentStatus,
+      };
+      if (student.imageUrl) payload.imageUrl = student.imageUrl.slice(0, 500);
+
+      await setDoc(doc(db, "students", studentId), payload, { merge: true });
+
+      // Sync to users collection
+      const userTargetId = student.uid || studentId;
+      try {
+        await setDoc(doc(db, "users", userTargetId), {
+          classId: "-",
+          className: "-",
+          kelas: "-",
+          class: "-",
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (uErr) {
+        console.warn("Sync to users collection warning:", uErr);
+      }
 
       toast.showSuccess(`${student.fullName || student.name} berhasil dikeluarkan dari kelas ${managingClass.name}.`, "Siswa Dikeluarkan");
     } catch (err: any) {
@@ -349,10 +371,33 @@ export default function ClassesPage() {
 
     try {
       setIsProcessingStudent(true);
-      await updateDoc(doc(db, "students", student._firestoreId), {
-        classId: managingClass.name,
-        updatedAt: new Date().toISOString()
-      });
+      const studentId = student._firestoreId;
+      const targetClass = managingClass.name;
+      const studentName = (student.fullName || student.name || "Siswa").trim();
+      const studentStatus = student.status || "Aktif";
+      const payload: any = {
+        id: studentId,
+        name: studentName.slice(0, 100),
+        classId: targetClass.slice(0, 50),
+        status: studentStatus,
+      };
+      if (student.imageUrl) payload.imageUrl = student.imageUrl.slice(0, 500);
+
+      await setDoc(doc(db, "students", studentId), payload, { merge: true });
+
+      // Sync to users collection
+      const userTargetId = student.uid || studentId;
+      try {
+        await setDoc(doc(db, "users", userTargetId), {
+          classId: targetClass,
+          className: targetClass,
+          kelas: targetClass,
+          class: targetClass,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (uErr) {
+        console.warn("Sync to users collection warning:", uErr);
+      }
 
       toast.showSuccess(`${student.fullName || student.name} berhasil dimasukkan ke kelas ${managingClass.name}!`, "Siswa Ditambahkan");
     } catch (err: any) {
@@ -458,10 +503,32 @@ export default function ClassesPage() {
 
     try {
       setIsProcessingStudent(true);
-      await updateDoc(doc(db, "students", transferringStudent._firestoreId), {
-        classId: targetClassId,
-        updatedAt: new Date().toISOString()
-      });
+      const studentId = transferringStudent._firestoreId;
+      const studentName = (transferringStudent.fullName || transferringStudent.name || "Siswa").trim();
+      const studentStatus = transferringStudent.status || "Aktif";
+      const payload: any = {
+        id: studentId,
+        name: studentName.slice(0, 100),
+        classId: targetClassId.slice(0, 50),
+        status: studentStatus,
+      };
+      if (transferringStudent.imageUrl) payload.imageUrl = transferringStudent.imageUrl.slice(0, 500);
+
+      await setDoc(doc(db, "students", studentId), payload, { merge: true });
+
+      // Sync to users collection
+      const userTargetId = transferringStudent.uid || studentId;
+      try {
+        await setDoc(doc(db, "users", userTargetId), {
+          classId: targetClassId,
+          className: targetClassId,
+          kelas: targetClassId,
+          class: targetClassId,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (uErr) {
+        console.warn("Sync to users collection warning:", uErr);
+      }
 
       toast.showSuccess(
         `${transferringStudent.fullName || transferringStudent.name} berhasil dipindahkan ke kelas ${targetClassId}!`,

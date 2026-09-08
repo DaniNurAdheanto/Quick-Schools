@@ -134,21 +134,35 @@ export function useUnifiedStudents() {
           if (!existing._allDocIds.includes(u._firestoreId)) {
             existing._allDocIds.push(u._firestoreId);
           }
-          // Merge missing fields
+          // Merge rich fields from u (users collection has full profile)
           Object.keys(u).forEach(k => {
-            if ((existing[k] === undefined || existing[k] === "" || existing[k] === "-") && u[k]) {
-              existing[k] = u[k];
+            if (k === "_firestoreId") return;
+            if (u[k] !== undefined && u[k] !== null && u[k] !== "") {
+              if (
+                existing[k] === undefined || 
+                existing[k] === "" || 
+                existing[k] === "-" || 
+                u.updatedAt ||
+                ["gender", "birthPlace", "birthDate", "religion", "nik", "address", "phone", "email", "major", "entryYear", "level", "studentStatus", "previousSchool", "fatherName", "motherName", "guardianName", "parentPhone", "parentJob", "parentIncome", "parentAddress", "emergencyName", "emergencyPhone", "emergencyRelation"].includes(k)
+              ) {
+                existing[k] = u[k];
+              }
             }
           });
-          if (!existing.name || existing.name === "Siswa Baru") {
+          if (u.fullName || u.name) {
             existing.name = u.fullName || u.name || existing.name;
+            existing.fullName = u.fullName || u.name || existing.fullName;
           }
-          if (!existing.fullName) {
-            existing.fullName = u.fullName || u.name || existing.name;
+          const uClass = u.classId || u.className || u.kelas || u.class;
+          if (uClass && uClass !== "-") {
+            existing.classId = uClass;
+            existing.className = uClass;
+            existing.kelas = uClass;
+            existing.class = uClass;
           }
-          if (!existing.classId && (u.classId || u.className || u.class)) {
-            existing.classId = u.classId || u.className || u.class;
-            existing.className = u.className || u.classId || u.class;
+          if (u.status) {
+            existing.status = isUnboarded ? "Belum Onboarding" : u.status;
+            existing.onboardingCompleted = !isUnboarded;
           }
         } else {
           const newKey = uUid || uEmail || u._firestoreId;
