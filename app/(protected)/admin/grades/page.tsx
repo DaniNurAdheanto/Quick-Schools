@@ -66,6 +66,7 @@ export default function GradesPage() {
   const [classes, setClasses] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
+  const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // User Auth & Role State
@@ -142,66 +143,251 @@ export default function GradesPage() {
     return () => unsubAuth();
   }, []);
 
-  // Determine if logged in user is Guru and their assigned Homeroom Class (Wali Kelas)
+  // Determine if logged in user is Guru and their assigned Homeroom Class (Wali Kelas) or Subject Teaching Responsibilities
   const isGuru = userRole === "guru" || userRole === "teacher";
 
-  const teacherClasses = useMemo(() => {
-    if (!isGuru) return null; // Non-guru users (admin, super-admin, etc.) are unrestricted
-    if (!currentUser && !currentUserData) return [];
-
+  // Resolve Teacher Profile and Identifiers
+  const teacherInfo = useMemo(() => {
+    if (!isGuru) return null;
     const userObj = currentUserData || currentUser || {};
-    const teacherName = (userObj.fullName || userObj.name || "").trim().toLowerCase();
-    const teacherNip = (userObj.nip || userObj.id || "").trim().toLowerCase();
-    const teacherEmail = (userObj.email || "").trim().toLowerCase();
-    const teacherUid = currentUser?.uid || userObj.uid;
+    const tName = (userObj.fullName || userObj.name || currentUser?.displayName || "").trim();
+    const tNip = (userObj.nip || userObj.id || "").trim();
+    const tEmail = (userObj.email || currentUser?.email || "").trim().toLowerCase();
+    const tUid = currentUser?.uid || userObj.uid;
+
+    // Cross-reference with teachers collection
+    const tDoc = teachers.find(t => 
+      (tEmail && t.email?.toLowerCase() === tEmail) ||
+      (tNip && (t.nip === tNip || t.id === tNip)) ||
+      (tUid && (t.uid === tUid || t._firestoreId === tUid)) ||
+      (tName && t.name && (
+        t.name.toLowerCase() === tName.toLowerCase() || 
+        (tName.length > 5 && t.name.toLowerCase().includes(tName.toLowerCase())) ||
+        (t.name.length > 5 && tName.toLowerCase().includes(t.name.toLowerCase()))
+      ))
+    );
+
+    const finalName = tDoc?.name || tName || "Guru";
+    const finalNip = tDoc?.nip || tDoc?.id || tNip || "-";
+    const finalSubject = tDoc?.subject || userObj.subject || "";
+    const finalSubjects: string[] = [];
+    if (finalSubject) finalSubjects.push(finalSubject);
+    if (Array.isArray(tDoc?.subjects)) finalSubjects.push(...tDoc.subjects);
+    if (Array.isArray(userObj?.subjects)) finalSubjects.push(...userObj.subjects);
+
+    return {
+      name: finalName,
+      nip: finalNip,
+      email: tEmail,
+      uid: tUid,
+      primarySubject: finalSubject,
+      declaredSubjects: Array.from(new Set(finalSubjects.filter(Boolean))),
+      teacherDoc: tDoc
+    };
+  }, [isGuru, currentUser, currentUserData, teachers]);
+
+  // 1. Homeroom Classes (Wali Kelas)
+  const homeroomClasses = useMemo(() => {
+    if (!isGuru || !teacherInfo) return [];
 
     const matched = new Set<string>();
+    const tName = teacherInfo.name.toLowerCase();
+    const tNip = teacherInfo.nip.toLowerCase();
+    const tUid = teacherInfo.uid;
 
-    // 1. Match from classes collection
+    // Match from classes collection
     classes.forEach(c => {
       const cName = c.name || c.id;
       const cHomeroom = (c.homeroom || "").trim().toLowerCase();
       const cNip = (c.homeroomNip || "").trim().toLowerCase();
       const cId = (c.homeroomId || "").trim();
 
-      const matchName = teacherName && cHomeroom && (
-        cHomeroom === teacherName ||
-        (teacherName.length > 5 && cHomeroom.includes(teacherName)) ||
-        (cHomeroom.length > 5 && teacherName.includes(cHomeroom))
+      const matchName = tName && cHomeroom && (
+        cHomeroom === tName ||
+        (tName.length > 5 && cHomeroom.includes(tName)) ||
+        (cHomeroom.length > 5 && tName.includes(cHomeroom))
       );
-      const matchNip = teacherNip && cNip && cNip === teacherNip;
-      const matchId = (teacherUid && cId && cId === teacherUid) || (userObj.id && cId === userObj.id);
+      const matchNip = tNip && tNip !== "-" && cNip && cNip === tNip;
+      const matchId = (tUid && cId && cId === tUid) || (currentUserData?.id && cId === currentUserData.id);
 
       if (matchName || matchNip || matchId) {
         if (cName) matched.add(cName);
       }
     });
 
-    // 2. Direct field in users collection
-    const directClass = userObj.homeroomClass || userObj.homeroom || userObj.className || userObj.classId;
+    // Direct field in users collection or teacherDoc
+    const directClass = teacherInfo.teacherDoc?.homeroomClass || teacherInfo.teacherDoc?.homeroom || currentUserData?.homeroomClass || currentUserData?.homeroom || currentUserData?.className || currentUserData?.classId;
     if (directClass && directClass !== "-" && classes.some(c => (c.name || c.id) === directClass)) {
       matched.add(directClass);
     }
 
-    // 3. Match from teachers collection
-    const teacherDoc = teachers.find(t => 
-      (teacherEmail && t.email?.toLowerCase() === teacherEmail) ||
-      (teacherNip && (t.nip === teacherNip || t.id === teacherNip)) ||
-      (teacherUid && (t.uid === teacherUid || t._firestoreId === teacherUid))
-    );
-    if (teacherDoc) {
-      const tClass = teacherDoc.homeroomClass || teacherDoc.homeroom || teacherDoc.class || teacherDoc.className;
-      if (tClass && tClass !== "-") {
-        matched.add(tClass);
+    return Array.from(matched);
+  }, [isGuru, teacherInfo, classes, currentUserData]);
+
+  // 2. Subject Teaching Responsibilities (Guru Mata Pelajaran pairs: { class, subject })
+  const taughtSubjectClassPairs = useMemo(() => {
+    if (!isGuru || !teacherInfo) return [];
+
+    const pairs: { class: string; subject: string }[] = [];
+    const pairKeys = new Set<string>();
+
+    const addPair = (cls: string, subj: string) => {
+      if (!cls || !subj) return;
+      const cleanClass = cls.trim();
+      const cleanSubj = subj.trim();
+      const key = `${cleanClass.toLowerCase()}:::${cleanSubj.toLowerCase()}`;
+      if (!pairKeys.has(key)) {
+        pairKeys.add(key);
+        pairs.push({ class: cleanClass, subject: cleanSubj });
       }
+    };
+
+    const tName = teacherInfo.name.toLowerCase();
+    const tNip = teacherInfo.nip.toLowerCase();
+    const tEmail = teacherInfo.email.toLowerCase();
+    const tUid = teacherInfo.uid;
+
+    // A. From schedules collection
+    schedules.forEach(s => {
+      const sTeacher = (s.teacher || "").toLowerCase().trim();
+      const sNip = (s.teacherNip || "").toLowerCase().trim();
+      const sId = (s.teacherId || "").trim();
+      const sEmail = (s.teacherEmail || "").toLowerCase().trim();
+
+      const matchName = tName && sTeacher && (
+        sTeacher === tName ||
+        (tName.length > 4 && sTeacher.includes(tName)) ||
+        (sTeacher.length > 4 && tName.includes(sTeacher))
+      );
+      const matchNip = tNip && tNip !== "-" && sNip && sNip === tNip;
+      const matchId = tUid && sId && sId === tUid;
+      const matchEmail = tEmail && sEmail && sEmail === tEmail;
+
+      if (matchName || matchNip || matchId || matchEmail) {
+        const sClass = s.class || s.className;
+        const sSubj = s.subject || s.subjectName;
+        if (sClass && sSubj) {
+          addPair(sClass, sSubj);
+        }
+      }
+    });
+
+    // B. From subjects collection where subject.teacher matches this teacher
+    subjects.forEach(subj => {
+      const subjTeacher = (subj.teacher || "").toLowerCase().trim();
+      const matchName = tName && subjTeacher && (
+        subjTeacher === tName ||
+        (tName.length > 4 && subjTeacher.includes(tName)) ||
+        (subjTeacher.length > 4 && tName.includes(subjTeacher))
+      );
+      if (matchName) {
+        // Find classes in schedules for this subject
+        const matchingSchedules = schedules.filter(s => (s.subject || "").toLowerCase().trim() === subj.name?.toLowerCase().trim());
+        if (matchingSchedules.length > 0) {
+          matchingSchedules.forEach(ms => {
+            if (ms.class) addPair(ms.class, subj.name);
+          });
+        } else {
+          // If no specific schedule found, check if teacher doc has classes
+          const tClasses = teacherInfo.teacherDoc?.classes || currentUserData?.classes;
+          if (Array.isArray(tClasses)) {
+            tClasses.forEach(tc => addPair(tc, subj.name));
+          } else if (classes.length > 0) {
+            const lvl = (subj.level || "").toLowerCase();
+            classes.forEach(c => {
+              const cName = c.name || "";
+              if (!lvl || lvl === "semua tingkat" || cName.toLowerCase().includes(lvl.replace("kelas ", ""))) {
+                addPair(cName, subj.name);
+              }
+            });
+          }
+        }
+      }
+    });
+
+    // C. From teacher declared subjects
+    teacherInfo.declaredSubjects.forEach(declaredSubj => {
+      schedules.forEach(s => {
+        const sSubj = (s.subject || "").toLowerCase().trim();
+        if (sSubj === declaredSubj.toLowerCase().trim()) {
+          const sTeacher = (s.teacher || "").toLowerCase().trim();
+          if (sTeacher === tName || (tName.length > 4 && sTeacher.includes(tName)) || (sTeacher.length > 4 && tName.includes(sTeacher))) {
+            if (s.class) addPair(s.class, s.subject || declaredSubj);
+          }
+        }
+      });
+
+      const tClasses = teacherInfo.teacherDoc?.classes || currentUserData?.classes;
+      if (Array.isArray(tClasses)) {
+        tClasses.forEach(tc => addPair(tc, declaredSubj));
+      }
+    });
+
+    return pairs;
+  }, [isGuru, teacherInfo, schedules, subjects, classes, currentUserData]);
+
+  // 3. Combined Authorized Classes for this Teacher (Homeroom + Classes Taught)
+  const authorizedClasses = useMemo(() => {
+    if (!isGuru) return null; // Non-guru users (admin, super-admin, etc.) are unrestricted
+    const classSet = new Set<string>();
+    homeroomClasses.forEach(c => classSet.add(c));
+    taughtSubjectClassPairs.forEach(p => classSet.add(p.class));
+    return Array.from(classSet);
+  }, [isGuru, homeroomClasses, taughtSubjectClassPairs]);
+
+  const isTeacherWaliKelas = Boolean(isGuru && homeroomClasses.length > 0);
+  const primaryTeacherClass = authorizedClasses && authorizedClasses.length > 0 ? authorizedClasses[0] : "";
+  const hasAnyGradingAccess = !isGuru || (authorizedClasses !== null && authorizedClasses.length > 0);
+  const isSuperAdmin = userRole === "superadmin" || userRole === "super_admin" || userRole === "super-admin";
+
+  // Helper: check if teacher is authorized to grade a specific (class, subject)
+  const isTeacherAuthorizedFor = (classId: string, subjectName: string): boolean => {
+    if (!isGuru) return true;
+    if (!classId || !subjectName) return false;
+
+    const normClass = classId.trim().toLowerCase();
+    const normSubj = subjectName.trim().toLowerCase();
+
+    // 1. Wali Kelas for this class -> authorized for all subjects in their homeroom class
+    if (homeroomClasses.some(hc => hc.trim().toLowerCase() === normClass)) {
+      return true;
     }
 
-    return Array.from(matched);
-  }, [isGuru, currentUser, currentUserData, classes, teachers]);
+    // 2. Guru Mata Pelajaran for this (class, subject)
+    const isTaught = taughtSubjectClassPairs.some(
+      p => p.class.trim().toLowerCase() === normClass && p.subject.trim().toLowerCase() === normSubj
+    );
+    if (isTaught) {
+      return true;
+    }
 
-  const isTeacherWaliKelas = Boolean(isGuru && teacherClasses && teacherClasses.length > 0);
-  const primaryTeacherClass = teacherClasses && teacherClasses.length > 0 ? teacherClasses[0] : "";
-  const isSuperAdmin = userRole === "superadmin" || userRole === "super_admin" || userRole === "super-admin";
+    return false;
+  };
+
+  // Helper: get list of authorized subjects for a specific class
+  const getAuthorizedSubjectsForClass = (targetClass: string): string[] => {
+    if (!isGuru) {
+      return subjects.map(s => s.name);
+    }
+    if (!targetClass) return [];
+
+    const normClass = targetClass.trim().toLowerCase();
+
+    // If teacher is Wali Kelas of this class: access to all subjects in their homeroom class
+    const isWali = homeroomClasses.some(hc => hc.trim().toLowerCase() === normClass);
+    if (isWali) {
+      return subjects.length > 0 
+        ? subjects.map(s => s.name)
+        : ["Matematika Wajib", "Bahasa Indonesia", "Bahasa Inggris", "Fisika", "Kimia", "Biologi", "Ekonomi", "Sosiologi", "Pendidikan Agama"];
+    }
+
+    // If Guru Mata Pelajaran: return only subjects taught in this class
+    const taught = taughtSubjectClassPairs
+      .filter(p => p.class.trim().toLowerCase() === normClass)
+      .map(p => p.subject);
+
+    return Array.from(new Set(taught));
+  };
 
   // Realtime School Configuration for KKM and Assessment Weights (managed by Super Admin)
   const [schoolGrading, setSchoolGrading] = useState<{
@@ -216,7 +402,7 @@ export default function GradesPage() {
     finalWeight: 40
   });
 
-  // Realtime Listeners for Grades, Students, Users, Classes, Subjects, Teachers, Settings
+  // Realtime Listeners for Grades, Students, Users, Classes, Subjects, Teachers, Schedules, Settings
   useEffect(() => {
     const unsubGrades = onSnapshot(collection(db, "grades"), (snap) => {
       const data = snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() }));
@@ -239,6 +425,10 @@ export default function GradesPage() {
       setTeachers(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
     });
 
+    const unsubSchedules = onSnapshot(collection(db, "schedules"), (snap) => {
+      setSchedules(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
+    });
+
     const unsubSettings = onSnapshot(doc(db, "settings", "school_configuration"), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
@@ -258,6 +448,7 @@ export default function GradesPage() {
       unsubClasses();
       unsubSubjects();
       unsubTeachers();
+      unsubSchedules();
       unsubSettings();
     };
   }, []);
@@ -277,45 +468,126 @@ export default function GradesPage() {
     const classNamesFromStudents = students.map(s => (s.classId || s.className || s.class)?.trim()).filter(Boolean);
     let uniqueClassNames = Array.from(new Set([...classNamesFromClasses, ...classNamesFromStudents])).sort();
     
-    // For Guru role: strictly limit to their homeroom classes
+    // For Guru role: limit to authorized classes (homeroom + taught classes)
     if (isGuru) {
-      if (!teacherClasses || teacherClasses.length === 0) {
+      if (!authorizedClasses || authorizedClasses.length === 0) {
         return [];
       }
       uniqueClassNames = uniqueClassNames.filter(cName => 
-        teacherClasses.some(tc => tc.trim().toLowerCase() === cName.toLowerCase())
+        authorizedClasses.some(ac => ac.trim().toLowerCase() === cName.toLowerCase())
       );
     }
 
     return uniqueClassNames.map(cName => {
       const count = students.filter(s => (s.classId || s.className || s.class)?.trim().toLowerCase() === cName.toLowerCase()).length;
+      const isWali = homeroomClasses.some(hc => hc.trim().toLowerCase() === cName.toLowerCase());
+      const taughtInThisClass = taughtSubjectClassPairs
+        .filter(p => p.class.trim().toLowerCase() === cName.toLowerCase())
+        .map(p => p.subject);
+
+      let roleLabel = "";
+      if (isGuru) {
+        if (isWali && taughtInThisClass.length > 0) {
+          roleLabel = ` • Wali Kelas & ${taughtInThisClass.join(", ")}`;
+        } else if (isWali) {
+          roleLabel = " • Wali Kelas";
+        } else if (taughtInThisClass.length > 0) {
+          roleLabel = ` • Guru ${taughtInThisClass.join(", ")}`;
+        }
+      }
+
       return {
-        label: count > 0 ? `${cName} (${count} Siswa)` : cName,
+        label: count > 0 ? `${cName} (${count} Siswa)${roleLabel}` : `${cName}${roleLabel}`,
         value: cName,
-        studentCount: count
+        studentCount: count,
+        isWali,
+        taughtSubjects: taughtInThisClass
       };
     });
-  }, [classes, students, isGuru, teacherClasses]);
+  }, [classes, students, isGuru, authorizedClasses, homeroomClasses, taughtSubjectClassPairs]);
 
-  // Available Subjects Options
+  // Available Subjects Options for Matrix view (dynamically filtered for Guru based on matrixClassId)
   const availableSubjectOptions = useMemo(() => {
-    if (subjects.length > 0) {
-      return subjects.map(s => ({ label: s.name, value: s.name }));
-    }
-    return [
-      { label: "Matematika Wajib", value: "Matematika Wajib" },
-      { label: "Bahasa Indonesia", value: "Bahasa Indonesia" },
-      { label: "Bahasa Inggris", value: "Bahasa Inggris" },
-      { label: "Fisika", value: "Fisika" },
-      { label: "Kimia", value: "Kimia" },
-      { label: "Biologi", value: "Biologi" },
-      { label: "Ekonomi", value: "Ekonomi" },
-      { label: "Sosiologi", value: "Sosiologi" },
-      { label: "Pendidikan Agama", value: "Pendidikan Agama" }
-    ];
-  }, [subjects]);
+    const allSubjects = subjects.length > 0
+      ? subjects.map(s => ({ label: s.name, value: s.name }))
+      : [
+          { label: "Matematika Wajib", value: "Matematika Wajib" },
+          { label: "Bahasa Indonesia", value: "Bahasa Indonesia" },
+          { label: "Bahasa Inggris", value: "Bahasa Inggris" },
+          { label: "Fisika", value: "Fisika" },
+          { label: "Kimia", value: "Kimia" },
+          { label: "Biologi", value: "Biologi" },
+          { label: "Ekonomi", value: "Ekonomi" },
+          { label: "Sosiologi", value: "Sosiologi" },
+          { label: "Pendidikan Agama", value: "Pendidikan Agama" }
+        ];
 
-  // Auto-initialize matrix class and subject smartly (prioritize class with enrolled students)
+    if (!isGuru) return allSubjects;
+
+    if (!matrixClassId) {
+      const myTaughtSubjs = Array.from(new Set(taughtSubjectClassPairs.map(p => p.subject)));
+      if (myTaughtSubjs.length > 0) {
+        return myTaughtSubjs.map(s => ({ label: s, value: s }));
+      }
+      return allSubjects;
+    }
+
+    const normClass = matrixClassId.trim().toLowerCase();
+    const isWali = homeroomClasses.some(hc => hc.trim().toLowerCase() === normClass);
+    if (isWali) {
+      return allSubjects.map(s => ({
+        ...s,
+        label: `${s.label} (Wali Kelas)`
+      }));
+    }
+
+    const allowed = getAuthorizedSubjectsForClass(matrixClassId);
+    if (allowed.length > 0) {
+      return allowed.map(s => ({ label: `${s} (Guru Pengampu)`, value: s }));
+    }
+
+    return [];
+  }, [subjects, isGuru, matrixClassId, homeroomClasses, taughtSubjectClassPairs]);
+
+  // Available Subjects Options for Table Log filter
+  const availableSubjectOptionsForFilter = useMemo(() => {
+    const allSubjects = subjects.length > 0
+      ? subjects.map(s => ({ label: s.name, value: s.name }))
+      : [
+          { label: "Matematika Wajib", value: "Matematika Wajib" },
+          { label: "Bahasa Indonesia", value: "Bahasa Indonesia" },
+          { label: "Bahasa Inggris", value: "Bahasa Inggris" },
+          { label: "Fisika", value: "Fisika" },
+          { label: "Kimia", value: "Kimia" },
+          { label: "Biologi", value: "Biologi" },
+          { label: "Ekonomi", value: "Ekonomi" },
+          { label: "Sosiologi", value: "Sosiologi" },
+          { label: "Pendidikan Agama", value: "Pendidikan Agama" }
+        ];
+
+    if (!isGuru) return allSubjects;
+
+    if (selectedClass && selectedClass !== "All") {
+      const normClass = selectedClass.trim().toLowerCase();
+      const isWali = homeroomClasses.some(hc => hc.trim().toLowerCase() === normClass);
+      if (isWali) return allSubjects;
+
+      const allowed = getAuthorizedSubjectsForClass(selectedClass);
+      if (allowed.length > 0) {
+        return allowed.map(s => ({ label: s, value: s }));
+      }
+      return [];
+    }
+
+    if (isTeacherWaliKelas) return allSubjects;
+    const taughtSubjs = Array.from(new Set(taughtSubjectClassPairs.map(p => p.subject)));
+    if (taughtSubjs.length > 0) {
+      return taughtSubjs.map(s => ({ label: s, value: s }));
+    }
+    return allSubjects;
+  }, [subjects, isGuru, selectedClass, homeroomClasses, isTeacherWaliKelas, taughtSubjectClassPairs]);
+
+  // Auto-initialize matrix class smartly
   useEffect(() => {
     if (availableClassOptions.length > 0) {
       const isCurrentValid = availableClassOptions.some(opt => opt.value.toLowerCase() === matrixClassId.trim().toLowerCase());
@@ -328,41 +600,54 @@ export default function GradesPage() {
           setMatrixClassId(availableClassOptions[0].value);
         }
       }
-    } else if (isGuru && (!teacherClasses || teacherClasses.length === 0)) {
+    } else if (isGuru && (!authorizedClasses || authorizedClasses.length === 0)) {
       setMatrixClassId("");
     }
+  }, [availableClassOptions, matrixClassId, isGuru, authorizedClasses]);
 
-    if (availableSubjectOptions.length > 0 && !matrixSubject) {
-      setMatrixSubject(availableSubjectOptions[0].value);
+  // Sync matrixSubject when matrixClassId or availableSubjectOptions change
+  useEffect(() => {
+    if (availableSubjectOptions.length > 0) {
+      const isSubjectValid = availableSubjectOptions.some(
+        opt => opt.value.toLowerCase().trim() === matrixSubject.toLowerCase().trim()
+      );
+      if (!matrixSubject || !isSubjectValid) {
+        setMatrixSubject(availableSubjectOptions[0].value);
+      }
+    } else if (isGuru) {
+      setMatrixSubject("");
     }
-  }, [availableClassOptions, availableSubjectOptions, matrixClassId, matrixSubject, isGuru, teacherClasses]);
+  }, [availableSubjectOptions, matrixSubject, isGuru]);
 
   // Sync selectedClass and matrixClassId for Guru
   useEffect(() => {
-    if (isGuru && teacherClasses && teacherClasses.length > 0) {
-      if (selectedClass !== "All" && !teacherClasses.some(tc => tc.trim().toLowerCase() === selectedClass.trim().toLowerCase())) {
-        setSelectedClass(teacherClasses[0]);
+    if (isGuru && authorizedClasses && authorizedClasses.length > 0) {
+      if (selectedClass !== "All" && !authorizedClasses.some(ac => ac.trim().toLowerCase() === selectedClass.trim().toLowerCase())) {
+        setSelectedClass(authorizedClasses[0]);
       }
-      if (!teacherClasses.some(tc => tc.trim().toLowerCase() === matrixClassId.trim().toLowerCase())) {
-        setMatrixClassId(teacherClasses[0]);
+      if (!authorizedClasses.some(ac => ac.trim().toLowerCase() === matrixClassId.trim().toLowerCase())) {
+        setMatrixClassId(authorizedClasses[0]);
       }
     }
-  }, [isGuru, teacherClasses, selectedClass, matrixClassId]);
+  }, [isGuru, authorizedClasses, selectedClass, matrixClassId]);
 
   // Students enrolled in selected matrixClassId (trimmed, case-insensitive)
   const matrixStudents = useMemo(() => {
     if (!matrixClassId) return [];
     if (isGuru) {
-      if (!teacherClasses || teacherClasses.length === 0) return [];
-      const isAllowed = teacherClasses.some(tc => tc.trim().toLowerCase() === matrixClassId.trim().toLowerCase());
+      if (!authorizedClasses || authorizedClasses.length === 0) return [];
+      const isAllowed = authorizedClasses.some(ac => ac.trim().toLowerCase() === matrixClassId.trim().toLowerCase());
       if (!isAllowed) return [];
+      if (matrixSubject && !isTeacherAuthorizedFor(matrixClassId, matrixSubject)) {
+        return [];
+      }
     }
     const target = matrixClassId.trim().toLowerCase();
     return students.filter(s => {
       const c = (s.classId || s.className || s.class || "").trim().toLowerCase();
       return c === target;
     });
-  }, [students, matrixClassId, isGuru, teacherClasses]);
+  }, [students, matrixClassId, matrixSubject, isGuru, authorizedClasses, homeroomClasses, taughtSubjectClassPairs]);
 
   // Pre-populate gridValues from Firestore grades when matrix filters change or grades update
   useEffect(() => {
@@ -483,13 +768,12 @@ export default function GradesPage() {
   // Save Matrix to Firestore (Writes all edited/filled cells simultaneously, or even just 1 cell!)
   const handleSaveMatrix = async () => {
     if (isGuru) {
-      if (!teacherClasses || teacherClasses.length === 0) {
-        toast.showError("Anda belum ditugaskan sebagai wali kelas untuk kelas manapun.", "Akses Ditolak");
+      if (!hasAnyGradingAccess) {
+        toast.showError("Anda belum memiliki penugasan mengajar mata pelajaran atau penugasan wali kelas.", "Akses Ditolak");
         return;
       }
-      const isMyClass = teacherClasses.some(tc => tc.trim().toLowerCase() === matrixClassId.trim().toLowerCase());
-      if (!isMyClass) {
-        toast.showError(`Anda hanya memiliki wewenang penilaian untuk kelas ${teacherClasses.join(", ")}.`, "Akses Ditolak");
+      if (!isTeacherAuthorizedFor(matrixClassId, matrixSubject)) {
+        toast.showError(`Anda hanya memiliki wewenang penilaian untuk kelas dan mata pelajaran yang ditugaskan kepada Anda.`, "Akses Ditolak");
         return;
       }
     }
@@ -614,13 +898,19 @@ export default function GradesPage() {
         if (!matchesId && !matchesEmail && !matchesName) return false;
       }
 
-      // 2. RBAC for Guru Wali Kelas Role
+      // 2. RBAC for Guru (Wali Kelas & Guru Mata Pelajaran)
       if (isGuru) {
-        if (!teacherClasses || teacherClasses.length === 0) return false;
+        if (!hasAnyGradingAccess) return false;
         const student = getStudentByIdOrName(g.studentId) || getStudentByIdOrName(g.studentName);
         const studentClass = (g.classId || student?.classId || student?.className || student?.class || "").trim().toLowerCase();
-        const isBelong = teacherClasses.some(tc => tc.trim().toLowerCase() === studentClass);
-        if (!isBelong) return false;
+        const gradeSubject = (g.subject || "").trim().toLowerCase();
+
+        const isHomeroom = homeroomClasses.some(hc => hc.trim().toLowerCase() === studentClass);
+        const isTaughtSubject = taughtSubjectClassPairs.some(
+          p => p.class.trim().toLowerCase() === studentClass && p.subject.trim().toLowerCase() === gradeSubject
+        );
+
+        if (!isHomeroom && !isTaughtSubject) return false;
       }
 
       // 3. Type Filter
@@ -663,22 +953,26 @@ export default function GradesPage() {
 
       return true;
     });
-  }, [grades, isStudentRole, studentDoc, currentUser, isGuru, teacherClasses, selectedType, selectedClass, selectedSubject, selectedKkmStatus, searchQuery, getStudentByIdOrName]);
+  }, [grades, isStudentRole, studentDoc, currentUser, isGuru, hasAnyGradingAccess, homeroomClasses, taughtSubjectClassPairs, selectedType, selectedClass, selectedSubject, selectedKkmStatus, searchQuery, getStudentByIdOrName]);
 
   // Single Grade Submit Handler (CrudSheet)
   const handleCrudSubmit = async (data: any) => {
     if (isStudentRole) return;
 
     if (isGuru) {
-      if (!teacherClasses || teacherClasses.length === 0) {
-        toast.showError("Anda belum ditugaskan sebagai wali kelas untuk kelas manapun.", "Akses Ditolak");
+      if (!hasAnyGradingAccess) {
+        toast.showError("Anda belum memiliki penugasan mengajar mata pelajaran atau wali kelas.", "Akses Ditolak");
         return;
       }
-      const targetStudent = getStudentByIdOrName(data.studentId);
-      const studentClass = (data.classId || targetStudent?.classId || targetStudent?.className || targetStudent?.class || "").trim().toLowerCase();
-      const belongsToMyClass = teacherClasses.some(tc => tc.trim().toLowerCase() === studentClass);
-      if (!belongsToMyClass) {
-        toast.showError(`Anda hanya dapat memberikan atau mengubah nilai untuk siswa di kelas ${teacherClasses.join(", ")}.`, "Akses Ditolak");
+      const targetStudent = getStudentByIdOrName(data.studentId || crudState.data?.studentId);
+      const studentClass = (data.classId || crudState.data?.classId || targetStudent?.classId || targetStudent?.className || targetStudent?.class || "").trim();
+      const subjectName = (data.subject || crudState.data?.subject || "").trim();
+
+      if (!isTeacherAuthorizedFor(studentClass, subjectName)) {
+        toast.showError(
+          `Anda hanya dapat memberikan atau mengelola nilai untuk mata pelajaran ${subjectName || ""} pada kelas yang menjadi tanggung jawab Anda.`,
+          "Akses Ditolak"
+        );
         return;
       }
     }
@@ -737,10 +1031,10 @@ export default function GradesPage() {
 
     let baseStudentList = students;
     if (isGuru) {
-      if (!teacherClasses || teacherClasses.length === 0) return [];
+      if (!authorizedClasses || authorizedClasses.length === 0) return [];
       baseStudentList = students.filter(s => {
         const c = (s.classId || s.className || s.class || "").trim().toLowerCase();
-        return teacherClasses.some(tc => tc.trim().toLowerCase() === c);
+        return authorizedClasses.some(ac => ac.trim().toLowerCase() === c);
       });
     }
 
@@ -835,16 +1129,16 @@ export default function GradesPage() {
         predicate
       };
     });
-  }, [students, accessibleGrades, selectedClass, isGuru, teacherClasses, getStudentByIdOrName, schoolGrading]);
+  }, [students, accessibleGrades, selectedClass, isGuru, authorizedClasses, getStudentByIdOrName, schoolGrading]);
 
   // Single Form Configuration for CrudSheet
   const filteredStudentsForSingleForm = useMemo(() => {
     let pool = students;
     if (isGuru) {
-      if (!teacherClasses || teacherClasses.length === 0) return [];
+      if (!authorizedClasses || authorizedClasses.length === 0) return [];
       pool = students.filter(s => {
         const c = (s.classId || s.className || s.class || "").trim().toLowerCase();
-        return teacherClasses.some(tc => tc.trim().toLowerCase() === c);
+        return authorizedClasses.some(ac => ac.trim().toLowerCase() === c);
       });
     }
 
@@ -861,7 +1155,44 @@ export default function GradesPage() {
     return pool
       .filter(s => (s.classId || s.className || s.class || "").trim().toLowerCase() === target)
       .map(s => ({ label: `${s.fullName || s.name} (NISN: ${s.nisn || s.id})`, value: s.id }));
-  }, [students, currentFormData.classId, isGuru, teacherClasses]);
+  }, [students, currentFormData.classId, isGuru, authorizedClasses]);
+
+  // Dynamic Subject Options for Single Form (filtered based on selected class in form)
+  const availableSubjectOptionsForSingleForm = useMemo(() => {
+    const allSubjects = subjects.length > 0
+      ? subjects.map(s => ({ label: s.name, value: s.name }))
+      : [
+          { label: "Matematika Wajib", value: "Matematika Wajib" },
+          { label: "Bahasa Indonesia", value: "Bahasa Indonesia" },
+          { label: "Bahasa Inggris", value: "Bahasa Inggris" },
+          { label: "Fisika", value: "Fisika" },
+          { label: "Kimia", value: "Kimia" },
+          { label: "Biologi", value: "Biologi" },
+          { label: "Ekonomi", value: "Ekonomi" },
+          { label: "Sosiologi", value: "Sosiologi" },
+          { label: "Pendidikan Agama", value: "Pendidikan Agama" }
+        ];
+
+    if (!isGuru) return allSubjects;
+
+    if (!currentFormData.classId) {
+      const taughtSubjs = Array.from(new Set(taughtSubjectClassPairs.map(p => p.subject)));
+      if (taughtSubjs.length > 0) {
+        return taughtSubjs.map(s => ({ label: s, value: s }));
+      }
+      return allSubjects;
+    }
+
+    const normClass = currentFormData.classId.trim().toLowerCase();
+    const isWali = homeroomClasses.some(hc => hc.trim().toLowerCase() === normClass);
+    if (isWali) return allSubjects;
+
+    const allowed = getAuthorizedSubjectsForClass(currentFormData.classId);
+    if (allowed.length > 0) {
+      return allowed.map(s => ({ label: s, value: s }));
+    }
+    return [];
+  }, [subjects, isGuru, currentFormData.classId, homeroomClasses, taughtSubjectClassPairs]);
 
   const singleGradeFields: CrudField[] = useMemo(() => [
     { 
@@ -885,7 +1216,7 @@ export default function GradesPage() {
       name: "subject", 
       label: "Mata Pelajaran", 
       type: "select", 
-      options: availableSubjectOptions,
+      options: availableSubjectOptionsForSingleForm,
       category: "akademik",
       colSpan: 1
     },
@@ -1937,12 +2268,18 @@ export default function GradesPage() {
                 ) : isGuru ? (
                   <span className={cn(
                     "px-2.5 py-0.5 text-xs font-bold rounded-full border flex items-center gap-1.5",
-                    isTeacherWaliKelas 
+                    hasAnyGradingAccess 
                       ? "bg-purple-50 text-[#531FFF] border-purple-200" 
                       : "bg-amber-50 text-amber-700 border-amber-200"
                   )}>
                     <GraduationCap className="w-3.5 h-3.5" />
-                    {isTeacherWaliKelas ? `Wali Kelas: ${teacherClasses?.join(", ")}` : "Guru (Bukan Wali Kelas)"}
+                    {isTeacherWaliKelas && taughtSubjectClassPairs.length > 0
+                      ? `Wali Kelas (${homeroomClasses.join(", ")}) & Guru Mapel`
+                      : isTeacherWaliKelas
+                      ? `Wali Kelas: ${homeroomClasses.join(", ")}`
+                      : taughtSubjectClassPairs.length > 0
+                      ? `Guru Mapel: ${Array.from(new Set(taughtSubjectClassPairs.map(p => p.subject))).join(", ")}`
+                      : "Guru (Belum Ada Penugasan)"}
                   </span>
                 ) : (
                   <span className="px-2.5 py-0.5 text-xs font-bold bg-purple-50 text-[#531FFF] rounded-full border border-purple-200">
@@ -1954,7 +2291,7 @@ export default function GradesPage() {
                 {isStudentRole
                   ? "Lihat riwayat capaian hasil belajar, nilai ujian, dan progres KKM Anda."
                   : isGuru
-                  ? `Penginputan dan pengecekan nilai khusus siswa kelas ${isTeacherWaliKelas ? teacherClasses?.join(", ") : "binaan Anda"}.`
+                  ? "Penginputan dan pengelolaan nilai untuk kelas dan mata pelajaran yang menjadi tanggung jawab Anda."
                   : "Input seluruh atau sebagian nilai siswa (Tugas, Kuis, UH, PTS, PAS, Asesmen Akhir) dalam satu tampilan spreadsheet yang fleksibel."}
               </p>
             </div>
@@ -1969,7 +2306,7 @@ export default function GradesPage() {
               <button
                 type="button"
                 onClick={handleSaveMatrix}
-                disabled={isSavingMatrix || (isGuru && !isTeacherWaliKelas)}
+                disabled={isSavingMatrix || (isGuru && (!hasAnyGradingAccess || !isTeacherAuthorizedFor(matrixClassId, matrixSubject)))}
                 className={cn(
                   "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-[13px] font-extrabold shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
                   hasUnsavedChanges
@@ -1994,7 +2331,7 @@ export default function GradesPage() {
             {/* Single Entry Button */}
             <button 
               type="button"
-              disabled={isGuru && !isTeacherWaliKelas}
+              disabled={isGuru && !hasAnyGradingAccess}
               onClick={() => setCrudState({ 
                 open: true, 
                 mode: "create",
@@ -2003,7 +2340,8 @@ export default function GradesPage() {
                   semester: "Ganjil",
                   academicYear: "2025/2026",
                   type: "Tugas",
-                  classId: matrixClassId || primaryTeacherClass || availableClassOptions[0]?.value || ""
+                  classId: matrixClassId || primaryTeacherClass || availableClassOptions[0]?.value || "",
+                  subject: matrixSubject || (matrixClassId ? getAuthorizedSubjectsForClass(matrixClassId)[0] : "") || ""
                 }
               })}
               className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-[13px] font-bold shadow-2xs transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
@@ -2015,14 +2353,14 @@ export default function GradesPage() {
         )}
       </div>
 
-      {/* Warning Notice for Guru who is not assigned as homeroom teacher */}
-      {isGuru && !isTeacherWaliKelas && !loading && (
+      {/* Warning Notice for Guru who has no assigned classes or subjects */}
+      {isGuru && !hasAnyGradingAccess && !loading && (
         <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 flex items-start gap-3.5 shadow-2xs">
           <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
           <div className="text-xs text-amber-800 space-y-1">
-            <p className="font-extrabold text-sm text-amber-900">Akses Terbatas: Belum Ditugaskan Sebagai Wali Kelas</p>
+            <p className="font-extrabold text-sm text-amber-900">Akses Terbatas: Belum Ditugaskan Kelas atau Mata Pelajaran</p>
             <p className="text-amber-700 font-medium">
-              Akun Anda terdaftar dengan role Guru, namun saat ini belum ditugaskan sebagai wali kelas di rombel manapun. Pemberian dan pengecekan nilai hanya dapat dilakukan oleh wali kelas untuk rombel binaannya. Silakan hubungi Administrator untuk penugasan wali kelas.
+              Akun Anda terdaftar dengan role Guru, namun saat ini belum memiliki penugasan mata pelajaran di rombel/jadwal mengajar ataupun penugasan sebagai wali kelas. Silakan hubungi Administrator untuk penugasan kelas dan mata pelajaran Anda.
             </p>
           </div>
         </div>
@@ -2194,6 +2532,29 @@ export default function GradesPage() {
                 )}
               </div>
             </div>
+
+            {/* Authority Verification Chip for Guru */}
+            {isGuru && matrixClassId && matrixSubject && (
+              <div className="sm:col-span-2 lg:col-span-5 pt-1">
+                {isTeacherAuthorizedFor(matrixClassId, matrixSubject) ? (
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 bg-emerald-50/80 border border-emerald-200/80 px-3.5 py-2 rounded-xl shadow-2xs">
+                    <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>
+                      Wewenang Terverifikasi: {homeroomClasses.some(hc => hc.toLowerCase() === matrixClassId.toLowerCase()) 
+                        ? `Wali Kelas ${matrixClassId} (Akses Penuh Penilaian)` 
+                        : `Guru Pengampu Mata Pelajaran ${matrixSubject} di Kelas ${matrixClassId}`}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs font-bold text-rose-800 bg-rose-50/80 border border-rose-200/80 px-3.5 py-2 rounded-xl shadow-2xs">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>
+                      Akses Terbatas: Anda tidak ditugaskan mengampu mata pelajaran {matrixSubject} di kelas {matrixClassId}.
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Bobot Penilaian & KKM Info Bar (Ditetapkan Super Admin) */}
@@ -2575,8 +2936,8 @@ export default function GradesPage() {
                     className="w-full sm:w-auto px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     {!isGuru && <option value="All">Semua Kelas</option>}
-                    {isGuru && teacherClasses && teacherClasses.length > 1 && (
-                      <option value="All">Semua Kelas Binaan ({teacherClasses.join(", ")})</option>
+                    {isGuru && authorizedClasses && authorizedClasses.length > 1 && (
+                      <option value="All">Semua Kelas Tanggung Jawab ({authorizedClasses.join(", ")})</option>
                     )}
                     {availableClassOptions.map(c => (
                       <option key={c.value} value={c.value}>{c.label}</option>
@@ -2589,7 +2950,7 @@ export default function GradesPage() {
                     className="w-full sm:w-auto px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer"
                   >
                     <option value="All">Semua Mata Pelajaran</option>
-                    {availableSubjectOptions.map(s => (
+                    {availableSubjectOptionsForFilter.map(s => (
                       <option key={s.value} value={s.value}>{s.label}</option>
                     ))}
                   </select>
@@ -2782,8 +3143,8 @@ export default function GradesPage() {
                 className="px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 disabled:bg-gray-100 disabled:cursor-not-allowed cursor-pointer"
               >
                 {!isGuru && <option value="All">Semua Kelas</option>}
-                {isGuru && teacherClasses && teacherClasses.length > 1 && (
-                  <option value="All">Semua Kelas Binaan ({teacherClasses.join(", ")})</option>
+                {isGuru && authorizedClasses && authorizedClasses.length > 1 && (
+                  <option value="All">Semua Kelas Tanggung Jawab ({authorizedClasses.join(", ")})</option>
                 )}
                 {availableClassOptions.map(c => (
                   <option key={c.value} value={c.value}>{c.label}</option>

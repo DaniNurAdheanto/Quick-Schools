@@ -452,33 +452,9 @@ export default function CalendarPage() {
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          {/* View Switcher */}
-          <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 w-full sm:w-auto">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={cn(
-                "flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
-                viewMode === "grid" ? "bg-white text-gray-900 shadow-xs" : "text-gray-500 hover:text-gray-900"
-              )}
-            >
-              <CalendarIcon className="w-3.5 h-3.5" />
-              <span>Grid Bulanan</span>
-            </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={cn(
-                "flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
-                viewMode === "list" ? "bg-white text-[#531FFF] shadow-xs" : "text-gray-500 hover:text-gray-900"
-              )}
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Daftar Agenda</span>
-            </button>
-          </div>
-
           <button
             onClick={() => setIsPrintModalOpen(true)}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-[0.98]"
+            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-[0.98] cursor-pointer"
           >
             <Printer className="w-4 h-4" />
             <span>Cetak Kalender (PDF)</span>
@@ -602,37 +578,55 @@ export default function CalendarPage() {
           {viewMode === "grid" ? (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-6">
               
-              {/* Month Navigation Controls */}
+              {/* Month Navigation & View Switcher Controls */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <div className="flex items-center bg-gray-100 border border-gray-200 rounded-xl p-1">
                     <button 
                       onClick={prevMonth}
-                      className="p-1.5 hover:bg-white rounded-lg text-gray-600 hover:text-gray-900 transition-all"
+                      className="p-1.5 hover:bg-white rounded-lg text-gray-600 hover:text-gray-900 transition-all cursor-pointer"
                       title="Bulan Sebelumnya"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <button 
                       onClick={nextMonth}
-                      className="p-1.5 hover:bg-white rounded-lg text-gray-600 hover:text-gray-900 transition-all"
+                      className="p-1.5 hover:bg-white rounded-lg text-gray-600 hover:text-gray-900 transition-all cursor-pointer"
                       title="Bulan Berikutnya"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
 
+                  <h2 className="text-xl font-extrabold text-gray-900 capitalize">
+                    {format(currentDate, 'MMMM yyyy', { locale: idLocale })}
+                  </h2>
+
                   <button 
                     onClick={goToToday}
-                    className="px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-extrabold text-gray-700 hover:bg-gray-100 transition-colors"
+                    className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-xs font-extrabold text-gray-700 transition-colors cursor-pointer"
                   >
                     Hari Ini (Today)
                   </button>
                 </div>
 
-                <h2 className="text-xl font-extrabold text-gray-900 capitalize">
-                  {format(currentDate, 'MMMM yyyy', { locale: idLocale })}
-                </h2>
+                {/* View Switcher Tabbing */}
+                <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 w-full sm:w-auto">
+                  <button
+                    onClick={() => setViewMode("grid")}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer bg-white text-gray-900 shadow-xs"
+                  >
+                    <CalendarIcon className="w-3.5 h-3.5 text-[#531FFF]" />
+                    <span>Grid Bulanan</span>
+                  </button>
+                  <button
+                    onClick={() => setViewMode("list")}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-gray-500 hover:text-gray-900"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-gray-400" />
+                    <span>Daftar Agenda</span>
+                  </button>
+                </div>
               </div>
 
               {/* Day Headers */}
@@ -653,9 +647,60 @@ export default function CalendarPage() {
           ) : (
             /* LIST VIEW MODE */
             <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-              <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
-                <h3 className="font-bold text-xs text-gray-800 uppercase tracking-wider">Daftar Seluruh Agenda ({filteredEvents.length})</h3>
-                <span className="text-xs text-gray-400 font-medium">Diurutkan berdasarkan tanggal</span>
+              {/* Month Navigation & View Switcher Bar for List View */}
+              <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1 shadow-2xs">
+                    <button 
+                      onClick={prevMonth}
+                      className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-all cursor-pointer"
+                      title="Bulan Sebelumnya"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={nextMonth}
+                      className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-all cursor-pointer"
+                      title="Bulan Berikutnya"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <h2 className="text-xl font-extrabold text-gray-900 capitalize">
+                    {format(currentDate, 'MMMM yyyy', { locale: idLocale })}
+                  </h2>
+
+                  <button 
+                    onClick={goToToday}
+                    className="px-3 py-1.5 bg-white hover:bg-gray-100 border border-gray-200 rounded-xl text-xs font-extrabold text-gray-700 transition-colors cursor-pointer shadow-2xs"
+                  >
+                    Hari Ini (Today)
+                  </button>
+                </div>
+
+                {/* View Switcher Tabbing */}
+                <div className="flex items-center bg-gray-200/80 p-1 rounded-xl border border-gray-200 w-full sm:w-auto">
+                  <button
+                    onClick={() => setViewMode("grid")}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-gray-600 hover:text-gray-900"
+                  >
+                    <CalendarIcon className="w-3.5 h-3.5 text-gray-400" />
+                    <span>Grid Bulanan</span>
+                  </button>
+                  <button
+                    onClick={() => setViewMode("list")}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer bg-white text-[#531FFF] shadow-xs"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-[#531FFF]" />
+                    <span>Daftar Agenda ({filteredEvents.length})</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-white text-xs">
+                <h3 className="font-bold text-gray-800 uppercase tracking-wider">Daftar Seluruh Agenda ({filteredEvents.length})</h3>
+                <span className="text-gray-400 font-medium">Diurutkan berdasarkan tanggal pelaksanaan</span>
               </div>
 
               <div className="divide-y divide-gray-100">

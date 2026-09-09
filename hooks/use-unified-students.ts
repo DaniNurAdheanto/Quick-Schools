@@ -61,19 +61,30 @@ export function useUnifiedStudents() {
   const mergeAndSetStudents = useCallback(() => {
     const studentMap = new Map<string, UnifiedStudent>();
 
+    const isDocId = (val: any) => typeof val === "string" && val.length >= 20 && !/^\d+$/.test(val);
+
     // 1. Process items from `students` collection
     rawStudentsRef.current.forEach(item => {
       const key = item.uid || item.email?.toLowerCase() || item._firestoreId;
       const isUnboarded = item.status === "Belum Onboarding" || item.onboardingCompleted === false;
+
+      const cleanNisn = (!isDocId(item.nisn) && item.nisn && item.nisn !== "-") ? String(item.nisn)
+        : (!isDocId(item.nis) && item.nis && item.nis !== "-") ? String(item.nis)
+        : (!isDocId(item.id) && item.id && item.id !== "-") ? String(item.id)
+        : "-";
+
+      const cleanNis = (!isDocId(item.nis) && item.nis && item.nis !== "-") ? String(item.nis)
+        : (!isDocId(item.id) && item.id && item.id !== "-") ? String(item.id)
+        : "-";
 
       studentMap.set(key, {
         ...item,
         _firestoreId: item._firestoreId,
         _allDocIds: [item._firestoreId],
         uid: item.uid || item._firestoreId,
-        id: item.nisn || item.nis || item.id || item._firestoreId || "-",
-        nis: item.nis || item.id || "-",
-        nisn: item.nisn || item.id || "-",
+        id: cleanNisn !== "-" ? cleanNisn : (cleanNis !== "-" ? cleanNis : (item.id || item._firestoreId || "-")),
+        nis: cleanNis,
+        nisn: cleanNisn,
         name: item.fullName || item.name || "",
         fullName: item.fullName || item.name || "",
         nickname: item.nickname || "",
@@ -149,6 +160,27 @@ export function useUnifiedStudents() {
               }
             }
           });
+
+          // Always merge valid NISN / NIS from users collection
+          const uNisn = (!isDocId(u.nisn) && u.nisn && u.nisn !== "-") ? String(u.nisn)
+            : (!isDocId(u.nis) && u.nis && u.nis !== "-") ? String(u.nis)
+            : (!isDocId(u.id) && u.id && u.id !== "-") ? String(u.id)
+            : null;
+
+          if (uNisn) {
+            if (isDocId(existing.nisn) || existing.nisn === "-" || !existing.nisn) {
+              existing.nisn = uNisn;
+            }
+            if (isDocId(existing.id) || existing.id === "-" || !existing.id) {
+              existing.id = uNisn;
+            }
+          }
+          if (u.nis && !isDocId(u.nis) && u.nis !== "-") {
+            if (isDocId(existing.nis) || existing.nis === "-" || !existing.nis) {
+              existing.nis = String(u.nis);
+            }
+          }
+
           if (u.fullName || u.name) {
             existing.name = u.fullName || u.name || existing.name;
             existing.fullName = u.fullName || u.name || existing.fullName;
@@ -166,14 +198,22 @@ export function useUnifiedStudents() {
           }
         } else {
           const newKey = uUid || uEmail || u._firestoreId;
+          const uNisn = (!isDocId(u.nisn) && u.nisn && u.nisn !== "-") ? String(u.nisn)
+            : (!isDocId(u.nis) && u.nis && u.nis !== "-") ? String(u.nis)
+            : (!isDocId(u.id) && u.id && u.id !== "-") ? String(u.id)
+            : "-";
+          const uNis = (!isDocId(u.nis) && u.nis && u.nis !== "-") ? String(u.nis)
+            : (!isDocId(u.id) && u.id && u.id !== "-") ? String(u.id)
+            : "-";
+
           studentMap.set(newKey, {
             ...u,
             _firestoreId: u._firestoreId,
             _allDocIds: [u._firestoreId],
             uid: uUid,
-            id: u.nisn || u.nis || u.id || u._firestoreId || "-",
-            nis: u.nis || "-",
-            nisn: u.nisn || "-",
+            id: uNisn !== "-" ? uNisn : (uNis !== "-" ? uNis : (u.id || u._firestoreId || "-")),
+            nis: uNis,
+            nisn: uNisn,
             name: u.fullName || u.name || u.email?.split("@")[0] || "Siswa Baru",
             fullName: u.fullName || u.name || "",
             nickname: u.nickname || "",
