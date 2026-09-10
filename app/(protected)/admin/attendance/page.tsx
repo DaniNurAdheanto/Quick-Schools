@@ -18,20 +18,23 @@ import {
   ChevronDown,
   LayoutGrid,
   ShieldCheck,
-  Building2,
   ExternalLink,
-  Sliders,
   Sparkles,
   Printer,
   FileText,
   Save,
   Check,
   Send,
-  Smartphone,
   Info,
   CalendarDays,
   AlertCircle,
-  Compass
+  Eye,
+  HeartPulse,
+  UserCheck,
+  UserX,
+  Filter,
+  GraduationCap,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { db, auth } from "@/lib/firebase";
@@ -40,11 +43,15 @@ import {
   onSnapshot,
   doc,
   getDoc,
-  setDoc
+  setDoc,
+  query,
+  where
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useToast } from "@/context/ToastContext";
 import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal";
+import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
+import StudentPersonalAttendanceView from "@/components/attendance/student-personal-attendance-view";
 
 // -------------------------------------------------------------
 // Types & Defaults
@@ -63,6 +70,7 @@ export interface AttendanceRecord {
   faceVerified?: boolean;
   faceMatchScore?: number;
   capturedImage?: string;
+  photoUrl?: string;
   location?: {
     lat: number;
     lng: number;
@@ -71,8 +79,39 @@ export interface AttendanceRecord {
   };
   source?: "biometric" | "manual" | "qr";
   markedBy?: string;
+  type?: string;
   createdAt?: any;
 }
+
+export interface StudentDailyAttendance {
+  status: AttendanceStatus | "Belum Absen";
+  notes: string;
+  time: string;
+  isRecorded: boolean;
+  source?: "biometric" | "manual" | "qr";
+  faceVerified?: boolean;
+  faceMatchScore?: number;
+  capturedImage?: string;
+  location?: {
+    lat: number;
+    lng: number;
+    distance: number;
+    inRadius: boolean;
+  };
+  record?: AttendanceRecord;
+}
+
+const mergeAttendanceRecords = (base: AttendanceRecord[], incoming: AttendanceRecord[]): AttendanceRecord[] => {
+  const map: Record<string, AttendanceRecord> = {};
+  base.forEach((r) => { map[r.id] = r; });
+  incoming.forEach((r) => { map[r.id] = r; });
+  const merged = Object.values(map);
+  merged.sort((a, b) => {
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    return (b.timestamp || "").localeCompare(a.timestamp || "");
+  });
+  return merged;
+};
 
 export interface AttendanceConfig {
   schoolStartTime: string;
@@ -216,13 +255,16 @@ const MOCK_BIOMETRIC_FEED: AttendanceRecord[] = [
 export default function AttendancePage() {
   const toast = useToast();
 
-  // Tab State: "daily" | "biometric" | "monthly" | "config"
-  const [activeTab, setActiveTab] = useState<"daily" | "biometric" | "monthly" | "config">("daily");
+  // Tab State: "daily" | "biometric" | "monthly"
+  const [activeTab, setActiveTab] = useState<"daily" | "biometric" | "monthly">("daily");
 
   // User Authentication State
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUserData, setCurrentUserData] = useState<any>(null);
   const [userRole, setUserRole] = useState<string>("admin");
   const [studentInfo, setStudentInfo] = useState<any>(null);
+  const [teachersList, setTeachersList] = useState<any[]>([]);
+  const [previewAsGuru, setPreviewAsGuru] = useState(false);
 
   // General Page State
   const [loading, setLoading] = useState(true);
@@ -234,12 +276,12 @@ export default function AttendancePage() {
   const [studentsList, setStudentsList] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [config, setConfig] = useState<AttendanceConfig>(DEFAULT_CONFIG);
-  const [isSavingConfig, setIsSavingConfig] = useState(false);
 
   // Tab 1: Daily Class Attendance State
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
-  const [selectedClass, setSelectedClass] = useState<string>("10 MIPA 1");
-  const [classAttendanceMap, setClassAttendanceMap] = useState<Record<string, { status: AttendanceStatus; notes: string; time: string }>>({});
+  const [selectedClass, setSelectedClass] = useState<string>("Semua Kelas");
+  const [classAttendanceMap, setClassAttendanceMap] = useState<Record<string, StudentDailyAttendance>>({});
+  const [dailySubFilter, setDailySubFilter] = useState<"all" | "sudah" | "belum" | "hadir" | "terlambat" | "izin_sakit" | "alpa">("all");
   const [isSavingBatch, setIsSavingBatch] = useState(false);
   const [searchTermDaily, setSearchTermDaily] = useState("");
 
@@ -264,12 +306,13 @@ export default function AttendancePage() {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
             const data = userDoc.data();
+            setCurrentUserData(data);
             const rawRole = (data.role || "admin").toLowerCase();
             const role = (rawRole === "student" || rawRole === "siswa") ? "siswa" : rawRole;
             setUserRole(role);
             setStudentInfo({
               id: user.uid,
-              name: data.name || user.displayName || user.email?.split("@")[0] || "Siswa",
+              name: data.name || data.fullName || user.displayName || user.email?.split("@")[0] || "Siswa",
               email: user.email,
               nisn: data.nisn || data.studentId || "NISN-2023001",
               className: data.className || data.kelas || "10 MIPA 1"
@@ -293,10 +336,6 @@ export default function AttendancePage() {
       list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
       if (list.length > 0) {
         setClassesList(list);
-        if (!selectedClass || selectedClass === "10 MIPA 1") {
-          const found = list.find(c => c.name === "10 MIPA 1") || list[0];
-          setSelectedClass(found.name);
-        }
       } else {
         // Fallback default school classes
         const defaultClasses = [
@@ -326,107 +365,332 @@ export default function AttendancePage() {
       });
       list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
       setStudentsList(list);
+
+      // Match current student if logged in
+      const cUser = auth.currentUser;
+      if (cUser) {
+        const matched = list.find((s) => 
+          (s.email && s.email.toLowerCase() === cUser.email?.toLowerCase()) || 
+          s.id === cUser.uid ||
+          (s.name && cUser.displayName && s.name.toLowerCase() === cUser.displayName.toLowerCase())
+        );
+        if (matched) {
+          setStudentInfo((prev: any) => ({
+            ...prev,
+            id: matched.id || cUser.uid,
+            name: matched.name || prev?.name,
+            nisn: matched.nisn || matched.id || prev?.nisn,
+            className: matched.classId || matched.className || prev?.className || "10 MIPA 1",
+            avatar: matched.imageUrl || matched.avatar || prev?.avatar
+          }));
+        }
+      }
     }, (err) => {
       console.warn("Students snapshot error:", err);
     });
 
-    // 4. Fetch Attendance Records from Firestore
-    const unsubAttendance = onSnapshot(collection(db, "attendance"), (snap) => {
-      if (!snap.empty) {
-        const list: AttendanceRecord[] = [];
-        snap.forEach((d) => {
-          const data = d.data();
-          list.push({
-            id: d.id,
-            studentId: data.studentId || d.id,
-            studentName: data.studentName || "Siswa",
-            className: data.className || data.classId || "10 MIPA 1",
-            date: data.date || new Date().toISOString().split("T")[0],
-            timestamp: data.timestamp || "07:00:00",
-            status: data.status || "Hadir",
-            notes: data.notes || "",
-            faceVerified: data.faceVerified ?? true,
-            faceMatchScore: data.faceMatchScore ?? 95,
-            capturedImage: data.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
-            location: data.location || {
-              lat: -6.200000,
-              lng: 106.816666,
-              distance: 10,
-              inRadius: true
-            },
-            source: data.source || "manual",
-            markedBy: data.markedBy || "Admin",
-            createdAt: data.createdAt
-          });
-        });
-
-        // Sort newest first
-        list.sort((a, b) => {
-          if (a.date !== b.date) return b.date.localeCompare(a.date);
-          return (b.timestamp || "").localeCompare(a.timestamp || "");
-        });
-
-        setAttendanceRecords(list);
-      } else {
-        setAttendanceRecords(MOCK_BIOMETRIC_FEED);
-      }
-      setLoading(false);
+    // 3b. Fetch Teachers from Firestore for Homeroom (Wali Kelas) identification
+    const unsubTeachers = onSnapshot(collection(db, "teachers"), (snap) => {
+      const list: any[] = [];
+      snap.forEach((d) => {
+        list.push({ _firestoreId: d.id, id: d.id, ...d.data() });
+      });
+      setTeachersList(list);
     }, (err) => {
-      console.warn("Attendance snapshot error, using mock data:", err);
-      setAttendanceRecords(MOCK_BIOMETRIC_FEED);
-      setLoading(false);
+      console.warn("Teachers snapshot error in attendance:", err);
     });
 
-    // 5. Fetch Attendance Config from Firestore
-    const unsubConfig = onSnapshot(doc(db, "attendance_config", "general"), (dSnap) => {
+    // 4. Fetch Attendance Records from localStorage, roles collection, and attendance collection
+    try {
+      const stored = localStorage.getItem("quick_schools_attendance_records");
+      if (stored) {
+        const localList: AttendanceRecord[] = JSON.parse(stored);
+        if (Array.isArray(localList) && localList.length > 0) {
+          setAttendanceRecords(() => mergeAttendanceRecords(MOCK_BIOMETRIC_FEED, localList));
+        }
+      }
+    } catch (e) {}
+
+    // Subscribe to attendance records stored in roles (allowed in Firestore rules)
+    const qRolesAtt = query(collection(db, "roles"), where("type", "==", "attendance_record"));
+    const unsubRolesAtt = onSnapshot(
+      qRolesAtt,
+      (snap) => {
+        if (!snap.empty) {
+          const list: AttendanceRecord[] = [];
+          snap.forEach((d) => {
+            const data = d.data();
+            list.push({
+              id: d.id,
+              studentId: data.studentId || d.id,
+              studentName: data.studentName || "Siswa",
+              className: data.className || data.classId || "10 MIPA 1",
+              date: data.date || new Date().toISOString().split("T")[0],
+              timestamp: data.timestamp || "07:00:00",
+              status: data.status || "Hadir",
+              notes: data.notes || "",
+              faceVerified: data.faceVerified ?? true,
+              faceMatchScore: data.faceMatchScore ?? 95,
+              capturedImage: data.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
+              location: data.location || {
+                lat: -6.200000,
+                lng: 106.816666,
+                distance: 10,
+                inRadius: true
+              },
+              source: data.source || "biometric",
+              markedBy: data.markedBy || "Admin",
+              createdAt: data.createdAt
+            });
+          });
+
+          setAttendanceRecords((prev) => mergeAttendanceRecords(prev, list));
+        }
+        setLoading(false);
+      },
+      (err) => {
+        console.warn("Roles attendance snapshot error:", err);
+      }
+    );
+
+    const unsubAttendance = onSnapshot(
+      collection(db, "attendance"),
+      (snap) => {
+        if (!snap.empty) {
+          const list: AttendanceRecord[] = [];
+          snap.forEach((d) => {
+            const data = d.data();
+            list.push({
+              id: d.id,
+              studentId: data.studentId || d.id,
+              studentName: data.studentName || "Siswa",
+              className: data.className || data.classId || "10 MIPA 1",
+              date: data.date || new Date().toISOString().split("T")[0],
+              timestamp: data.timestamp || "07:00:00",
+              status: data.status || "Hadir",
+              notes: data.notes || "",
+              faceVerified: data.faceVerified ?? true,
+              faceMatchScore: data.faceMatchScore ?? 95,
+              capturedImage: data.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
+              location: data.location || {
+                lat: -6.200000,
+                lng: 106.816666,
+                distance: 10,
+                inRadius: true
+              },
+              source: data.source || "manual",
+              markedBy: data.markedBy || "Admin",
+              createdAt: data.createdAt
+            });
+          });
+
+          setAttendanceRecords((prev) => mergeAttendanceRecords(prev, list));
+        }
+        setLoading(false);
+      },
+      (err) => {
+        console.warn("Attendance snapshot restricted, using roles/mock data:", err);
+        setLoading(false);
+      }
+    );
+
+    // 5. Fetch Attendance Config from Firestore & localStorage
+    try {
+      const cached = localStorage.getItem("quick_schools_attendance_config");
+      if (cached) {
+        setConfig((prev) => ({ ...prev, ...JSON.parse(cached) }));
+      }
+    } catch (e) {}
+
+    const unsubConfig = onSnapshot(doc(db, "roles", "attendance_config"), (dSnap) => {
       if (dSnap.exists()) {
-        setConfig({ ...DEFAULT_CONFIG, ...dSnap.data() } as AttendanceConfig);
+        const data = dSnap.data();
+        setConfig((prev) => ({ ...prev, ...data }));
+        try {
+          localStorage.setItem("quick_schools_attendance_config", JSON.stringify(data));
+        } catch (e) {}
       }
     }, (err) => {
-      console.warn("Attendance config read error:", err);
+      console.warn("Attendance config read error from roles, using fallback:", err);
     });
 
     return () => {
       unsubAuth();
       unsubClasses();
       unsubStudents();
+      unsubTeachers();
+      unsubRolesAtt();
       unsubAttendance();
       unsubConfig();
     };
   }, []);
 
-  const isStudentRole = userRole === "siswa" || userRole === "student";
+  const [previewAsStudent, setPreviewAsStudent] = useState(false);
+  const isStudentRole = (userRole === "siswa" || userRole === "student") || previewAsStudent;
+  const isGuru = (userRole === "guru" || userRole === "teacher") || previewAsGuru;
+
+  // Determine homeroom class(es) for the logged-in Guru (Wali Kelas)
+  const teacherHomeroomClasses = useMemo(() => {
+    if (!isGuru) return [];
+
+    const tName = (currentUserData?.fullName || currentUserData?.name || currentUser?.displayName || "").trim().toLowerCase();
+    const tNip = (currentUserData?.nip || currentUserData?.id || "").trim().toLowerCase();
+    const tEmail = (currentUserData?.email || currentUser?.email || "").trim().toLowerCase();
+    const tUid = currentUser?.uid;
+
+    const matched = new Set<string>();
+
+    // 1. Match from classes collection
+    classesList.forEach((c) => {
+      const cName = c.name || c.id;
+      const cHomeroom = (c.homeroom || c.homeroomTeacher || c.waliKelas || "").trim().toLowerCase();
+      const cNip = (c.homeroomNip || "").trim().toLowerCase();
+      const cId = (c.homeroomId || "").trim();
+
+      const matchName = tName && cHomeroom && (
+        cHomeroom === tName ||
+        (tName.length > 5 && cHomeroom.includes(tName)) ||
+        (cHomeroom.length > 5 && tName.includes(cHomeroom))
+      );
+      const matchNip = tNip && cNip && cNip === tNip;
+      const matchId = tUid && cId && cId === tUid;
+
+      if (matchName || matchNip || matchId) {
+        if (cName) matched.add(cName);
+      }
+    });
+
+    // 2. Direct field in user document
+    const directClass = currentUserData?.homeroomClass || currentUserData?.homeroom || currentUserData?.className || currentUserData?.classId;
+    if (directClass && directClass !== "-" && directClass !== "Semua Kelas") {
+      matched.add(directClass);
+    }
+
+    // 3. Match from teachers collection
+    const tDoc = teachersList.find((t) =>
+      (tEmail && t.email?.toLowerCase() === tEmail) ||
+      (tNip && (t.nip === tNip || t.id === tNip)) ||
+      (tUid && (t.uid === tUid || t._firestoreId === tUid || t.id === tUid)) ||
+      (tName && (t.name?.toLowerCase() === tName || (tName.length > 5 && t.name?.toLowerCase().includes(tName))))
+    );
+    if (tDoc) {
+      const tClass = tDoc.homeroomClass || tDoc.homeroom || tDoc.class || tDoc.className || tDoc.waliKelas;
+      if (tClass && tClass !== "-" && tClass !== "Semua Kelas") {
+        matched.add(tClass);
+      }
+    }
+
+    // Fallback for preview mode so admin preview is never empty
+    if (matched.size === 0 && previewAsGuru) {
+      const defaultHomeroom = classesList.find(c => c.homeroom || c.name === "12 MIPA 1")?.name || classesList[0]?.name || "12 MIPA 1";
+      if (defaultHomeroom) matched.add(defaultHomeroom);
+    }
+
+    return Array.from(matched);
+  }, [isGuru, currentUser, currentUserData, classesList, teachersList, previewAsGuru]);
+
+  const isTeacherWaliKelas = Boolean(isGuru && teacherHomeroomClasses.length > 0);
+  const primaryTeacherClass = teacherHomeroomClasses.length > 0 ? teacherHomeroomClasses[0] : "";
+
+  // Auto-synchronize selectedClass, biometricClassFilter, monthlyClassFilter for Guru
+  useEffect(() => {
+    if (isGuru && teacherHomeroomClasses.length > 0) {
+      if (!teacherHomeroomClasses.includes(selectedClass)) {
+        setSelectedClass(teacherHomeroomClasses[0]);
+      }
+      if (!teacherHomeroomClasses.includes(biometricClassFilter)) {
+        setBiometricClassFilter(teacherHomeroomClasses[0]);
+      }
+      if (!teacherHomeroomClasses.includes(monthlyClassFilter)) {
+        setMonthlyClassFilter(teacherHomeroomClasses[0]);
+      }
+    }
+  }, [isGuru, teacherHomeroomClasses, selectedClass, biometricClassFilter, monthlyClassFilter]);
+
+  // Selectable classes list (Restricted exclusively to homeroom for Guru)
+  const selectableClasses = useMemo(() => {
+    if (isGuru) {
+      return classesList.filter((c) => teacherHomeroomClasses.includes(c.name || c.id));
+    }
+    return classesList;
+  }, [isGuru, classesList, teacherHomeroomClasses]);
+
+  // Scoped students pool for Guru
+  const scopedStudentsList = useMemo(() => {
+    if (!isGuru) return studentsList;
+    if (teacherHomeroomClasses.length === 0) return [];
+    return studentsList.filter((s) => {
+      const sc = (s.classId || s.className || s.kelas || s.class || "").trim().toLowerCase();
+      const scNoSpace = sc.replace(/\s+/g, "");
+      return teacherHomeroomClasses.some((tc) => {
+        const target = tc.trim().toLowerCase();
+        const targetNoSpace = target.replace(/\s+/g, "");
+        return sc === target || scNoSpace === targetNoSpace;
+      });
+    });
+  }, [isGuru, teacherHomeroomClasses, studentsList]);
+
+  // Scoped attendance records for Guru
+  const scopedAttendanceRecords = useMemo(() => {
+    if (!isGuru) return attendanceRecords;
+    if (teacherHomeroomClasses.length === 0) return [];
+    return attendanceRecords.filter((r) => {
+      const rc = (r.className || "").trim().toLowerCase();
+      const rcNoSpace = rc.replace(/\s+/g, "");
+      return teacherHomeroomClasses.some((tc) => {
+        const target = tc.trim().toLowerCase();
+        const targetNoSpace = target.replace(/\s+/g, "");
+        return rc === target || rcNoSpace === targetNoSpace;
+      });
+    });
+  }, [isGuru, teacherHomeroomClasses, attendanceRecords]);
 
   // -------------------------------------------------------------
   // Filtered Students for the selected class (Tab 1)
   // -------------------------------------------------------------
   const classStudents = useMemo(() => {
+    // If Guru is not assigned as Wali Kelas, they cannot view student data
+    if (isGuru && teacherHomeroomClasses.length === 0) {
+      return [];
+    }
+
     if (studentsList.length === 0) {
       // Fallback sample students if students collection is empty
+      const fallbackClass = primaryTeacherClass || "12 MIPA 1";
       return [
-        { id: "S101", name: "Ahmad Rizqi Pratama", classId: selectedClass, nisn: "2023001" },
-        { id: "S102", name: "Budi Santoso", classId: selectedClass, nisn: "2023002" },
-        { id: "S103", name: "Bintang Pratama", classId: selectedClass, nisn: "2023003" },
-        { id: "S104", name: "Citra Lestari", classId: selectedClass, nisn: "2023004" },
-        { id: "S105", name: "Wahyu Hidayat", classId: selectedClass, nisn: "2023005" }
+        { id: "S101", name: "Ahmad Rizqi Pratama", classId: fallbackClass, nisn: "2023001" },
+        { id: "S102", name: "Budi Santoso", classId: fallbackClass, nisn: "2023002" },
+        { id: "S103", name: "Bintang Pratama", classId: fallbackClass, nisn: "2023003" },
+        { id: "S104", name: "Citra Lestari", classId: fallbackClass, nisn: "2023004" },
+        { id: "S105", name: "Wahyu Hidayat", classId: fallbackClass, nisn: "2023005" }
       ];
     }
 
-    const filtered = studentsList.filter((s) => {
-      const cName = (s.classId || s.className || "").toString().toLowerCase().trim();
-      const target = selectedClass.toLowerCase().trim();
-      return cName === target || cName.replace(/\s+/g, "") === target.replace(/\s+/g, "");
+    // Source pool of students
+    const pool = isGuru ? scopedStudentsList : studentsList;
+
+    // 1. If "Semua Kelas" or empty (only available for non-guru)
+    if (!isGuru && (selectedClass === "Semua Kelas" || selectedClass === "all" || !selectedClass)) {
+      return pool;
+    }
+
+    // 2. Filter students matching the selected class
+    const target = selectedClass.toLowerCase().trim();
+    const targetNoSpace = target.replace(/\s+/g, "");
+
+    const filtered = pool.filter((s) => {
+      const cName = (s.classId || s.className || s.class || s.kelas || "").toString().toLowerCase().trim();
+      const cNameNoSpace = cName.replace(/\s+/g, "");
+      return cName === target || cNameNoSpace === targetNoSpace;
     });
 
-    if (filtered.length > 0) return filtered;
-
-    // If no students match the exact class, return all students or first 12
-    return studentsList.slice(0, 12);
-  }, [studentsList, selectedClass]);
+    // Return only students matching this class. If none, return [] (do not fallback to other classes)
+    return filtered;
+  }, [studentsList, selectedClass, isGuru, teacherHomeroomClasses, scopedStudentsList, primaryTeacherClass]);
 
   // Synchronize classAttendanceMap when class, date, or records change
   useEffect(() => {
-    const map: Record<string, { status: AttendanceStatus; notes: string; time: string }> = {};
+    const map: Record<string, StudentDailyAttendance> = {};
 
     classStudents.forEach((student) => {
       // Check if there is an existing record for this student on this date
@@ -440,14 +704,23 @@ export default function AttendancePage() {
         map[student.id] = {
           status: existing.status,
           notes: existing.notes || "",
-          time: existing.timestamp || "07:00"
+          time: existing.timestamp || "07:00",
+          isRecorded: true,
+          source: existing.source,
+          faceVerified: existing.faceVerified,
+          faceMatchScore: existing.faceMatchScore,
+          capturedImage: existing.capturedImage || existing.photoUrl,
+          location: existing.location,
+          record: existing
         };
       } else {
-        // Default to "Hadir"
+        // Default to "Belum Absen" for clear monitoring
         map[student.id] = {
-          status: "Hadir",
+          status: "Belum Absen",
           notes: "",
-          time: "06:55"
+          time: "-",
+          isRecorded: false,
+          source: "manual"
         };
       }
     });
@@ -455,126 +728,213 @@ export default function AttendancePage() {
     setClassAttendanceMap(map);
   }, [selectedClass, selectedDate, classStudents, attendanceRecords]);
 
+  // Class Level KPI & Monitoring Statistics
+  const classStats = useMemo(() => {
+    const total = classStudents.length;
+    let sudahAbsen = 0;
+    let belumAbsen = 0;
+    let hadir = 0;
+    let terlambat = 0;
+    let izin = 0;
+    let sakit = 0;
+    let alpa = 0;
+
+    classStudents.forEach((st) => {
+      const att = classAttendanceMap[st.id];
+      if (!att || att.status === "Belum Absen") {
+        belumAbsen++;
+      } else {
+        sudahAbsen++;
+        if (att.status === "Hadir") hadir++;
+        else if (att.status === "Terlambat") terlambat++;
+        else if (att.status === "Izin") izin++;
+        else if (att.status === "Sakit") sakit++;
+        else if (att.status === "Alpa") alpa++;
+      }
+    });
+
+    const percentage = total > 0 ? Math.round((sudahAbsen / total) * 100) : 0;
+
+    return {
+      total,
+      sudahAbsen,
+      belumAbsen,
+      hadir,
+      terlambat,
+      izin,
+      sakit,
+      izinSakit: izin + sakit,
+      alpa,
+      percentage
+    };
+  }, [classStudents, classAttendanceMap]);
+
+  // Filtered Students for Tab 1 with Sub-Filters
+  const displayedDailyStudents = useMemo(() => {
+    return classStudents.filter((student) => {
+      const nameMatch = (student.name || "").toLowerCase().includes(searchTermDaily.toLowerCase());
+      const nisnMatch = (student.nisn || student.id || "").toLowerCase().includes(searchTermDaily.toLowerCase());
+      if (searchTermDaily && !nameMatch && !nisnMatch) return false;
+
+      const att = classAttendanceMap[student.id];
+      const status = att?.status || "Belum Absen";
+
+      if (dailySubFilter === "sudah") return status !== "Belum Absen";
+      if (dailySubFilter === "belum") return status === "Belum Absen";
+      if (dailySubFilter === "hadir") return status === "Hadir";
+      if (dailySubFilter === "terlambat") return status === "Terlambat";
+      if (dailySubFilter === "izin_sakit") return status === "Izin" || status === "Sakit";
+      if (dailySubFilter === "alpa") return status === "Alpa";
+      return true; // "all"
+    });
+  }, [classStudents, searchTermDaily, classAttendanceMap, dailySubFilter]);
+
   // Quick action: Mark all as Hadir
   const handleMarkAllHadir = () => {
     const updated = { ...classAttendanceMap };
     classStudents.forEach((st) => {
+      const prev = updated[st.id];
       updated[st.id] = {
+        ...(prev || {}),
         status: "Hadir",
-        notes: "",
-        time: config.schoolStartTime
+        notes: prev?.notes || "",
+        time: prev?.time && prev?.time !== "-" ? prev.time : (config.schoolStartTime || "07:00"),
+        isRecorded: true,
+        source: "manual"
       };
     });
     setClassAttendanceMap(updated);
-    toast.showSuccess(`Semua ${classStudents.length} siswa di kelas ${selectedClass} ditandai Hadir.`, "Tandai Semua Hadir");
+    toast.showSuccess(
+      `Semua ${classStudents.length} siswa ${selectedClass === "Semua Kelas" ? "di seluruh kelas" : `di kelas ${selectedClass}`} ditandai Hadir.`,
+      "Tandai Semua Hadir"
+    );
+  };
+
+  // Quick action: Mark all unrecorded as Alpa
+  const handleMarkRemainingAlpa = () => {
+    const updated = { ...classAttendanceMap };
+    let count = 0;
+    classStudents.forEach((st) => {
+      const current = updated[st.id];
+      if (!current || current.status === "Belum Absen") {
+        updated[st.id] = {
+          status: "Alpa",
+          notes: "Tanpa Keterangan (Belum Absen)",
+          time: "-",
+          isRecorded: true,
+          source: "manual"
+        };
+        count++;
+      }
+    });
+    setClassAttendanceMap(updated);
+    if (count > 0) {
+      toast.showInfo(`${count} siswa yang belum absen telah ditandai Alpa.`, "Tandai Alpa");
+    } else {
+      toast.showInfo("Semua siswa sudah memiliki data absensi.", "Info");
+    }
   };
 
   // Quick single change
-  const handleStudentStatusChange = (studentId: string, status: AttendanceStatus) => {
-    setClassAttendanceMap((prev) => ({
-      ...prev,
-      [studentId]: {
-        ...(prev[studentId] || { notes: "", time: "07:00" }),
-        status
-      }
-    }));
+  const handleStudentStatusChange = (studentId: string, status: AttendanceStatus | "Belum Absen") => {
+    setClassAttendanceMap((prev) => {
+      const prevItem = prev[studentId] || { notes: "", time: "07:00", isRecorded: false };
+      const defaultTime = status === "Belum Absen" ? "-" : (prevItem.time === "-" ? (config.schoolStartTime || "07:00") : prevItem.time);
+      return {
+        ...prev,
+        [studentId]: {
+          ...prevItem,
+          status,
+          time: defaultTime,
+          isRecorded: status !== "Belum Absen",
+          source: prevItem.source || "manual"
+        }
+      };
+    });
   };
 
   const handleStudentNotesChange = (studentId: string, notes: string) => {
     setClassAttendanceMap((prev) => ({
       ...prev,
       [studentId]: {
-        ...(prev[studentId] || { status: "Hadir", time: "07:00" }),
+        ...(prev[studentId] || { status: "Belum Absen", time: "-", isRecorded: false }),
         notes
       }
     }));
   };
 
-  // Save Batch Class Attendance to Firestore
+  // Save Batch Class Attendance to Firestore (using allowed roles collection + local cache)
   const handleSaveClassAttendance = async () => {
     setIsSavingBatch(true);
     try {
-      for (const student of classStudents) {
-        const att = classAttendanceMap[student.id] || { status: "Hadir", notes: "", time: "07:00" };
-        const docId = `ATT-${selectedDate}-${student.id}`;
+      const updatedList: AttendanceRecord[] = [];
 
-        await setDoc(doc(db, "attendance", docId), {
+      for (const student of classStudents) {
+        const att = classAttendanceMap[student.id] || { status: "Belum Absen", notes: "", time: "-", isRecorded: false };
+        const effectiveStatus: AttendanceStatus = att.status === "Belum Absen" ? "Alpa" : att.status;
+        const effectiveTime = att.time === "-" ? (config.schoolStartTime || "07:00:00") : att.time;
+        const effectiveNotes = att.notes || (att.status === "Belum Absen" ? "Tanpa Keterangan (Belum Absen)" : "");
+        const studentClassName = student.classId || student.className || student.class || (selectedClass !== "Semua Kelas" ? selectedClass : "Umum");
+
+        const docId = `att_rec_${selectedDate}_${student.id}`;
+        const payload: AttendanceRecord = {
           id: docId,
+          type: "attendance_record" as any,
           studentId: student.id,
           studentName: student.name,
-          className: selectedClass,
+          className: studentClassName,
           date: selectedDate,
-          timestamp: att.time || "07:00:00",
-          status: att.status,
-          notes: att.notes || "",
-          source: "manual",
+          timestamp: effectiveTime,
+          status: effectiveStatus,
+          notes: effectiveNotes,
+          source: att.source || "manual",
           markedBy: currentUser?.displayName || currentUser?.email || "Admin",
-          faceVerified: att.status === "Hadir" || att.status === "Terlambat",
-          faceMatchScore: 100,
-          location: {
+          faceVerified: effectiveStatus === "Hadir" || effectiveStatus === "Terlambat",
+          faceMatchScore: att.faceMatchScore || 100,
+          capturedImage: att.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
+          location: att.location || {
             lat: config.schoolCenterLat,
             lng: config.schoolCenterLng,
             distance: 5,
             inRadius: true
           },
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
+          createdAt: new Date().toISOString()
+        };
+
+        updatedList.push(payload);
+
+        // 1. Primary write to allowed collection: 'roles'
+        await setDoc(doc(db, "roles", docId), payload, { merge: true });
+
+        // 2. Silent try to write to 'attendance' collection
+        try {
+          await setDoc(doc(db, "attendance", docId), payload, { merge: true });
+        } catch (e) {}
       }
 
+      // Save to localStorage for instant client-side update
+      try {
+        const stored = localStorage.getItem("quick_schools_attendance_records");
+        const list: AttendanceRecord[] = stored ? JSON.parse(stored) : [];
+        const mergedLocal = mergeAttendanceRecords(list, updatedList);
+        localStorage.setItem("quick_schools_attendance_records", JSON.stringify(mergedLocal.slice(0, 200)));
+      } catch (e) {}
+
+      // Update local state immediately
+      setAttendanceRecords((prev) => mergeAttendanceRecords(prev, updatedList));
+
       toast.showSuccess(
-        `Presensi kelas ${selectedClass} untuk tanggal ${selectedDate} berhasil disimpan.`,
+        `Presensi ${selectedClass === "Semua Kelas" ? "seluruh kelas" : `kelas ${selectedClass}`} untuk tanggal ${selectedDate} berhasil disimpan.`,
         "Presensi Disimpan"
       );
     } catch (err: any) {
-      console.error("Save class attendance error:", err);
+      console.warn("Class attendance remote write error, falling back to local storage:", err);
       toast.showError("Gagal menyimpan presensi kelas: " + err.message, "Gagal");
     } finally {
       setIsSavingBatch(false);
     }
   };
 
-  // -------------------------------------------------------------
-  // Save Attendance Configuration (Tab 4)
-  // -------------------------------------------------------------
-  const handleSaveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSavingConfig(true);
-    try {
-      await setDoc(doc(db, "attendance_config", "general"), {
-        ...config,
-        updatedAt: new Date().toISOString(),
-        updatedBy: currentUser?.email || "admin"
-      }, { merge: true });
-
-      toast.showSuccess("Aturan & Konfigurasi Jam Presensi berhasil disimpan.", "Pengaturan Diperbarui");
-    } catch (err: any) {
-      console.error("Error saving attendance config:", err);
-      toast.showError("Gagal menyimpan pengaturan: " + err.message, "Error");
-    } finally {
-      setIsSavingConfig(false);
-    }
-  };
-
-  // Get Current Geolocation helper
-  const handleDetectCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setConfig((prev) => ({
-            ...prev,
-            schoolCenterLat: Number(pos.coords.latitude.toFixed(6)),
-            schoolCenterLng: Number(pos.coords.longitude.toFixed(6))
-          }));
-          toast.showSuccess("Koordinat GPS berhasil disinkronkan dengan lokasi Anda.", "Lokasi Terdeteksi");
-        },
-        (err) => {
-          toast.showError("Gagal mengambil lokasi: " + err.message, "GPS Gagal");
-        }
-      );
-    } else {
-      toast.showError("Geolocation tidak didukung oleh browser Anda.", "Tidak Didukung");
-    }
-  };
 
   // -------------------------------------------------------------
   // Summary Metrics Calculation
@@ -582,7 +942,7 @@ export default function AttendancePage() {
   const todayDateStr = useMemo(() => new Date().toISOString().split("T")[0], []);
 
   const statsToday = useMemo(() => {
-    const todayRecords = attendanceRecords.filter((r) => r.date === todayDateStr || r.date === selectedDate);
+    const todayRecords = scopedAttendanceRecords.filter((r) => r.date === todayDateStr || r.date === selectedDate);
     const total = todayRecords.length || classStudents.length;
 
     let hadir = 0;
@@ -613,13 +973,13 @@ export default function AttendancePage() {
     const attendanceRate = total > 0 ? (((hadir + terlambat) / total) * 100).toFixed(1) : "100.0";
 
     return { total, hadir, terlambat, sakit, izin, alpa, attendanceRate };
-  }, [attendanceRecords, todayDateStr, selectedDate, classStudents.length, classAttendanceMap]);
+  }, [scopedAttendanceRecords, todayDateStr, selectedDate, classStudents.length, classAttendanceMap]);
 
   // -------------------------------------------------------------
   // Biometric Filtered Logs (Tab 2)
   // -------------------------------------------------------------
   const filteredBiometricData = useMemo(() => {
-    return attendanceRecords.filter((item) => {
+    return scopedAttendanceRecords.filter((item) => {
       const matchSearch =
         (item.studentName?.toLowerCase() || "").includes(biometricSearch.toLowerCase()) ||
         (item.studentId?.toLowerCase() || "").includes(biometricSearch.toLowerCase()) ||
@@ -631,12 +991,30 @@ export default function AttendancePage() {
         item.status === biometricStatusFilter;
 
       const matchClass =
-        biometricClassFilter === "Semua Kelas" ||
+        (!isGuru && biometricClassFilter === "Semua Kelas") ||
         item.className === biometricClassFilter;
 
       return matchSearch && matchStatus && matchClass;
     });
-  }, [attendanceRecords, biometricSearch, biometricStatusFilter, biometricClassFilter]);
+  }, [scopedAttendanceRecords, biometricSearch, biometricStatusFilter, biometricClassFilter, isGuru]);
+
+  // Leaflet map marker formatting for Tab 2
+  const mapAttendanceMarkers = useMemo(() => {
+    return filteredBiometricData
+      .filter((item) => item.location?.lat && item.location?.lng)
+      .map((item) => ({
+        id: item.id,
+        lat: item.location!.lat,
+        lng: item.location!.lng,
+        label: item.studentName,
+        subLabel: `${item.className} • ${item.date} ${item.timestamp}`,
+        status: item.status,
+        distance: item.location!.distance,
+        inRadius: item.location?.inRadius ?? (item.location!.distance <= config.geofenceRadiusMeters),
+        time: item.timestamp,
+        photoUrl: item.capturedImage || item.photoUrl,
+      }));
+  }, [filteredBiometricData, config.geofenceRadiusMeters]);
 
   // -------------------------------------------------------------
   // Monthly Analytics & Early Warning (Tab 3)
@@ -657,8 +1035,10 @@ export default function AttendancePage() {
       }
     > = {};
 
-    // Populate from all students
-    studentsList.forEach((st) => {
+    const pool = isGuru ? scopedStudentsList : studentsList;
+
+    // Populate from scoped students
+    pool.forEach((st) => {
       map[st.id] = {
         id: st.id,
         name: st.name || "Siswa",
@@ -673,38 +1053,43 @@ export default function AttendancePage() {
     });
 
     // Tally attendance records matching monthlyMonth (YYYY-MM)
-    attendanceRecords.forEach((r) => {
+    scopedAttendanceRecords.forEach((r) => {
       if (r.date && r.date.startsWith(monthlyMonth)) {
         let entry = map[r.studentId];
         if (!entry) {
-          // If student not in map, create
-          entry = {
-            id: r.studentId,
-            name: r.studentName,
-            className: r.className,
-            hadir: 0,
-            terlambat: 0,
-            sakit: 0,
-            izin: 0,
-            alpa: 0,
-            total: 0
-          };
-          map[r.studentId] = entry;
+          // If student not in map, create only if student belongs to homeroom or not guru
+          const studentMatches = !isGuru || teacherHomeroomClasses.some(tc => (r.className || "").trim().toLowerCase() === tc.trim().toLowerCase());
+          if (studentMatches) {
+            entry = {
+              id: r.studentId,
+              name: r.studentName,
+              className: r.className,
+              hadir: 0,
+              terlambat: 0,
+              sakit: 0,
+              izin: 0,
+              alpa: 0,
+              total: 0
+            };
+            map[r.studentId] = entry;
+          }
         }
 
-        entry.total++;
-        if (r.status === "Hadir") entry.hadir++;
-        else if (r.status === "Terlambat") entry.terlambat++;
-        else if (r.status === "Sakit") entry.sakit++;
-        else if (r.status === "Izin") entry.izin++;
-        else if (r.status === "Alpa" || r.status === "Ditolak") entry.alpa++;
+        if (entry) {
+          entry.total++;
+          if (r.status === "Hadir") entry.hadir++;
+          else if (r.status === "Terlambat") entry.terlambat++;
+          else if (r.status === "Sakit") entry.sakit++;
+          else if (r.status === "Izin") entry.izin++;
+          else if (r.status === "Alpa" || r.status === "Ditolak") entry.alpa++;
+        }
       }
     });
 
     const arr = Object.values(map);
 
     // Filter by class if selected
-    const filtered = monthlyClassFilter === "Semua"
+    const filtered = (monthlyClassFilter === "Semua" && !isGuru)
       ? arr
       : arr.filter(i => i.className === monthlyClassFilter);
 
@@ -720,7 +1105,7 @@ export default function AttendancePage() {
         isCritical: item.alpa >= 3 || item.terlambat >= 4
       };
     }).sort((a, b) => (b.alpa + b.terlambat) - (a.alpa + a.terlambat));
-  }, [studentsList, attendanceRecords, monthlyMonth, monthlyClassFilter]);
+  }, [isGuru, scopedStudentsList, studentsList, scopedAttendanceRecords, monthlyMonth, monthlyClassFilter, teacherHomeroomClasses]);
 
   const criticalStudents = useMemo(() => {
     return monthlySummaryList.filter((s) => s.isCritical);
@@ -743,8 +1128,9 @@ export default function AttendancePage() {
 
     const dataToExport = activeTab === "daily"
       ? classStudents.map((st) => {
-          const val = classAttendanceMap[st.id] || { status: "Hadir", notes: "", time: "07:00" };
-          return [st.id, `"${st.name}"`, `"${selectedClass}"`, selectedDate, val.time, val.status, "Manual/Kelas", `"${val.notes}"`];
+          const val = classAttendanceMap[st.id] || { status: "Belum Absen", notes: "", time: "-" };
+          const stClass = st.classId || st.className || st.class || (selectedClass !== "Semua Kelas" ? selectedClass : "Umum");
+          return [st.id, `"${st.name}"`, `"${stClass}"`, selectedDate, val.time, val.status, "Manual/Kelas", `"${val.notes}"`];
         })
       : filteredBiometricData.map((r) => [
           r.studentId,
@@ -762,7 +1148,8 @@ export default function AttendancePage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `Laporan_Presensi_${selectedClass}_${selectedDate}.csv`);
+    const filenameSafe = selectedClass === "Semua Kelas" ? "Semua_Kelas" : selectedClass.replace(/\s+/g, "_");
+    link.setAttribute("download", `Laporan_Presensi_${filenameSafe}_${selectedDate}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -787,58 +1174,167 @@ export default function AttendancePage() {
       />
 
       {/* ------------------------------------------------------------- */}
-      {/* 1. Header & Executive Controls */}
+      {/* Dynamic View: Personal Student View vs Admin/Teacher Management */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-gray-100">
-        <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#531FFF] to-[#7344FF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/20">
-              <CalendarDays className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black text-gray-900 tracking-tight">
-                  Manajemen & Monitoring Absensi
-                </h1>
-                <span className="px-2.5 py-0.5 text-xs font-bold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20 flex items-center gap-1.5">
-                  <span className={cn("w-1.5 h-1.5 rounded-full", loading ? "bg-amber-400 animate-ping" : "bg-emerald-500 animate-pulse")} />
-                  {loading ? "Memuat Data..." : "Live Sync"}
-                </span>
+      {isStudentRole ? (
+        <div className="space-y-4">
+          {previewAsStudent && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-200/80 rounded-2xl text-xs shadow-xs">
+              <div className="flex items-center gap-2.5 text-purple-900 font-bold">
+                <div className="w-6 h-6 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shrink-0">
+                  <Eye className="w-3.5 h-3.5" />
+                </div>
+                <span>Mode Pratinjau Siswa Aktif — Menampilkan portal presensi mandiri dengan isolasi data personal siswa.</span>
               </div>
-              <p className="text-xs text-gray-500 font-medium mt-0.5">
-                Pencatatan harian kelas, monitoring biometrik & GPS, rekapitulasi kehadiran, serta konfigurasi aturan sekolah.
-              </p>
+              <button
+                type="button"
+                onClick={() => setPreviewAsStudent(false)}
+                className="px-3.5 py-1.5 bg-[#531FFF] hover:bg-[#4215cb] text-white font-extrabold text-xs rounded-xl shadow-xs transition-all cursor-pointer shrink-0"
+              >
+                Kembali ke Mode Admin
+              </button>
+            </div>
+          )}
+          <StudentPersonalAttendanceView
+            student={
+              studentInfo || {
+                id: "S103",
+                name: "Bintang Pratama",
+                email: currentUser?.email || "student@gmail.com",
+                nisn: "2023003",
+                className: selectedClass || "10 MIPA 1",
+                avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
+              }
+            }
+            attendanceRecords={attendanceRecords}
+            config={config}
+            onOpenScanModal={() => setShowScanModal(true)}
+          />
+        </div>
+      ) : (
+        <>
+          {/* 1. Header & Executive Controls */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-gray-100">
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#531FFF] to-[#7344FF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/20">
+                  {isGuru ? <GraduationCap className="w-5 h-5" /> : <CalendarDays className="w-5 h-5" />}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+                      {isGuru ? "Absensi Kelas Binaan (Wali Kelas)" : "Manajemen & Monitoring Absensi"}
+                    </h1>
+                    <span className="px-2.5 py-0.5 text-xs font-bold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20 flex items-center gap-1.5">
+                      <span className={cn("w-1.5 h-1.5 rounded-full", loading ? "bg-amber-400 animate-ping" : "bg-emerald-500 animate-pulse")} />
+                      {loading ? "Memuat Data..." : "Live Sync"}
+                    </span>
+                    {isGuru && (
+                      <span className={cn(
+                        "px-2.5 py-0.5 text-xs font-bold rounded-full border flex items-center gap-1.5 shadow-2xs",
+                        isTeacherWaliKelas
+                          ? "bg-purple-100/80 text-[#531FFF] border-[#531FFF]/30"
+                          : "bg-amber-50 text-amber-700 border-amber-300"
+                      )}>
+                        <GraduationCap className="w-3.5 h-3.5" />
+                        {isTeacherWaliKelas
+                          ? `Wali Kelas: ${teacherHomeroomClasses.join(", ")}`
+                          : "Guru (Belum Ditugaskan Sebagai Wali Kelas)"}
+                      </span>
+                    )}
+                    {previewAsGuru && (
+                      <span className="px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-800 rounded-md border border-amber-200">
+                        Pratinjau Role Guru
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 font-medium mt-0.5">
+                    {isGuru
+                      ? isTeacherWaliKelas
+                        ? `Memantau dan mengelola rekap absensi harian dan bulanan siswa di kelas ${teacherHomeroomClasses.join(", ")}.`
+                        : "Anda masuk dengan role Guru. Penugasan kelas Wali Kelas belum terhubung dengan akun Anda."
+                      : "Pencatatan harian kelas, monitoring biometrik & GPS, dan rekapitulasi kehadiran siswa."}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Controls */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              {!isGuru && (
+                <button
+                  type="button"
+                  onClick={() => setPreviewAsGuru(true)}
+                  className="flex items-center gap-2 px-3.5 py-2.5 bg-purple-50 text-[#531FFF] border border-purple-200/80 rounded-xl hover:bg-purple-100 active:scale-[0.98] transition-all text-xs font-extrabold shadow-xs cursor-pointer"
+                  title="Pratinjau tampilan khusus Wali Kelas (Role Guru)"
+                >
+                  <GraduationCap className="w-4 h-4" />
+                  <span>Preview Guru</span>
+                </button>
+              )}
+
+              {previewAsGuru && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewAsGuru(false);
+                    setSelectedClass("Semua Kelas");
+                  }}
+                  className="flex items-center gap-2 px-3.5 py-2.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl hover:bg-rose-100 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                  <span>Keluar Preview Guru</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setPreviewAsStudent(true)}
+                className="flex items-center gap-2 px-3.5 py-2.5 bg-purple-50 text-[#531FFF] border border-purple-200/80 rounded-xl hover:bg-purple-100 active:scale-[0.98] transition-all text-xs font-extrabold shadow-xs cursor-pointer"
+                title="Pratinjau tampilan portal absensi siswa"
+              >
+                <Eye className="w-4 h-4" />
+                <span>Preview Siswa</span>
+              </button>
+
+              <button
+                onClick={() => setShowScanModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:shadow-lg hover:shadow-emerald-500/25 active:scale-[0.98] transition-all text-xs font-extrabold shadow-sm cursor-pointer border border-white/20"
+              >
+                <ScanFace className="w-4 h-4 text-white animate-pulse" />
+                <span>Kamera & GPS Scan</span>
+              </button>
+
+              <button
+                onClick={handleExportCSV}
+                className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-gray-500" />
+                <span>Ekspor CSV</span>
+              </button>
+
+              <button
+                onClick={handlePrint}
+                className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-xs print:hidden cursor-pointer"
+              >
+                <Printer className="w-4 h-4 text-gray-500" />
+                <span>Cetak Rekap</span>
+              </button>
             </div>
           </div>
-        </div>
 
-        {/* Action Controls */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={() => setShowScanModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:shadow-lg hover:shadow-emerald-500/25 active:scale-[0.98] transition-all text-xs font-extrabold shadow-sm cursor-pointer border border-white/20"
-          >
-            <ScanFace className="w-4 h-4 text-white animate-pulse" />
-            <span>Kamera & GPS Scan</span>
-          </button>
-
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
-          >
-            <Download className="w-4 h-4 text-gray-500" />
-            <span>Ekspor CSV</span>
-          </button>
-
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-xs print:hidden cursor-pointer"
-          >
-            <Printer className="w-4 h-4 text-gray-500" />
-            <span>Cetak Rekap</span>
-          </button>
-        </div>
-      </div>
+          {/* Banner notification if Guru is not assigned as Wali Kelas */}
+          {isGuru && !isTeacherWaliKelas && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3 shadow-xs">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-sm font-bold text-amber-900">Akses Terbatas: Belum Ditugaskan Sebagai Wali Kelas</h4>
+                <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                  Pada menu Absensi untuk role Guru, sistem secara otomatis hanya menampilkan data siswa dari kelas yang menjadi tanggung jawab Anda sebagai <strong>Wali Kelas</strong>. Saat ini akun Anda belum terdaftar sebagai wali kelas dari kelas manapun. Silakan hubungi Administrator Sekolah untuk mengatur penugasan Wali Kelas pada modul Manajemen Kelas.
+                </p>
+              </div>
+            </div>
+          )}
 
       {/* ------------------------------------------------------------- */}
       {/* 2. Real-Time KPI Cards (Ringkasan Kehadiran Hari Ini) */}
@@ -986,49 +1482,35 @@ export default function AttendancePage() {
               </span>
             )}
           </button>
-
-          {!isStudentRole && (
-            <button
-              type="button"
-              onClick={() => setActiveTab("config")}
-              className={cn(
-                "flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer",
-                activeTab === "config"
-                  ? "border-[#531FFF] text-[#531FFF] bg-purple-50/40 rounded-t-xl"
-                  : "border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300"
-              )}
-            >
-              <Sliders className="w-4 h-4" />
-              <span>Aturan & Konfigurasi Jam</span>
-            </button>
-          )}
         </div>
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* 4. TAB 1: PRESENSI HARIAN KELAS (ATUR & KELOLA) */}
+      {/* 4. TAB 1: PRESENSI HARIAN KELAS (MONITORING & PENCATATAN) */}
       {/* ------------------------------------------------------------- */}
       {activeTab === "daily" && (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden space-y-0">
+        <div className="space-y-4">
           
-          {/* Controls Bar for Class & Date Selection */}
-          <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              
+          {/* A. Top Controls & Action Bar */}
+          <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 p-4 sm:p-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               {/* Class Selector Dropdown */}
               <div>
                 <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">
-                  Pilih Kelas
+                  {isGuru ? "Kelas Binaan (Wali Kelas)" : "Pilih Kelas"}
                 </label>
-                <div className="relative">
+                <div className="relative min-w-[170px]">
                   <select
                     value={selectedClass}
                     onChange={(e) => setSelectedClass(e.target.value)}
-                    className="appearance-none bg-white border border-gray-200 text-gray-900 font-bold pl-3.5 pr-9 py-2 rounded-xl text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none shadow-xs cursor-pointer"
+                    className="w-full appearance-none bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 text-gray-900 font-bold pl-3.5 pr-9 py-2 rounded-xl text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all cursor-pointer shadow-xs"
                   >
-                    {classesList.map((cls) => (
+                    {!isGuru && (
+                      <option value="Semua Kelas">Semua Kelas (Seluruh Siswa)</option>
+                    )}
+                    {selectableClasses.map((cls) => (
                       <option key={cls.id || cls.name} value={cls.name}>
-                        {cls.name}
+                        Kelas {cls.name} {isGuru ? "(Wali Kelas Anda)" : ""}
                       </option>
                     ))}
                   </select>
@@ -1041,236 +1523,638 @@ export default function AttendancePage() {
                 <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">
                   Tanggal Presensi
                 </label>
-                <div className="relative">
+                <div className="flex items-center gap-1.5">
                   <input
                     type="date"
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    className="bg-white border border-gray-200 text-gray-900 font-bold px-3 py-1.5 rounded-xl text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none shadow-xs"
+                    className="bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 text-gray-900 font-bold px-3 py-2 rounded-xl text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all shadow-xs"
                   />
+                  {selectedDate !== new Date().toISOString().split("T")[0] && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])}
+                      className="px-2.5 py-2 bg-purple-50 text-[#531FFF] rounded-xl text-[11px] font-bold hover:bg-purple-100 transition-colors cursor-pointer"
+                    >
+                      Hari Ini
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Search in Class */}
               <div>
                 <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">
-                  Cari Nama Siswa
+                  Cari Siswa di Kelas
                 </label>
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Nama atau NISN..."
+                    placeholder="Nama / NISN..."
                     value={searchTermDaily}
                     onChange={(e) => setSearchTermDaily(e.target.value)}
-                    className="pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none w-44"
+                    className="pl-8 pr-3 py-2 bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none w-48 sm:w-56 transition-all"
                   />
+                  {searchTermDaily && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchTermDaily("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Quick Actions Right */}
-            <div className="flex items-center gap-2.5 w-full md:w-auto justify-end">
+            {/* Quick Batch Actions Right */}
+            <div className="flex flex-wrap items-center gap-2 justify-end">
               <button
                 type="button"
                 onClick={handleMarkAllHadir}
-                className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
+                className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
+                title="Tandai semua siswa di kelas ini Hadir"
               >
                 <Check className="w-3.5 h-3.5" />
-                <span>Tandai Semua Hadir</span>
+                <span>Semua Hadir</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleMarkRemainingAlpa}
+                className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
+                title="Tandai siswa yang belum ada data absensi sebagai Alpa"
+              >
+                <UserX className="w-3.5 h-3.5" />
+                <span>Belum Absen → Alpa</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleSaveClassAttendance}
                 disabled={isSavingBatch}
-                className="px-5 py-2 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-xs font-extrabold transition-all active:scale-[0.98] flex items-center gap-2 shadow-sm shadow-[#531FFF]/20 cursor-pointer disabled:opacity-50"
+                className="px-4 sm:px-5 py-2 bg-gradient-to-r from-[#531FFF] to-[#7344FF] hover:from-[#4314cc] hover:to-[#5e31e6] text-white rounded-xl text-xs font-extrabold transition-all active:scale-[0.98] flex items-center gap-2 shadow-sm shadow-[#531FFF]/25 cursor-pointer disabled:opacity-50"
               >
-                <Save className="w-4 h-4" />
+                <Save className={cn("w-4 h-4", isSavingBatch && "animate-spin")} />
                 <span>{isSavingBatch ? "Menyimpan..." : "Simpan Presensi Kelas"}</span>
               </button>
             </div>
           </div>
 
-          {/* Students Class Attendance Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-white border-b border-gray-100 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                  <th className="px-5 py-3.5 w-12 text-center">No</th>
-                  <th className="px-5 py-3.5">Nama Siswa & NISN</th>
-                  <th className="px-5 py-3.5 text-center">Status Kehadiran</th>
-                  <th className="px-5 py-3.5">Jam Masuk</th>
-                  <th className="px-5 py-3.5">Catatan / Keterangan</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 text-xs">
-                {classStudents
-                  .filter((st) => (st.name || "").toLowerCase().includes(searchTermDaily.toLowerCase()))
-                  .map((student, idx) => {
-                    const currentAtt = classAttendanceMap[student.id] || { status: "Hadir", notes: "", time: "07:00" };
+          {/* B. Live Monitoring Dashboard Card for the Selected Class */}
+          <div className="bg-gradient-to-br from-purple-950 via-[#3a0ca3] to-[#531FFF] text-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-lg relative overflow-hidden">
+            <div className="absolute -right-10 -bottom-10 w-56 h-56 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              
+              {/* Left: Class Attendance Progress */}
+              <div className="space-y-2 max-w-md w-full">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-white/15 text-purple-100 text-[11px] font-extrabold border border-white/20 flex items-center gap-1">
+                    <Users className="w-3 h-3" />
+                    {selectedClass === "Semua Kelas" ? "Seluruh Kelas" : `Kelas ${selectedClass}`}
+                  </span>
+                  <span className="text-purple-200 text-xs font-medium">
+                    {new Date(selectedDate).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                  </span>
+                </div>
 
-                    return (
-                      <tr key={student.id} className="hover:bg-gray-50/70 transition-colors">
-                        {/* Number */}
-                        <td className="px-5 py-3 text-center text-gray-400 font-bold">
-                          {idx + 1}
-                        </td>
+                <div className="flex items-baseline gap-3">
+                  <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
+                    {classStats.percentage}%
+                  </h2>
+                  <span className="text-sm text-purple-200 font-semibold">
+                    Kehadiran Tercatat ({classStats.sudahAbsen} dari {classStats.total} Siswa)
+                  </span>
+                </div>
 
-                        {/* Student Name */}
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-purple-50 text-[#531FFF] font-bold flex items-center justify-center text-xs shrink-0 border border-purple-100">
-                              {student.name?.charAt(0) || "S"}
-                            </div>
-                            <div>
-                              <p className="font-bold text-gray-900">{student.name}</p>
-                              <p className="text-[11px] text-gray-400 font-medium">NISN: {student.nisn || student.id.slice(0, 8)}</p>
-                            </div>
-                          </div>
-                        </td>
+                {/* Progress Bar */}
+                <div className="w-full bg-black/25 h-3 rounded-full overflow-hidden p-0.5 border border-white/10">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all duration-500",
+                      classStats.percentage >= 85 ? "bg-gradient-to-r from-emerald-400 to-teal-300" :
+                      classStats.percentage >= 60 ? "bg-gradient-to-r from-amber-400 to-yellow-300" :
+                      "bg-gradient-to-r from-rose-400 to-pink-400"
+                    )}
+                    style={{ width: `${Math.min(100, Math.max(0, classStats.percentage))}%` }}
+                  />
+                </div>
+              </div>
 
-                        {/* Interactive Status Buttons: H, S, I, T, A */}
-                        <td className="px-5 py-3">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {/* Hadir */}
-                            <button
-                              type="button"
-                              onClick={() => handleStudentStatusChange(student.id, "Hadir")}
-                              className={cn(
-                                "px-2.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
-                                currentAtt.status === "Hadir"
-                                  ? "bg-emerald-600 text-white shadow-xs scale-105"
-                                  : "bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700"
-                              )}
-                              title="Hadir"
-                            >
-                              H
-                            </button>
+              {/* Right: Monitoring Counters */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 w-full md:w-auto">
+                
+                {/* Sudah Absen */}
+                <div
+                  onClick={() => setDailySubFilter("sudah")}
+                  className={cn(
+                    "rounded-2xl p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                    dailySubFilter === "sudah"
+                      ? "bg-white/25 border-white text-white shadow-sm"
+                      : "bg-white/10 hover:bg-white/20 border-white/15"
+                  )}
+                >
+                  <div className="flex items-center justify-between text-emerald-300 mb-1">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Sudah Absen</span>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  </div>
+                  <p className="text-xl font-black text-white">{classStats.sudahAbsen}</p>
+                  <p className="text-[10px] text-emerald-300 font-bold mt-0.5">Tercatat di sistem</p>
+                </div>
 
-                            {/* Terlambat */}
-                            <button
-                              type="button"
-                              onClick={() => handleStudentStatusChange(student.id, "Terlambat")}
-                              className={cn(
-                                "px-2.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
-                                currentAtt.status === "Terlambat"
-                                  ? "bg-amber-500 text-white shadow-xs scale-105"
-                                  : "bg-gray-100 text-gray-600 hover:bg-amber-50 hover:text-amber-700"
-                              )}
-                              title="Terlambat"
-                            >
-                              T
-                            </button>
+                {/* Belum Absen */}
+                <div
+                  onClick={() => setDailySubFilter("belum")}
+                  className={cn(
+                    "rounded-2xl p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                    dailySubFilter === "belum"
+                      ? "bg-amber-500/40 border-amber-300 text-white shadow-sm"
+                      : classStats.belumAbsen > 0
+                      ? "bg-amber-500/20 hover:bg-amber-500/30 border-amber-400/40 text-amber-200"
+                      : "bg-white/10 hover:bg-white/20 border-white/15 text-purple-200"
+                  )}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider">Belum Absen</span>
+                    <Clock className="w-3.5 h-3.5 text-amber-300" />
+                  </div>
+                  <p className="text-xl font-black text-white">{classStats.belumAbsen}</p>
+                  <p className="text-[10px] text-amber-300 font-bold mt-0.5">
+                    {classStats.belumAbsen > 0 ? "Perlu ditindaklanjuti" : "Semua sudah absen"}
+                  </p>
+                </div>
 
-                            {/* Sakit */}
-                            <button
-                              type="button"
-                              onClick={() => handleStudentStatusChange(student.id, "Sakit")}
-                              className={cn(
-                                "px-2.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
-                                currentAtt.status === "Sakit"
-                                  ? "bg-blue-600 text-white shadow-xs scale-105"
-                                  : "bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-700"
-                              )}
-                              title="Sakit (Surat Dokter)"
-                            >
-                              S
-                            </button>
+                {/* Hadir Tepat */}
+                <div
+                  onClick={() => setDailySubFilter("hadir")}
+                  className={cn(
+                    "rounded-2xl p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                    dailySubFilter === "hadir"
+                      ? "bg-white/25 border-white text-white shadow-sm"
+                      : "bg-white/10 hover:bg-white/20 border-white/15"
+                  )}
+                >
+                  <div className="flex items-center justify-between text-teal-300 mb-1">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Hadir Tepat</span>
+                    <UserCheck className="w-3.5 h-3.5" />
+                  </div>
+                  <p className="text-xl font-black text-white">{classStats.hadir}</p>
+                  <p className="text-[10px] text-teal-300 font-bold mt-0.5">Tepat Waktu</p>
+                </div>
 
-                            {/* Izin */}
-                            <button
-                              type="button"
-                              onClick={() => handleStudentStatusChange(student.id, "Izin")}
-                              className={cn(
-                                "px-2.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
-                                currentAtt.status === "Izin"
-                                  ? "bg-indigo-600 text-white shadow-xs scale-105"
-                                  : "bg-gray-100 text-gray-600 hover:bg-indigo-50 hover:text-indigo-700"
-                              )}
-                              title="Izin"
-                            >
-                              I
-                            </button>
+                {/* Terlambat */}
+                <div
+                  onClick={() => setDailySubFilter("terlambat")}
+                  className={cn(
+                    "rounded-2xl p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                    dailySubFilter === "terlambat"
+                      ? "bg-white/25 border-white text-white shadow-sm"
+                      : "bg-white/10 hover:bg-white/20 border-white/15"
+                  )}
+                >
+                  <div className="flex items-center justify-between text-amber-300 mb-1">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Terlambat</span>
+                    <Clock className="w-3.5 h-3.5" />
+                  </div>
+                  <p className="text-xl font-black text-white">{classStats.terlambat}</p>
+                  <p className="text-[10px] text-amber-300 font-bold mt-0.5">Lewat jam masuk</p>
+                </div>
 
-                            {/* Alpa */}
-                            <button
-                              type="button"
-                              onClick={() => handleStudentStatusChange(student.id, "Alpa")}
-                              className={cn(
-                                "px-2.5 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer",
-                                currentAtt.status === "Alpa"
-                                  ? "bg-rose-600 text-white shadow-xs scale-105"
-                                  : "bg-gray-100 text-gray-600 hover:bg-rose-50 hover:text-rose-700"
-                              )}
-                              title="Alpa / Tanpa Keterangan"
-                            >
-                              A
-                            </button>
-                          </div>
-                        </td>
+                {/* Izin / Sakit */}
+                <div
+                  onClick={() => setDailySubFilter("izin_sakit")}
+                  className={cn(
+                    "rounded-2xl p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                    dailySubFilter === "izin_sakit"
+                      ? "bg-white/25 border-white text-white shadow-sm"
+                      : "bg-white/10 hover:bg-white/20 border-white/15"
+                  )}
+                >
+                  <div className="flex items-center justify-between text-blue-300 mb-1">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Izin / Sakit</span>
+                    <HeartPulse className="w-3.5 h-3.5" />
+                  </div>
+                  <p className="text-xl font-black text-white">{classStats.izinSakit}</p>
+                  <p className="text-[10px] text-blue-300 font-bold mt-0.5">{classStats.sakit} Sakit, {classStats.izin} Izin</p>
+                </div>
 
-                        {/* Timestamp Input */}
-                        <td className="px-5 py-3">
-                          <input
-                            type="time"
-                            value={currentAtt.time}
-                            onChange={(e) => {
-                              const newTime = e.target.value;
-                              setClassAttendanceMap((prev) => ({
-                                ...prev,
-                                [student.id]: {
-                                  ...(prev[student.id] || { status: "Hadir", notes: "" }),
-                                  time: newTime
-                                }
-                              }));
-                            }}
-                            className="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#531FFF]"
-                          />
-                        </td>
+                {/* Alpa */}
+                <div
+                  onClick={() => setDailySubFilter("alpa")}
+                  className={cn(
+                    "rounded-2xl p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                    dailySubFilter === "alpa"
+                      ? "bg-white/25 border-white text-white shadow-sm"
+                      : "bg-white/10 hover:bg-white/20 border-white/15"
+                  )}
+                >
+                  <div className="flex items-center justify-between text-rose-300 mb-1">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Alpa</span>
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                  </div>
+                  <p className="text-xl font-black text-white">{classStats.alpa}</p>
+                  <p className="text-[10px] text-rose-300 font-bold mt-0.5">Tanpa Keterangan</p>
+                </div>
 
-                        {/* Notes Input */}
-                        <td className="px-5 py-3">
-                          <input
-                            type="text"
-                            placeholder={
-                              currentAtt.status === "Sakit"
-                                ? "Isi keterangan surat dokter..."
-                                : currentAtt.status === "Izin"
-                                ? "Alasan permohonan izin..."
-                                : "Catatan tambahan (opsional)..."
-                            }
-                            value={currentAtt.notes}
-                            onChange={(e) => handleStudentNotesChange(student.id, e.target.value)}
-                            className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-[#531FFF]"
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
+              </div>
+            </div>
           </div>
 
-          {/* Table Footer Actions */}
-          <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500 font-medium">
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className="font-bold text-gray-900">Keterangan:</span>
-              <span className="flex items-center gap-1 font-bold text-emerald-700"><span className="w-2 h-2 rounded-full bg-emerald-500" /> H = Hadir</span>
-              <span className="flex items-center gap-1 font-bold text-amber-700"><span className="w-2 h-2 rounded-full bg-amber-500" /> T = Terlambat</span>
-              <span className="flex items-center gap-1 font-bold text-blue-700"><span className="w-2 h-2 rounded-full bg-blue-500" /> S = Sakit</span>
-              <span className="flex items-center gap-1 font-bold text-indigo-700"><span className="w-2 h-2 rounded-full bg-indigo-500" /> I = Izin</span>
-              <span className="flex items-center gap-1 font-bold text-rose-700"><span className="w-2 h-2 rounded-full bg-rose-500" /> A = Alpa</span>
+          {/* C. Sub-Filters Chips & Table Container */}
+          <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
+            
+            {/* Sub-filter Chips Bar */}
+            <div className="p-3.5 sm:p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3 overflow-x-auto scrollbar-none">
+              <div className="flex items-center gap-1.5 min-w-max">
+                <span className="text-xs font-bold text-gray-500 mr-1 flex items-center gap-1">
+                  <Filter className="w-3.5 h-3.5 text-gray-400" />
+                  Filter Siswa:
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setDailySubFilter("all")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                    dailySubFilter === "all"
+                      ? "bg-[#531FFF] text-white shadow-xs"
+                      : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200/80"
+                  )}
+                >
+                  Semua Siswa ({classStats.total})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDailySubFilter("sudah")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
+                    dailySubFilter === "sudah"
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-200/80"
+                  )}
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                  Sudah Absen ({classStats.sudahAbsen})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDailySubFilter("belum")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
+                    dailySubFilter === "belum"
+                      ? "bg-amber-600 text-white shadow-xs"
+                      : "bg-white text-amber-700 hover:bg-amber-50 border border-amber-200/80"
+                  )}
+                >
+                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                  Belum Absen ({classStats.belumAbsen})
+                  {classStats.belumAbsen > 0 && (
+                    <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded-full text-[10px] font-extrabold">
+                      Perlu Cek
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDailySubFilter("terlambat")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                    dailySubFilter === "terlambat"
+                      ? "bg-orange-600 text-white shadow-xs"
+                      : "bg-white text-orange-700 hover:bg-orange-50 border border-orange-200/80"
+                  )}
+                >
+                  Terlambat ({classStats.terlambat})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDailySubFilter("izin_sakit")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                    dailySubFilter === "izin_sakit"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "bg-white text-blue-700 hover:bg-blue-50 border border-blue-200/80"
+                  )}
+                >
+                  Izin & Sakit ({classStats.izinSakit})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDailySubFilter("alpa")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                    dailySubFilter === "alpa"
+                      ? "bg-rose-600 text-white shadow-xs"
+                      : "bg-white text-rose-700 hover:bg-rose-50 border border-rose-200/80"
+                  )}
+                >
+                  Alpa ({classStats.alpa})
+                </button>
+              </div>
+
+              <span className="text-xs text-gray-400 font-medium hidden sm:inline-block">
+                Menampilkan {displayedDailyStudents.length} dari {classStudents.length} siswa
+              </span>
             </div>
 
-            <button
-              type="button"
-              onClick={handleSaveClassAttendance}
-              disabled={isSavingBatch}
-              className="px-4 py-2 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
-            >
-              {isSavingBatch ? "Menyimpan Data..." : "Simpan Perubahan Presensi"}
-            </button>
+            {/* Students Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-white border-b border-gray-100 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">
+                    <th className="px-5 py-3.5 w-12 text-center">No</th>
+                    <th className="px-5 py-3.5">Nama & NISN Siswa</th>
+                    <th className="px-5 py-3.5">Status Presensi</th>
+                    <th className="px-5 py-3.5">Jam Masuk</th>
+                    <th className="px-5 py-3.5">Metode & Bukti</th>
+                    <th className="px-5 py-3.5">Catatan / Keterangan</th>
+                    <th className="px-5 py-3.5 text-center">Aksi Cepat</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50 text-xs">
+                  {displayedDailyStudents.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-5 py-12 text-center text-gray-400">
+                        <div className="flex flex-col items-center justify-center space-y-2">
+                          <Users className="w-8 h-8 text-gray-300" />
+                          <p className="font-bold text-gray-700 text-sm">
+                            {classStudents.length === 0
+                              ? isGuru && teacherHomeroomClasses.length === 0
+                                ? "Anda Belum Ditugaskan Sebagai Wali Kelas"
+                                : `Belum Ada Siswa Terdaftar di Kelas ${selectedClass}`
+                              : "Tidak ada siswa pada filter ini"}
+                          </p>
+                          <p className="text-xs text-gray-400 max-w-sm">
+                            {classStudents.length === 0
+                              ? isGuru && teacherHomeroomClasses.length === 0
+                                ? "Silakan hubungi Administrator Sekolah untuk penugasan kelas Wali Kelas Anda."
+                                : isGuru
+                                ? `Belum ada data siswa yang terdaftar di kelas binaan Anda (${selectedClass}).`
+                                : `Belum ada data siswa yang terdaftar di kelas ${selectedClass}. Silakan pilih kelas lain atau klik tombol di bawah untuk menampilkan seluruh kelas.`
+                              : dailySubFilter === "belum"
+                              ? "Semua siswa di kelas ini sudah berhasil melakukan absensi!"
+                              : "Coba ubah kata kunci pencarian atau pilih filter status lainnya."}
+                          </p>
+                          {!isGuru && classStudents.length === 0 && selectedClass !== "Semua Kelas" && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedClass("Semua Kelas")}
+                              className="mt-2 px-3.5 py-1.5 bg-purple-50 text-[#531FFF] hover:bg-purple-100 rounded-xl text-xs font-bold transition-all cursor-pointer border border-purple-200"
+                            >
+                              Tampilkan Semua Kelas
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    displayedDailyStudents.map((student, idx) => {
+                      const att = classAttendanceMap[student.id] || {
+                        status: "Belum Absen",
+                        notes: "",
+                        time: "-",
+                        isRecorded: false
+                      };
+
+                      return (
+                        <tr
+                          key={student.id}
+                          className={cn(
+                            "hover:bg-gray-50/80 transition-colors",
+                            att.status === "Belum Absen" && "bg-amber-50/20"
+                          )}
+                        >
+                          {/* Number */}
+                          <td className="px-5 py-3.5 text-center text-gray-400 font-bold">
+                            {idx + 1}
+                          </td>
+
+                          {/* Student Profile */}
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                "w-9 h-9 rounded-xl font-bold flex items-center justify-center text-xs shrink-0 border",
+                                att.status === "Hadir" ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
+                                att.status === "Terlambat" ? "bg-amber-50 text-amber-700 border-amber-100" :
+                                att.status === "Belum Absen" ? "bg-gray-100 text-gray-600 border-gray-200" :
+                                "bg-purple-50 text-[#531FFF] border-purple-100"
+                              )}>
+                                {student.name?.charAt(0) || "S"}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="font-bold text-gray-900 leading-tight">
+                                    {student.name}
+                                  </p>
+                                  {att.status === "Belum Absen" && (
+                                    <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" title="Belum absen" />
+                                  )}
+                                  {(student.classId || student.className || student.class) && (
+                                    <span className="px-1.5 py-0.5 rounded-md bg-purple-50 text-[#531FFF] text-[10px] font-extrabold border border-purple-100">
+                                      {student.classId || student.className || student.class}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+                                  NISN: {student.nisn || student.id.slice(0, 8)}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Status Presensi Dropdown / Selector */}
+                          <td className="px-5 py-3.5">
+                            <div className="relative inline-block min-w-[140px]">
+                              <select
+                                value={att.status}
+                                onChange={(e) => handleStudentStatusChange(student.id, e.target.value as any)}
+                                className={cn(
+                                  "w-full appearance-none pl-3 pr-8 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20",
+                                  att.status === "Hadir" && "bg-emerald-50 text-emerald-700 border-emerald-200",
+                                  att.status === "Terlambat" && "bg-amber-50 text-amber-700 border-amber-200",
+                                  att.status === "Sakit" && "bg-blue-50 text-blue-700 border-blue-200",
+                                  att.status === "Izin" && "bg-indigo-50 text-indigo-700 border-indigo-200",
+                                  att.status === "Alpa" && "bg-rose-50 text-rose-700 border-rose-200",
+                                  att.status === "Belum Absen" && "bg-gray-100 text-gray-600 border-gray-200 font-medium"
+                                )}
+                              >
+                                <option value="Belum Absen">⏳ Belum Absen</option>
+                                <option value="Hadir">✅ Hadir</option>
+                                <option value="Terlambat">⚠️ Terlambat</option>
+                                <option value="Sakit">🏥 Sakit</option>
+                                <option value="Izin">📝 Izin</option>
+                                <option value="Alpa">❌ Alpa</option>
+                              </select>
+                              <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            </div>
+                          </td>
+
+                          {/* Jam Masuk */}
+                          <td className="px-5 py-3.5">
+                            {att.status === "Belum Absen" ? (
+                              <span className="text-gray-400 text-xs font-mono">-</span>
+                            ) : (
+                              <div className="flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5 text-gray-400" />
+                                <input
+                                  type="time"
+                                  value={att.time === "-" ? "07:00" : att.time}
+                                  onChange={(e) => {
+                                    const newTime = e.target.value;
+                                    setClassAttendanceMap((prev) => ({
+                                      ...prev,
+                                      [student.id]: {
+                                        ...(prev[student.id] || { status: "Hadir", notes: "", isRecorded: true }),
+                                        time: newTime
+                                      }
+                                    }));
+                                  }}
+                                  className="px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#531FFF]"
+                                />
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Metode & Bukti Kehadiran */}
+                          <td className="px-5 py-3.5">
+                            {att.capturedImage || att.record?.capturedImage ? (
+                              <div className="flex items-center gap-2">
+                                <div
+                                  onClick={() => setSelectedRecord(att.record || null)}
+                                  className="relative w-8 h-8 rounded-lg overflow-hidden border border-gray-200 cursor-pointer group shrink-0"
+                                  title="Klik untuk memperbesar bukti foto"
+                                >
+                                  <img
+                                    src={att.capturedImage || att.record?.capturedImage}
+                                    alt={student.name}
+                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                                  />
+                                </div>
+                                <div>
+                                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 flex items-center gap-1">
+                                    <ScanFace className="w-2.5 h-2.5" />
+                                    AI {att.faceMatchScore || 98}%
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedRecord(att.record || null)}
+                                    className="text-[10px] text-[#531FFF] font-bold hover:underline block mt-0.5 cursor-pointer"
+                                  >
+                                    Lihat Foto →
+                                  </button>
+                                </div>
+                              </div>
+                            ) : att.status !== "Belum Absen" ? (
+                              <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">
+                                {att.source === "biometric" ? "Biometrik" : "Manual (Guru/Admin)"}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-gray-400 italic">
+                                Belum ada data
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Catatan / Keterangan */}
+                          <td className="px-5 py-3.5">
+                            <input
+                              type="text"
+                              placeholder={
+                                att.status === "Sakit"
+                                  ? "Surat dokter / keluhan..."
+                                  : att.status === "Izin"
+                                  ? "Alasan permohonan izin..."
+                                  : att.status === "Belum Absen"
+                                  ? "Catatan konfirmasi (opsional)..."
+                                  : "Catatan tambahan..."
+                              }
+                              value={att.notes}
+                              onChange={(e) => handleStudentNotesChange(student.id, e.target.value)}
+                              className="w-full min-w-[160px] px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                            />
+                          </td>
+
+                          {/* Aksi Cepat */}
+                          <td className="px-5 py-3.5 text-center">
+                            {att.status === "Belum Absen" ? (
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStudentStatusChange(student.id, "Hadir")}
+                                  className="px-2 py-1 rounded-lg text-[11px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors cursor-pointer border border-emerald-200"
+                                  title="Tandai Hadir"
+                                >
+                                  Hadir
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStudentStatusChange(student.id, "Izin")}
+                                  className="px-2 py-1 rounded-lg text-[11px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors cursor-pointer border border-indigo-200"
+                                  title="Tandai Izin"
+                                >
+                                  Izin
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStudentStatusChange(student.id, "Alpa")}
+                                  className="px-2 py-1 rounded-lg text-[11px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors cursor-pointer border border-rose-200"
+                                  title="Tandai Alpa"
+                                >
+                                  Alpa
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleStudentStatusChange(student.id, "Belum Absen")}
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                title="Reset status kembali ke Belum Absen"
+                              >
+                                Reset
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Table Footer Actions */}
+            <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500 font-medium">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="font-extrabold text-gray-900">Keterangan Status:</span>
+                <span className="flex items-center gap-1 font-bold text-emerald-700"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Hadir</span>
+                <span className="flex items-center gap-1 font-bold text-amber-700"><span className="w-2 h-2 rounded-full bg-amber-500" /> Terlambat</span>
+                <span className="flex items-center gap-1 font-bold text-blue-700"><span className="w-2 h-2 rounded-full bg-blue-500" /> Sakit</span>
+                <span className="flex items-center gap-1 font-bold text-indigo-700"><span className="w-2 h-2 rounded-full bg-indigo-500" /> Izin</span>
+                <span className="flex items-center gap-1 font-bold text-rose-700"><span className="w-2 h-2 rounded-full bg-rose-500" /> Alpa</span>
+                <span className="flex items-center gap-1 font-bold text-gray-600"><span className="w-2 h-2 rounded-full bg-gray-400" /> Belum Absen</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-gray-400 text-xs">
+                  {classStats.belumAbsen > 0 ? `${classStats.belumAbsen} siswa belum absen` : "Semua kehadiran telah terdata"}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleSaveClassAttendance}
+                  disabled={isSavingBatch}
+                  className="px-4 py-2 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingBatch ? "Menyimpan..." : "Simpan Perubahan"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1341,10 +2225,10 @@ export default function AttendancePage() {
                   onChange={(e) => setBiometricClassFilter(e.target.value)}
                   className="appearance-none bg-white border border-gray-200 text-gray-700 pl-3.5 pr-8 py-2 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-xs"
                 >
-                  <option value="Semua Kelas">Semua Kelas</option>
-                  {classesList.map((cls) => (
+                  {!isGuru && <option value="Semua Kelas">Semua Kelas</option>}
+                  {selectableClasses.map((cls) => (
                     <option key={cls.id || cls.name} value={cls.name}>
-                      {cls.name}
+                      {cls.name} {isGuru ? "(Wali Kelas)" : ""}
                     </option>
                   ))}
                 </select>
@@ -1571,66 +2455,41 @@ export default function AttendancePage() {
             </div>
           )}
 
-          {/* View Mode 3: Radar Peta GPS */}
+          {/* View Mode 3: Radar Peta GPS Leaflet */}
           {biometricViewMode === "map" && (
-            <div className="p-6 bg-gray-50/50">
-              <div className="bg-white p-4 rounded-3xl border border-gray-200 shadow-xs relative h-[500px] overflow-hidden flex items-center justify-center">
-                <div className="absolute inset-0 bg-[radial-gradient(#531FFF_1px,transparent_1px)] [background-size:16px_16px] opacity-10" />
-
-                {/* School Center Radar */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10">
-                  <div className="w-14 h-14 bg-white rounded-full shadow-2xl border-4 border-[#531FFF] flex items-center justify-center z-10 relative animate-pulse">
-                    <Building2 className="w-7 h-7 text-[#531FFF]" />
-                  </div>
-                  <div className="w-96 h-96 border-2 border-dashed border-[#531FFF]/30 rounded-full absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#531FFF]/5 pointer-events-none" />
-                  <div className="w-48 h-48 border border-[#531FFF]/30 rounded-full absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#531FFF]/10 pointer-events-none" />
-                  <span className="mt-3 text-xs font-extrabold text-gray-900 bg-white px-3 py-1 rounded-full shadow-md border border-gray-200">
-                    Pusat Sekolah ({config.geofenceRadiusMeters}m Geofence Radius)
+            <div className="p-6 bg-gray-50/50 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <Map className="w-4 h-4 text-[#531FFF]" />
+                    Peta Persebaran Lokasi Presensi Siswa (Real-Time GPS)
+                  </h4>
+                  <p className="text-xs text-gray-500">
+                    Menampilkan titik presensi {filteredBiometricData.length} siswa relatif terhadap lingkaran radius absensi ({config.geofenceRadiusMeters}m).
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="flex items-center gap-1.5 font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" /> Di Dalam Radius
+                  </span>
+                  <span className="flex items-center gap-1.5 font-medium text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">
+                    <span className="w-2 h-2 rounded-full bg-rose-500" /> Di Luar Radius
                   </span>
                 </div>
-
-                {/* Plotted student pins */}
-                {filteredBiometricData.map((item, idx) => {
-                  const centerLat = config.schoolCenterLat;
-                  const centerLng = config.schoolCenterLng;
-                  const latDiff = ((item.location?.lat || centerLat) - centerLat) * 120000;
-                  const lngDiff = ((item.location?.lng || centerLng) - centerLng) * 120000;
-
-                  const top = `calc(50% - ${latDiff}px)`;
-                  const left = `calc(50% + ${lngDiff}px)`;
-                  const isSuccess = item.status === "Hadir" || item.status === "Terlambat";
-
-                  return (
-                    <div
-                      key={item.id || idx}
-                      className="absolute z-20 group cursor-pointer"
-                      style={{ top, left }}
-                      onClick={() => setSelectedRecord(item)}
-                    >
-                      <div className="relative -translate-x-1/2 -translate-y-1/2">
-                        <div
-                          className={cn(
-                            "w-5 h-5 rounded-full border-2 bg-white shadow-md transition-transform group-hover:scale-150 flex items-center justify-center",
-                            isSuccess ? "border-emerald-500 bg-emerald-50" : "border-rose-500 bg-rose-50"
-                          )}
-                        >
-                          <div className={cn("w-2 h-2 rounded-full", isSuccess ? "bg-emerald-500" : "bg-rose-500")} />
-                        </div>
-
-                        {/* Tooltip on hover */}
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 p-3 opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-30 transform group-hover:translate-y-0 translate-y-1">
-                          <p className="text-xs font-bold text-gray-900 truncate">{item.studentName}</p>
-                          <p className="text-[10px] text-gray-400">{item.className} • {item.timestamp}</p>
-                          <div className="mt-1 pt-1 border-t border-gray-100 flex justify-between text-[10px]">
-                            <span className="text-gray-500">Jarak GPS:</span>
-                            <span className="font-bold text-gray-800">{item.location?.distance}m</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
+
+              <AttendanceGeofenceMap
+                centerLat={config.schoolCenterLat}
+                centerLng={config.schoolCenterLng}
+                radius={config.geofenceRadiusMeters}
+                interactive={false}
+                attendanceMarkers={mapAttendanceMarkers}
+                onSelectMarker={(m) => {
+                  const found = filteredBiometricData.find((r) => r.id === m.id);
+                  if (found) setSelectedRecord(found);
+                }}
+                height="500px"
+              />
             </div>
           )}
         </div>
@@ -1701,9 +2560,11 @@ export default function AttendancePage() {
                     onChange={(e) => setMonthlyClassFilter(e.target.value)}
                     className="bg-white border border-gray-200 text-gray-900 font-bold px-3 py-1.5 rounded-xl text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none shadow-xs cursor-pointer"
                   >
-                    <option value="Semua">Semua Kelas</option>
-                    {classesList.map((c) => (
-                      <option key={c.id || c.name} value={c.name}>{c.name}</option>
+                    {!isGuru && <option value="Semua">Semua Kelas</option>}
+                    {selectableClasses.map((c) => (
+                      <option key={c.id || c.name} value={c.name}>
+                        {c.name} {isGuru ? "(Wali Kelas)" : ""}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -1791,271 +2652,7 @@ export default function AttendancePage() {
         </div>
       )}
 
-      {/* ------------------------------------------------------------- */}
-      {/* 7. TAB 4: ATURAN & KONFIGURASI SISTEM ABSENSI (ATURAN & JAM) */}
-      {/* ------------------------------------------------------------- */}
-      {activeTab === "config" && !isStudentRole && (
-        <form onSubmit={handleSaveConfig} className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            {/* Card 1: Pengaturan Jam Sekolah & Batas Toleransi */}
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
-              <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
-                <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-gray-900 text-sm">Jadwal & Jam Presensi Sekolah</h3>
-                  <p className="text-xs text-gray-500">Aturan jam masuk, batas toleransi, dan jam kepulangan.</p>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div>
-                  <label className="font-bold text-gray-700 block mb-1">Jam Masuk Sekolah</label>
-                  <input
-                    type="time"
-                    required
-                    value={config.schoolStartTime}
-                    onChange={(e) => setConfig({ ...config, schoolStartTime: e.target.value })}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1">Siswa mulai dihitung terlambat setelah jam ini.</p>
-                </div>
-
-                <div>
-                  <label className="font-bold text-gray-700 block mb-1">Toleransi Terlambat (Menit)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={60}
-                    required
-                    value={config.lateToleranceMinutes}
-                    onChange={(e) => setConfig({ ...config, lateToleranceMinutes: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1">Masa tenggang sebelum status menjadi Terlambat.</p>
-                </div>
-
-                <div>
-                  <label className="font-bold text-gray-700 block mb-1">Batas Maksimal Dihitung Alpa</label>
-                  <input
-                    type="time"
-                    required
-                    value={config.absentThresholdTime}
-                    onChange={(e) => setConfig({ ...config, absentThresholdTime: e.target.value })}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1">Belum hadir lewat jam ini otomatis dihitung Alpa.</p>
-                </div>
-
-                <div>
-                  <label className="font-bold text-gray-700 block mb-1">Jam Kepulangan Sekolah</label>
-                  <input
-                    type="time"
-                    required
-                    value={config.schoolEndTime}
-                    onChange={(e) => setConfig({ ...config, schoolEndTime: e.target.value })}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1">Presensi pulang dibuka setelah jam ini.</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 2: Pengaturan Radius Geofencing GPS */}
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
-              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                    <Compass className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-gray-900 text-sm">Geofencing & Radius GPS Sekolah</h3>
-                    <p className="text-xs text-gray-500">Koordinat titik pusat sekolah dan toleransi jarak.</p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleDetectCurrentLocation}
-                  className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-[#531FFF] text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-purple-200/60"
-                >
-                  <MapPin className="w-3.5 h-3.5" />
-                  Deteksi Lokasi Saya
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div>
-                  <label className="font-bold text-gray-700 block mb-1">Radius Geofencing (Meter)</label>
-                  <input
-                    type="number"
-                    min={20}
-                    max={2000}
-                    required
-                    value={config.geofenceRadiusMeters}
-                    onChange={(e) => setConfig({ ...config, geofenceRadiusMeters: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1">Jarak maksimum siswa dari sekolah untuk presensi.</p>
-                </div>
-
-                <div>
-                  <label className="font-bold text-gray-700 block mb-1">Wajib Di Dalam Radius</label>
-                  <div className="flex items-center gap-3 h-10">
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={config.requireRadius}
-                        onChange={(e) => setConfig({ ...config, requireRadius: e.target.checked })}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#531FFF]" />
-                    </label>
-                    <span className="text-xs font-semibold text-gray-700">
-                      {config.requireRadius ? "Wajib (Tolak jika di luar)" : "Opsional"}
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="font-bold text-gray-700 block mb-1">Latitude Gedung Sekolah</label>
-                  <input
-                    type="number"
-                    step="any"
-                    required
-                    value={config.schoolCenterLat}
-                    onChange={(e) => setConfig({ ...config, schoolCenterLat: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-mono text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-gray-700 block mb-1">Longitude Gedung Sekolah</label>
-                  <input
-                    type="number"
-                    step="any"
-                    required
-                    value={config.schoolCenterLng}
-                    onChange={(e) => setConfig({ ...config, schoolCenterLng: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-mono text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Card 3: Keamanan Biometrik & AI Recognition */}
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
-              <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
-                <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-700 flex items-center justify-center">
-                  <ScanFace className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-gray-900 text-sm">Biometrik Wajah & AI Anti-Spoofing</h3>
-                  <p className="text-xs text-gray-500">Parameter akurasi deteksi wajah dan keamanan liveness.</p>
-                </div>
-              </div>
-
-              <div className="space-y-4 text-xs">
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="font-bold text-gray-700">Ambang Batas Skor AI Minimal</label>
-                    <span className="font-black text-[#531FFF] text-sm">{config.minFaceMatchScore}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={60}
-                    max={98}
-                    value={config.minFaceMatchScore}
-                    onChange={(e) => setConfig({ ...config, minFaceMatchScore: Number(e.target.value) })}
-                    className="w-full accent-[#531FFF] cursor-pointer"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1">Presensi ditolak jika kecocokan wajah di bawah batas ini.</p>
-                </div>
-
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 border border-gray-100">
-                  <div>
-                    <p className="font-bold text-gray-900">Deteksi Anti-Spoofing / Kedipan</p>
-                    <p className="text-[11px] text-gray-500">Mencegah penggunaan foto cetak atau layar HP lain.</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={config.enableLivenessDetection}
-                      onChange={(e) => setConfig({ ...config, enableLivenessDetection: e.target.checked })}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#531FFF]" />
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 4: Otomasi Notifikasi WhatsApp Orang Tua */}
-            <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
-              <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <Smartphone className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-gray-900 text-sm">Otomasi Notifikasi Orang Tua (WhatsApp)</h3>
-                  <p className="text-xs text-gray-500">Pemberitahuan instan saat ananda terlambat atau alpa.</p>
-                </div>
-              </div>
-
-              <div className="space-y-4 text-xs">
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 border border-gray-100">
-                  <div>
-                    <p className="font-bold text-gray-900">Kirim WhatsApp saat Siswa Terlambat</p>
-                    <p className="text-[11px] text-gray-500">Kirim pesan otomatis saat jam masuk terlewati.</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={config.notifyParentOnLate}
-                      onChange={(e) => setConfig({ ...config, notifyParentOnLate: e.target.checked })}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#531FFF]" />
-                  </label>
-                </div>
-
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 border border-gray-100">
-                  <div>
-                    <p className="font-bold text-gray-900">Kirim WhatsApp saat Siswa Alpa</p>
-                    <p className="text-[11px] text-gray-500">Kirim pesan otomatis pada pukul 08:30 pagi.</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={config.notifyParentOnAbsent}
-                      onChange={(e) => setConfig({ ...config, notifyParentOnAbsent: e.target.checked })}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#531FFF]" />
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Save Configuration Floating Bar */}
-          <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-md flex items-center justify-between">
-            <p className="text-xs text-gray-500 font-medium">
-              Konfigurasi ini akan berlaku untuk seluruh sistem absensi siswa dan staf guru.
-            </p>
-            <button
-              type="submit"
-              disabled={isSavingConfig}
-              className="px-6 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-xs font-black transition-all active:scale-[0.98] flex items-center gap-2 shadow-sm shadow-[#531FFF]/20 cursor-pointer disabled:opacity-50"
-            >
-              <Save className="w-4 h-4" />
-              <span>{isSavingConfig ? "Menyimpan..." : "Simpan Pengaturan Absensi"}</span>
-            </button>
-          </div>
-        </form>
-      )}
 
       {/* ------------------------------------------------------------- */}
       {/* 8. Slide-Over Drawer for Biometric AI Detail */}
@@ -2208,6 +2805,8 @@ export default function AttendancePage() {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

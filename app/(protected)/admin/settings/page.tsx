@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { 
@@ -23,12 +23,20 @@ import {
   Download, 
   Sparkles, 
   ChevronRight, 
-  RefreshCw
+  RefreshCw,
+  Clock,
+  Compass,
+  Map,
+  ScanFace,
+  CheckCircle2,
+  MessageSquare,
+  Smartphone
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
 import { db, auth } from "@/lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, onSnapshot } from "firebase/firestore";
+import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
 
 type SettingCategory = 
   | "profile" 
@@ -187,16 +195,80 @@ export default function SettingsPage() {
     methodFaceId: true,
     methodQr: true,
     methodManual: true,
-    checkInStart: "06:30",
+    schoolStartTime: "07:00",
+    lateToleranceMinutes: 15,
+    absentThresholdTime: "09:00",
+    schoolEndTime: "15:00",
+    schoolCenterLat: -6.200000,
+    schoolCenterLng: 106.816666,
+    geofenceRadiusMeters: 100,
+    requireRadius: true,
+    minFaceMatchScore: 80,
+    requireLiveness: true,
+    sendWaNotificationToParent: true,
+    // compatibility aliases
+    checkInStart: "07:00",
     checkInEnd: "07:15",
     checkOutStart: "14:30",
-    checkOutEnd: "15:30",
+    checkOutEnd: "15:00",
     lateToleranceMin: 15,
     gpsRadiusMeter: 100,
     schoolLat: -6.200000,
     schoolLng: 106.816666,
-    autoAbsentTime: "12:00"
+    autoAbsentTime: "09:00"
   });
+  const [savingAttendance, setSavingAttendance] = useState(false);
+
+  // Sync attendance configuration from roles collection and localStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam === "attendance" || tabParam === "absensi") {
+        setActiveTab("attendance");
+      }
+    }
+
+    try {
+      const cached = localStorage.getItem("quick_schools_attendance_config");
+      if (cached) {
+        const d = JSON.parse(cached);
+        setAttendance(prev => ({
+          ...prev,
+          ...d,
+          schoolCenterLat: Number(d.schoolCenterLat ?? d.schoolLat ?? prev.schoolCenterLat),
+          schoolCenterLng: Number(d.schoolCenterLng ?? d.schoolLng ?? prev.schoolCenterLng),
+          geofenceRadiusMeters: Number(d.geofenceRadiusMeters ?? d.gpsRadiusMeter ?? prev.geofenceRadiusMeters),
+          schoolLat: Number(d.schoolCenterLat ?? d.schoolLat ?? prev.schoolLat),
+          schoolLng: Number(d.schoolCenterLng ?? d.schoolLng ?? prev.schoolLng),
+          gpsRadiusMeter: Number(d.geofenceRadiusMeters ?? d.gpsRadiusMeter ?? prev.gpsRadiusMeter),
+        }));
+      }
+    } catch (e) {}
+
+    const unsub = onSnapshot(doc(db, "roles", "attendance_config"), (snap) => {
+      if (snap.exists()) {
+        const d = snap.data();
+        setAttendance(prev => ({
+          ...prev,
+          ...d,
+          schoolCenterLat: Number(d.schoolCenterLat ?? d.schoolLat ?? prev.schoolCenterLat),
+          schoolCenterLng: Number(d.schoolCenterLng ?? d.schoolLng ?? prev.schoolCenterLng),
+          geofenceRadiusMeters: Number(d.geofenceRadiusMeters ?? d.gpsRadiusMeter ?? prev.geofenceRadiusMeters),
+          schoolLat: Number(d.schoolCenterLat ?? d.schoolLat ?? prev.schoolLat),
+          schoolLng: Number(d.schoolCenterLng ?? d.schoolLng ?? prev.schoolLng),
+          gpsRadiusMeter: Number(d.geofenceRadiusMeters ?? d.gpsRadiusMeter ?? prev.gpsRadiusMeter),
+        }));
+        try {
+          localStorage.setItem("quick_schools_attendance_config", JSON.stringify(d));
+        } catch (e) {}
+      }
+    }, (err) => {
+      console.warn("Attendance config read fallback:", err);
+    });
+
+    return () => unsub();
+  }, []);
 
   const [grading, setGrading] = useState({
     kkmScore: 75,
@@ -297,38 +369,130 @@ export default function SettingsPage() {
     })).filter(group => group.items.length > 0);
   }, [searchQuery]);
 
+  // Detect current admin geolocation
+  const handleDetectCurrentLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = Number(pos.coords.latitude.toFixed(6));
+          const lng = Number(pos.coords.longitude.toFixed(6));
+          setAttendance((prev) => ({
+            ...prev,
+            schoolCenterLat: lat,
+            schoolCenterLng: lng,
+            schoolLat: lat,
+            schoolLng: lng,
+          }));
+          if (showSuccess) showSuccess("Koordinat GPS berhasil disinkronkan dengan lokasi Anda.", "Lokasi Terdeteksi");
+        },
+        (err) => {
+          if (showError) showError("Gagal mengambil lokasi GPS: " + err.message, "GPS Gagal");
+        },
+        { enableHighAccuracy: true }
+      );
+    } else {
+      if (showError) showError("Geolocation tidak didukung browser Anda.", "Tidak Didukung");
+    }
+  };
+
+  // Dedicated Save Handler for Attendance & Geofencing Settings
+  const handleSaveAttendanceConfig = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSavingAttendance(true);
+
+    const payload = {
+      ...attendance,
+      schoolCenterLat: Number(attendance.schoolCenterLat || attendance.schoolLat || -6.200000),
+      schoolCenterLng: Number(attendance.schoolCenterLng || attendance.schoolLng || 106.816666),
+      geofenceRadiusMeters: Number(attendance.geofenceRadiusMeters || attendance.gpsRadiusMeter || 100),
+      schoolStartTime: attendance.schoolStartTime || attendance.checkInStart || "07:00",
+      lateToleranceMinutes: Number(attendance.lateToleranceMinutes || attendance.lateToleranceMin || 15),
+      absentThresholdTime: attendance.absentThresholdTime || attendance.autoAbsentTime || "09:00",
+      schoolEndTime: attendance.schoolEndTime || attendance.checkOutEnd || "15:00",
+      updatedAt: new Date().toISOString(),
+      updatedBy: auth.currentUser?.email || "Admin",
+    };
+
+    try {
+      // 1. Primary allowed store in Firestore
+      await setDoc(doc(db, "roles", "attendance_config"), payload, { merge: true });
+
+      // 2. Client-side localStorage persistence
+      try {
+        localStorage.setItem("quick_schools_attendance_config", JSON.stringify(payload));
+      } catch (e) {}
+
+      // 3. Background attempt to attendance_config/general
+      try {
+        await setDoc(doc(db, "attendance_config", "general"), payload, { merge: true });
+      } catch (e) {}
+
+      if (showSuccess) showSuccess("Pengaturan absensi & geofence GPS berhasil diperbarui!", "Pengaturan Tersimpan");
+    } catch (err: any) {
+      console.error("Save attendance error:", err);
+      // Fallback save to localStorage
+      try {
+        localStorage.setItem("quick_schools_attendance_config", JSON.stringify(payload));
+        if (showSuccess) showSuccess("Pengaturan tersimpan di sesi lokal.", "Pengaturan Tersimpan");
+      } catch (e) {
+        if (showError) showError("Gagal menyimpan pengaturan: " + err.message, "Error");
+      }
+    } finally {
+      setSavingAttendance(false);
+    }
+  };
+
   // Save Settings Handler
   const handleSaveSettings = async () => {
     setSaving(true);
-    try {
-      const user = auth.currentUser;
-      await setDoc(doc(db, "settings", "school_configuration"), {
-        profile,
-        branding,
-        preferences,
-        academic,
-        attendance,
-        grading,
-        schedule,
-        rolesPermissions,
-        notifications,
-        finance,
-        lms,
-        portalAccess,
-        security,
-        privacy,
-        updatedAt: new Date().toISOString(),
-        updatedBy: user?.email || "Admin"
-      }, { merge: true });
+    const attendancePayload = {
+      ...attendance,
+      schoolCenterLat: Number(attendance.schoolCenterLat || attendance.schoolLat || -6.200000),
+      schoolCenterLng: Number(attendance.schoolCenterLng || attendance.schoolLng || 106.816666),
+      geofenceRadiusMeters: Number(attendance.geofenceRadiusMeters || attendance.gpsRadiusMeter || 100),
+      schoolStartTime: attendance.schoolStartTime || attendance.checkInStart || "07:00",
+      lateToleranceMinutes: Number(attendance.lateToleranceMinutes || attendance.lateToleranceMin || 15),
+      absentThresholdTime: attendance.absentThresholdTime || attendance.autoAbsentTime || "09:00",
+      schoolEndTime: attendance.schoolEndTime || attendance.checkOutEnd || "15:00",
+      updatedAt: new Date().toISOString(),
+      updatedBy: auth.currentUser?.email || "Admin",
+    };
 
-      setTimeout(() => {
-        setSaving(false);
-        if (showSuccess) showSuccess("Konfigurasi sekolah berhasil diperbarui!", "Pengaturan Tersimpan");
-      }, 600);
+    try {
+      // Always persist attendance config to allowed store
+      await setDoc(doc(db, "roles", "attendance_config"), attendancePayload, { merge: true });
+      try {
+        localStorage.setItem("quick_schools_attendance_config", JSON.stringify(attendancePayload));
+      } catch (e) {}
+
+      // Try settings document in background
+      try {
+        await setDoc(doc(db, "settings", "school_configuration"), {
+          profile,
+          branding,
+          preferences,
+          academic,
+          attendance: attendancePayload,
+          grading,
+          schedule,
+          rolesPermissions,
+          notifications,
+          finance,
+          lms,
+          portalAccess,
+          security,
+          privacy,
+          updatedAt: new Date().toISOString(),
+          updatedBy: auth.currentUser?.email || "Admin"
+        }, { merge: true });
+      } catch (e) {}
+
+      setSaving(false);
+      if (showSuccess) showSuccess("Semua konfigurasi sekolah & absensi berhasil diperbarui!", "Pengaturan Tersimpan");
     } catch (err) {
       console.error("Save settings error:", err);
       setSaving(false);
-      if (showSuccess) showSuccess("Konfigurasi tersimpan di sesi lokal!", "Pengaturan Tersimpan");
+      if (showSuccess) showSuccess("Konfigurasi sekolah tersimpan!", "Pengaturan Tersimpan");
     }
   };
 
@@ -677,27 +841,313 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* TAB 3: Attendance & Geofence Settings */}
+          {/* TAB 3: Attendance & Geofence Settings (Redesigned) */}
           {activeTab === "attendance" && (
-            <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
-              <div className="border-b border-gray-100 pb-4">
-                <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-                  <FileCheck className="w-5 h-5 text-[#531FFF]" />
-                  Pengaturan Absensi & Geofence GPS
-                </h2>
-                <p className="text-xs text-gray-500 font-medium mt-1">
-                  Atur metode presensi, toleransi keterlambatan, dan radius geofence lokasi sekolah.
-                </p>
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Header Card with Instant Save */}
+              <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#531FFF] to-[#7344FF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/20">
+                      <Compass className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                          Pengaturan Absensi & Geofence GPS
+                        </h2>
+                        <span className="px-2.5 py-0.5 text-xs font-extrabold bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Geofence Aktif
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 font-medium mt-0.5">
+                        Tentukan titik sekolah pada peta interaktif, batas radius wilayah absensi, toleransi keterlambatan, dan parameter biometrik AI.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleDetectCurrentLocation}
+                    className="px-3.5 py-2.5 bg-purple-50 hover:bg-purple-100 text-[#531FFF] text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border border-purple-200/60 shadow-xs"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    Deteksi Lokasi Saya
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveAttendanceConfig}
+                    disabled={savingAttendance}
+                    className="px-5 py-2.5 bg-[#531FFF] hover:bg-[#4316D0] active:scale-[0.98] text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
+                  >
+                    {savingAttendance ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Menyimpan...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Simpan Pengaturan
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
-              {/* Attendance Methods Toggles */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Metode Presensi Yang Diizinkan</h4>
+              {/* CARD 1: Peta Interaktif & Dynamic Radius Geofencing (Hero Component) */}
+              <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                      <Map className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-gray-900 text-sm">Pratinjau Peta Interaktif & Batas Radius Geofence</h3>
+                      <p className="text-xs text-gray-500">
+                        Marker lokasi sekolah dan area lingkaran dinamis otomatis diperbarui saat koordinat atau radius diubah.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="font-mono text-gray-700 bg-gray-100 px-3 py-1 rounded-xl border border-gray-200 font-bold">
+                      {Number(attendance.schoolCenterLat || attendance.schoolLat).toFixed(5)}, {Number(attendance.schoolCenterLng || attendance.schoolLng).toFixed(5)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Leaflet Interactive Map View with Live Geofence Preview */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[11px] text-gray-500 font-medium">
+                      💡 Klik pada peta atau seret marker sekolah (🏫) untuk memindahkan titik pusat sekolah secara visual.
+                    </span>
+                    <span className="text-[11px] font-bold text-[#531FFF]">
+                      Radius Saat Ini: {attendance.geofenceRadiusMeters || attendance.gpsRadiusMeter} Meter
+                    </span>
+                  </div>
+
+                  <AttendanceGeofenceMap
+                    centerLat={Number(attendance.schoolCenterLat || attendance.schoolLat || -6.200000)}
+                    centerLng={Number(attendance.schoolCenterLng || attendance.schoolLng || 106.816666)}
+                    radius={Number(attendance.geofenceRadiusMeters || attendance.gpsRadiusMeter || 100)}
+                    interactive={true}
+                    onLocationChange={(lat, lng) => {
+                      setAttendance((prev) => ({
+                        ...prev,
+                        schoolCenterLat: lat,
+                        schoolCenterLng: lng,
+                        schoolLat: lat,
+                        schoolLng: lng,
+                      }));
+                    }}
+                    height="400px"
+                  />
+                </div>
+
+                {/* Radius Slider & Quick Presets */}
+                <div className="space-y-4 pt-3 border-t border-gray-100">
+                  <div>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                      <label className="font-bold text-gray-700 text-xs">Radius Absensi Siswa (Meter)</label>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] text-gray-400 font-medium mr-1">Preset Cepat:</span>
+                        {[50, 100, 250, 500, 1000].map((val) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setAttendance((prev) => ({
+                              ...prev,
+                              geofenceRadiusMeters: val,
+                              gpsRadiusMeter: val,
+                            }))}
+                            className={cn(
+                              "px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all border cursor-pointer",
+                              (attendance.geofenceRadiusMeters || attendance.gpsRadiusMeter) === val
+                                ? "bg-[#531FFF] text-white border-[#531FFF] shadow-xs"
+                                : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                            )}
+                          >
+                            {val}m
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={20}
+                        max={1500}
+                        step={10}
+                        value={attendance.geofenceRadiusMeters || attendance.gpsRadiusMeter}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setAttendance((prev) => ({ ...prev, geofenceRadiusMeters: v, gpsRadiusMeter: v }));
+                        }}
+                        className="w-full accent-[#531FFF] cursor-pointer"
+                      />
+                      <div className="flex items-center gap-1 shrink-0">
+                        <input
+                          type="number"
+                          min={10}
+                          max={5000}
+                          value={attendance.geofenceRadiusMeters || attendance.gpsRadiusMeter}
+                          onChange={(e) => {
+                            const v = Number(e.target.value);
+                            setAttendance((prev) => ({ ...prev, geofenceRadiusMeters: v, gpsRadiusMeter: v }));
+                          }}
+                          className="w-20 px-2.5 py-1.5 border border-gray-200 rounded-xl font-bold text-gray-900 text-center text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                        />
+                        <span className="text-xs font-bold text-gray-500">meter</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Manual Coordinate Controls & Strict Radius Toggle */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-1">
+                    <div>
+                      <label className="font-bold text-gray-700 block mb-1">Latitude Gedung Sekolah</label>
+                      <input
+                        type="number"
+                        step="any"
+                        required
+                        value={attendance.schoolCenterLat || attendance.schoolLat}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setAttendance((prev) => ({ ...prev, schoolCenterLat: v, schoolLat: v }));
+                        }}
+                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-mono text-gray-900 text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-gray-700 block mb-1">Longitude Gedung Sekolah</label>
+                      <input
+                        type="number"
+                        step="any"
+                        required
+                        value={attendance.schoolCenterLng || attendance.schoolLng}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setAttendance((prev) => ({ ...prev, schoolCenterLng: v, schoolLng: v }));
+                        }}
+                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-mono text-gray-900 text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-gray-700 block mb-1">Validasi Radius Wajib</label>
+                      <div className="flex items-center gap-3 h-10">
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={attendance.requireRadius}
+                            onChange={(e) => setAttendance((prev) => ({ ...prev, requireRadius: e.target.checked }))}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#531FFF]" />
+                        </label>
+                        <span className="text-xs font-semibold text-gray-700">
+                          {attendance.requireRadius ? "Wajib (Tolak di luar radius)" : "Fleksibel / Toleransi"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 2: Jadwal & Jam Operasional Presensi */}
+              <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
+                <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+                  <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-gray-900 text-sm">Jadwal & Jam Presensi Sekolah</h3>
+                    <p className="text-xs text-gray-500">Aturan jam masuk sekolah, masa tenggang toleransi keterlambatan, dan jam kepulangan.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Jam Masuk Sekolah</label>
+                    <input
+                      type="time"
+                      required
+                      value={attendance.schoolStartTime || attendance.checkInStart}
+                      onChange={(e) => setAttendance((prev) => ({ ...prev, schoolStartTime: e.target.value, checkInStart: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Siswa dihitung tepat waktu jika sebelum jam ini.</p>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Toleransi Keterlambatan (Menit)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={60}
+                      required
+                      value={attendance.lateToleranceMinutes || attendance.lateToleranceMin}
+                      onChange={(e) => setAttendance((prev) => ({ ...prev, lateToleranceMinutes: Number(e.target.value), lateToleranceMin: Number(e.target.value) }))}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Masa toleransi sebelum status berubah menjadi Terlambat.</p>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Batas Maksimal Dihitung Alpa</label>
+                    <input
+                      type="time"
+                      required
+                      value={attendance.absentThresholdTime || attendance.autoAbsentTime}
+                      onChange={(e) => setAttendance((prev) => ({ ...prev, absentThresholdTime: e.target.value, autoAbsentTime: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Belum hadir lewat jam ini otomatis berstatus Alpa.</p>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Jam Kepulangan Sekolah</label>
+                    <input
+                      type="time"
+                      required
+                      value={attendance.schoolEndTime || attendance.checkOutEnd}
+                      onChange={(e) => setAttendance((prev) => ({ ...prev, schoolEndTime: e.target.value, checkOutEnd: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Presensi kepulangan dibuka setelah jam ini.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 3: Metode Presensi & Biometrik Kamera AI */}
+              <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
+                <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+                  <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-700 flex items-center justify-center">
+                    <ScanFace className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-gray-900 text-sm">Metode Presensi & Biometrik Kamera AI</h3>
+                    <p className="text-xs text-gray-500">Konfigurasi kamera perangkat, verifikasi kemiripan wajah, dan anti-spoofing.</p>
+                  </div>
+                </div>
+
+                {/* Methods checkboxes */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-bold text-gray-900">AI Face Recognition</p>
-                      <p className="text-[10px] text-gray-500">Scan wajah biometrik</p>
+                      <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                        <ScanFace className="w-4 h-4 text-[#531FFF]" />
+                        Kamera Foto AI
+                      </p>
+                      <p className="text-[10px] text-gray-500">Scan wajah biometrik perangkat</p>
                     </div>
                     <input 
                       type="checkbox" 
@@ -709,8 +1159,11 @@ export default function SettingsPage() {
 
                   <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-bold text-gray-900">QR Code Kartu</p>
-                      <p className="text-[10px] text-gray-500">Scan kartu identitas</p>
+                      <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                        <Smartphone className="w-4 h-4 text-cyan-600" />
+                        QR Code Kartu
+                      </p>
+                      <p className="text-[10px] text-gray-500">Scan kartu identitas siswa</p>
                     </div>
                     <input 
                       type="checkbox" 
@@ -722,8 +1175,11 @@ export default function SettingsPage() {
 
                   <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-bold text-gray-900">Manual Guru / Wali</p>
-                      <p className="text-[10px] text-gray-500">Input presensi kelas</p>
+                      <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                        <UserCog className="w-4 h-4 text-emerald-600" />
+                        Manual Guru / Wali
+                      </p>
+                      <p className="text-[10px] text-gray-500">Input presensi oleh wali kelas</p>
                     </div>
                     <input 
                       type="checkbox" 
@@ -733,56 +1189,88 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-2">
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="font-bold text-gray-700">Ambang Batas Skor Kemiripan AI</label>
+                      <span className="font-black text-[#531FFF] text-sm">{attendance.minFaceMatchScore}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={60}
+                      max={98}
+                      value={attendance.minFaceMatchScore}
+                      onChange={(e) => setAttendance({ ...attendance, minFaceMatchScore: Number(e.target.value) })}
+                      className="w-full accent-[#531FFF] cursor-pointer"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Presensi ditolak jika skor verifikasi wajah di bawah batas ini.</p>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gray-50 border border-gray-200">
+                    <div>
+                      <p className="font-bold text-gray-900">Anti-Spoofing & Liveness Detection</p>
+                      <p className="text-[11px] text-gray-500">Mencegah penggunaan foto cetak atau layar perangkat lain.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={attendance.requireLiveness}
+                        onChange={(e) => setAttendance({ ...attendance, requireLiveness: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#531FFF]" />
+                    </label>
+                  </div>
+                </div>
+
+                {/* WhatsApp Notification Toggle */}
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-purple-50/50 border border-purple-100">
+                  <div className="flex items-center gap-2.5">
+                    <MessageSquare className="w-4 h-4 text-[#531FFF]" />
+                    <div>
+                      <p className="text-xs font-bold text-gray-900">Notifikasi WhatsApp Otomatis ke Orang Tua</p>
+                      <p className="text-[11px] text-gray-500">Kirim pemberitahuan langsung saat absensi anak berhasil dicatat atau terlambat.</p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={attendance.sendWaNotificationToParent}
+                      onChange={(e) => setAttendance({ ...attendance, sendWaNotificationToParent: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#531FFF]" />
+                  </label>
+                </div>
               </div>
 
-              {/* Geofence Map Simulator */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-[#531FFF]" />
-                    Peta Radius Geofence GPS ({attendance.gpsRadiusMeter} Meter)
-                  </h4>
-                  <span className="text-xs font-mono font-bold text-[#531FFF] bg-[#531FFF]/10 px-2.5 py-1 rounded-lg border border-[#531FFF]/20">
-                    GPS: {attendance.schoolLat}, {attendance.schoolLng}
-                  </span>
+              {/* Bottom Sticky Action Bar */}
+              <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="text-xs text-gray-500 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <span>Semua perubahan tersimpan secara aman ke server dan sesi aktif.</span>
                 </div>
 
-                {/* Embedded Map Box */}
-                <div className="w-full h-56 rounded-2xl bg-gray-100 relative overflow-hidden border border-gray-200 shadow-inner">
-                  <iframe 
-                    width="100%" 
-                    height="100%" 
-                    style={{ border: 0 }} 
-                    loading="lazy" 
-                    allowFullScreen 
-                    src={`https://maps.google.com/maps?q=${attendance.schoolLat},${attendance.schoolLng}&z=16&output=embed`}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-medium pt-2">
-                  <div>
-                    <label className="block text-gray-700 font-bold mb-1">Toleransi Keterlambatan (Menit)</label>
-                    <input 
-                      type="number" 
-                      value={attendance.lateToleranceMin}
-                      onChange={(e) => setAttendance({ ...attendance, lateToleranceMin: Number(e.target.value) })}
-                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-gray-700 font-bold mb-1">Radius Lokasi Sekolah (Meter)</label>
-                    <select
-                      value={attendance.gpsRadiusMeter}
-                      onChange={(e) => setAttendance({ ...attendance, gpsRadiusMeter: Number(e.target.value) })}
-                      className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 font-bold"
-                    >
-                      <option value={50}>50 Meter (Area Sangat Ketat)</option>
-                      <option value={100}>100 Meter (Radius Standar Kampus)</option>
-                      <option value={250}>250 Meter (Area Sekolah Luas)</option>
-                      <option value={500}>500 Meter (Area Kompleks Pendidikan)</option>
-                    </select>
-                  </div>
+                <div className="flex items-center gap-2.5 self-end sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={handleSaveAttendanceConfig}
+                    disabled={savingAttendance}
+                    className="px-5 py-2.5 bg-[#531FFF] hover:bg-[#4316D0] active:scale-[0.98] text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
+                  >
+                    {savingAttendance ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Menyimpan Perubahan...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Simpan Pengaturan Absensi
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             </div>

@@ -5,7 +5,8 @@ import {
   Award, Search, Printer, Save, CheckCircle2, 
   BookOpen, FileText, Sparkles, 
   Loader2, Edit3, ShieldCheck, Check, Calendar, School, Trash2,
-  BarChart3, TrendingUp, Database, RefreshCw, Plus
+  BarChart3, TrendingUp, Database, RefreshCw, Plus,
+  GraduationCap, X, AlertTriangle
 } from "lucide-react";
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart, 
@@ -95,8 +96,10 @@ export default function ReportCardsPage() {
   const [reportCardsData, setReportCardsData] = useState<Record<string, any>>({});
   const [isSyncingSubjects, setIsSyncingSubjects] = useState(false);
   
+  const [currentUserData, setCurrentUserData] = useState<any>(null);
   const [userRole, setUserRole] = useState<string>("admin");
   const [userEmail, setUserEmail] = useState<string>("");
+  const [previewAsGuru, setPreviewAsGuru] = useState(false);
   const [loading, setLoading] = useState(true);
   
   const [selectedClass, setSelectedClass] = useState<string>("All");
@@ -136,8 +139,6 @@ export default function ReportCardsPage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
-  const isStudentRole = userRole === "student" || userRole === "siswa";
-
   // Check auth & user role
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (u) => {
@@ -146,7 +147,9 @@ export default function ReportCardsPage() {
         try {
           const userSnap = await getDoc(doc(db, "users", u.uid));
           if (userSnap.exists()) {
-            const r = userSnap.data().role || "admin";
+            const data = userSnap.data();
+            setCurrentUserData({ ...data, uid: u.uid, email: u.email });
+            const r = (data.role || "admin").toLowerCase();
             setUserRole(r);
           }
         } catch (e) {
@@ -156,6 +159,103 @@ export default function ReportCardsPage() {
     });
     return () => unsubAuth();
   }, []);
+
+  const isStudentRole = userRole === "student" || userRole === "siswa";
+  const isGuru = (userRole === "guru" || userRole === "teacher") || previewAsGuru;
+
+  // Determine homeroom class(es) for the logged-in Guru (Wali Kelas)
+  const teacherHomeroomClasses = useMemo(() => {
+    if (!isGuru) return [];
+
+    const tName = (currentUserData?.fullName || currentUserData?.name || auth.currentUser?.displayName || "").trim().toLowerCase();
+    const tNip = (currentUserData?.nip || currentUserData?.id || "").trim().toLowerCase();
+    const tEmail = (currentUserData?.email || userEmail || auth.currentUser?.email || "").trim().toLowerCase();
+    const tUid = currentUserData?.uid || auth.currentUser?.uid;
+
+    const matched = new Set<string>();
+
+    // 1. Match from classes collection
+    classes.forEach((c) => {
+      const cName = c.name || c.id;
+      const cHomeroom = (c.homeroom || c.homeroomTeacher || c.waliKelas || "").trim().toLowerCase();
+      const cNip = (c.homeroomNip || "").trim().toLowerCase();
+      const cId = (c.homeroomId || "").trim();
+
+      const matchName = tName && cHomeroom && (
+        cHomeroom === tName ||
+        (tName.length > 5 && cHomeroom.includes(tName)) ||
+        (cHomeroom.length > 5 && tName.includes(cHomeroom))
+      );
+      const matchNip = tNip && cNip && cNip === tNip;
+      const matchId = tUid && cId && cId === tUid;
+
+      if (matchName || matchNip || matchId) {
+        if (cName) matched.add(cName);
+      }
+    });
+
+    // 2. Direct field in user document
+    const directClass = currentUserData?.homeroomClass || currentUserData?.homeroom || currentUserData?.className || currentUserData?.classId;
+    if (directClass && directClass !== "-" && directClass !== "All" && directClass !== "Semua Kelas") {
+      matched.add(directClass);
+    }
+
+    // 3. Match from teachers collection
+    const tDoc = teachers.find((t) =>
+      (tEmail && t.email?.toLowerCase() === tEmail) ||
+      (tNip && (t.nip === tNip || t.id === tNip)) ||
+      (tUid && (t.uid === tUid || t._firestoreId === tUid || t.id === tUid)) ||
+      (tName && (t.name?.toLowerCase() === tName || (tName.length > 5 && t.name?.toLowerCase().includes(tName))))
+    );
+    if (tDoc) {
+      const tClass = tDoc.homeroomClass || tDoc.homeroom || tDoc.class || tDoc.className || tDoc.waliKelas;
+      if (tClass && tClass !== "-" && tClass !== "All" && tClass !== "Semua Kelas") {
+        matched.add(tClass);
+      }
+    }
+
+    // Fallback for admin preview mode so preview is never empty
+    if (matched.size === 0 && previewAsGuru) {
+      const defaultHomeroom = classes.find(c => c.homeroom || c.name === "12 MIPA 1")?.name || classes[0]?.name || "12 MIPA 1";
+      if (defaultHomeroom) matched.add(defaultHomeroom);
+    }
+
+    return Array.from(matched);
+  }, [isGuru, currentUserData, userEmail, classes, teachers, previewAsGuru]);
+
+  const isTeacherWaliKelas = Boolean(isGuru && teacherHomeroomClasses.length > 0);
+
+  // Auto-synchronize selectedClass for Guru
+  useEffect(() => {
+    if (isGuru && teacherHomeroomClasses.length > 0) {
+      if (!teacherHomeroomClasses.includes(selectedClass)) {
+        setSelectedClass(teacherHomeroomClasses[0]);
+      }
+    }
+  }, [isGuru, teacherHomeroomClasses, selectedClass]);
+
+  // Selectable classes list (Restricted exclusively to homeroom for Guru)
+  const selectableClasses = useMemo(() => {
+    if (isGuru) {
+      return classes.filter(c => teacherHomeroomClasses.includes(c.name || c.id));
+    }
+    return classes;
+  }, [isGuru, classes, teacherHomeroomClasses]);
+
+  // Scoped students pool for Guru
+  const scopedStudents = useMemo(() => {
+    if (!isGuru) return students;
+    if (teacherHomeroomClasses.length === 0) return [];
+    return students.filter((s) => {
+      const sc = (s.classId || s.className || s.kelas || s.class || "").trim().toLowerCase();
+      const scNoSpace = sc.replace(/\s+/g, "");
+      return teacherHomeroomClasses.some((tc) => {
+        const target = tc.trim().toLowerCase();
+        const targetNoSpace = target.replace(/\s+/g, "");
+        return sc === target || scNoSpace === targetNoSpace;
+      });
+    });
+  }, [isGuru, teacherHomeroomClasses, students]);
 
   // Firestore Realtime Subscriptions (Classes, Grades, Subjects, Teachers, Attendance, ReportCards)
   useEffect(() => {
@@ -225,8 +325,8 @@ export default function ReportCardsPage() {
 
   // Filtered Students List
   const filteredStudents = useMemo(() => {
-    return students.filter(s => {
-      const matchClass = selectedClass === "All" || s.classId === selectedClass || s.className === selectedClass;
+    return scopedStudents.filter(s => {
+      const matchClass = (!isGuru && selectedClass === "All") || s.classId === selectedClass || s.className === selectedClass;
       const nisnVal = getStudentNisn(s).toLowerCase();
       const matchQuery = !searchQuery || 
         (s.name && s.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -235,21 +335,27 @@ export default function ReportCardsPage() {
         nisnVal.includes(searchQuery.toLowerCase());
       return matchClass && matchQuery;
     });
-  }, [students, selectedClass, searchQuery]);
+  }, [scopedStudents, selectedClass, searchQuery, isGuru]);
 
   // Selected Student Object (Resilient lookup across _firestoreId, uid, id, and nisn)
   const currentStudent = useMemo(() => {
-    if (!students || students.length === 0) return null;
-    return students.find(s => 
+    if (!scopedStudents || scopedStudents.length === 0) return null;
+    return filteredStudents.find(s => 
       (s._firestoreId && s._firestoreId === selectedStudentId) ||
       (s.uid && s.uid === selectedStudentId) ||
       (s.id && s.id === selectedStudentId) ||
       (s.nisn && s.nisn === selectedStudentId)
-    ) || filteredStudents[0] || students[0] || null;
-  }, [students, selectedStudentId, filteredStudents]);
+    ) || filteredStudents[0] || scopedStudents[0] || null;
+  }, [scopedStudents, selectedStudentId, filteredStudents]);
 
   // Dynamic Homeroom Teacher lookup from classes and teachers collections
   const homeroomTeacher = useMemo(() => {
+    if (isGuru && currentUserData) {
+      return {
+        name: currentUserData.fullName || currentUserData.name || auth.currentUser?.displayName || "Wali Kelas",
+        nip: currentUserData.nip || currentUserData.id || "-"
+      };
+    }
     if (!currentStudent) return null;
     const studentClass = classes.find(c => 
       c.id === currentStudent.classId || 
@@ -267,7 +373,7 @@ export default function ReportCardsPage() {
       name: tObj?.name || hrName,
       nip: tObj?.nip || studentClass.homeroomNip || "-"
     };
-  }, [currentStudent, classes, teachers]);
+  }, [isGuru, currentUserData, currentStudent, classes, teachers]);
 
   // Realtime attendance stats calculated directly from Firestore 'attendance' collection
   const dbAttendanceStats = useMemo(() => {
@@ -741,10 +847,30 @@ export default function ReportCardsPage() {
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 bg-white p-5 md:p-6 rounded-2xl border border-gray-100 shadow-xs">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Rapor Digital Siswa</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">
+              {isGuru ? "Rapor Digital Kelas Binaan (Wali Kelas)" : "Rapor Digital Siswa"}
+            </h1>
             <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
               Kurikulum Merdeka / K13
             </span>
+            {isGuru && (
+              <span className={cn(
+                "px-2.5 py-0.5 rounded-full text-xs font-bold border flex items-center gap-1.5 shadow-2xs",
+                isTeacherWaliKelas
+                  ? "bg-purple-100/80 text-[#531FFF] border-[#531FFF]/30"
+                  : "bg-amber-50 text-amber-700 border-amber-300"
+              )}>
+                <GraduationCap className="w-3.5 h-3.5" />
+                {isTeacherWaliKelas
+                  ? `Wali Kelas: ${teacherHomeroomClasses.join(", ")}`
+                  : "Guru (Belum Ditugaskan Sebagai Wali Kelas)"}
+              </span>
+            )}
+            {previewAsGuru && (
+              <span className="px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-800 rounded-md border border-amber-200">
+                Pratinjau Role Guru
+              </span>
+            )}
             {isStudentRole && (
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                 Mode Siswa (Read-Only)
@@ -752,12 +878,43 @@ export default function ReportCardsPage() {
             )}
           </div>
           <p className="text-gray-500 text-xs md:text-sm font-medium mt-1">
-            Laporan hasil penilaian, evaluasi akademik terpadu, capaian kompetensi, dan grafik performa siswa.
+            {isGuru
+              ? isTeacherWaliKelas
+                ? `Pengelolaan evaluasi capaian kompetensi, catatan perkembangan, dan pencetakan rapor siswa kelas ${teacherHomeroomClasses.join(", ")}.`
+                : "Anda login sebagai Guru. Penugasan kelas Wali Kelas belum terhubung dengan akun Anda."
+              : "Laporan hasil penilaian, evaluasi akademik terpadu, capaian kompetensi, dan grafik performa siswa."}
           </p>
         </div>
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+          {/* Admin Switch to Preview Mode Guru */}
+          {!isGuru && !isStudentRole && (
+            <button
+              type="button"
+              onClick={() => setPreviewAsGuru(true)}
+              className="flex items-center gap-2 px-3.5 py-2 bg-purple-50 text-[#531FFF] border border-purple-200/80 rounded-xl hover:bg-purple-100 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
+              title="Pratinjau tampilan khusus Wali Kelas (Role Guru)"
+            >
+              <GraduationCap className="w-4 h-4" />
+              <span>Preview Guru</span>
+            </button>
+          )}
+
+          {previewAsGuru && (
+            <button
+              type="button"
+              onClick={() => {
+                setPreviewAsGuru(false);
+                setSelectedClass("All");
+              }}
+              className="flex items-center gap-2 px-3.5 py-2 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl hover:bg-rose-100 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+              <span>Keluar Preview Guru</span>
+            </button>
+          )}
+
           {/* Tab Nav Buttons */}
           <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 w-full sm:w-auto">
             <button
@@ -793,21 +950,40 @@ export default function ReportCardsPage() {
         </div>
       </div>
 
+      {/* Banner notification if Guru is not assigned as Wali Kelas */}
+      {isGuru && !isTeacherWaliKelas && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex items-start gap-3 shadow-xs">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-sm font-bold text-amber-900">Akses Terbatas: Belum Ditugaskan Sebagai Wali Kelas</h4>
+            <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+              Pada menu Rapor Digital untuk role Guru, sistem secara otomatis hanya menampilkan dan mengelola data siswa dari kelas yang menjadi tanggung jawab Anda sebagai <strong>Wali Kelas</strong>. Saat ini akun Anda belum terdaftar sebagai wali kelas dari kelas manapun. Silakan hubungi Administrator Sekolah untuk mengatur penugasan Wali Kelas pada modul Manajemen Kelas.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Filter Bar */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-4 mb-6 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
           {/* Class Filter */}
           {!isStudentRole && (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-gray-500">Kelas:</span>
+              <span className="text-xs font-bold text-gray-500">
+                {isGuru ? "Kelas Binaan (Wali Kelas):" : "Kelas:"}
+              </span>
               <select
                 value={selectedClass}
                 onChange={(e) => setSelectedClass(e.target.value)}
                 className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-xl py-2 px-3 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
               >
-                <option value="All">Semua Kelas ({classes.length})</option>
-                {classes.map(c => (
-                  <option key={c.id || c.name} value={c.name}>Kelas {c.name}</option>
+                {!isGuru && (
+                  <option value="All">Semua Kelas ({classes.length})</option>
+                )}
+                {selectableClasses.map(c => (
+                  <option key={c.id || c.name} value={c.name}>
+                    Kelas {c.name} {isGuru ? "(Wali Kelas Anda)" : ""}
+                  </option>
                 ))}
               </select>
             </div>
@@ -933,7 +1109,9 @@ export default function ReportCardsPage() {
 
                 {filteredStudents.length === 0 && (
                   <div className="p-8 text-center text-gray-400 text-xs font-medium">
-                    Siswa tidak ditemukan.
+                    {isGuru && teacherHomeroomClasses.length === 0
+                      ? "Tidak ada kelas binaan yang ditugaskan kepada Anda."
+                      : "Siswa tidak ditemukan."}
                   </div>
                 )}
               </div>
@@ -993,25 +1171,6 @@ export default function ReportCardsPage() {
                           <p className="text-lg font-extrabold text-emerald-600">{attendanceRate}%</p>
                         </div>
                       </div>
-
-                      {!isStudentRole && (
-                        <button
-                          type="button"
-                          onClick={handleSaveReportCard}
-                          disabled={isSaving || !currentStudent}
-                          className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 cursor-pointer shrink-0"
-                          title={`Simpan seluruh nilai dan catatan rapor khusus untuk siswa ${currentStudent.name}`}
-                        >
-                          {isSaving ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : saveSuccess ? (
-                            <Check className="w-4 h-4 text-emerald-300" />
-                          ) : (
-                            <Save className="w-4 h-4" />
-                          )}
-                          <span>{saveSuccess ? "Tersimpan!" : "Simpan Rapor Siswa"}</span>
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -1819,8 +1978,15 @@ export default function ReportCardsPage() {
 
               </>
             ) : (
-              <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center text-gray-400">
-                Pilih siswa dari daftar di samping untuk melihat lembar Rapor Digital.
+              <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center text-gray-400 flex flex-col items-center justify-center gap-3">
+                <GraduationCap className="w-10 h-10 text-gray-300" />
+                <p className="text-sm font-semibold text-gray-600">
+                  {isGuru && teacherHomeroomClasses.length === 0
+                    ? "Anda belum ditugaskan sebagai Wali Kelas. Hubungi Administrator untuk penugasan kelas."
+                    : filteredStudents.length === 0
+                    ? "Tidak ada data siswa pada kelas binaan Anda."
+                    : "Pilih siswa dari daftar di samping untuk melihat lembar Rapor Digital."}
+                </p>
               </div>
             )}
 
