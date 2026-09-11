@@ -258,11 +258,11 @@ export default function ProfilePage() {
     <div className="p-4 sm:p-6 md:p-8 max-w-[1500px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
       
       {/* Top Header Card */}
-      <div className="bg-white rounded-3xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
+      <div className="bg-white rounded-xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-full bg-gradient-to-l from-[#531FFF]/5 via-[#531FFF]/2 to-transparent pointer-events-none" />
         
         <div className="flex items-center gap-4 relative z-10">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] flex items-center justify-center text-white shadow-lg shadow-[#531FFF]/25 shrink-0 font-bold">
+          <div className="w-14 h-14 rounded-lg bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] flex items-center justify-center text-white shadow-lg shadow-[#531FFF]/25 shrink-0 font-bold">
             <RoleIcon className="w-7 h-7" />
           </div>
           <div>
@@ -287,7 +287,7 @@ export default function ProfilePage() {
           {!isEditing ? (
             <button
               onClick={() => setIsEditing(true)}
-              className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#4314cc] text-white px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer active:scale-95"
+              className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#4314cc] text-white px-5 py-2.5 rounded-lg text-xs sm:text-sm font-extrabold shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer active:scale-95"
             >
               <Edit3 className="w-4 h-4" />
               <span>Edit Profil</span>
@@ -298,7 +298,7 @@ export default function ProfilePage() {
                 setIsEditing(false);
                 setFormData(profileData);
               }}
-              className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer"
+              className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
               <span>Batal</span>
@@ -316,13 +316,13 @@ export default function ProfilePage() {
         <div className="lg:col-span-4 space-y-5">
           
           {/* User Identity Card */}
-          <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-xs relative overflow-hidden text-center">
+          <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-xs relative overflow-hidden text-center">
             {/* Top Background Accent */}
             <div className="h-24 bg-gradient-to-r from-[#531FFF]/15 via-[#6E3BFF]/10 to-[#531FFF]/5 -mx-6 -mt-6 mb-4 relative" />
 
             {/* Avatar */}
             <div className="relative mx-auto w-24 h-24 -mt-16 mb-3">
-              <div className="w-full h-full rounded-3xl ring-4 ring-white shadow-xl bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white flex items-center justify-center font-black text-3xl overflow-hidden relative border border-gray-100">
+              <div className="w-full h-full rounded-xl ring-4 ring-white shadow-xl bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white flex items-center justify-center font-black text-3xl overflow-hidden relative border border-gray-100">
                 {profileData.imageUrl ? (
                   <Image 
                     src={profileData.imageUrl} 
@@ -360,9 +360,9 @@ export default function ProfilePage() {
             {/* Quick Contact & Info List */}
             <div className="space-y-3 text-left">
               {/* Email */}
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-gray-50/70 border border-gray-100 hover:bg-gray-50 transition-colors">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50/70 border border-gray-100 hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-white text-[#531FFF] flex items-center justify-center shrink-0 border border-gray-200/80 shadow-2xs">
+                  <div className="w-8 h-8 rounded-lg bg-white text-[#531FFF] flex items-center justify-center shrink-0 border border-gray-200/80 shadow-2xs">
                     <Mail className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
@@ -375,7 +375,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => handleCopy(profileData.email, "Email")}
-                  className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-white rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-white rounded-md transition-colors cursor-pointer"
                   title="Salin Email"
                 >
                   {copiedField === "Email" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -383,9 +383,9 @@ export default function ProfilePage() {
               </div>
 
               {/* Phone / WhatsApp */}
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-gray-50/70 border border-gray-100 hover:bg-gray-50 transition-colors">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50/70 border border-gray-100 hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-white text-[#531FFF] flex items-center justify-center shrink-0 border border-gray-200/80 shadow-2xs">
+                  <div className="w-8 h-8 rounded-lg bg-white text-[#531FFF] flex items-center justify-center shrink-0 border border-gray-200/80 shadow-2xs">
                     <Phone className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
@@ -400,7 +400,7 @@ export default function ProfilePage() {
                     href={`https://wa.me/${(profileData.phone || matchedTeacher?.contact).replace(/[^0-9]/g, "")}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                    className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
                     title="Buka Chat WhatsApp"
                   >
                     <MessageCircle className="w-3.5 h-3.5" />
@@ -420,8 +420,8 @@ export default function ProfilePage() {
               </div>
 
               {/* Tanggal Bergabung */}
-              <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-gray-50/70 border border-gray-100">
-                <div className="w-8 h-8 rounded-xl bg-white text-[#531FFF] flex items-center justify-center shrink-0 border border-gray-200/80 shadow-2xs">
+              <div className="flex items-center gap-2.5 p-3 rounded-lg bg-gray-50/70 border border-gray-100">
+                <div className="w-8 h-8 rounded-lg bg-white text-[#531FFF] flex items-center justify-center shrink-0 border border-gray-200/80 shadow-2xs">
                   <Calendar className="w-4 h-4" />
                 </div>
                 <div>
@@ -433,7 +433,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Account Security Info Card */}
-          <div className="bg-gradient-to-br from-[#531FFF]/10 via-[#531FFF]/5 to-transparent rounded-3xl border border-[#531FFF]/20 p-5 space-y-2.5">
+          <div className="bg-gradient-to-br from-[#531FFF]/10 via-[#531FFF]/5 to-transparent rounded-xl border border-[#531FFF]/20 p-5 space-y-2.5">
             <div className="flex items-center gap-2 text-[#531FFF]">
               <ShieldCheck className="w-5 h-5" />
               <h4 className="text-xs font-black uppercase tracking-wider">Keamanan Akun</h4>
@@ -455,12 +455,12 @@ export default function ProfilePage() {
         <div className="lg:col-span-8 space-y-6">
           
           {/* Navigation Tabs Bar */}
-          <div className="flex items-center gap-2 bg-gray-100/90 p-1.5 rounded-2xl border border-gray-200 w-full sm:w-fit">
+          <div className="flex items-center gap-2 bg-gray-100/90 p-1.5 rounded-lg border border-gray-200 w-full sm:w-fit">
             <button
               type="button"
               onClick={() => setActiveTab("biodata")}
               className={cn(
-                "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap",
+                "flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap",
                 activeTab === "biodata"
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-900"
@@ -474,7 +474,7 @@ export default function ProfilePage() {
               type="button"
               onClick={() => setActiveTab("security")}
               className={cn(
-                "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap",
+                "flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap",
                 activeTab === "security"
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-900"
@@ -489,7 +489,7 @@ export default function ProfilePage() {
           {/* TAB 1: BIODATA & INFORMASI PRIBADI                                      */}
           {/* ======================================================================= */}
           {activeTab === "biodata" && (
-            <div className="bg-white rounded-3xl border border-gray-100 p-6 sm:p-7 shadow-xs space-y-6 animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl border border-gray-100 p-6 sm:p-7 shadow-xs space-y-6 animate-in fade-in duration-200">
               <div className="flex items-center justify-between pb-4 border-b border-gray-100">
                 <div>
                   <h3 className="text-lg font-black text-gray-900 tracking-tight">Informasi Pribadi & Kontak</h3>
@@ -518,7 +518,7 @@ export default function ProfilePage() {
                         value={formData.name || ""}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         required
-                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                       />
                     </div>
 
@@ -528,7 +528,7 @@ export default function ProfilePage() {
                         type="email"
                         value={formData.email || ""}
                         disabled
-                        className="w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm font-semibold text-gray-400 cursor-not-allowed"
+                        className="w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-lg text-sm font-semibold text-gray-400 cursor-not-allowed"
                       />
                       <p className="text-[10px] text-gray-400">Email akun terikat pada kredensial login.</p>
                     </div>
@@ -540,7 +540,7 @@ export default function ProfilePage() {
                         value={formData.phone || ""}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         placeholder="Contoh: 081234567890"
-                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                       />
                     </div>
 
@@ -549,7 +549,7 @@ export default function ProfilePage() {
                       <select
                         value={formData.gender || "Laki-laki"}
                         onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                       >
                         <option value="Laki-laki">Laki-laki</option>
                         <option value="Perempuan">Perempuan</option>
@@ -564,7 +564,7 @@ export default function ProfilePage() {
                             type="text"
                             value={formData.nip || ""}
                             onChange={(e) => setFormData({ ...formData, nip: e.target.value })}
-                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                           />
                         </div>
 
@@ -574,7 +574,7 @@ export default function ProfilePage() {
                             type="text"
                             value={formData.subject || ""}
                             onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                           />
                         </div>
                       </>
@@ -587,7 +587,7 @@ export default function ProfilePage() {
                         value={formData.address || ""}
                         onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                         placeholder="Jl. Pendidikan No. 10, Kelurahan, Kecamatan..."
-                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                       />
                     </div>
                   </div>
@@ -599,7 +599,7 @@ export default function ProfilePage() {
                         setIsEditing(false);
                         setFormData(profileData);
                       }}
-                      className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
+                      className="px-5 py-2.5 rounded-lg text-xs sm:text-sm font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
                       disabled={saving}
                     >
                       Batal
@@ -607,7 +607,7 @@ export default function ProfilePage() {
                     <button
                       type="submit"
                       disabled={saving}
-                      className="px-6 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold text-white bg-[#531FFF] hover:bg-[#4314cc] shadow-md shadow-[#531FFF]/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                      className="px-6 py-2.5 rounded-lg text-xs sm:text-sm font-extrabold text-white bg-[#531FFF] hover:bg-[#4314cc] shadow-md shadow-[#531FFF]/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
                     >
                       {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                       <Save className="w-4 h-4" />
@@ -617,43 +617,43 @@ export default function ProfilePage() {
                 </form>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-2xl bg-gray-50/70 border border-gray-100">
+                  <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
                     <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Nama Lengkap</p>
                     <p className="text-sm font-bold text-gray-900 mt-1">{profileData.name}</p>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-gray-50/70 border border-gray-100">
+                  <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
                     <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Email Utama</p>
                     <p className="text-sm font-bold text-gray-900 mt-1">{profileData.email || "-"}</p>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-gray-50/70 border border-gray-100">
+                  <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
                     <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">No. WhatsApp / HP</p>
                     <p className="text-sm font-bold text-gray-900 mt-1">
                       {profileData.phone || matchedTeacher?.contact || "Belum dilengkapi"}
                     </p>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-gray-50/70 border border-gray-100">
+                  <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
                     <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Jenis Kelamin</p>
                     <p className="text-sm font-bold text-gray-900 mt-1">{profileData.gender || "Laki-laki"}</p>
                   </div>
 
                   {profileData.role === "guru" && (
                     <>
-                      <div className="p-4 rounded-2xl bg-gray-50/70 border border-gray-100">
+                      <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
                         <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">NIP (Nomor Induk Pegawai)</p>
                         <p className="text-sm font-bold text-gray-900 mt-1">{profileData.nip || matchedTeacher?.nip || matchedTeacher?.id || "-"}</p>
                       </div>
 
-                      <div className="p-4 rounded-2xl bg-gray-50/70 border border-gray-100">
+                      <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
                         <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Mata Pelajaran</p>
                         <p className="text-sm font-bold text-[#531FFF] mt-1">{profileData.subject || matchedTeacher?.role || matchedTeacher?.subject || "-"}</p>
                       </div>
                     </>
                   )}
 
-                  <div className="p-4 rounded-2xl bg-gray-50/70 border border-gray-100 md:col-span-2">
+                  <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100 md:col-span-2">
                     <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Alamat Domisili</p>
                     <p className="text-sm font-bold text-gray-900 mt-1 leading-relaxed">
                       {profileData.address || "Belum ada informasi alamat yang dicantumkan."}
@@ -668,7 +668,7 @@ export default function ProfilePage() {
           {/* TAB 2: KEAMANAN & SANDI                                                 */}
           {/* ======================================================================= */}
           {activeTab === "security" && (
-            <div className="bg-white rounded-3xl border border-gray-100 p-6 sm:p-7 shadow-xs space-y-6 animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl border border-gray-100 p-6 sm:p-7 shadow-xs space-y-6 animate-in fade-in duration-200">
               <div className="pb-4 border-b border-gray-100">
                 <h3 className="text-lg font-black text-gray-900 tracking-tight">Keamanan Akun & Sandi</h3>
                 <p className="text-xs font-medium text-gray-500 mt-0.5">
@@ -686,7 +686,7 @@ export default function ProfilePage() {
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="Minimal 6 karakter"
                       required
-                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                     />
                     <button
                       type="button"
@@ -706,7 +706,7 @@ export default function ProfilePage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Ulangi kata sandi baru"
                     required
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                   />
                 </div>
 
@@ -714,7 +714,7 @@ export default function ProfilePage() {
                   <button
                     type="submit"
                     disabled={updatingPassword}
-                    className="px-6 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold text-white bg-[#531FFF] hover:bg-[#4314cc] shadow-md shadow-[#531FFF]/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                    className="px-6 py-2.5 rounded-lg text-xs sm:text-sm font-extrabold text-white bg-[#531FFF] hover:bg-[#4314cc] shadow-md shadow-[#531FFF]/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
                   >
                     {updatingPassword && <Loader2 className="w-4 h-4 animate-spin" />}
                     <Key className="w-4 h-4" />
@@ -723,7 +723,7 @@ export default function ProfilePage() {
                 </div>
               </form>
 
-              <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-amber-900 text-xs font-medium leading-relaxed flex items-start gap-2.5">
+              <div className="p-4 rounded-lg bg-amber-50/80 border border-amber-200/80 text-amber-900 text-xs font-medium leading-relaxed flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <span>
                   Pastikan kata sandi Anda menggunakan kombinasi huruf besar, huruf kecil, dan angka untuk menjaga keamanan akun institusi Anda.

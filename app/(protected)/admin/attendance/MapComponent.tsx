@@ -37,10 +37,10 @@ export default function MapComponent({ filteredData, centerLat, centerLng, radiu
     setMounted(true);
   }, []);
 
-  if (!mounted) return <div className="h-[500px] w-full bg-gray-100 animate-pulse rounded-2xl" />;
+  if (!mounted) return <div className="h-[500px] w-full bg-gray-100 animate-pulse rounded-lg" />;
 
   return (
-    <div className="h-[500px] w-full rounded-2xl overflow-hidden border border-gray-200 z-0">
+    <div className="h-[500px] w-full rounded-lg overflow-hidden border border-gray-200 z-0">
       <MapContainer 
         center={[centerLat, centerLng]} 
         zoom={18} 

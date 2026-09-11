@@ -150,7 +150,7 @@ function InnerGeofenceMap({
   const circleColor = studentLocation ? (isInRadius ? "#10b981" : "#ef4444") : "#531FFF";
 
   return (
-    <div className={cn("w-full relative rounded-2xl overflow-hidden border border-gray-200 shadow-inner group", className)} style={{ height }}>
+    <div className={cn("w-full relative rounded-lg overflow-hidden border border-gray-200 shadow-inner group", className)} style={{ height }}>
       <MapContainer
         center={schoolPosition}
         zoom={zoom}
@@ -314,7 +314,7 @@ function InnerGeofenceMap({
 
       {/* Floating HUD Badge: Radius and Status indicator */}
       <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-1.5 pointer-events-none">
-        <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-gray-200/80 text-[11px] font-bold text-gray-800 flex items-center gap-2">
+        <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-lg shadow-md border border-gray-200/80 text-[11px] font-bold text-gray-800 flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: circleColor }} />
           <span>Radius: {radius}m</span>
           <span className="text-gray-400 font-normal">| Area: ~{Math.round(Math.PI * radius * radius / 1000)}k m²</span>
@@ -322,7 +322,7 @@ function InnerGeofenceMap({
 
         {studentLocation && (
           <div className={cn(
-            "px-3 py-1.5 rounded-xl shadow-md border text-[11px] font-extrabold flex items-center gap-1.5 backdrop-blur-md",
+            "px-3 py-1.5 rounded-lg shadow-md border text-[11px] font-extrabold flex items-center gap-1.5 backdrop-blur-md",
             isInRadius
               ? "bg-emerald-500/95 text-white border-emerald-400"
               : "bg-rose-500/95 text-white border-rose-400 animate-bounce"
@@ -336,7 +336,7 @@ function InnerGeofenceMap({
       {/* Interactive Helper Banner for Admin */}
       {interactive && (
         <div className="absolute bottom-3 left-3 right-3 z-10 pointer-events-none flex justify-center">
-          <div className="bg-gray-900/80 backdrop-blur-md text-white px-3.5 py-1.5 rounded-xl text-[11px] font-medium shadow-lg flex items-center gap-2 border border-white/10">
+          <div className="bg-gray-900/80 backdrop-blur-md text-white px-3.5 py-1.5 rounded-lg text-[11px] font-medium shadow-lg flex items-center gap-2 border border-white/10">
             <Compass className="w-3.5 h-3.5 text-[#8F94FB]" />
             <span>Klik peta atau geser marker untuk menentukan titik pusat sekolah</span>
           </div>
@@ -350,7 +350,7 @@ function InnerGeofenceMap({
 const DynamicGeofenceMap = dynamic(() => Promise.resolve(InnerGeofenceMap), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-[380px] rounded-2xl bg-gray-100 border border-gray-200 animate-pulse flex flex-col items-center justify-center text-gray-400 gap-2">
+    <div className="w-full h-[380px] rounded-lg bg-gray-100 border border-gray-200 animate-pulse flex flex-col items-center justify-center text-gray-400 gap-2">
       <div className="w-8 h-8 rounded-full border-2 border-[#531FFF] border-t-transparent animate-spin" />
       <span className="text-xs font-semibold">Memuat Peta Interaktif...</span>
     </div>

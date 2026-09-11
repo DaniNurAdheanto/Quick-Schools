@@ -1,15 +1,15 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { 
-  Plus, 
-  Search, 
-  Award, 
-  CheckCircle2, 
-  AlertCircle, 
-  BookOpen, 
-  Trash2, 
-  ShieldCheck, 
+import {
+  Plus,
+  Search,
+  Award,
+  CheckCircle2,
+  AlertCircle,
+  BookOpen,
+  Trash2,
+  ShieldCheck,
   Eye,
   Sparkles,
   LayoutGrid,
@@ -31,14 +31,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
-import { 
-  collection, 
-  onSnapshot, 
-  doc, 
-  setDoc, 
-  deleteDoc, 
-  updateDoc, 
-  serverTimestamp, 
+import {
+  collection,
+  onSnapshot,
+  doc,
+  setDoc,
+  deleteDoc,
+  updateDoc,
+  serverTimestamp,
   getDoc,
   writeBatch
 } from "firebase/firestore";
@@ -156,12 +156,12 @@ export default function GradesPage() {
     const tUid = currentUser?.uid || userObj.uid;
 
     // Cross-reference with teachers collection
-    const tDoc = teachers.find(t => 
+    const tDoc = teachers.find(t =>
       (tEmail && t.email?.toLowerCase() === tEmail) ||
       (tNip && (t.nip === tNip || t.id === tNip)) ||
       (tUid && (t.uid === tUid || t._firestoreId === tUid)) ||
       (tName && t.name && (
-        t.name.toLowerCase() === tName.toLowerCase() || 
+        t.name.toLowerCase() === tName.toLowerCase() ||
         (tName.length > 5 && t.name.toLowerCase().includes(tName.toLowerCase())) ||
         (t.name.length > 5 && tName.toLowerCase().includes(t.name.toLowerCase()))
       ))
@@ -376,7 +376,7 @@ export default function GradesPage() {
     // If teacher is Wali Kelas of this class: access to all subjects in their homeroom class
     const isWali = homeroomClasses.some(hc => hc.trim().toLowerCase() === normClass);
     if (isWali) {
-      return subjects.length > 0 
+      return subjects.length > 0
         ? subjects.map(s => s.name)
         : ["Matematika Wajib", "Bahasa Indonesia", "Bahasa Inggris", "Fisika", "Kimia", "Biologi", "Ekonomi", "Sosiologi", "Pendidikan Agama"];
     }
@@ -467,13 +467,13 @@ export default function GradesPage() {
     const classNamesFromClasses = classes.map(c => c.name?.trim()).filter(Boolean);
     const classNamesFromStudents = students.map(s => (s.classId || s.className || s.class)?.trim()).filter(Boolean);
     let uniqueClassNames = Array.from(new Set([...classNamesFromClasses, ...classNamesFromStudents])).sort();
-    
+
     // For Guru role: limit to authorized classes (homeroom + taught classes)
     if (isGuru) {
       if (!authorizedClasses || authorizedClasses.length === 0) {
         return [];
       }
-      uniqueClassNames = uniqueClassNames.filter(cName => 
+      uniqueClassNames = uniqueClassNames.filter(cName =>
         authorizedClasses.some(ac => ac.trim().toLowerCase() === cName.toLowerCase())
       );
     }
@@ -511,16 +511,16 @@ export default function GradesPage() {
     const allSubjects = subjects.length > 0
       ? subjects.map(s => ({ label: s.name, value: s.name }))
       : [
-          { label: "Matematika Wajib", value: "Matematika Wajib" },
-          { label: "Bahasa Indonesia", value: "Bahasa Indonesia" },
-          { label: "Bahasa Inggris", value: "Bahasa Inggris" },
-          { label: "Fisika", value: "Fisika" },
-          { label: "Kimia", value: "Kimia" },
-          { label: "Biologi", value: "Biologi" },
-          { label: "Ekonomi", value: "Ekonomi" },
-          { label: "Sosiologi", value: "Sosiologi" },
-          { label: "Pendidikan Agama", value: "Pendidikan Agama" }
-        ];
+        { label: "Matematika Wajib", value: "Matematika Wajib" },
+        { label: "Bahasa Indonesia", value: "Bahasa Indonesia" },
+        { label: "Bahasa Inggris", value: "Bahasa Inggris" },
+        { label: "Fisika", value: "Fisika" },
+        { label: "Kimia", value: "Kimia" },
+        { label: "Biologi", value: "Biologi" },
+        { label: "Ekonomi", value: "Ekonomi" },
+        { label: "Sosiologi", value: "Sosiologi" },
+        { label: "Pendidikan Agama", value: "Pendidikan Agama" }
+      ];
 
     if (!isGuru) return allSubjects;
 
@@ -554,16 +554,16 @@ export default function GradesPage() {
     const allSubjects = subjects.length > 0
       ? subjects.map(s => ({ label: s.name, value: s.name }))
       : [
-          { label: "Matematika Wajib", value: "Matematika Wajib" },
-          { label: "Bahasa Indonesia", value: "Bahasa Indonesia" },
-          { label: "Bahasa Inggris", value: "Bahasa Inggris" },
-          { label: "Fisika", value: "Fisika" },
-          { label: "Kimia", value: "Kimia" },
-          { label: "Biologi", value: "Biologi" },
-          { label: "Ekonomi", value: "Ekonomi" },
-          { label: "Sosiologi", value: "Sosiologi" },
-          { label: "Pendidikan Agama", value: "Pendidikan Agama" }
-        ];
+        { label: "Matematika Wajib", value: "Matematika Wajib" },
+        { label: "Bahasa Indonesia", value: "Bahasa Indonesia" },
+        { label: "Bahasa Inggris", value: "Bahasa Inggris" },
+        { label: "Fisika", value: "Fisika" },
+        { label: "Kimia", value: "Kimia" },
+        { label: "Biologi", value: "Biologi" },
+        { label: "Ekonomi", value: "Ekonomi" },
+        { label: "Sosiologi", value: "Sosiologi" },
+        { label: "Pendidikan Agama", value: "Pendidikan Agama" }
+      ];
 
     if (!isGuru) return allSubjects;
 
@@ -591,7 +591,7 @@ export default function GradesPage() {
   useEffect(() => {
     if (availableClassOptions.length > 0) {
       const isCurrentValid = availableClassOptions.some(opt => opt.value.toLowerCase() === matrixClassId.trim().toLowerCase());
-      
+
       if (!matrixClassId || !isCurrentValid) {
         const classWithStudents = availableClassOptions.find(opt => opt.studentCount > 0);
         if (classWithStudents) {
@@ -886,13 +886,13 @@ export default function GradesPage() {
     return grades.filter(g => {
       // 1. RBAC for Student Role
       if (isStudentRole) {
-        const matchesId = 
+        const matchesId =
           (studentDoc?.nisn && g.studentId === studentDoc.nisn) ||
           (studentDoc?.id && g.studentId === studentDoc.id) ||
           (currentUser?.uid && g.studentId === currentUser.uid);
 
         const matchesEmail = currentUser?.email && g.studentEmail === currentUser.email;
-        const matchesName = studentDoc?.name && g.studentName && 
+        const matchesName = studentDoc?.name && g.studentName &&
           g.studentName.toLowerCase().trim() === studentDoc.name.toLowerCase().trim();
 
         if (!matchesId && !matchesEmail && !matchesName) return false;
@@ -1038,8 +1038,8 @@ export default function GradesPage() {
       });
     }
 
-    const targetStudents = selectedClass === "All" 
-      ? baseStudentList 
+    const targetStudents = selectedClass === "All"
+      ? baseStudentList
       : baseStudentList.filter(s => (s.classId || s.className || s.class || "").trim().toLowerCase() === target);
 
     targetStudents.forEach(s => {
@@ -1059,7 +1059,7 @@ export default function GradesPage() {
 
     accessibleGrades.forEach(g => {
       const matched = getStudentByIdOrName(g.studentId) || getStudentByIdOrName(g.studentName);
-      const entry = matched 
+      const entry = matched
         ? (studentMap.get(matched.id) || studentMap.get(matched._firestoreId) || studentMap.get(matched.uid))
         : studentMap.get(g.studentId);
 
@@ -1145,9 +1145,9 @@ export default function GradesPage() {
     if (!currentFormData.classId) {
       return pool.map(s => {
         const c = s.classId || s.className || s.class || "Tanpa Kelas";
-        return { 
-          label: `${s.fullName || s.name} (${c})`, 
-          value: s.id 
+        return {
+          label: `${s.fullName || s.name} (${c})`,
+          value: s.id
         };
       });
     }
@@ -1162,16 +1162,16 @@ export default function GradesPage() {
     const allSubjects = subjects.length > 0
       ? subjects.map(s => ({ label: s.name, value: s.name }))
       : [
-          { label: "Matematika Wajib", value: "Matematika Wajib" },
-          { label: "Bahasa Indonesia", value: "Bahasa Indonesia" },
-          { label: "Bahasa Inggris", value: "Bahasa Inggris" },
-          { label: "Fisika", value: "Fisika" },
-          { label: "Kimia", value: "Kimia" },
-          { label: "Biologi", value: "Biologi" },
-          { label: "Ekonomi", value: "Ekonomi" },
-          { label: "Sosiologi", value: "Sosiologi" },
-          { label: "Pendidikan Agama", value: "Pendidikan Agama" }
-        ];
+        { label: "Matematika Wajib", value: "Matematika Wajib" },
+        { label: "Bahasa Indonesia", value: "Bahasa Indonesia" },
+        { label: "Bahasa Inggris", value: "Bahasa Inggris" },
+        { label: "Fisika", value: "Fisika" },
+        { label: "Kimia", value: "Kimia" },
+        { label: "Biologi", value: "Biologi" },
+        { label: "Ekonomi", value: "Ekonomi" },
+        { label: "Sosiologi", value: "Sosiologi" },
+        { label: "Pendidikan Agama", value: "Pendidikan Agama" }
+      ];
 
     if (!isGuru) return allSubjects;
 
@@ -1195,58 +1195,58 @@ export default function GradesPage() {
   }, [subjects, isGuru, currentFormData.classId, homeroomClasses, taughtSubjectClassPairs]);
 
   const singleGradeFields: CrudField[] = useMemo(() => [
-    { 
-      name: "classId", 
-      label: "Kelas Siswa", 
-      type: "select", 
+    {
+      name: "classId",
+      label: "Kelas Siswa",
+      type: "select",
       options: availableClassOptions,
       category: "akademik",
       colSpan: 1
     },
-    { 
-      name: "studentId", 
-      label: "Pilih Siswa", 
-      type: "select", 
+    {
+      name: "studentId",
+      label: "Pilih Siswa",
+      type: "select",
       options: filteredStudentsForSingleForm,
       placeholder: currentFormData.classId ? "Pilih Siswa" : "Pilih kelas terlebih dahulu",
       category: "akademik",
       colSpan: 1
     },
-    { 
-      name: "subject", 
-      label: "Mata Pelajaran", 
-      type: "select", 
+    {
+      name: "subject",
+      label: "Mata Pelajaran",
+      type: "select",
       options: availableSubjectOptionsForSingleForm,
       category: "akademik",
       colSpan: 1
     },
-    { 
-      name: "type", 
-      label: "Tipe Penilaian", 
-      type: "select", 
+    {
+      name: "type",
+      label: "Tipe Penilaian",
+      type: "select",
       options: ASSESSMENT_TYPES.map(t => ({ label: t.label, value: t.id })),
       category: "akademik",
       colSpan: 1
     },
-    { 
-      name: "assessmentName", 
-      label: "Nama / Topik Penilaian", 
+    {
+      name: "assessmentName",
+      label: "Nama / Topik Penilaian",
       placeholder: "Contoh: Tugas 1 Aljabar / Ulangan Bab 2",
       category: "akademik",
       colSpan: 1
     },
-    { 
-      name: "score", 
-      label: "Nilai Siswa (0-100)", 
-      type: "number", 
+    {
+      name: "score",
+      label: "Nilai Siswa (0-100)",
+      type: "number",
       placeholder: "0 - 100",
       category: "akademik",
       colSpan: 1
     },
-    { 
-      name: "kkm", 
-      label: "Nilai KKM (Ditetapkan Super Admin)", 
-      type: "number", 
+    {
+      name: "kkm",
+      label: "Nilai KKM (Ditetapkan Super Admin)",
+      type: "number",
       disabled: true,
       readOnly: true,
       helperText: "Batas KKM dan bobot nilai diatur oleh Super Admin pada kurikulum mata pelajaran",
@@ -1254,10 +1254,10 @@ export default function GradesPage() {
       category: "akademik",
       colSpan: 1
     },
-    { 
-      name: "semester", 
-      label: "Semester", 
-      type: "select", 
+    {
+      name: "semester",
+      label: "Semester",
+      type: "select",
       options: [
         { label: "Ganjil", value: "Ganjil" },
         { label: "Genap", value: "Genap" }
@@ -1265,9 +1265,9 @@ export default function GradesPage() {
       category: "akademik",
       colSpan: 1
     },
-    { 
-      name: "notes", 
-      label: "Catatan Evaluasi Guru (Opsional)", 
+    {
+      name: "notes",
+      label: "Catatan Evaluasi Guru (Opsional)",
       placeholder: "Catatan kemajuan siswa...",
       category: "pribadi",
       colSpan: 2
@@ -1284,9 +1284,9 @@ export default function GradesPage() {
     const uName = (currentUserData?.name || currentUserData?.fullName || studentDoc?.name || "").toLowerCase().trim();
     const uNisn = currentUserData?.nisn || studentDoc?.nisn;
 
-    return students.find(s => 
-      s.id === uid || 
-      s._firestoreId === uid || 
+    return students.find(s =>
+      s.id === uid ||
+      s._firestoreId === uid ||
       (email && s.email && s.email.toLowerCase() === email) ||
       (uNisn && (s.nisn === uNisn || s.id === uNisn)) ||
       (uName && s.name && s.name.toLowerCase().trim() === uName) ||
@@ -1295,14 +1295,14 @@ export default function GradesPage() {
   }, [students, currentUser, currentUserData, studentDoc]);
 
   const studentClassId = useMemo(() => {
-    return matchedStudent?.classId || matchedStudent?.className || matchedStudent?.class || 
-           currentUserData?.classId || currentUserData?.className || currentUserData?.class ||
-           studentDoc?.classId || studentDoc?.className || studentDoc?.class || "";
+    return matchedStudent?.classId || matchedStudent?.className || matchedStudent?.class ||
+      currentUserData?.classId || currentUserData?.className || currentUserData?.class ||
+      studentDoc?.classId || studentDoc?.className || studentDoc?.class || "";
   }, [matchedStudent, currentUserData, studentDoc]);
 
   const studentMyClass = useMemo(() => {
     if (!studentClassId) return null;
-    return classes.find(c => 
+    return classes.find(c =>
       c.name?.toLowerCase() === studentClassId.toLowerCase() ||
       c.id?.toLowerCase() === studentClassId.toLowerCase() ||
       c._firestoreId === studentClassId
@@ -1351,7 +1351,7 @@ export default function GradesPage() {
   // Kelompokkan nilai per mata pelajaran yang sudah dinilai
   const studentGradesBySubject = useMemo(() => {
     const map = new Map<string, any[]>();
-    
+
     myStudentGrades.forEach(g => {
       const subj = g.subject || "Mata Pelajaran";
       if (!map.has(subj)) {
@@ -1427,8 +1427,8 @@ export default function GradesPage() {
     : "0";
   const studentPassedSubjectsCount = studentGradesBySubject.filter(s => s.isPassed).length;
   const studentTotalSubjectsCount = studentGradesBySubject.length;
-  const studentPassingPercentage = studentTotalSubjectsCount > 0 
-    ? Math.round((studentPassedSubjectsCount / studentTotalSubjectsCount) * 100) 
+  const studentPassingPercentage = studentTotalSubjectsCount > 0
+    ? Math.round((studentPassedSubjectsCount / studentTotalSubjectsCount) * 100)
     : 100;
 
   const studentHighestScore = useMemo(() => {
@@ -1481,8 +1481,8 @@ export default function GradesPage() {
     if (!studentMyClass && !studentClassId) {
       return (
         <div className="p-4 sm:p-8 max-w-[1200px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-12">
-            <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200 shadow-sm">
+          <div className="bg-white rounded-xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-12">
+            <div className="w-16 h-16 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200 shadow-sm">
               <AlertCircle className="w-8 h-8" />
             </div>
             <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-50 text-amber-800 border border-amber-200 uppercase tracking-wider">
@@ -1499,12 +1499,12 @@ export default function GradesPage() {
 
     return (
       <div className="p-4 sm:p-8 pb-16 max-w-[1600px] mx-auto w-full flex flex-col space-y-6 animate-in fade-in duration-200 printable-area">
-        
+
         {/* ================= HEADER PORTAL SISWA ================= */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/40 p-6 rounded-3xl border border-purple-100/60 shadow-2xs">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/40 p-6 rounded-xl border border-purple-100/60 shadow-2xs">
           <div>
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-[#531FFF] text-white flex items-center justify-center shadow-lg shadow-[#531FFF]/25">
+              <div className="w-12 h-12 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shadow-lg shadow-[#531FFF]/25">
                 <Award className="w-6 h-6" />
               </div>
               <div>
@@ -1529,7 +1529,7 @@ export default function GradesPage() {
           <div className="flex items-center gap-2.5 no-print">
             <button
               onClick={() => window.print()}
-              className="px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 text-xs font-extrabold rounded-2xl border border-gray-200 shadow-xs flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-98 cursor-pointer"
+              className="px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 text-xs font-extrabold rounded-lg border border-gray-200 shadow-xs flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-98 cursor-pointer"
               title="Cetak transkrip nilai capaian"
             >
               <Printer className="w-4 h-4 text-[#531FFF]" />
@@ -1540,12 +1540,12 @@ export default function GradesPage() {
 
         {/* ================= METRICS CARDS ================= */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          
+
           {/* CARD 1: RATA-RATA NILAI */}
-          <div className="p-5 rounded-3xl bg-white border border-gray-100 shadow-xs flex flex-col justify-between hover:border-purple-200 transition-all">
+          <div className="p-5 rounded-xl bg-white border border-gray-100 shadow-xs flex flex-col justify-between hover:border-purple-200 transition-all">
             <div className="flex items-center justify-between">
               <span className="text-xs font-extrabold text-gray-500 uppercase tracking-wider">Rata-Rata Kumulatif</span>
-              <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold">
+              <div className="w-8 h-8 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold">
                 <Award className="w-4 h-4" />
               </div>
             </div>
@@ -1556,31 +1556,31 @@ export default function GradesPage() {
               </div>
               <div className="mt-1.5 flex items-center gap-1.5">
                 <span className={cn(
-                  "px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider",
+                  "px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider",
                   Number(studentOverallAverage) >= 90 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
-                  Number(studentOverallAverage) >= 80 ? "bg-blue-50 text-blue-700 border border-blue-200" :
-                  Number(studentOverallAverage) >= 75 ? "bg-amber-50 text-amber-700 border border-amber-200" :
-                  "bg-rose-50 text-rose-700 border border-rose-200"
+                    Number(studentOverallAverage) >= 80 ? "bg-blue-50 text-blue-700 border border-blue-200" :
+                      Number(studentOverallAverage) >= 75 ? "bg-amber-50 text-amber-700 border border-amber-200" :
+                        "bg-rose-50 text-rose-700 border border-rose-200"
                 )}>
                   {Number(studentOverallAverage) >= 90 ? "Predikat A (Sangat Baik)" :
-                   Number(studentOverallAverage) >= 80 ? "Predikat B (Baik)" :
-                   Number(studentOverallAverage) >= 75 ? "Predikat C (Cukup)" : "Predikat D (Perlu Bimbingan)"}
+                    Number(studentOverallAverage) >= 80 ? "Predikat B (Baik)" :
+                      Number(studentOverallAverage) >= 75 ? "Predikat C (Cukup)" : "Predikat D (Perlu Bimbingan)"}
                 </span>
               </div>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-              <div 
-                className="bg-gradient-to-r from-[#531FFF] to-indigo-600 h-1.5 rounded-full transition-all duration-500" 
-                style={{ width: `${Math.min(100, Math.max(0, Number(studentOverallAverage)))}%` }} 
+              <div
+                className="bg-gradient-to-r from-[#531FFF] to-indigo-600 h-1.5 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(100, Math.max(0, Number(studentOverallAverage)))}%` }}
               />
             </div>
           </div>
 
           {/* CARD 2: KETUNTASAN KKM */}
-          <div className="p-5 rounded-3xl bg-white border border-gray-100 shadow-xs flex flex-col justify-between hover:border-emerald-200 transition-all">
+          <div className="p-5 rounded-xl bg-white border border-gray-100 shadow-xs flex flex-col justify-between hover:border-emerald-200 transition-all">
             <div className="flex items-center justify-between">
               <span className="text-xs font-extrabold text-gray-500 uppercase tracking-wider">Ketuntasan KKM</span>
-              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
                 <CheckCircle2 className="w-4 h-4" />
               </div>
             </div>
@@ -1591,24 +1591,24 @@ export default function GradesPage() {
                 </span>
               </div>
               <div className="mt-1.5 flex items-center gap-1.5">
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
                   {studentPassingPercentage}% Memenuhi KKM
                 </span>
               </div>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-              <div 
-                className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" 
-                style={{ width: `${studentPassingPercentage}%` }} 
+              <div
+                className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
+                style={{ width: `${studentPassingPercentage}%` }}
               />
             </div>
           </div>
 
           {/* CARD 3: TOTAL EVALUASI TERINPUT */}
-          <div className="p-5 rounded-3xl bg-white border border-gray-100 shadow-xs flex flex-col justify-between hover:border-blue-200 transition-all">
+          <div className="p-5 rounded-xl bg-white border border-gray-100 shadow-xs flex flex-col justify-between hover:border-blue-200 transition-all">
             <div className="flex items-center justify-between">
               <span className="text-xs font-extrabold text-gray-500 uppercase tracking-wider">Evaluasi Dinilai</span>
-              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+              <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
                 <BookOpen className="w-4 h-4" />
               </div>
             </div>
@@ -1629,10 +1629,10 @@ export default function GradesPage() {
           </div>
 
           {/* CARD 4: CAPAIAN TERTINGGI */}
-          <div className="p-5 rounded-3xl bg-white border border-gray-100 shadow-xs flex flex-col justify-between hover:border-amber-200 transition-all">
+          <div className="p-5 rounded-xl bg-white border border-gray-100 shadow-xs flex flex-col justify-between hover:border-amber-200 transition-all">
             <div className="flex items-center justify-between">
               <span className="text-xs font-extrabold text-gray-500 uppercase tracking-wider">Nilai Tertinggi</span>
-              <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+              <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
                 <Sparkles className="w-4 h-4" />
               </div>
             </div>
@@ -1658,11 +1658,11 @@ export default function GradesPage() {
 
         {/* ================= TAB NAVIGATION ================= */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200 pb-3 no-print">
-          <div className="flex items-center gap-2 bg-gray-100/80 p-1 rounded-2xl w-fit">
+          <div className="flex items-center gap-2 bg-gray-100/80 p-1 rounded-lg w-fit">
             <button
               onClick={() => setStudentTab("bySubject")}
               className={cn(
-                "px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer",
+                "px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer",
                 studentTab === "bySubject"
                   ? "bg-white text-gray-900 shadow-xs"
                   : "text-gray-500 hover:text-gray-900"
@@ -1681,7 +1681,7 @@ export default function GradesPage() {
             <button
               onClick={() => setStudentTab("allGrades")}
               className={cn(
-                "px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer",
+                "px-4 py-2 rounded-lg text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer",
                 studentTab === "allGrades"
                   ? "bg-white text-gray-900 shadow-xs"
                   : "text-gray-500 hover:text-gray-900"
@@ -1708,8 +1708,8 @@ export default function GradesPage() {
         {studentTab === "bySubject" && (
           <div className="space-y-4">
             {studentGradesBySubject.length === 0 ? (
-              <div className="bg-white rounded-3xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-8">
-                <div className="w-16 h-16 rounded-3xl bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto mb-4 border border-purple-100 shadow-sm">
+              <div className="bg-white rounded-xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-8">
+                <div className="w-16 h-16 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto mb-4 border border-purple-100 shadow-sm">
                   <Award className="w-8 h-8" />
                 </div>
                 <span className="px-3 py-1 rounded-full text-xs font-black bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20 uppercase tracking-wider">
@@ -1726,9 +1726,9 @@ export default function GradesPage() {
                   const isExpanded = expandedSubjectCard === item.subject;
 
                   return (
-                    <div 
+                    <div
                       key={item.subject}
-                      className="bg-white rounded-3xl border border-gray-100 hover:border-purple-200 shadow-xs p-6 flex flex-col justify-between transition-all duration-200"
+                      className="bg-white rounded-xl border border-gray-100 hover:border-purple-200 shadow-xs p-6 flex flex-col justify-between transition-all duration-200"
                     >
                       <div>
                         {/* Header Card */}
@@ -1748,13 +1748,13 @@ export default function GradesPage() {
                           </div>
 
                           <div className="flex flex-col items-end gap-1">
-                            <span className="px-2.5 py-1 rounded-xl text-[11px] font-black bg-gray-50 text-gray-600 border border-gray-200">
+                            <span className="px-2.5 py-1 rounded-lg text-[11px] font-black bg-gray-50 text-gray-600 border border-gray-200">
                               Target KKM: {item.kkm}
                             </span>
                             <span className={cn(
-                              "px-2 py-0.5 rounded-lg text-[10px] font-black flex items-center gap-1",
-                              item.isPassed 
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
+                              "px-2 py-0.5 rounded-md text-[10px] font-black flex items-center gap-1",
+                              item.isPassed
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                 : "bg-rose-50 text-rose-700 border border-rose-200"
                             )}>
                               {item.isPassed ? (
@@ -1771,14 +1771,14 @@ export default function GradesPage() {
                         </div>
 
                         {/* Nilai Rata-rata & Visual Progress */}
-                        <div className="my-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-50/70 p-4 rounded-2xl border border-gray-100">
+                        <div className="my-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-50/70 p-4 rounded-lg border border-gray-100">
                           <div>
                             <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Rata-Rata Capaian</span>
                             <div className="flex items-baseline gap-2 mt-0.5">
                               <span className={cn(
                                 "text-3xl font-black tracking-tight",
                                 item.avgScore >= 90 ? "text-emerald-600" :
-                                item.avgScore >= 75 ? "text-blue-600" : "text-rose-600"
+                                  item.avgScore >= 75 ? "text-blue-600" : "text-rose-600"
                               )}>
                                 {item.avgScore}
                               </span>
@@ -1799,7 +1799,7 @@ export default function GradesPage() {
                         {/* Progress Bar with KKM line */}
                         <div className="space-y-1.5 mb-5">
                           <div className="relative w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                            <div 
+                            <div
                               className={cn(
                                 "h-2 rounded-full transition-all duration-500",
                                 item.isPassed ? "bg-emerald-500" : "bg-rose-500"
@@ -1816,42 +1816,42 @@ export default function GradesPage() {
 
                         {/* 6 Assessment Type Scores Matrix */}
                         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-2 pb-2">
-                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-blue-50/50 border border-blue-100">
+                          <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-blue-50/50 border border-blue-100">
                             <span className="text-[10px] font-bold text-blue-700">Tugas</span>
                             <span className="text-sm font-black text-gray-900 mt-0.5">
                               {item.tugas !== null ? item.tugas : "-"}
                             </span>
                           </div>
 
-                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-indigo-50/50 border border-indigo-100">
+                          <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-indigo-50/50 border border-indigo-100">
                             <span className="text-[10px] font-bold text-indigo-700">Kuis</span>
                             <span className="text-sm font-black text-gray-900 mt-0.5">
                               {item.kuis !== null ? item.kuis : "-"}
                             </span>
                           </div>
 
-                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-purple-50/50 border border-purple-100">
+                          <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-purple-50/50 border border-purple-100">
                             <span className="text-[10px] font-bold text-purple-700">UH</span>
                             <span className="text-sm font-black text-gray-900 mt-0.5">
                               {item.uh !== null ? item.uh : "-"}
                             </span>
                           </div>
 
-                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-amber-50/50 border border-amber-100">
+                          <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-amber-50/50 border border-amber-100">
                             <span className="text-[10px] font-bold text-amber-700">PTS</span>
                             <span className="text-sm font-black text-gray-900 mt-0.5">
                               {item.pts !== null ? item.pts : "-"}
                             </span>
                           </div>
 
-                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-orange-50/50 border border-orange-100">
+                          <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-orange-50/50 border border-orange-100">
                             <span className="text-[10px] font-bold text-orange-700">PAS</span>
                             <span className="text-sm font-black text-gray-900 mt-0.5">
                               {item.pas !== null ? item.pas : "-"}
                             </span>
                           </div>
 
-                          <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-rose-50/50 border border-rose-100">
+                          <div className="flex flex-col items-center justify-center p-2 rounded-lg bg-rose-50/50 border border-rose-100">
                             <span className="text-[10px] font-bold text-rose-700">Akhir</span>
                             <span className="text-sm font-black text-gray-900 mt-0.5">
                               {item.akhir !== null ? item.akhir : "-"}
@@ -1861,7 +1861,7 @@ export default function GradesPage() {
 
                         {/* Teacher Note Quote (if any) */}
                         {item.latestNote && (
-                          <div className="mt-3 p-3 rounded-2xl bg-purple-50/60 border border-purple-100 flex items-start gap-2.5">
+                          <div className="mt-3 p-3 rounded-lg bg-purple-50/60 border border-purple-100 flex items-start gap-2.5">
                             <MessageSquare className="w-4 h-4 text-[#531FFF] shrink-0 mt-0.5" />
                             <div>
                               <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">
@@ -1879,7 +1879,7 @@ export default function GradesPage() {
                       <div className="mt-4 pt-3 border-t border-gray-100">
                         <button
                           onClick={() => setExpandedSubjectCard(isExpanded ? null : item.subject)}
-                          className="w-full py-2 px-3 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold flex items-center justify-between transition-colors cursor-pointer"
+                          className="w-full py-2 px-3 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-bold flex items-center justify-between transition-colors cursor-pointer"
                         >
                           <span>Rincian Evaluasi ({item.totalItems} Komponen Dinilai)</span>
                           {isExpanded ? <ChevronUp className="w-4 h-4 text-[#531FFF]" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
@@ -1893,13 +1893,13 @@ export default function GradesPage() {
                               const isSubPassed = scoreNum >= item.kkm;
 
                               return (
-                                <div 
+                                <div
                                   key={g.id || idx}
-                                  className="p-3 bg-white rounded-xl border border-gray-200 flex items-center justify-between gap-2 hover:border-purple-300 transition-colors"
+                                  className="p-3 bg-white rounded-lg border border-gray-200 flex items-center justify-between gap-2 hover:border-purple-300 transition-colors"
                                 >
                                   <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-50 text-[#531FFF] border border-purple-100">
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-purple-50 text-[#531FFF] border border-purple-100">
                                         {g.type || "Tugas"}
                                       </span>
                                       <span className="text-xs font-bold text-gray-900 truncate">
@@ -1926,7 +1926,7 @@ export default function GradesPage() {
 
                                     <button
                                       onClick={() => setDetailModalGrade(g)}
-                                      className="p-1.5 rounded-lg bg-gray-50 hover:bg-purple-50 hover:text-[#531FFF] text-gray-400 border border-gray-200 transition-colors cursor-pointer"
+                                      className="p-1.5 rounded-md bg-gray-50 hover:bg-purple-50 hover:text-[#531FFF] text-gray-400 border border-gray-200 transition-colors cursor-pointer"
                                       title="Lihat detail nilai"
                                     >
                                       <Eye className="w-3.5 h-3.5" />
@@ -1950,9 +1950,9 @@ export default function GradesPage() {
         {/* ================= TAB CONTENT 2: RIWAYAT LENGKAP PENILAIAN ================= */}
         {studentTab === "allGrades" && (
           <div className="space-y-4">
-            
+
             {/* Filter Toolbar */}
-            <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3 no-print">
+            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3 no-print">
               <div className="relative w-full md:w-80">
                 <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
@@ -1960,7 +1960,7 @@ export default function GradesPage() {
                   placeholder="Cari mata pelajaran, materi, atau catatan..."
                   value={studentSearch}
                   onChange={(e) => setStudentSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-xs font-medium bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                  className="w-full pl-9 pr-3 py-2 text-xs font-medium bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
                 />
               </div>
 
@@ -1969,7 +1969,7 @@ export default function GradesPage() {
                 <select
                   value={studentSubjectFilter}
                   onChange={(e) => setStudentSubjectFilter(e.target.value)}
-                  className="px-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
+                  className="px-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
                 >
                   <option value="All">Semua Mata Pelajaran</option>
                   {studentAvailableSubjects.map(s => (
@@ -1981,7 +1981,7 @@ export default function GradesPage() {
                 <select
                   value={studentTypeFilter}
                   onChange={(e) => setStudentTypeFilter(e.target.value)}
-                  className="px-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
+                  className="px-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
                 >
                   <option value="Semua">Semua Komponen</option>
                   <option value="Tugas">Tugas</option>
@@ -1996,7 +1996,7 @@ export default function GradesPage() {
                 <select
                   value={studentStatusFilter}
                   onChange={(e) => setStudentStatusFilter(e.target.value)}
-                  className="px-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
+                  className="px-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
                 >
                   <option value="All">Semua Status</option>
                   <option value="Tuntas">Tuntas KKM</option>
@@ -2007,7 +2007,7 @@ export default function GradesPage() {
                 <select
                   value={studentSemesterFilter}
                   onChange={(e) => setStudentSemesterFilter(e.target.value)}
-                  className="px-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
+                  className="px-3 py-2 text-xs font-bold bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
                 >
                   <option value="All">Semua Semester</option>
                   <option value="Ganjil">Semester Ganjil</option>
@@ -2017,7 +2017,7 @@ export default function GradesPage() {
             </div>
 
             {/* Table of Grades */}
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden">
+            <div className="bg-white rounded-xl border border-gray-100 shadow-xs overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -2054,7 +2054,7 @@ export default function GradesPage() {
 
                             <td className="py-3.5 px-4">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-50 text-[#531FFF] border border-purple-100">
+                                <span className="px-2 py-0.5 rounded text-[10px] font-black bg-purple-50 text-[#531FFF] border border-purple-100">
                                   {grade.type || "Tugas"}
                                 </span>
                                 <span className="font-bold text-gray-800">
@@ -2065,9 +2065,9 @@ export default function GradesPage() {
 
                             <td className="py-3.5 px-4 text-center">
                               <span className={cn(
-                                "text-base font-black px-2.5 py-0.5 rounded-lg inline-block",
+                                "text-base font-black px-2.5 py-0.5 rounded-md inline-block",
                                 scoreVal >= 90 ? "bg-emerald-50 text-emerald-700" :
-                                scoreVal >= kkmVal ? "bg-blue-50 text-blue-700" : "bg-rose-50 text-rose-700"
+                                  scoreVal >= kkmVal ? "bg-blue-50 text-blue-700" : "bg-rose-50 text-rose-700"
                               )}>
                                 {grade.score}
                               </span>
@@ -2080,8 +2080,8 @@ export default function GradesPage() {
                             <td className="py-3.5 px-4 text-center">
                               <span className={cn(
                                 "px-2.5 py-0.5 rounded-full text-[10px] font-black inline-flex items-center gap-1",
-                                isTuntas 
-                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
+                                isTuntas
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                   : "bg-rose-50 text-rose-700 border border-rose-200"
                               )}>
                                 {isTuntas ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
@@ -2100,7 +2100,7 @@ export default function GradesPage() {
                             <td className="py-3.5 px-6 text-right no-print">
                               <button
                                 onClick={() => setDetailModalGrade(grade)}
-                                className="px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-purple-50 text-[#531FFF] border border-gray-200 text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer"
+                                className="px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-purple-50 text-[#531FFF] border border-gray-200 text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer"
                               >
                                 <Eye className="w-3.5 h-3.5" />
                                 <span>Detail</span>
@@ -2121,11 +2121,11 @@ export default function GradesPage() {
         {/* ================= DETAIL MODAL ================= */}
         {detailModalGrade && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200 no-print">
-            <div className="bg-white w-full max-w-md rounded-3xl border border-gray-100 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 p-6 space-y-5">
-              
+            <div className="bg-white w-full max-w-md rounded-xl border border-gray-100 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 p-6 space-y-5">
+
               <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold">
+                  <div className="w-8 h-8 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold">
                     <Award className="w-4 h-4" />
                   </div>
                   <div>
@@ -2135,17 +2135,17 @@ export default function GradesPage() {
                 </div>
                 <button
                   onClick={() => setDetailModalGrade(null)}
-                  className="p-1.5 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               <div className="space-y-4">
-                
+
                 {/* Subject & Component Header */}
-                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100">
                     {detailModalGrade.type || "Tugas"}
                   </span>
                   <h4 className="text-base font-black text-gray-900 mt-2">
@@ -2157,7 +2157,7 @@ export default function GradesPage() {
                 </div>
 
                 {/* Big Score Box */}
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-50/50 to-indigo-50/50 border border-purple-100/70 flex items-center justify-between">
+                <div className="p-4 rounded-lg bg-gradient-to-br from-purple-50/50 to-indigo-50/50 border border-purple-100/70 flex items-center justify-between">
                   <div>
                     <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Perolehan Nilai</span>
                     <div className="flex items-baseline gap-2 mt-1">
@@ -2173,7 +2173,7 @@ export default function GradesPage() {
 
                   <div className="text-right">
                     <span className={cn(
-                      "px-3 py-1 rounded-xl text-xs font-black inline-block",
+                      "px-3 py-1 rounded-lg text-xs font-black inline-block",
                       Number(detailModalGrade.score) >= (Number(detailModalGrade.kkm) || 75)
                         ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                         : "bg-rose-50 text-rose-700 border border-rose-200"
@@ -2188,18 +2188,18 @@ export default function GradesPage() {
 
                 {/* Details Table */}
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-100">
+                  <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
                     <span className="text-[10px] text-gray-400 font-bold block">Semester</span>
                     <span className="font-extrabold text-gray-800">{detailModalGrade.semester || "Ganjil"}</span>
                   </div>
-                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-100">
+                  <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
                     <span className="text-[10px] text-gray-400 font-bold block">Tahun Ajaran</span>
                     <span className="font-extrabold text-gray-800">{detailModalGrade.academicYear || "2025/2026"}</span>
                   </div>
                 </div>
 
                 {/* Teacher Feedback / Notes */}
-                <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-200 space-y-1">
+                <div className="p-3.5 rounded-lg bg-gray-50 border border-gray-200 space-y-1">
                   <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
                     <MessageSquare className="w-3.5 h-3.5 text-[#531FFF]" /> Catatan & Saran Guru Pengampu:
                   </span>
@@ -2213,7 +2213,7 @@ export default function GradesPage() {
               <div className="pt-2">
                 <button
                   onClick={() => setDetailModalGrade(null)}
-                  className="w-full py-2.5 bg-gray-900 hover:bg-black text-white rounded-2xl text-xs font-black transition-all cursor-pointer shadow-xs"
+                  className="w-full py-2.5 bg-gray-900 hover:bg-black text-white rounded-lg text-xs font-black transition-all cursor-pointer shadow-xs"
                 >
                   Tutup Rincian
                 </button>
@@ -2232,10 +2232,10 @@ export default function GradesPage() {
   // =========================================================================
   return (
     <div className="p-4 sm:p-8 pb-16 max-w-[1600px] mx-auto w-full flex flex-col space-y-6 animate-in fade-in duration-200">
-      
+
       {/* ================= CRUD DRAWER / SHEET ================= */}
-      <CrudSheet 
-        open={crudState.open} 
+      <CrudSheet
+        open={crudState.open}
         onOpenChange={(open) => {
           setCrudState(s => ({ ...s, open }));
           if (!open) setCurrentFormData({});
@@ -2250,10 +2250,10 @@ export default function GradesPage() {
       />
 
       {/* ================= HEADER SECTION ================= */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/40 p-6 rounded-3xl border border-purple-100/60 shadow-2xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/40 p-6 rounded-xl border border-purple-100/60 shadow-2xs">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-[#531FFF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/25">
+            <div className="w-10 h-10 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/25">
               <Award className="w-5 h-5" />
             </div>
             <div>
@@ -2268,18 +2268,18 @@ export default function GradesPage() {
                 ) : isGuru ? (
                   <span className={cn(
                     "px-2.5 py-0.5 text-xs font-bold rounded-full border flex items-center gap-1.5",
-                    hasAnyGradingAccess 
-                      ? "bg-purple-50 text-[#531FFF] border-purple-200" 
+                    hasAnyGradingAccess
+                      ? "bg-purple-50 text-[#531FFF] border-purple-200"
                       : "bg-amber-50 text-amber-700 border-amber-200"
                   )}>
                     <GraduationCap className="w-3.5 h-3.5" />
                     {isTeacherWaliKelas && taughtSubjectClassPairs.length > 0
                       ? `Wali Kelas (${homeroomClasses.join(", ")}) & Guru Mapel`
                       : isTeacherWaliKelas
-                      ? `Wali Kelas: ${homeroomClasses.join(", ")}`
-                      : taughtSubjectClassPairs.length > 0
-                      ? `Guru Mapel: ${Array.from(new Set(taughtSubjectClassPairs.map(p => p.subject))).join(", ")}`
-                      : "Guru (Belum Ada Penugasan)"}
+                        ? `Wali Kelas: ${homeroomClasses.join(", ")}`
+                        : taughtSubjectClassPairs.length > 0
+                          ? `Guru Mapel: ${Array.from(new Set(taughtSubjectClassPairs.map(p => p.subject))).join(", ")}`
+                          : "Guru (Belum Ada Penugasan)"}
                   </span>
                 ) : (
                   <span className="px-2.5 py-0.5 text-xs font-bold bg-purple-50 text-[#531FFF] rounded-full border border-purple-200">
@@ -2291,8 +2291,8 @@ export default function GradesPage() {
                 {isStudentRole
                   ? "Lihat riwayat capaian hasil belajar, nilai ujian, dan progres KKM Anda."
                   : isGuru
-                  ? "Penginputan dan pengelolaan nilai untuk kelas dan mata pelajaran yang menjadi tanggung jawab Anda."
-                  : "Input seluruh atau sebagian nilai siswa (Tugas, Kuis, UH, PTS, PAS, Asesmen Akhir) dalam satu tampilan spreadsheet yang fleksibel."}
+                    ? "Penginputan dan pengelolaan nilai untuk kelas dan mata pelajaran yang menjadi tanggung jawab Anda."
+                    : "Input seluruh atau sebagian nilai siswa (Tugas, Kuis, UH, PTS, PAS, Asesmen Akhir) dalam satu tampilan spreadsheet yang fleksibel."}
               </p>
             </div>
           </div>
@@ -2308,7 +2308,7 @@ export default function GradesPage() {
                 onClick={handleSaveMatrix}
                 disabled={isSavingMatrix || (isGuru && (!hasAnyGradingAccess || !isTeacherAuthorizedFor(matrixClassId, matrixSubject)))}
                 className={cn(
-                  "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-[13px] font-extrabold shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
+                  "flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs sm:text-[13px] font-extrabold shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
                   hasUnsavedChanges
                     ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-500/25 ring-2 ring-emerald-400/50 animate-pulse"
                     : "bg-[#531FFF] hover:bg-[#4314cc] text-white shadow-[#531FFF]/25"
@@ -2329,11 +2329,11 @@ export default function GradesPage() {
             )}
 
             {/* Single Entry Button */}
-            <button 
+            <button
               type="button"
               disabled={isGuru && !hasAnyGradingAccess}
-              onClick={() => setCrudState({ 
-                open: true, 
+              onClick={() => setCrudState({
+                open: true,
                 mode: "create",
                 data: {
                   kkm: schoolGrading?.kkmScore || 75,
@@ -2344,7 +2344,7 @@ export default function GradesPage() {
                   subject: matrixSubject || (matrixClassId ? getAuthorizedSubjectsForClass(matrixClassId)[0] : "") || ""
                 }
               })}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-[13px] font-bold shadow-2xs transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 rounded-lg text-xs sm:text-[13px] font-bold shadow-2xs transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4" />
               <span>Entri Nilai Tunggal</span>
@@ -2355,7 +2355,7 @@ export default function GradesPage() {
 
       {/* Warning Notice for Guru who has no assigned classes or subjects */}
       {isGuru && !hasAnyGradingAccess && !loading && (
-        <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 flex items-start gap-3.5 shadow-2xs">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-start gap-3.5 shadow-2xs">
           <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
           <div className="text-xs text-amber-800 space-y-1">
             <p className="font-extrabold text-sm text-amber-900">Akses Terbatas: Belum Ditugaskan Kelas atau Mata Pelajaran</p>
@@ -2367,15 +2367,15 @@ export default function GradesPage() {
       )}
 
       {/* ================= VIEW MODE SELECTOR BAR ================= */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-2.5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 p-1 bg-gray-100/90 rounded-xl overflow-x-auto w-full sm:w-auto">
+      <div className="bg-white border border-gray-100 rounded-lg p-2.5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 p-1 bg-gray-100/90 rounded-lg overflow-x-auto w-full sm:w-auto">
           {/* TAB 1: SPREADSHEET MATRIX (Default) */}
           {!isStudentRole && (
             <button
               type="button"
               onClick={() => setViewMode("matrix")}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer",
+                "flex items-center gap-2 px-4 py-2 rounded-md text-xs font-extrabold transition-all cursor-pointer",
                 viewMode === "matrix"
                   ? "bg-white text-[#531FFF] shadow-xs"
                   : "text-gray-500 hover:text-gray-900"
@@ -2394,7 +2394,7 @@ export default function GradesPage() {
             type="button"
             onClick={() => setViewMode("table")}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer",
+              "flex items-center gap-2 px-4 py-2 rounded-md text-xs font-extrabold transition-all cursor-pointer",
               viewMode === "table"
                 ? "bg-white text-[#531FFF] shadow-xs"
                 : "text-gray-500 hover:text-gray-900"
@@ -2413,7 +2413,7 @@ export default function GradesPage() {
               type="button"
               onClick={() => setViewMode("gradebook")}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer",
+                "flex items-center gap-2 px-4 py-2 rounded-md text-xs font-extrabold transition-all cursor-pointer",
                 viewMode === "gradebook"
                   ? "bg-white text-[#531FFF] shadow-xs"
                   : "text-gray-500 hover:text-gray-900"
@@ -2427,7 +2427,7 @@ export default function GradesPage() {
 
         {/* Unsaved notification indicator */}
         {viewMode === "matrix" && hasUnsavedChanges && (
-          <div className="flex items-center gap-2 text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 animate-pulse">
+          <div className="flex items-center gap-2 text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200 animate-pulse">
             <AlertCircle className="w-3.5 h-3.5" />
             <span>Ada nilai yang belum disimpan! Klik tombol simpan di atas.</span>
           </div>
@@ -2439,9 +2439,9 @@ export default function GradesPage() {
       {/* ========================================================================= */}
       {viewMode === "matrix" && !isStudentRole && (
         <div className="space-y-4 animate-in fade-in duration-200">
-          
+
           {/* Configuration Toolbar for Matrix Input */}
-          <div className="bg-white border border-gray-100 rounded-3xl p-5 shadow-2xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end">
+          <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-2xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end">
             {/* 1. Pilih Kelas */}
             <div className="space-y-1.5">
               <label className="text-[11px] font-black uppercase tracking-wider text-gray-500">Pilih Kelas</label>
@@ -2449,7 +2449,7 @@ export default function GradesPage() {
                 value={matrixClassId}
                 onChange={(e) => setMatrixClassId(e.target.value)}
                 disabled={isGuru && availableClassOptions.length <= 1}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 {availableClassOptions.length === 0 ? (
                   <option value="">(Belum Ada Kelas Ditugaskan)</option>
@@ -2467,7 +2467,7 @@ export default function GradesPage() {
               <select
                 value={matrixSubject}
                 onChange={(e) => setMatrixSubject(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
               >
                 {availableSubjectOptions.map(s => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -2481,7 +2481,7 @@ export default function GradesPage() {
               <select
                 value={matrixSemester}
                 onChange={(e) => setMatrixSemester(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
               >
                 <option value="Ganjil">Semester Ganjil</option>
                 <option value="Genap">Semester Genap</option>
@@ -2494,7 +2494,7 @@ export default function GradesPage() {
               <select
                 value={matrixAcademicYear}
                 onChange={(e) => setMatrixAcademicYear(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
               >
                 <option value="2025/2026">2025/2026</option>
                 <option value="2026/2027">2026/2027</option>
@@ -2521,9 +2521,9 @@ export default function GradesPage() {
                   onChange={(e) => isSuperAdmin && setMatrixKkm(Number(e.target.value))}
                   title={!isSuperAdmin ? "Nilai KKM ditentukan oleh Super Admin pada kurikulum mata pelajaran" : "Ubah KKM"}
                   className={cn(
-                    "w-full px-3.5 py-2.5 rounded-xl text-xs font-black transition-all",
-                    !isSuperAdmin 
-                      ? "bg-gray-100/90 border border-gray-200 text-gray-500 cursor-not-allowed select-none pl-8" 
+                    "w-full px-3.5 py-2.5 rounded-lg text-xs font-black transition-all",
+                    !isSuperAdmin
+                      ? "bg-gray-100/90 border border-gray-200 text-gray-500 cursor-not-allowed select-none pl-8"
                       : "bg-gray-50 border border-gray-200 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                   )}
                 />
@@ -2537,16 +2537,16 @@ export default function GradesPage() {
             {isGuru && matrixClassId && matrixSubject && (
               <div className="sm:col-span-2 lg:col-span-5 pt-1">
                 {isTeacherAuthorizedFor(matrixClassId, matrixSubject) ? (
-                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 bg-emerald-50/80 border border-emerald-200/80 px-3.5 py-2 rounded-xl shadow-2xs">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 bg-emerald-50/80 border border-emerald-200/80 px-3.5 py-2 rounded-lg shadow-2xs">
                     <BadgeCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                     <span>
-                      Wewenang Terverifikasi: {homeroomClasses.some(hc => hc.toLowerCase() === matrixClassId.toLowerCase()) 
-                        ? `Wali Kelas ${matrixClassId} (Akses Penuh Penilaian)` 
+                      Wewenang Terverifikasi: {homeroomClasses.some(hc => hc.toLowerCase() === matrixClassId.toLowerCase())
+                        ? `Wali Kelas ${matrixClassId} (Akses Penuh Penilaian)`
                         : `Guru Pengampu Mata Pelajaran ${matrixSubject} di Kelas ${matrixClassId}`}
                     </span>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 text-xs font-bold text-rose-800 bg-rose-50/80 border border-rose-200/80 px-3.5 py-2 rounded-xl shadow-2xs">
+                  <div className="flex items-center gap-2 text-xs font-bold text-rose-800 bg-rose-50/80 border border-rose-200/80 px-3.5 py-2 rounded-lg shadow-2xs">
                     <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                     <span>
                       Akses Terbatas: Anda tidak ditugaskan mengampu mata pelajaran {matrixSubject} di kelas {matrixClassId}.
@@ -2558,25 +2558,25 @@ export default function GradesPage() {
           </div>
 
           {/* Bobot Penilaian & KKM Info Bar (Ditetapkan Super Admin) */}
-          <div className="bg-gradient-to-r from-purple-50/70 via-indigo-50/40 to-white border border-purple-100/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs shadow-2xs">
+          <div className="bg-gradient-to-r from-purple-50/70 via-indigo-50/40 to-white border border-purple-100/80 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3 text-xs shadow-2xs">
             <div className="flex items-center gap-2 text-purple-950 font-bold">
               <ShieldCheck className="w-4 h-4 text-[#531FFF]" />
               <span>Standar KKM & Bobot Penilaian Resmi (Ditetapkan Super Admin):</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-3 py-1.5 bg-white border border-purple-200 rounded-xl text-[11px] font-extrabold text-[#531FFF] shadow-2xs flex items-center gap-1.5">
+              <span className="px-3 py-1.5 bg-white border border-purple-200 rounded-lg text-[11px] font-extrabold text-[#531FFF] shadow-2xs flex items-center gap-1.5">
                 <span className="text-gray-400 font-semibold">KKM:</span>
                 <span className="font-black text-xs">{matrixKkm}</span>
               </span>
-              <span className="px-3 py-1.5 bg-white border border-purple-200 rounded-xl text-[11px] font-semibold text-gray-700 shadow-2xs flex items-center gap-1.5">
+              <span className="px-3 py-1.5 bg-white border border-purple-200 rounded-lg text-[11px] font-semibold text-gray-700 shadow-2xs flex items-center gap-1.5">
                 <span className="text-gray-400">Tugas / Harian:</span>
                 <strong className="text-gray-900 font-black">{schoolGrading.assignmentWeight}%</strong>
               </span>
-              <span className="px-3 py-1.5 bg-white border border-purple-200 rounded-xl text-[11px] font-semibold text-gray-700 shadow-2xs flex items-center gap-1.5">
+              <span className="px-3 py-1.5 bg-white border border-purple-200 rounded-lg text-[11px] font-semibold text-gray-700 shadow-2xs flex items-center gap-1.5">
                 <span className="text-gray-400">PTS (Tengah Semester):</span>
                 <strong className="text-gray-900 font-black">{schoolGrading.midtermWeight}%</strong>
               </span>
-              <span className="px-3 py-1.5 bg-white border border-purple-200 rounded-xl text-[11px] font-semibold text-gray-700 shadow-2xs flex items-center gap-1.5">
+              <span className="px-3 py-1.5 bg-white border border-purple-200 rounded-lg text-[11px] font-semibold text-gray-700 shadow-2xs flex items-center gap-1.5">
                 <span className="text-gray-400">PAS (Akhir Semester):</span>
                 <strong className="text-gray-900 font-black">{schoolGrading.finalWeight}%</strong>
               </span>
@@ -2584,7 +2584,7 @@ export default function GradesPage() {
           </div>
 
           {/* Matrix Spreadsheet Table */}
-          <div className="bg-white border border-gray-100 rounded-3xl shadow-2xs overflow-hidden">
+          <div className="bg-white border border-gray-100 rounded-xl shadow-2xs overflow-hidden">
             {/* Table Header Bar */}
             <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
@@ -2599,14 +2599,14 @@ export default function GradesPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-xl">
+                <span className="text-xs font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-lg">
                   {matrixStudents.length} Siswa Terdaftar
                 </span>
                 <button
                   type="button"
                   onClick={handleSaveMatrix}
                   disabled={isSavingMatrix}
-                  className="px-4 py-2 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-xs font-bold shadow-md shadow-[#531FFF]/25 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg text-xs font-bold shadow-md shadow-[#531FFF]/25 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
                   title="Simpan perubahan nilai yang telah diisi"
                 >
                   {isSavingMatrix ? (
@@ -2626,7 +2626,7 @@ export default function GradesPage() {
                   <tr className="bg-white border-b border-gray-100 text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
                     <th className="py-3 px-4 w-12 text-center">No.</th>
                     <th className="py-3 px-5 min-w-[200px]">Nama Siswa &amp; NISN</th>
-                    
+
                     {/* 6 Assessment Type Headers with Quick Fill Options */}
                     {ASSESSMENT_TYPES.map((type) => (
                       <th key={type.key} className="py-3 px-3 min-w-[110px] text-center">
@@ -2668,7 +2668,7 @@ export default function GradesPage() {
                   {matrixStudents.length === 0 ? (
                     <tr>
                       <td colSpan={11} className="py-16 text-center text-gray-400">
-                        <div className="w-12 h-12 rounded-2xl bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto mb-3">
+                        <div className="w-12 h-12 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto mb-3">
                           <Users className="w-6 h-6" />
                         </div>
                         <p className="font-bold text-gray-800 text-sm">Tidak ada siswa terdaftar di kelas {matrixClassId}</p>
@@ -2682,7 +2682,7 @@ export default function GradesPage() {
                                 key={opt.value}
                                 type="button"
                                 onClick={() => setMatrixClassId(opt.value)}
-                                className="px-3.5 py-1.5 bg-[#531FFF]/10 hover:bg-[#531FFF]/20 text-[#531FFF] font-extrabold text-xs rounded-xl transition-all cursor-pointer shadow-2xs"
+                                className="px-3.5 py-1.5 bg-[#531FFF]/10 hover:bg-[#531FFF]/20 text-[#531FFF] font-extrabold text-xs rounded-lg transition-all cursor-pointer shadow-2xs"
                               >
                                 Buka Kelas {opt.label}
                               </button>
@@ -2707,7 +2707,7 @@ export default function GradesPage() {
                         .map(val => val !== undefined && val !== "" ? Number(val) : null)
                         .filter(v => v !== null && !isNaN(v)) as number[];
 
-                      const avgScore = numericScores.length > 0 
+                      const avgScore = numericScores.length > 0
                         ? Math.round(numericScores.reduce((a, b) => a + b, 0) / numericScores.length)
                         : null;
 
@@ -2723,7 +2723,7 @@ export default function GradesPage() {
                           {/* Student Name */}
                           <td className="py-3 px-5">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-lg bg-[#531FFF]/10 text-[#531FFF] font-black text-xs flex items-center justify-center shrink-0">
+                              <div className="w-7 h-7 rounded-md bg-[#531FFF]/10 text-[#531FFF] font-black text-xs flex items-center justify-center shrink-0">
                                 {(student.fullName || student.name || "S").charAt(0)}
                               </div>
                               <div className="truncate">
@@ -2752,7 +2752,7 @@ export default function GradesPage() {
                                   value={val}
                                   onChange={(e) => handleCellChange(student.id, type.key, e.target.value)}
                                   className={cn(
-                                    "w-16 sm:w-20 px-2 py-1.5 rounded-xl border text-center font-black text-xs transition-all focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:bg-white",
+                                    "w-16 sm:w-20 px-2 py-1.5 rounded-lg border text-center font-black text-xs transition-all focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:bg-white",
                                     numVal === null
                                       ? "bg-gray-50/80 border-gray-200 text-gray-400"
                                       : numVal >= matrixKkm
@@ -2770,8 +2770,8 @@ export default function GradesPage() {
                               <span className={cn(
                                 "font-black text-sm",
                                 avgScore >= 80 ? "text-emerald-600" :
-                                avgScore >= matrixKkm ? "text-blue-600" :
-                                "text-rose-600"
+                                  avgScore >= matrixKkm ? "text-blue-600" :
+                                    "text-rose-600"
                               )}>
                                 {avgScore}
                               </span>
@@ -2785,8 +2785,8 @@ export default function GradesPage() {
                             {isPassed !== null ? (
                               <span className={cn(
                                 "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border",
-                                isPassed 
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                                isPassed
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                   : "bg-rose-50 text-rose-700 border-rose-200"
                               )}>
                                 {isPassed ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
@@ -2804,7 +2804,7 @@ export default function GradesPage() {
                               placeholder="Catatan..."
                               value={rowData.notes || ""}
                               onChange={(e) => handleCellChange(student.id, "notes", e.target.value)}
-                              className="w-full px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-[#531FFF]"
+                              className="w-full px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-md text-xs text-gray-700 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-[#531FFF]"
                             />
                           </td>
                         </tr>
@@ -2827,7 +2827,7 @@ export default function GradesPage() {
                   type="button"
                   onClick={handleSaveMatrix}
                   disabled={isSavingMatrix}
-                  className="px-6 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-[#531FFF]/25 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="px-6 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg text-xs sm:text-sm font-bold shadow-md shadow-[#531FFF]/25 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {isSavingMatrix ? (
                     <>
@@ -2852,15 +2852,15 @@ export default function GradesPage() {
       {/* ========================================================================= */}
       {viewMode === "table" && (
         <div className="space-y-4 animate-in fade-in duration-200">
-          
+
           {/* Assessment Type Selector Filter Bar */}
-          <div className="bg-white border border-gray-100 rounded-2xl p-3 shadow-2xs space-y-2">
+          <div className="bg-white border border-gray-100 rounded-lg p-3 shadow-2xs space-y-2">
             <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
               <button
                 type="button"
                 onClick={() => setSelectedType("Semua")}
                 className={cn(
-                  "px-3 py-1.5 rounded-xl text-xs font-extrabold shrink-0 transition-all border cursor-pointer",
+                  "px-3 py-1.5 rounded-lg text-xs font-extrabold shrink-0 transition-all border cursor-pointer",
                   selectedType === "Semua"
                     ? "bg-[#531FFF] text-white border-[#531FFF] shadow-xs"
                     : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
@@ -2886,7 +2886,7 @@ export default function GradesPage() {
                     type="button"
                     onClick={() => setSelectedType(type.id)}
                     className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all border cursor-pointer",
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 transition-all border cursor-pointer",
                       isActive
                         ? "bg-[#531FFF] text-white border-[#531FFF] shadow-xs"
                         : "bg-white text-gray-700 border-gray-200 hover:bg-purple-50/50"
@@ -2894,7 +2894,7 @@ export default function GradesPage() {
                   >
                     <span>{type.label}</span>
                     <span className={cn(
-                      "px-1.5 py-0.2 rounded-md text-[10px] font-extrabold",
+                      "px-1.5 py-0.2 rounded text-[10px] font-extrabold",
                       isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"
                     )}>
                       {count}
@@ -2906,19 +2906,19 @@ export default function GradesPage() {
           </div>
 
           {/* Filter Toolbar */}
-          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-2xs flex flex-col lg:flex-row items-center justify-between gap-4">
+          <div className="bg-white border border-gray-100 rounded-lg p-4 shadow-2xs flex flex-col lg:flex-row items-center justify-between gap-4">
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                <input 
+                <input
                   type="text"
                   placeholder="Cari nama siswa, mapel, materi..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                  className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
                 />
                 {searchQuery && (
-                  <button 
+                  <button
                     onClick={() => setSearchQuery("")}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
                   >
@@ -2933,7 +2933,7 @@ export default function GradesPage() {
                     value={selectedClass}
                     onChange={(e) => setSelectedClass(e.target.value)}
                     disabled={isGuru && availableClassOptions.length <= 1}
-                    className="w-full sm:w-auto px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     {!isGuru && <option value="All">Semua Kelas</option>}
                     {isGuru && authorizedClasses && authorizedClasses.length > 1 && (
@@ -2947,7 +2947,7 @@ export default function GradesPage() {
                   <select
                     value={selectedSubject}
                     onChange={(e) => setSelectedSubject(e.target.value)}
-                    className="w-full sm:w-auto px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer"
+                    className="w-full sm:w-auto px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer"
                   >
                     <option value="All">Semua Mata Pelajaran</option>
                     {availableSubjectOptionsForFilter.map(s => (
@@ -2960,7 +2960,7 @@ export default function GradesPage() {
               <select
                 value={selectedKkmStatus}
                 onChange={(e) => setSelectedKkmStatus(e.target.value)}
-                className="w-full sm:w-auto px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer"
+                className="w-full sm:w-auto px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer"
               >
                 <option value="All">Semua Status KKM</option>
                 <option value="Lulus">Lulus KKM (&gt;= 75)</option>
@@ -2970,7 +2970,7 @@ export default function GradesPage() {
           </div>
 
           {/* Table Content */}
-          <div className="bg-white border border-gray-100 rounded-3xl shadow-2xs overflow-hidden">
+          <div className="bg-white border border-gray-100 rounded-xl shadow-2xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -2998,7 +2998,7 @@ export default function GradesPage() {
                         {/* Siswa */}
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-black text-xs shrink-0">
+                            <div className="w-9 h-9 rounded-lg bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-black text-xs shrink-0">
                               {(studentDisplayName || "S").charAt(0).toUpperCase()}
                             </div>
                             <div>
@@ -3027,13 +3027,13 @@ export default function GradesPage() {
                         <td className="py-4 px-6">
                           <div className="flex flex-col gap-1 items-start">
                             <span className={cn(
-                              "px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold border shadow-2xs",
+                              "px-2.5 py-0.5 rounded-md text-[10px] font-extrabold border shadow-2xs",
                               grade.type === "Tugas" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                              grade.type === "Kuis" ? "bg-indigo-50 text-indigo-700 border-indigo-200" :
-                              grade.type?.includes("Ulangan") ? "bg-purple-50 text-purple-700 border-purple-200" :
-                              grade.type?.includes("PTS") || grade.type === "UTS" ? "bg-amber-50 text-amber-700 border-amber-200" :
-                              grade.type?.includes("PAS") || grade.type === "UAS" ? "bg-orange-50 text-orange-700 border-orange-200" :
-                              "bg-rose-50 text-rose-700 border-rose-200"
+                                grade.type === "Kuis" ? "bg-indigo-50 text-indigo-700 border-indigo-200" :
+                                  grade.type?.includes("Ulangan") ? "bg-purple-50 text-purple-700 border-purple-200" :
+                                    grade.type?.includes("PTS") || grade.type === "UTS" ? "bg-amber-50 text-amber-700 border-amber-200" :
+                                      grade.type?.includes("PAS") || grade.type === "UAS" ? "bg-orange-50 text-orange-700 border-orange-200" :
+                                        "bg-rose-50 text-rose-700 border-rose-200"
                             )}>
                               {grade.type}
                             </span>
@@ -3050,7 +3050,7 @@ export default function GradesPage() {
                           <span className={cn(
                             "text-lg font-black",
                             score >= 90 ? "text-emerald-600" :
-                            score >= 75 ? "text-blue-600" : "text-rose-600"
+                              score >= 75 ? "text-blue-600" : "text-rose-600"
                           )}>
                             {score}
                           </span>
@@ -3060,8 +3060,8 @@ export default function GradesPage() {
                         <td className="py-4 px-6 text-center">
                           <span className={cn(
                             "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border",
-                            isPassed 
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                            isPassed
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                               : "bg-rose-50 text-rose-700 border-rose-200"
                           )}>
                             {isPassed ? <CheckCircle2 className="w-3 h-3 text-emerald-600" /> : <AlertCircle className="w-3 h-3 text-rose-600" />}
@@ -3081,7 +3081,7 @@ export default function GradesPage() {
                             <button
                               type="button"
                               onClick={() => setCrudState({ open: true, mode: "view", data: grade })}
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-md text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
                               title="Lihat Detail Nilai"
                             >
                               <Eye className="w-4 h-4" />
@@ -3090,12 +3090,12 @@ export default function GradesPage() {
                               <>
                                 <button
                                   type="button"
-                                  onClick={() => setCrudState({ 
-                                    open: true, 
-                                    mode: "edit", 
-                                    data: { ...grade, classId: className || "" } 
+                                  onClick={() => setCrudState({
+                                    open: true,
+                                    mode: "edit",
+                                    data: { ...grade, classId: className || "" }
                                   })}
-                                  className="p-1.5 rounded-lg text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
+                                  className="p-1.5 rounded-md text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
                                   title="Edit Nilai"
                                 >
                                   <PenTool className="w-4 h-4" />
@@ -3103,7 +3103,7 @@ export default function GradesPage() {
                                 <button
                                   type="button"
                                   onClick={() => setCrudState({ open: true, mode: "delete", data: grade })}
-                                  className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                  className="p-1.5 rounded-md text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                                   title="Hapus Nilai"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -3126,7 +3126,7 @@ export default function GradesPage() {
       {/* ============ MODE 3: GRADEBOOK REKAP MATRIX (REKAP RAPOR) =============== */}
       {/* ========================================================================= */}
       {viewMode === "gradebook" && !isStudentRole && (
-        <div className="bg-white border border-gray-100 rounded-3xl shadow-2xs overflow-hidden animate-in fade-in duration-200">
+        <div className="bg-white border border-gray-100 rounded-xl shadow-2xs overflow-hidden animate-in fade-in duration-200">
           <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-[#531FFF]" />
@@ -3134,13 +3134,13 @@ export default function GradesPage() {
                 Rekap Transkrip Nilai Siswa per Rombel (6 Asesmen Lengkap)
               </h3>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <select
                 value={selectedClass}
                 onChange={(e) => setSelectedClass(e.target.value)}
                 disabled={isGuru && availableClassOptions.length <= 1}
-                className="px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 disabled:bg-gray-100 disabled:cursor-not-allowed cursor-pointer"
+                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-700 disabled:bg-gray-100 disabled:cursor-not-allowed cursor-pointer"
               >
                 {!isGuru && <option value="All">Semua Kelas</option>}
                 {isGuru && authorizedClasses && authorizedClasses.length > 1 && (
@@ -3160,16 +3160,16 @@ export default function GradesPage() {
               <span>Rumus Nilai Rapor Akhir Ditetapkan Super Admin:</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2.5 py-1 bg-white border border-purple-200 rounded-lg text-[11px] font-semibold text-gray-700 shadow-2xs">
+              <span className="px-2.5 py-1 bg-white border border-purple-200 rounded-md text-[11px] font-semibold text-gray-700 shadow-2xs">
                 Harian (Tugas/Kuis/UH): <strong className="text-gray-900 font-black">{schoolGrading.assignmentWeight}%</strong>
               </span>
-              <span className="px-2.5 py-1 bg-white border border-purple-200 rounded-lg text-[11px] font-semibold text-gray-700 shadow-2xs">
+              <span className="px-2.5 py-1 bg-white border border-purple-200 rounded-md text-[11px] font-semibold text-gray-700 shadow-2xs">
                 PTS (Tengah Semester): <strong className="text-gray-900 font-black">{schoolGrading.midtermWeight}%</strong>
               </span>
-              <span className="px-2.5 py-1 bg-white border border-purple-200 rounded-lg text-[11px] font-semibold text-gray-700 shadow-2xs">
+              <span className="px-2.5 py-1 bg-white border border-purple-200 rounded-md text-[11px] font-semibold text-gray-700 shadow-2xs">
                 PAS / Akhir: <strong className="text-gray-900 font-black">{schoolGrading.finalWeight}%</strong>
               </span>
-              <span className="px-2.5 py-1 bg-white border border-purple-200 rounded-lg text-[11px] font-extrabold text-[#531FFF] shadow-2xs">
+              <span className="px-2.5 py-1 bg-white border border-purple-200 rounded-md text-[11px] font-extrabold text-[#531FFF] shadow-2xs">
                 Standar KKM: {schoolGrading.kkmScore}
               </span>
             </div>
@@ -3228,10 +3228,10 @@ export default function GradesPage() {
                       <td className="py-4 px-6 text-center">
                         {finalScore !== null ? (
                           <span className={cn(
-                            "px-3 py-1 rounded-xl text-xs font-black inline-block",
+                            "px-3 py-1 rounded-lg text-xs font-black inline-block",
                             finalScore >= 80 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
-                            finalScore >= 75 ? "bg-blue-50 text-blue-700 border border-blue-200" :
-                            "bg-rose-50 text-rose-700 border border-rose-200"
+                              finalScore >= 75 ? "bg-blue-50 text-blue-700 border border-blue-200" :
+                                "bg-rose-50 text-rose-700 border border-rose-200"
                           )}>
                             {finalScore}
                           </span>

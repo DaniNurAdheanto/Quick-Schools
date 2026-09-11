@@ -352,7 +352,7 @@ export default function CalendarPage() {
             {/* Top Date Header */}
             <div className="flex items-center justify-between">
               <span className={cn(
-                "w-7 h-7 flex items-center justify-center rounded-xl text-xs font-extrabold transition-all",
+                "w-7 h-7 flex items-center justify-center rounded-lg text-xs font-extrabold transition-all",
                 isToday 
                   ? "bg-[#531FFF] text-white shadow-md shadow-[#531FFF]/20" 
                   : !isCurrentMonth 
@@ -368,7 +368,7 @@ export default function CalendarPage() {
                     e.stopPropagation();
                     handleOpenAdd(dateStr);
                   }}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-[#531FFF] hover:bg-white rounded-md transition-all shadow-xs"
+                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-[#531FFF] hover:bg-white rounded transition-all shadow-xs"
                   title="Tambah Agenda Hari Ini"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -390,7 +390,7 @@ export default function CalendarPage() {
                       }
                     }}
                     className={cn(
-                      "text-[10px] font-extrabold px-2 py-1 rounded-lg truncate transition-all flex items-center gap-1.5 border shadow-2xs hover:scale-[1.02]",
+                      "text-[10px] font-extrabold px-2 py-1 rounded-md truncate transition-all flex items-center gap-1.5 border shadow-2xs hover:scale-[1.02]",
                       meta.color
                     )}
                     title={`${event.title} (${event.location || ""})`}
@@ -402,7 +402,7 @@ export default function CalendarPage() {
               })}
 
               {dayEvents.length > 3 && (
-                <span className="text-[9px] font-extrabold text-[#531FFF] bg-[#531FFF]/10 px-1.5 py-0.5 rounded-md inline-block">
+                <span className="text-[9px] font-extrabold text-[#531FFF] bg-[#531FFF]/10 px-1.5 py-0.5 rounded inline-block">
                   +{dayEvents.length - 3} agenda lainnya
                 </span>
               )}
@@ -437,7 +437,7 @@ export default function CalendarPage() {
       )}
 
       {/* Header Bar */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 bg-white p-5 md:p-6 rounded-2xl border border-gray-100 shadow-xs">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 bg-white p-5 md:p-6 rounded-lg border border-gray-100 shadow-xs">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Kalender Akademik</h1>
@@ -454,7 +454,7 @@ export default function CalendarPage() {
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
           <button
             onClick={() => setIsPrintModalOpen(true)}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-[0.98] cursor-pointer"
+            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-lg text-xs font-bold shadow-xs transition-all active:scale-[0.98] cursor-pointer"
           >
             <Printer className="w-4 h-4" />
             <span>Cetak Kalender (PDF)</span>
@@ -463,7 +463,7 @@ export default function CalendarPage() {
           {!isStudent && (
             <button
               onClick={() => handleOpenAdd()}
-              className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Tambah Agenda Baru</span>
@@ -476,7 +476,7 @@ export default function CalendarPage() {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-6">
         
         {/* Academic Year Progress Box (5 cols) */}
-        <div className="xl:col-span-5 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
+        <div className="xl:col-span-5 bg-white p-5 rounded-lg border border-gray-100 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-extrabold text-sm text-gray-900">Progress Tahun Ajaran {academicYearText}</h3>
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -511,11 +511,11 @@ export default function CalendarPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-3 flex-1 text-xs">
-              <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+              <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
                 <span className="text-[10px] font-bold text-gray-400 uppercase block">Hari Berjalan</span>
                 <p className="font-extrabold text-sm text-gray-900 mt-0.5">{passedDays} Hari</p>
               </div>
-              <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+              <div className="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
                 <span className="text-[10px] font-bold text-gray-400 uppercase block">Sisa Hari</span>
                 <p className="font-extrabold text-sm text-gray-900 mt-0.5">{totalDays - passedDays} Hari</p>
               </div>
@@ -527,7 +527,7 @@ export default function CalendarPage() {
         </div>
 
         {/* Category Filters Bar (7 cols) */}
-        <div className="xl:col-span-7 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
+        <div className="xl:col-span-7 bg-white p-5 rounded-lg border border-gray-100 shadow-xs flex flex-col justify-between">
           <div>
             <h3 className="font-extrabold text-sm text-gray-900 mb-1">Filter & Legenda Kategori Agenda</h3>
             <p className="text-xs text-gray-400 mb-4">Klik kategori untuk memfilter agenda yang tampil pada kalender</p>
@@ -541,7 +541,7 @@ export default function CalendarPage() {
                   key={cat.id}
                   onClick={() => setSelectedCategory(cat.id)}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all border",
+                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all border",
                     isSelected 
                       ? "bg-[#531FFF] text-white border-[#531FFF] shadow-md shadow-[#531FFF]/20 scale-105" 
                       : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
@@ -562,7 +562,7 @@ export default function CalendarPage() {
               placeholder="Cari agenda sekolah, lokasi, atau keterangan..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs font-medium bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+              className="w-full pl-9 pr-3 py-2 text-xs font-medium bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
             />
           </div>
         </div>
@@ -576,22 +576,22 @@ export default function CalendarPage() {
         <div className="lg:col-span-8 space-y-6">
           
           {viewMode === "grid" ? (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-6">
+            <div className="bg-white rounded-lg border border-gray-100 shadow-xs p-6">
               
               {/* Month Navigation & View Switcher Controls */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex items-center bg-gray-100 border border-gray-200 rounded-xl p-1">
+                  <div className="flex items-center bg-gray-100 border border-gray-200 rounded-lg p-1">
                     <button 
                       onClick={prevMonth}
-                      className="p-1.5 hover:bg-white rounded-lg text-gray-600 hover:text-gray-900 transition-all cursor-pointer"
+                      className="p-1.5 hover:bg-white rounded-md text-gray-600 hover:text-gray-900 transition-all cursor-pointer"
                       title="Bulan Sebelumnya"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <button 
                       onClick={nextMonth}
-                      className="p-1.5 hover:bg-white rounded-lg text-gray-600 hover:text-gray-900 transition-all cursor-pointer"
+                      className="p-1.5 hover:bg-white rounded-md text-gray-600 hover:text-gray-900 transition-all cursor-pointer"
                       title="Bulan Berikutnya"
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -604,24 +604,24 @@ export default function CalendarPage() {
 
                   <button 
                     onClick={goToToday}
-                    className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-xs font-extrabold text-gray-700 transition-colors cursor-pointer"
+                    className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-xs font-extrabold text-gray-700 transition-colors cursor-pointer"
                   >
                     Hari Ini (Today)
                   </button>
                 </div>
 
                 {/* View Switcher Tabbing */}
-                <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 w-full sm:w-auto">
+                <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200 w-full sm:w-auto">
                   <button
                     onClick={() => setViewMode("grid")}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer bg-white text-gray-900 shadow-xs"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer bg-white text-gray-900 shadow-xs"
                   >
                     <CalendarIcon className="w-3.5 h-3.5 text-[#531FFF]" />
                     <span>Grid Bulanan</span>
                   </button>
                   <button
                     onClick={() => setViewMode("list")}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-gray-500 hover:text-gray-900"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer text-gray-500 hover:text-gray-900"
                   >
                     <FileText className="w-3.5 h-3.5 text-gray-400" />
                     <span>Daftar Agenda</span>
@@ -630,7 +630,7 @@ export default function CalendarPage() {
               </div>
 
               {/* Day Headers */}
-              <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-2xs">
+              <div className="border border-gray-100 rounded-lg overflow-hidden shadow-2xs">
                 <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-100">
                   {['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'].map((day) => (
                     <div key={day} className="py-2.5 text-center text-xs font-extrabold text-gray-600 border-r border-gray-100 last:border-r-0">
@@ -646,21 +646,21 @@ export default function CalendarPage() {
             </div>
           ) : (
             /* LIST VIEW MODE */
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+            <div className="bg-white rounded-lg border border-gray-100 shadow-xs overflow-hidden">
               {/* Month Navigation & View Switcher Bar for List View */}
               <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1 shadow-2xs">
+                  <div className="flex items-center bg-white border border-gray-200 rounded-lg p-1 shadow-2xs">
                     <button 
                       onClick={prevMonth}
-                      className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-all cursor-pointer"
+                      className="p-1.5 hover:bg-gray-100 rounded-md text-gray-600 hover:text-gray-900 transition-all cursor-pointer"
                       title="Bulan Sebelumnya"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                     <button 
                       onClick={nextMonth}
-                      className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900 transition-all cursor-pointer"
+                      className="p-1.5 hover:bg-gray-100 rounded-md text-gray-600 hover:text-gray-900 transition-all cursor-pointer"
                       title="Bulan Berikutnya"
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -673,24 +673,24 @@ export default function CalendarPage() {
 
                   <button 
                     onClick={goToToday}
-                    className="px-3 py-1.5 bg-white hover:bg-gray-100 border border-gray-200 rounded-xl text-xs font-extrabold text-gray-700 transition-colors cursor-pointer shadow-2xs"
+                    className="px-3 py-1.5 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg text-xs font-extrabold text-gray-700 transition-colors cursor-pointer shadow-2xs"
                   >
                     Hari Ini (Today)
                   </button>
                 </div>
 
                 {/* View Switcher Tabbing */}
-                <div className="flex items-center bg-gray-200/80 p-1 rounded-xl border border-gray-200 w-full sm:w-auto">
+                <div className="flex items-center bg-gray-200/80 p-1 rounded-lg border border-gray-200 w-full sm:w-auto">
                   <button
                     onClick={() => setViewMode("grid")}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-gray-600 hover:text-gray-900"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer text-gray-600 hover:text-gray-900"
                   >
                     <CalendarIcon className="w-3.5 h-3.5 text-gray-400" />
                     <span>Grid Bulanan</span>
                   </button>
                   <button
                     onClick={() => setViewMode("list")}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer bg-white text-[#531FFF] shadow-xs"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer bg-white text-[#531FFF] shadow-xs"
                   >
                     <FileText className="w-3.5 h-3.5 text-[#531FFF]" />
                     <span>Daftar Agenda ({filteredEvents.length})</span>
@@ -712,7 +712,7 @@ export default function CalendarPage() {
                   return (
                     <div key={evt.id || idx} className="p-4 hover:bg-gray-50/50 transition-colors flex items-center justify-between gap-4">
                       <div className="flex items-center gap-4 min-w-0">
-                        <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border font-bold", meta.color)}>
+                        <div className={cn("w-11 h-11 rounded-lg flex items-center justify-center shrink-0 border font-bold", meta.color)}>
                           <Icon className="w-5 h-5" />
                         </div>
                         <div className="min-w-0">
@@ -734,14 +734,14 @@ export default function CalendarPage() {
                         <div className="flex items-center gap-1 shrink-0">
                           <button
                             onClick={() => handleEdit(evt)}
-                            className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
+                            className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 rounded-md transition-colors cursor-pointer"
                             title="Edit Agenda"
                           >
                             <Edit3 className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(evt.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
                             title="Hapus Agenda"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -767,7 +767,7 @@ export default function CalendarPage() {
         <div className="lg:col-span-4 space-y-6">
           
           {/* Upcoming Events Box */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5 space-y-4">
+          <div className="bg-white rounded-lg border border-gray-100 shadow-xs p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-[#531FFF]" />
@@ -788,9 +788,9 @@ export default function CalendarPage() {
                   <div 
                     key={evt.id || idx}
                     onClick={() => handleEdit(evt)}
-                    className="p-3 bg-gray-50 hover:bg-purple-50/50 rounded-xl border border-gray-200 transition-all cursor-pointer group flex items-start gap-3"
+                    className="p-3 bg-gray-50 hover:bg-purple-50/50 rounded-lg border border-gray-200 transition-all cursor-pointer group flex items-start gap-3"
                   >
-                    <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border font-bold mt-0.5", meta.color)}>
+                    <div className={cn("w-9 h-9 rounded-md flex items-center justify-center shrink-0 border font-bold mt-0.5", meta.color)}>
                       <Icon className="w-4 h-4" />
                     </div>
 
@@ -814,7 +814,7 @@ export default function CalendarPage() {
             {!isStudent && (
               <button
                 onClick={() => handleOpenAdd()}
-                className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-[#531FFF] font-bold text-xs rounded-xl transition-colors border border-gray-200 flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-[#531FFF] font-bold text-xs rounded-lg transition-colors border border-gray-200 flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Plus className="w-4 h-4" /> Tambah Agenda Sekarang
               </button>
@@ -822,7 +822,7 @@ export default function CalendarPage() {
           </div>
 
           {/* Quick Statistics Card */}
-          <div className="bg-gradient-to-br from-[#531FFF] to-indigo-800 text-white rounded-2xl p-6 shadow-md relative overflow-hidden space-y-4">
+          <div className="bg-gradient-to-br from-[#531FFF] to-indigo-800 text-white rounded-lg p-6 shadow-md relative overflow-hidden space-y-4">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full pointer-events-none" />
 
             <div>
@@ -832,19 +832,19 @@ export default function CalendarPage() {
             </div>
 
             <div className="pt-3 border-t border-white/20 grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-white/10 p-2.5 rounded-xl border border-white/10">
+              <div className="bg-white/10 p-2.5 rounded-lg border border-white/10">
                 <span className="text-[10px] text-white/70 block">Akademik</span>
                 <span className="font-extrabold text-sm">{events.filter(e => e.category === 'AKADEMIK').length}</span>
               </div>
-              <div className="bg-white/10 p-2.5 rounded-xl border border-white/10">
+              <div className="bg-white/10 p-2.5 rounded-lg border border-white/10">
                 <span className="text-[10px] text-white/70 block">Ujian</span>
                 <span className="font-extrabold text-sm">{events.filter(e => e.category === 'UJIAN').length}</span>
               </div>
-              <div className="bg-white/10 p-2.5 rounded-xl border border-white/10">
+              <div className="bg-white/10 p-2.5 rounded-lg border border-white/10">
                 <span className="text-[10px] text-white/70 block">Libur</span>
                 <span className="font-extrabold text-sm">{events.filter(e => e.category === 'LIBUR').length}</span>
               </div>
-              <div className="bg-white/10 p-2.5 rounded-xl border border-white/10">
+              <div className="bg-white/10 p-2.5 rounded-lg border border-white/10">
                 <span className="text-[10px] text-white/70 block">Event & Ekskul</span>
                 <span className="font-extrabold text-sm">{events.filter(e => e.category === 'EVENT' || e.category === 'EKSKUL').length}</span>
               </div>
@@ -858,7 +858,7 @@ export default function CalendarPage() {
       {/* MODAL TAMBAH / EDIT AGENDA KALENDER */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-xl p-6 text-gray-900">
+          <div className="bg-white rounded-lg shadow-2xl border border-gray-200 w-full max-w-xl p-6 text-gray-900">
             
             {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-gray-100">
@@ -870,7 +870,7 @@ export default function CalendarPage() {
               </div>
               <button 
                 onClick={() => setIsModalOpen(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-md"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -887,7 +887,7 @@ export default function CalendarPage() {
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="Contoh: Ujian Tengah Semester Ganjil / Pentas Seni Sekolah"
-                  className="w-full px-3 py-2 font-medium bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                  className="w-full px-3 py-2 font-medium bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                 />
               </div>
 
@@ -897,7 +897,7 @@ export default function CalendarPage() {
                   <select
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-3 py-2 font-bold bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20"
+                    className="w-full px-3 py-2 font-bold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20"
                   >
                     <option value="AKADEMIK">Akademik (Biru)</option>
                     <option value="UJIAN">Ujian & Evaluasi (Oranye)</option>
@@ -915,7 +915,7 @@ export default function CalendarPage() {
                     value={formData.target}
                     onChange={(e) => setFormData({ ...formData, target: e.target.value })}
                     placeholder="Contoh: Seluruh Siswa, Kelas 10, Guru"
-                    className="w-full px-3 py-2 font-semibold bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20"
+                    className="w-full px-3 py-2 font-semibold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20"
                   />
                 </div>
               </div>
@@ -928,7 +928,7 @@ export default function CalendarPage() {
                     required
                     value={formData.startDate}
                     onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    className="w-full px-3 py-2 font-bold bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20"
+                    className="w-full px-3 py-2 font-bold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20"
                   />
                 </div>
 
@@ -939,7 +939,7 @@ export default function CalendarPage() {
                     required
                     value={formData.endDate}
                     onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                    className="w-full px-3 py-2 font-bold bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20"
+                    className="w-full px-3 py-2 font-bold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20"
                   />
                 </div>
               </div>
@@ -963,7 +963,7 @@ export default function CalendarPage() {
                       type="time"
                       value={formData.startTime}
                       onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                      className="w-full px-3 py-2 font-bold bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 text-center"
+                      className="w-full px-3 py-2 font-bold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 text-center"
                     />
                   </div>
 
@@ -973,7 +973,7 @@ export default function CalendarPage() {
                       type="time"
                       value={formData.endTime}
                       onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                      className="w-full px-3 py-2 font-bold bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 text-center"
+                      className="w-full px-3 py-2 font-bold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 text-center"
                     />
                   </div>
                 </div>
@@ -986,7 +986,7 @@ export default function CalendarPage() {
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                   placeholder="Contoh: Aula Utama, Lab Komputer, Lapangan Olahraga"
-                  className="w-full px-3 py-2 font-semibold bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20"
+                  className="w-full px-3 py-2 font-semibold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20"
                 />
               </div>
 
@@ -997,7 +997,7 @@ export default function CalendarPage() {
                   value={formData.desc}
                   onChange={(e) => setFormData({ ...formData, desc: e.target.value })}
                   placeholder="Tuliskan keterangan detail kegiatan..."
-                  className="w-full p-3 font-medium bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20"
+                  className="w-full p-3 font-medium bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20"
                 />
               </div>
 
@@ -1006,14 +1006,14 @@ export default function CalendarPage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 font-bold text-gray-500 hover:bg-gray-100 rounded-xl"
+                  className="px-4 py-2 font-bold text-gray-500 hover:bg-gray-100 rounded-lg"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="flex items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2 rounded-xl font-bold shadow-md shadow-[#531FFF]/20"
+                  className="flex items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2 rounded-lg font-bold shadow-md shadow-[#531FFF]/20"
                 >
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   <span>{editingEventId ? "Simpan Perubahan" : "Tambah Agenda"}</span>
@@ -1029,7 +1029,7 @@ export default function CalendarPage() {
       {/* PRINT-READY OFFICIAL ACADEMIC CALENDAR SHEET MODAL */}
       {isPrintModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar p-8 text-gray-900 font-sans print-area">
+          <div className="bg-white rounded-lg shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar p-8 text-gray-900 font-sans print-area">
             
             {/* Controls */}
             <div className="flex justify-between items-center pb-6 border-b border-gray-200 no-print">
@@ -1040,13 +1040,13 @@ export default function CalendarPage() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => window.print()}
-                  className="flex items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs"
+                  className="flex items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-xs"
                 >
                   <Printer className="w-4 h-4" /> Cetak / Download PDF
                 </button>
                 <button
                   onClick={() => setIsPrintModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-xl"
+                  className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-lg"
                 >
                   Tutup
                 </button>

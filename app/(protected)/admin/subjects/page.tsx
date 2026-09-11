@@ -540,8 +540,8 @@ export default function SubjectsPage() {
     if (!studentMyClass && !studentClassId) {
       return (
         <div className="p-4 sm:p-8 max-w-[1200px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-12">
-            <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200 shadow-sm">
+          <div className="bg-white rounded-xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-12">
+            <div className="w-16 h-16 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200 shadow-sm">
               <AlertCircle className="w-8 h-8" />
             </div>
             <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-50 text-amber-800 border border-amber-200 uppercase tracking-wider">
@@ -567,11 +567,11 @@ export default function SubjectsPage() {
       <div className="p-4 sm:p-8 pb-16 max-w-[1500px] mx-auto w-full flex flex-col space-y-6 animate-in fade-in duration-300">
         
         {/* Top Header Card */}
-        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
+        <div className="bg-white rounded-xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-96 h-full bg-gradient-to-l from-[#531FFF]/5 via-[#531FFF]/2 to-transparent pointer-events-none" />
           
           <div className="flex items-center gap-4 relative z-10">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] flex items-center justify-center text-white shadow-lg shadow-[#531FFF]/25 shrink-0">
+            <div className="w-14 h-14 rounded-lg bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] flex items-center justify-center text-white shadow-lg shadow-[#531FFF]/25 shrink-0">
               <BookOpen className="w-7 h-7" />
             </div>
             <div>
@@ -597,7 +597,7 @@ export default function SubjectsPage() {
           </div>
 
           <div className="flex items-center gap-2 relative z-10 self-start sm:self-auto">
-            <div className="px-4 py-2 bg-gray-50 rounded-2xl border border-gray-100 text-right">
+            <div className="px-4 py-2 bg-gray-50 rounded-lg border border-gray-100 text-right">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Kurikulum</p>
               <p className="text-xs font-black text-gray-800">Merdeka Belajar</p>
             </div>
@@ -608,7 +608,7 @@ export default function SubjectsPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           
           {/* Card 1: Total Mata Pelajaran */}
-          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+          <div className="bg-white rounded-xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
             <div className="space-y-2">
               <span className="text-[10px] font-black tracking-wider uppercase text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-100">
                 Mata Pelajaran Terdaftar
@@ -628,7 +628,7 @@ export default function SubjectsPage() {
           </div>
 
           {/* Card 2: Beban Belajar / Alokasi JP */}
-          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+          <div className="bg-white rounded-xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
             <div className="space-y-2">
               <span className="text-[10px] font-black tracking-wider uppercase text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
                 Beban Jam Belajar (JP)
@@ -648,7 +648,7 @@ export default function SubjectsPage() {
           </div>
 
           {/* Card 3: Standar KKM Minimum */}
-          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+          <div className="bg-white rounded-xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
             <div className="space-y-2">
               <span className="text-[10px] font-black tracking-wider uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
                 Kriteria Ketuntasan (KKM)
@@ -670,7 +670,7 @@ export default function SubjectsPage() {
         </div>
 
         {/* Section: Daftar Mata Pelajaran */}
-        <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-xs space-y-5">
+        <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-xs space-y-5">
           
           {/* Controls Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
@@ -692,19 +692,19 @@ export default function SubjectsPage() {
                   placeholder="Cari mapel atau guru..."
                   value={studentSearchQuery}
                   onChange={(e) => setStudentSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                  className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                 />
               </div>
 
               {/* Category Filter */}
-              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border border-gray-200 text-xs font-bold">
+              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200 text-xs font-bold">
                 {["All", "Wajib", "Peminatan", "Muatan Lokal"].map((cat) => (
                   <button
                     key={cat}
                     type="button"
                     onClick={() => setStudentCategoryFilter(cat)}
                     className={cn(
-                      "px-2.5 py-1 rounded-lg transition-all cursor-pointer whitespace-nowrap",
+                      "px-2.5 py-1 rounded-md transition-all cursor-pointer whitespace-nowrap",
                       studentCategoryFilter === cat ? "bg-white text-gray-900 shadow-2xs" : "text-gray-500 hover:text-gray-900"
                     )}
                   >
@@ -714,12 +714,12 @@ export default function SubjectsPage() {
               </div>
 
               {/* View Toggle */}
-              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border border-gray-200">
+              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
                 <button
                   type="button"
                   onClick={() => setStudentViewMode("grid")}
                   className={cn(
-                    "p-1.5 rounded-lg transition-all cursor-pointer",
+                    "p-1.5 rounded-md transition-all cursor-pointer",
                     studentViewMode === "grid" ? "bg-white text-[#531FFF] shadow-2xs" : "text-gray-400 hover:text-gray-600"
                   )}
                   title="Tampilan Kartu"
@@ -730,7 +730,7 @@ export default function SubjectsPage() {
                   type="button"
                   onClick={() => setStudentViewMode("table")}
                   className={cn(
-                    "p-1.5 rounded-lg transition-all cursor-pointer",
+                    "p-1.5 rounded-md transition-all cursor-pointer",
                     studentViewMode === "table" ? "bg-white text-[#531FFF] shadow-2xs" : "text-gray-400 hover:text-gray-600"
                   )}
                   title="Tampilan Tabel"
@@ -751,7 +751,7 @@ export default function SubjectsPage() {
                   return (
                     <div
                       key={sub._firestoreId || sub.name || idx}
-                      className="rounded-2xl p-4 bg-white border border-gray-100 hover:border-gray-200 hover:shadow-xs transition-all flex flex-col justify-between"
+                      className="rounded-lg p-4 bg-white border border-gray-100 hover:border-gray-200 hover:shadow-xs transition-all flex flex-col justify-between"
                     >
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
@@ -761,7 +761,7 @@ export default function SubjectsPage() {
                           )}>
                             {sub.category}
                           </span>
-                          <span className="text-[10px] font-mono font-bold text-gray-400 px-2 py-0.5 bg-gray-50 rounded-md border border-gray-100">
+                          <span className="text-[10px] font-mono font-bold text-gray-400 px-2 py-0.5 bg-gray-50 rounded border border-gray-100">
                             {sub.code || "MAPEL"}
                           </span>
                         </div>
@@ -776,8 +776,8 @@ export default function SubjectsPage() {
                         </div>
 
                         {/* Teacher Box */}
-                        <div className="p-3 rounded-xl bg-gray-50/80 border border-gray-100 flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-xl bg-white text-[#531FFF] border border-gray-200/80 shadow-2xs flex items-center justify-center font-bold text-xs shrink-0">
+                        <div className="p-3 rounded-lg bg-gray-50/80 border border-gray-100 flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-white text-[#531FFF] border border-gray-200/80 shadow-2xs flex items-center justify-center font-bold text-xs shrink-0">
                             {sub.teacher && sub.teacher !== "-" ? sub.teacher.charAt(0).toUpperCase() : "G"}
                           </div>
                           <div className="min-w-0">
@@ -790,7 +790,7 @@ export default function SubjectsPage() {
 
                         {/* Schedule Info if scheduled */}
                         {sub.scheduleDay && sub.scheduleTime && (
-                          <div className="p-2.5 rounded-xl bg-blue-50/60 border border-blue-100 text-blue-900 text-[11px] font-bold flex items-center gap-2">
+                          <div className="p-2.5 rounded-lg bg-blue-50/60 border border-blue-100 text-blue-900 text-[11px] font-bold flex items-center gap-2">
                             <Clock className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                             <span className="truncate">
                               {sub.scheduleDay}, {sub.scheduleTime}
@@ -808,7 +808,7 @@ export default function SubjectsPage() {
                 })}
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-2xl border border-gray-100">
+              <div className="overflow-x-auto rounded-lg border border-gray-100">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50/60 font-bold text-gray-400 uppercase tracking-wider text-[10px]">
@@ -881,10 +881,10 @@ export default function SubjectsPage() {
       />
 
       {/* ================= HEADER SECTION ================= */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/40 p-6 rounded-3xl border border-purple-100/60 shadow-2xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/40 p-6 rounded-xl border border-purple-100/60 shadow-2xs">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-[#531FFF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/25">
+            <div className="w-10 h-10 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/25">
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
@@ -916,7 +916,7 @@ export default function SubjectsPage() {
                 setSelectedBatchPresets(unadded);
                 setShowBatchModal(true);
               }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 text-[#531FFF] hover:bg-purple-100 border border-purple-200/80 rounded-xl text-[13px] font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+              className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 text-[#531FFF] hover:bg-purple-100 border border-purple-200/80 rounded-lg text-[13px] font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
             >
               <Sparkles className="w-4 h-4 text-[#531FFF]" />
               <span>Paket Kurikulum Nasional</span>
@@ -937,7 +937,7 @@ export default function SubjectsPage() {
                   teacher: "-"
                 }
               })}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-[13px] font-bold shadow-md shadow-[#531FFF]/25 transition-all active:scale-95 cursor-pointer"
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg text-[13px] font-bold shadow-md shadow-[#531FFF]/25 transition-all active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Tambah Mapel Baru</span>
@@ -948,7 +948,7 @@ export default function SubjectsPage() {
 
       {/* ================= QUICK PRESET TEMPLATES BAR ================= */}
       {!isGuru && (
-        <div className="bg-white border border-gray-100 rounded-3xl p-4 sm:p-5 shadow-2xs space-y-3">
+        <div className="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-2xs space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-[#531FFF]" />
@@ -970,7 +970,7 @@ export default function SubjectsPage() {
                   type="button"
                   onClick={() => handleApplyPreset(preset)}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all border cursor-pointer",
+                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 transition-all border cursor-pointer",
                     isAlreadyAdded 
                       ? "bg-gray-50/80 text-gray-600 border-gray-200 hover:border-[#531FFF]/50 hover:text-[#531FFF]" 
                       : "bg-purple-50/60 text-[#531FFF] border-purple-200 hover:bg-purple-100 hover:border-purple-300"
@@ -979,7 +979,7 @@ export default function SubjectsPage() {
                 >
                   <span>{preset.icon}</span>
                   <span>{preset.name}</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-white border text-gray-500 font-mono">
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-white border text-gray-500 font-mono">
                     {preset.code}
                   </span>
                   {isAlreadyAdded && (
@@ -992,7 +992,7 @@ export default function SubjectsPage() {
             <button
               type="button"
               onClick={() => setShowBatchModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-[#531FFF] hover:underline shrink-0 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[#531FFF] hover:underline shrink-0 cursor-pointer"
             >
               <span>Lihat Semua ({STANDARD_PRESETS.length})</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -1004,7 +1004,7 @@ export default function SubjectsPage() {
       {/* ================= METRICS STATS TILES ================= */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Mapel */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-lg border border-gray-100 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Mapel</p>
             <p className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">{subjects.length}</p>
@@ -1012,13 +1012,13 @@ export default function SubjectsPage() {
               {activeCount} Mapel Aktif
             </span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-[#531FFF] flex items-center justify-center">
+          <div className="w-12 h-12 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center">
             <BookOpen className="w-6 h-6" />
           </div>
         </div>
 
         {/* Mapel Wajib */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-lg border border-gray-100 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Kelompok Wajib</p>
             <p className="text-2xl sm:text-3xl font-black text-blue-600 mt-1">{wajibCount}</p>
@@ -1026,13 +1026,13 @@ export default function SubjectsPage() {
               Kurikulum Nasional
             </span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
             <GraduationCap className="w-6 h-6" />
           </div>
         </div>
 
         {/* Mapel Peminatan */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-lg border border-gray-100 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Peminatan</p>
             <p className="text-2xl sm:text-3xl font-black text-purple-600 mt-1">{peminatanCount}</p>
@@ -1040,13 +1040,13 @@ export default function SubjectsPage() {
               MIPA &amp; IPS Terarah
             </span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
             <Layers className="w-6 h-6" />
           </div>
         </div>
 
         {/* Muatan Lokal */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-lg border border-gray-100 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Muatan Lokal</p>
             <p className="text-2xl sm:text-3xl font-black text-amber-600 mt-1">{mulokCount}</p>
@@ -1054,14 +1054,14 @@ export default function SubjectsPage() {
               Kearifan Sekolah &amp; Daerah
             </span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
             <Target className="w-6 h-6" />
           </div>
         </div>
       </div>
 
       {/* ================= FILTER & SEARCH TOOLBAR ================= */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-2xs flex flex-col lg:flex-row items-center justify-between gap-4">
+      <div className="bg-white border border-gray-100 rounded-lg p-4 shadow-2xs flex flex-col lg:flex-row items-center justify-between gap-4">
         {/* Search & Category Pills */}
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
           {/* Search box */}
@@ -1072,7 +1072,7 @@ export default function SubjectsPage() {
               placeholder="Cari nama, kode, atau guru..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+              className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
             />
             {searchQuery && (
               <button 
@@ -1085,7 +1085,7 @@ export default function SubjectsPage() {
           </div>
 
           {/* Category Tabs */}
-          <div className="flex items-center gap-1 p-1 bg-gray-100/80 rounded-xl overflow-x-auto w-full sm:w-auto shrink-0">
+          <div className="flex items-center gap-1 p-1 bg-gray-100/80 rounded-lg overflow-x-auto w-full sm:w-auto shrink-0">
             {["All", "Wajib", "Peminatan", "Muatan Lokal"].map((cat) => {
               const isActive = selectedCategory === cat;
               return (
@@ -1094,7 +1094,7 @@ export default function SubjectsPage() {
                   type="button"
                   onClick={() => setSelectedCategory(cat)}
                   className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer",
+                    "px-3 py-1.5 rounded-md text-xs font-bold transition-all shrink-0 cursor-pointer",
                     isActive 
                       ? "bg-white text-[#531FFF] shadow-2xs" 
                       : "text-gray-500 hover:text-gray-800"
@@ -1112,7 +1112,7 @@ export default function SubjectsPage() {
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer"
+            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer"
           >
             <option value="All">Semua Status</option>
             <option value="Aktif">Aktif</option>
@@ -1120,12 +1120,12 @@ export default function SubjectsPage() {
           </select>
 
           {/* View Format Switcher */}
-          <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200/60 shrink-0">
+          <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200/60 shrink-0">
             <button
               type="button"
               onClick={() => setViewMode("grid")}
               className={cn(
-                "p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                "p-1.5 rounded-md text-xs font-bold transition-all cursor-pointer",
                 viewMode === "grid" 
                   ? "bg-white text-[#531FFF] shadow-xs" 
                   : "text-gray-400 hover:text-gray-700"
@@ -1138,7 +1138,7 @@ export default function SubjectsPage() {
               type="button"
               onClick={() => setViewMode("table")}
               className={cn(
-                "p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                "p-1.5 rounded-md text-xs font-bold transition-all cursor-pointer",
                 viewMode === "table" 
                   ? "bg-white text-[#531FFF] shadow-xs" 
                   : "text-gray-400 hover:text-gray-700"
@@ -1153,13 +1153,13 @@ export default function SubjectsPage() {
 
       {/* ================= MAIN SUBJECTS LISTING ================= */}
       {loading ? (
-        <div className="py-24 bg-white border border-gray-100 rounded-3xl flex flex-col items-center justify-center space-y-3">
+        <div className="py-24 bg-white border border-gray-100 rounded-xl flex flex-col items-center justify-center space-y-3">
           <Loader2 className="w-8 h-8 animate-spin text-[#531FFF]" />
           <p className="text-xs font-bold text-gray-500">Memuat daftar mata pelajaran...</p>
         </div>
       ) : filteredSubjects.length === 0 ? (
-        <div className="py-20 bg-white border border-gray-100 rounded-3xl flex flex-col items-center justify-center text-center p-6 space-y-4">
-          <div className="w-16 h-16 rounded-3xl bg-purple-50 text-[#531FFF] flex items-center justify-center">
+        <div className="py-20 bg-white border border-gray-100 rounded-xl flex flex-col items-center justify-center text-center p-6 space-y-4">
+          <div className="w-16 h-16 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center">
             <BookOpen className="w-8 h-8" />
           </div>
           <div>
@@ -1179,7 +1179,7 @@ export default function SubjectsPage() {
                   setSelectedCategory("All");
                   setSelectedStatus("All");
                 }}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-colors cursor-pointer"
               >
                 Reset Filter
               </button>
@@ -1188,14 +1188,14 @@ export default function SubjectsPage() {
                 <button
                   type="button"
                   onClick={() => setShowBatchModal(true)}
-                  className="px-4 py-2 bg-purple-50 text-[#531FFF] hover:bg-purple-100 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-purple-200"
+                  className="px-4 py-2 bg-purple-50 text-[#531FFF] hover:bg-purple-100 rounded-lg text-xs font-bold transition-colors cursor-pointer border border-purple-200"
                 >
                   ⚡ Impor Paket Standar
                 </button>
                 <button
                   type="button"
                   onClick={() => setCrudState({ open: true, mode: "create" })}
-                  className="px-4 py-2 bg-[#531FFF] text-white hover:bg-[#4314cc] rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  className="px-4 py-2 bg-[#531FFF] text-white hover:bg-[#4314cc] rounded-lg text-xs font-bold transition-colors cursor-pointer"
                 >
                   + Tambah Manual
                 </button>
@@ -1213,17 +1213,17 @@ export default function SubjectsPage() {
             return (
               <div
                 key={item._firestoreId}
-                className="bg-white hover:bg-gradient-to-b hover:from-white hover:to-purple-50/20 border border-gray-100 hover:border-[#531FFF]/30 rounded-3xl p-5 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group"
+                className="bg-white hover:bg-gradient-to-b hover:from-white hover:to-purple-50/20 border border-gray-100 hover:border-[#531FFF]/30 rounded-xl p-5 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group"
               >
                 <div>
                   {/* Top Bar: Code chip + Category Pill + Status */}
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-1 rounded-xl bg-gray-100 font-mono font-black text-xs text-gray-800 border border-gray-200/60">
+                      <span className="px-2.5 py-1 rounded-lg bg-gray-100 font-mono font-black text-xs text-gray-800 border border-gray-200/60">
                         {item.code || "MAPEL"}
                       </span>
                       <span className={cn(
-                        "px-2.5 py-0.5 rounded-lg text-[11px] font-bold border",
+                        "px-2.5 py-0.5 rounded-md text-[11px] font-bold border",
                         isWajib 
                           ? "bg-blue-50 text-blue-700 border-blue-200" 
                           : isPeminatan 
@@ -1296,7 +1296,7 @@ export default function SubjectsPage() {
                       <button
                         type="button"
                         onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                        className="p-2 rounded-xl text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-all cursor-pointer"
+                        className="p-2 rounded-lg text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-all cursor-pointer"
                         title="Edit Mapel"
                       >
                         <PenTool className="w-3.5 h-3.5" />
@@ -1304,7 +1304,7 @@ export default function SubjectsPage() {
                       <button
                         type="button"
                         onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
-                        className="p-2 rounded-xl text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                        className="p-2 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
                         title="Hapus Mapel"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1318,7 +1318,7 @@ export default function SubjectsPage() {
         </div>
       ) : (
         /* ================= TABLE VIEW ================= */
-        <div className="bg-white border border-gray-100 rounded-3xl shadow-2xs overflow-hidden">
+        <div className="bg-white border border-gray-100 rounded-xl shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -1348,7 +1348,7 @@ export default function SubjectsPage() {
                     </td>
                     <td className="py-4 px-6">
                       <span className={cn(
-                        "px-2.5 py-0.5 rounded-lg text-xs font-bold border",
+                        "px-2.5 py-0.5 rounded-md text-xs font-bold border",
                         item.category === "Wajib" 
                           ? "bg-blue-50 text-blue-700 border-blue-200"
                           : item.category === "Peminatan"
@@ -1380,7 +1380,7 @@ export default function SubjectsPage() {
                         <button
                           type="button"
                           onClick={() => setCrudState({ open: true, mode: "view", data: item })}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
+                          className="p-1.5 rounded-md text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
                           title="Lihat Detail"
                         >
                           <Eye className="w-4 h-4" />
@@ -1390,7 +1390,7 @@ export default function SubjectsPage() {
                             <button
                               type="button"
                               onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-md text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
                               title="Edit"
                             >
                               <PenTool className="w-4 h-4" />
@@ -1398,7 +1398,7 @@ export default function SubjectsPage() {
                             <button
                               type="button"
                               onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-md text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                               title="Hapus"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -1418,11 +1418,11 @@ export default function SubjectsPage() {
       {/* ================= BATCH ADD MODAL (PAKET KURIKULUM NASIONAL) ================= */}
       {!isGuru && showBatchModal && (
         <div className="fixed inset-0 z-50 p-3 sm:p-6 bg-gray-950/60 backdrop-blur-xs flex items-center justify-center animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[90vh] shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
             <div className="p-5 sm:p-6 border-b border-gray-100 bg-gradient-to-r from-purple-50/80 to-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-[#531FFF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/25">
+                <div className="w-10 h-10 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/25">
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
@@ -1486,7 +1486,7 @@ export default function SubjectsPage() {
                       );
                     }}
                     className={cn(
-                      "p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 select-none",
+                      "p-3.5 rounded-lg border transition-all flex items-center justify-between gap-3 select-none",
                       isAlreadyInSystem
                         ? "bg-gray-50/60 border-gray-200/60 opacity-60 cursor-not-allowed"
                         : isSelected
@@ -1496,7 +1496,7 @@ export default function SubjectsPage() {
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={cn(
-                        "w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-all",
+                        "w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all",
                         isAlreadyInSystem
                           ? "bg-gray-200 border-gray-300 text-gray-500"
                           : isSelected
@@ -1525,12 +1525,12 @@ export default function SubjectsPage() {
 
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={cn(
-                        "px-2.5 py-0.5 rounded-lg text-[10px] font-bold border",
+                        "px-2.5 py-0.5 rounded-md text-[10px] font-bold border",
                         preset.category === "Wajib" ? "bg-blue-50 text-blue-700 border-blue-200" : preset.category === "Peminatan" ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-amber-50 text-amber-700 border-amber-200"
                       )}>
                         {preset.category}
                       </span>
-                      <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-lg">
+                      <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
                         {preset.creditHours}
                       </span>
                       {isAlreadyInSystem && (
@@ -1549,7 +1549,7 @@ export default function SubjectsPage() {
               <button
                 type="button"
                 onClick={() => setShowBatchModal(false)}
-                className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
+                className="px-5 py-2.5 rounded-lg text-xs sm:text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
                 disabled={isBatchAdding}
               >
                 Batal
@@ -1559,7 +1559,7 @@ export default function SubjectsPage() {
                 type="button"
                 onClick={handleBatchAddPresets}
                 disabled={isBatchAdding || selectedBatchPresets.length === 0}
-                className="px-6 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-[#531FFF]/25 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
+                className="px-6 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg text-xs sm:text-sm font-bold shadow-md shadow-[#531FFF]/25 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
               >
                 {isBatchAdding ? (
                   <>

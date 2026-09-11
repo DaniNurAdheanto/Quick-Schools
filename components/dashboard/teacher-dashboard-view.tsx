@@ -569,7 +569,7 @@ export function TeacherDashboardView({
       {/* ============================================================ */}
       {/* 1. TOP HERO BANNER: PERSONALIZED GURU SUMMARY */}
       {/* ============================================================ */}
-      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-[#4318FF] via-[#531FFF] to-[#7042FF] text-white p-7 md:p-8 shadow-xl shadow-[#531FFF]/15 border border-[#6F42FF]/30">
+      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-[#4318FF] via-[#531FFF] to-[#7042FF] text-white p-7 md:p-8 shadow-xl shadow-[#531FFF]/15 border border-[#6F42FF]/30">
         <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
         <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-indigo-300/10 rounded-full blur-2xl pointer-events-none" />
 
@@ -606,17 +606,17 @@ export function TeacherDashboardView({
 
             {/* Teacher Details Bar */}
             <div className="flex flex-wrap items-center gap-4 pt-1 text-xs md:text-sm text-white/90">
-              <div className="flex items-center gap-2 bg-black/15 px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/10">
+              <div className="flex items-center gap-2 bg-black/15 px-3 py-1.5 rounded-lg backdrop-blur-sm border border-white/10">
                 <span className="text-white/60">NIP:</span>
                 <span className="font-mono font-bold text-white">{teacherProfile.nip}</span>
               </div>
 
-              <div className="flex items-center gap-2 bg-black/15 px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/10">
+              <div className="flex items-center gap-2 bg-black/15 px-3 py-1.5 rounded-lg backdrop-blur-sm border border-white/10">
                 <span className="text-white/60">Mata Pelajaran:</span>
                 <span className="font-bold text-amber-200">{teacherProfile.subject}</span>
               </div>
 
-              <div className="flex items-center gap-2 bg-black/15 px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/10">
+              <div className="flex items-center gap-2 bg-black/15 px-3 py-1.5 rounded-lg backdrop-blur-sm border border-white/10">
                 <Clock className="w-3.5 h-3.5 text-white/70" />
                 <span>{currentDate || "Hari Ini"}</span>
               </div>
@@ -624,13 +624,13 @@ export function TeacherDashboardView({
           </div>
 
           {/* Right Live Status Card */}
-          <div className="lg:w-80 bg-white/15 backdrop-blur-md rounded-2xl p-5 border border-white/20 shadow-lg flex flex-col justify-between shrink-0 space-y-4">
+          <div className="lg:w-80 bg-white/15 backdrop-blur-md rounded-lg p-5 border border-white/20 shadow-lg flex flex-col justify-between shrink-0 space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-white/75 flex items-center gap-1.5">
                 <Activity className="w-3.5 h-3.5 text-emerald-300" />
                 Status Mengajar
               </span>
-              <span className="font-mono text-xs font-black bg-black/30 px-2 py-0.5 rounded-md text-emerald-300">
+              <span className="font-mono text-xs font-black bg-black/30 px-2 py-0.5 rounded text-emerald-300">
                 {currentTimeStr} WIB
               </span>
             </div>
@@ -667,10 +667,10 @@ export function TeacherDashboardView({
       {/* ============================================================ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Metric 1: Jadwal Hari Ini */}
-        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-lg p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Jadwal Hari Ini</span>
-            <div className="w-10 h-10 rounded-xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center">
               <CalendarCheck className="w-5 h-5" />
             </div>
           </div>
@@ -685,10 +685,10 @@ export function TeacherDashboardView({
         </div>
 
         {/* Metric 2: Total Siswa Diampu */}
-        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-lg p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Siswa Diampu</span>
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
               <Users className="w-5 h-5" />
             </div>
           </div>
@@ -703,10 +703,10 @@ export function TeacherDashboardView({
         </div>
 
         {/* Metric 3: Kehadiran Siswa Hari Ini */}
-        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-lg p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Presensi Siswa</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <UserCheck className="w-5 h-5" />
             </div>
           </div>
@@ -721,10 +721,10 @@ export function TeacherDashboardView({
         </div>
 
         {/* Metric 4: Progres Input Nilai */}
-        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-lg p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Input Penilaian</span>
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
               <PenLine className="w-5 h-5" />
             </div>
           </div>
@@ -745,12 +745,12 @@ export function TeacherDashboardView({
         </div>
 
         {/* Metric 5: Wali Kelas / Jam Mengajar */}
-        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-lg p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
               {resolvedHomeroomClass ? "Kelas Perwalian" : "Beban Mengajar"}
             </span>
-            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
               <School className="w-5 h-5" />
             </div>
           </div>
@@ -771,10 +771,10 @@ export function TeacherDashboardView({
       {/* 3. WALI KELAS SPECIAL SECTION (DYNAMICALLY DISPLAYED IF WALI KELAS) */}
       {/* ============================================================ */}
       {resolvedHomeroomClass && (
-        <div className="bg-gradient-to-r from-purple-50/80 via-indigo-50/50 to-white rounded-3xl p-6 border border-purple-100 shadow-sm space-y-4">
+        <div className="bg-gradient-to-r from-purple-50/80 via-indigo-50/50 to-white rounded-xl p-6 border border-purple-100 shadow-sm space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-purple-100/80">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-600/20">
+              <div className="w-12 h-12 rounded-lg bg-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-600/20">
                 <School className="w-6 h-6" />
               </div>
               <div>
@@ -795,14 +795,14 @@ export function TeacherDashboardView({
             <div className="flex items-center gap-2">
               <Link
                 href="/admin/report-cards"
-                className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
+                className="px-3.5 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
               >
                 <Award className="w-3.5 h-3.5" />
                 Rapor Digital Kelas
               </Link>
               <Link
                 href="/admin/data-siswa"
-                className="px-3.5 py-2 rounded-xl bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2 rounded-lg bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <Users className="w-3.5 h-3.5" />
                 Data Siswa
@@ -812,7 +812,7 @@ export function TeacherDashboardView({
 
           {/* Homeroom Attendance Pills & Alerts */}
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-            <div className="bg-white rounded-2xl p-3.5 border border-purple-100 flex items-center justify-between">
+            <div className="bg-white rounded-lg p-3.5 border border-purple-100 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-gray-400 uppercase">Total Siswa</span>
                 <p className="text-lg font-black text-gray-900">{homeroomAttendance?.totalStudents || 32}</p>
@@ -820,7 +820,7 @@ export function TeacherDashboardView({
               <Users className="w-5 h-5 text-gray-400" />
             </div>
 
-            <div className="bg-white rounded-2xl p-3.5 border border-emerald-100 flex items-center justify-between">
+            <div className="bg-white rounded-lg p-3.5 border border-emerald-100 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-emerald-600 uppercase">Hadir Hari Ini</span>
                 <p className="text-lg font-black text-emerald-600">{homeroomAttendance?.hadir || 30}</p>
@@ -828,7 +828,7 @@ export function TeacherDashboardView({
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
             </div>
 
-            <div className="bg-white rounded-2xl p-3.5 border border-amber-100 flex items-center justify-between">
+            <div className="bg-white rounded-lg p-3.5 border border-amber-100 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-amber-600 uppercase">Sakit / Izin</span>
                 <p className="text-lg font-black text-amber-600">
@@ -838,7 +838,7 @@ export function TeacherDashboardView({
               <Clock className="w-5 h-5 text-amber-500" />
             </div>
 
-            <div className="bg-white rounded-2xl p-3.5 border border-rose-100 flex items-center justify-between">
+            <div className="bg-white rounded-lg p-3.5 border border-rose-100 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-rose-600 uppercase">Alpa (Tanpa Ket.)</span>
                 <p className="text-lg font-black text-rose-600">{homeroomAttendance?.alpa || 0}</p>
@@ -846,14 +846,14 @@ export function TeacherDashboardView({
               <AlertTriangle className="w-5 h-5 text-rose-500" />
             </div>
 
-            <div className="col-span-2 sm:col-span-4 lg:col-span-1 bg-white rounded-2xl p-3.5 border border-purple-100 flex items-center justify-between">
+            <div className="col-span-2 sm:col-span-4 lg:col-span-1 bg-white rounded-lg p-3.5 border border-purple-100 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-purple-600 uppercase">Aksi Presensi</span>
                 <p className="text-xs font-bold text-gray-800 mt-0.5">Input Hari Ini</p>
               </div>
               <button
                 onClick={() => handleOpenAttendanceModal(resolvedHomeroomClass)}
-                className="px-2.5 py-1.5 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs font-bold transition-all cursor-pointer"
+                className="px-2.5 py-1.5 rounded-md bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs font-bold transition-all cursor-pointer"
               >
                 Buka
               </button>
@@ -869,7 +869,7 @@ export function TeacherDashboardView({
         
         {/* LEFT COLUMN: LIVE TEACHING SCHEDULE (8 COLS) */}
         <div className="lg:col-span-8 space-y-6">
-          <div className="bg-white rounded-3xl p-6 md:p-7 border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] space-y-5">
+          <div className="bg-white rounded-xl p-6 md:p-7 border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] space-y-5">
             {/* Header & Day Selector */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-100">
               <div>
@@ -888,7 +888,7 @@ export function TeacherDashboardView({
               </div>
 
               {/* Day Tab Pills */}
-              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-2xl overflow-x-auto">
+              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
                 {DAYS_ORDER.map((day) => {
                   const isSelected = selectedDayTab === day;
                   const isToday = currentDay === day;
@@ -897,7 +897,7 @@ export function TeacherDashboardView({
                       key={day}
                       onClick={() => setSelectedDayTab(day)}
                       className={cn(
-                        "px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer",
+                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer",
                         isSelected
                           ? "bg-white text-[#531FFF] shadow-xs"
                           : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50"
@@ -918,7 +918,7 @@ export function TeacherDashboardView({
 
               if (daySchedules.length === 0) {
                 return (
-                  <div className="p-10 text-center rounded-2xl bg-gray-50 border border-dashed border-gray-200 space-y-2">
+                  <div className="p-10 text-center rounded-lg bg-gray-50 border border-dashed border-gray-200 space-y-2">
                     <CalendarCheck className="w-10 h-10 text-gray-400 mx-auto" />
                     <h4 className="font-bold text-gray-700 text-sm">Tidak Ada Jadwal Mengajar pada Hari {selectedDayTab}</h4>
                     <p className="text-xs text-gray-400 max-w-sm mx-auto">
@@ -942,7 +942,7 @@ export function TeacherDashboardView({
                       <div
                         key={schedule.id || idx}
                         className={cn(
-                          "rounded-2xl p-4 md:p-5 border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4",
+                          "rounded-lg p-4 md:p-5 border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4",
                           isOngoing
                             ? "bg-emerald-50/60 border-emerald-300 shadow-md shadow-emerald-500/5 ring-2 ring-emerald-500/20"
                             : isCompleted
@@ -953,7 +953,7 @@ export function TeacherDashboardView({
                         {/* Left Info */}
                         <div className="flex items-start gap-4">
                           <div className={cn(
-                            "w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-mono shrink-0 font-black text-xs",
+                            "w-12 h-12 rounded-lg flex flex-col items-center justify-center font-mono shrink-0 font-black text-xs",
                             isOngoing
                               ? "bg-emerald-600 text-white shadow-sm"
                               : isCompleted
@@ -966,7 +966,7 @@ export function TeacherDashboardView({
 
                           <div className="space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="px-2.5 py-0.5 rounded-lg text-xs font-black bg-gray-900 text-white tracking-wide">
+                              <span className="px-2.5 py-0.5 rounded-md text-xs font-black bg-gray-900 text-white tracking-wide">
                                 {schedule.class || "Kelas"}
                               </span>
                               <h4 className="text-sm md:text-base font-black text-gray-900">
@@ -1012,7 +1012,7 @@ export function TeacherDashboardView({
                           <button
                             onClick={() => handleOpenAttendanceModal(schedule.class)}
                             className={cn(
-                              "px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                              "px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
                               isOngoing
                                 ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm active:scale-95"
                                 : "bg-gray-100 hover:bg-gray-200 text-gray-700"
@@ -1025,7 +1025,7 @@ export function TeacherDashboardView({
 
                           <Link
                             href={`/admin/grades?class=${encodeURIComponent(schedule.class || "")}&subject=${encodeURIComponent(schedule.subject || "")}`}
-                            className="px-3 py-2 rounded-xl bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
+                            className="px-3 py-2 rounded-lg bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
                             title="Input Nilai Siswa untuk Kelas Ini"
                           >
                             <PenLine className="w-3.5 h-3.5" />
@@ -1052,7 +1052,7 @@ export function TeacherDashboardView({
           </div>
 
           {/* ACADEMIC PERFORMANCE CHART (DYNAMIC RECHARTS) */}
-          <div className="bg-white rounded-3xl p-6 md:p-7 border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] space-y-5">
+          <div className="bg-white rounded-xl p-6 md:p-7 border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-gray-100">
               <div>
                 <h3 className="text-base font-black text-gray-900 tracking-tight flex items-center gap-2">
@@ -1084,7 +1084,7 @@ export function TeacherDashboardView({
                       if (active && payload && payload.length) {
                         const data = payload[0].payload;
                         return (
-                          <div className="bg-gray-900 text-white p-3 rounded-xl shadow-xl text-xs space-y-1">
+                          <div className="bg-gray-900 text-white p-3 rounded-lg shadow-xl text-xs space-y-1">
                             <p className="font-extrabold text-sm">{data.className}</p>
                             <p className="text-amber-300 font-bold">Rata-rata: {data.average}</p>
                             <p className="text-gray-400">Target KKM: {data.kkm}</p>
@@ -1114,7 +1114,7 @@ export function TeacherDashboardView({
         <div className="lg:col-span-4 space-y-6">
 
           {/* QUICK ACTIONS HUB */}
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] space-y-4">
+          <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] space-y-4">
             <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-[#531FFF]" />
               Aktivitas Utama Guru
@@ -1123,10 +1123,10 @@ export function TeacherDashboardView({
             <div className="grid grid-cols-1 gap-2.5">
               <Link
                 href="/admin/grades"
-                className="p-3 rounded-2xl bg-indigo-50/60 hover:bg-indigo-50 border border-indigo-100 transition-all flex items-center justify-between group cursor-pointer"
+                className="p-3 rounded-lg bg-indigo-50/60 hover:bg-indigo-50 border border-indigo-100 transition-all flex items-center justify-between group cursor-pointer"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#531FFF] text-white flex items-center justify-center shadow-sm">
+                  <div className="w-9 h-9 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shadow-sm">
                     <PenLine className="w-4 h-4" />
                   </div>
                   <div>
@@ -1141,10 +1141,10 @@ export function TeacherDashboardView({
 
               <button
                 onClick={() => handleOpenAttendanceModal(taughtClasses[0] || "10 MIPA 1")}
-                className="w-full text-left p-3 rounded-2xl bg-emerald-50/60 hover:bg-emerald-50 border border-emerald-100 transition-all flex items-center justify-between group cursor-pointer"
+                className="w-full text-left p-3 rounded-lg bg-emerald-50/60 hover:bg-emerald-50 border border-emerald-100 transition-all flex items-center justify-between group cursor-pointer"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-sm">
                     <UserCheck className="w-4 h-4" />
                   </div>
                   <div>
@@ -1159,10 +1159,10 @@ export function TeacherDashboardView({
 
               <Link
                 href="/admin/schedule"
-                className="p-3 rounded-2xl bg-blue-50/60 hover:bg-blue-50 border border-blue-100 transition-all flex items-center justify-between group cursor-pointer"
+                className="p-3 rounded-lg bg-blue-50/60 hover:bg-blue-50 border border-blue-100 transition-all flex items-center justify-between group cursor-pointer"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
+                  <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-sm">
                     <CalendarRange className="w-4 h-4" />
                   </div>
                   <div>
@@ -1177,10 +1177,10 @@ export function TeacherDashboardView({
 
               <Link
                 href="/admin/report-cards"
-                className="p-3 rounded-2xl bg-purple-50/60 hover:bg-purple-50 border border-purple-100 transition-all flex items-center justify-between group cursor-pointer"
+                className="p-3 rounded-lg bg-purple-50/60 hover:bg-purple-50 border border-purple-100 transition-all flex items-center justify-between group cursor-pointer"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-sm">
+                  <div className="w-9 h-9 rounded-lg bg-purple-600 text-white flex items-center justify-center shadow-sm">
                     <Award className="w-4 h-4" />
                   </div>
                   <div>
@@ -1196,7 +1196,7 @@ export function TeacherDashboardView({
           </div>
 
           {/* STUDENTS REQUIRING ATTENTION */}
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] space-y-4">
+          <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-500" />
@@ -1211,7 +1211,7 @@ export function TeacherDashboardView({
               {studentsNeedAttention.map((item, i) => (
                 <div
                   key={i}
-                  className="p-3 rounded-2xl bg-gray-50 border border-gray-100 hover:border-amber-200 transition-all flex items-center justify-between"
+                  className="p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-amber-200 transition-all flex items-center justify-between"
                 >
                   <div className="space-y-0.5">
                     <div className="flex items-center gap-2">
@@ -1224,7 +1224,7 @@ export function TeacherDashboardView({
                   </div>
 
                   <span className={cn(
-                    "px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase shrink-0",
+                    "px-2 py-0.5 rounded text-[10px] font-extrabold uppercase shrink-0",
                     item.type === "attendance" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-800"
                   )}>
                     {item.status}
@@ -1235,7 +1235,7 @@ export function TeacherDashboardView({
           </div>
 
           {/* INTERACTIVE TEACHER TO-DO / NOTES */}
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] space-y-4">
+          <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider flex items-center gap-2">
                 <ListTodo className="w-4 h-4 text-emerald-600" />
@@ -1253,11 +1253,11 @@ export function TeacherDashboardView({
                 value={newTodoText}
                 onChange={(e) => setNewTodoText(e.target.value)}
                 placeholder="Tulis catatan tugas baru..."
-                className="flex-1 px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-[#531FFF] transition-colors"
+                className="flex-1 px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-[#531FFF] transition-colors"
               />
               <button
                 type="submit"
-                className="px-3 py-2 rounded-xl bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
+                className="px-3 py-2 rounded-lg bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -1268,7 +1268,7 @@ export function TeacherDashboardView({
               {toDoItems.map((todo) => (
                 <div
                   key={todo.id}
-                  className="flex items-center justify-between gap-2 p-2 rounded-xl hover:bg-gray-50 transition-colors group"
+                  className="flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors group"
                 >
                   <label className="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer">
                     <input
@@ -1297,7 +1297,7 @@ export function TeacherDashboardView({
           </div>
 
           {/* SCHOOL ANNOUNCEMENTS NOTICE BOARD */}
-          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] space-y-4">
+          <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider flex items-center gap-2">
                 <Megaphone className="w-4 h-4 text-blue-600" />
@@ -1310,7 +1310,7 @@ export function TeacherDashboardView({
 
             <div className="space-y-3">
               {announcements.slice(0, 3).map((ann, i) => (
-                <div key={ann.id || i} className="p-3 rounded-2xl bg-gray-50 border border-gray-100 space-y-1">
+                <div key={ann.id || i} className="p-3 rounded-lg bg-gray-50 border border-gray-100 space-y-1">
                   <div className="flex items-center justify-between gap-2">
                     <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-blue-100 text-blue-800">
                       {ann.category || "Info"}
@@ -1324,7 +1324,7 @@ export function TeacherDashboardView({
                 </div>
               ))}
               {announcements.length === 0 && (
-                <div className="p-4 text-center text-xs text-gray-400 bg-gray-50 rounded-2xl">
+                <div className="p-4 text-center text-xs text-gray-400 bg-gray-50 rounded-lg">
                   Belum ada pengumuman terbaru.
                 </div>
               )}

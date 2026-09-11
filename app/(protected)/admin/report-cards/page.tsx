@@ -1,15 +1,15 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { 
-  Award, Search, Printer, Save, CheckCircle2, 
-  BookOpen, FileText, Sparkles, 
+import {
+  Award, Search, Printer, Save, CheckCircle2,
+  BookOpen, FileText, Sparkles,
   Loader2, Edit3, ShieldCheck, Check, Calendar, School, Trash2,
   BarChart3, TrendingUp, Database, RefreshCw, Plus,
   GraduationCap, X, AlertTriangle
 } from "lucide-react";
-import { 
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart, 
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart,
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Cell, Legend
 } from "recharts";
 import { collection, onSnapshot, doc, setDoc, addDoc, serverTimestamp, getDoc } from "firebase/firestore";
@@ -84,7 +84,7 @@ export default function ReportCardsPage() {
       setAlertState(null);
     }, 5000);
   };
-  
+
   // Realtime Unified Student Data (Merged from students + users collections, same as data-siswa)
   const { students, loading: studentsLoading } = useUnifiedStudents();
   const [classes, setClasses] = useState<any[]>([]);
@@ -95,13 +95,13 @@ export default function ReportCardsPage() {
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
   const [reportCardsData, setReportCardsData] = useState<Record<string, any>>({});
   const [isSyncingSubjects, setIsSyncingSubjects] = useState(false);
-  
+
   const [currentUserData, setCurrentUserData] = useState<any>(null);
   const [userRole, setUserRole] = useState<string>("admin");
   const [userEmail, setUserEmail] = useState<string>("");
   const [previewAsGuru, setPreviewAsGuru] = useState(false);
   const [loading, setLoading] = useState(true);
-  
+
   const [selectedClass, setSelectedClass] = useState<string>("All");
   const [selectedStudentId, setSelectedStudentId] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -116,11 +116,11 @@ export default function ReportCardsPage() {
   const [spiritualDesc, setSpiritualDesc] = useState<string>("Terbiasa berdoa sebelum/sesudah belajar, taat beribadah, dan menunjukkan toleransi yang tinggi.");
   const [socialAttitude, setSocialAttitude] = useState<string>("Baik");
   const [socialDesc, setSocialDesc] = useState<string>("Sangat santun dalam bertutur kata, disiplin dalam mengumpulkan tugas, dan peduli terhadap sesama.");
-  
+
   const [sickCount, setSickCount] = useState<number>(0);
   const [permitCount, setPermitCount] = useState<number>(0);
   const [alphaCount, setAlphaCount] = useState<number>(0);
-  
+
   const [extraCurriculars, setExtraCurriculars] = useState<{ name: string; grade: string; desc: string }[]>([
     { name: "Pramuka Wajib", grade: "A", desc: "Aktif dan menunjukkan jiwa kepemimpinan yang tinggi." },
     { name: "Palang Merah Remaja", grade: "B", desc: "Berpartisipasi aktif dalam kegiatan kemanusiaan dan pertolongan pertama." }
@@ -313,7 +313,7 @@ export default function ReportCardsPage() {
   // Auto-select student if student role
   useEffect(() => {
     if (isStudentRole && students.length > 0 && userEmail) {
-      const matchingStudent = students.find(s => 
+      const matchingStudent = students.find(s =>
         (s.email && s.email.toLowerCase() === userEmail.toLowerCase()) ||
         (s.name && userEmail.toLowerCase().includes(s.name.toLowerCase().split(' ')[0]))
       );
@@ -328,7 +328,7 @@ export default function ReportCardsPage() {
     return scopedStudents.filter(s => {
       const matchClass = (!isGuru && selectedClass === "All") || s.classId === selectedClass || s.className === selectedClass;
       const nisnVal = getStudentNisn(s).toLowerCase();
-      const matchQuery = !searchQuery || 
+      const matchQuery = !searchQuery ||
         (s.name && s.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (s.fullName && s.fullName.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (s.id && s.id.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -340,7 +340,7 @@ export default function ReportCardsPage() {
   // Selected Student Object (Resilient lookup across _firestoreId, uid, id, and nisn)
   const currentStudent = useMemo(() => {
     if (!scopedStudents || scopedStudents.length === 0) return null;
-    return filteredStudents.find(s => 
+    return filteredStudents.find(s =>
       (s._firestoreId && s._firestoreId === selectedStudentId) ||
       (s.uid && s.uid === selectedStudentId) ||
       (s.id && s.id === selectedStudentId) ||
@@ -357,15 +357,15 @@ export default function ReportCardsPage() {
       };
     }
     if (!currentStudent) return null;
-    const studentClass = classes.find(c => 
-      c.id === currentStudent.classId || 
-      c.name === currentStudent.classId || 
+    const studentClass = classes.find(c =>
+      c.id === currentStudent.classId ||
+      c.name === currentStudent.classId ||
       c.name === currentStudent.className
     );
     if (!studentClass) return null;
     const hrName = studentClass.homeroom;
     if (!hrName) return null;
-    const tObj = teachers.find(t => 
+    const tObj = teachers.find(t =>
       (t.name && t.name.toLowerCase() === hrName.toLowerCase()) ||
       (t.id && t.id === hrName)
     );
@@ -378,11 +378,11 @@ export default function ReportCardsPage() {
   // Realtime attendance stats calculated directly from Firestore 'attendance' collection
   const dbAttendanceStats = useMemo(() => {
     if (!currentStudent) return { sick: 0, permit: 0, alpha: 0, present: 0, late: 0, total: 0 };
-    
+
     const studentRecords = attendanceRecords.filter((rec: any) => {
       const matchId = rec.studentId && (
-        rec.studentId === currentStudent.id || 
-        rec.studentId === currentStudent.uid || 
+        rec.studentId === currentStudent.id ||
+        rec.studentId === currentStudent.uid ||
         rec.studentId === currentStudent.nis ||
         rec.studentId === currentStudent.nisn ||
         rec.studentId === currentStudent._firestoreId ||
@@ -420,7 +420,7 @@ export default function ReportCardsPage() {
     if (!currentStudent) return "";
     const nisn = getStudentNisn(currentStudent);
     const primaryId = (nisn !== "-" ? nisn : (currentStudent.id || currentStudent.uid || currentStudent._firestoreId));
-    
+
     // Check if there's already an existing record saved under different candidate keys
     const candidateKeys = [
       nisn !== "-" ? `${nisn}_${semester}_${sanitizedAcademicYear}` : null,
@@ -444,7 +444,7 @@ export default function ReportCardsPage() {
       setSpiritualDesc(rc.spiritualDesc || "Terbiasa berdoa sebelum/sesudah belajar, taat beribadah, dan menunjukkan toleransi yang tinggi.");
       setSocialAttitude(rc.socialAttitude || "Baik");
       setSocialDesc(rc.socialDesc || "Sangat santun dalam bertutur kata, disiplin dalam mengumpulkan tugas, dan peduli terhadap sesama.");
-      
+
       // If explicit attendance saved in reportCard, use it; otherwise auto-use live DB counts
       setSickCount(rc.sickCount !== undefined ? rc.sickCount : dbAttendanceStats.sick);
       setPermitCount(rc.permitCount !== undefined ? rc.permitCount : dbAttendanceStats.permit);
@@ -470,7 +470,7 @@ export default function ReportCardsPage() {
       setSpiritualDesc("Terbiasa berdoa sebelum dan sesudah belajar, taat beribadah, serta menunjukkan sikap toleransi yang tinggi.");
       setSocialAttitude("Baik");
       setSocialDesc("Sangat santun dalam bertutur kata, memiliki kepedulian sosial yang baik, dan dapat bekerja sama.");
-      
+
       // Real counts from attendance database!
       setSickCount(dbAttendanceStats.sick);
       setPermitCount(dbAttendanceStats.permit);
@@ -494,26 +494,26 @@ export default function ReportCardsPage() {
 
     // Filter grades for current student matching semester and academic year
     const studentGrades = grades.filter(g => {
-      const matchStudent = 
-        g.studentId === currentStudent.id || 
-        g.studentId === currentStudent.uid || 
+      const matchStudent =
+        g.studentId === currentStudent.id ||
+        g.studentId === currentStudent.uid ||
         g.studentId === currentStudent.nis ||
         g.studentId === currentStudent.nisn ||
         g.studentId === currentStudent._firestoreId ||
         (currentStudent._allDocIds && currentStudent._allDocIds.includes(g.studentId)) ||
         (g.studentName && currentStudent.name && g.studentName.toLowerCase().trim() === currentStudent.name.toLowerCase().trim()) ||
         (g.studentName && currentStudent.fullName && g.studentName.toLowerCase().trim() === currentStudent.fullName.toLowerCase().trim());
-      
+
       if (!matchStudent) return false;
 
       const matchSemester = !g.semester || g.semester === semester;
       const matchYear = !g.academicYear || g.academicYear === academicYear;
       return matchSemester && matchYear;
     });
-    
+
     // Group by normalized subject name
     const subjectGradeMap: Record<string, { total: number; count: number; scores: number[] }> = {};
-    
+
     studentGrades.forEach(g => {
       const rawSubj = g.subject || "Umum";
       const normSubj = normalizeSubjectName(rawSubj);
@@ -541,7 +541,7 @@ export default function ReportCardsPage() {
     if (currentStudent.classId) {
       schedules.forEach(sc => {
         if (
-          sc.subject && 
+          sc.subject &&
           (sc.classId === currentStudent.classId || sc.className === currentStudent.classId || sc.class === currentStudent.classId)
         ) {
           allDbSubjectNames.add(normalizeSubjectName(sc.subject));
@@ -550,7 +550,7 @@ export default function ReportCardsPage() {
 
       grades.forEach(g => {
         if (
-          g.subject && 
+          g.subject &&
           (g.classId === currentStudent.classId || g.className === currentStudent.classId || g.class === currentStudent.classId)
         ) {
           allDbSubjectNames.add(normalizeSubjectName(g.subject));
@@ -599,7 +599,7 @@ export default function ReportCardsPage() {
     const subjectList = Array.from(allDbSubjectNames).map(subjName => {
       const data = subjectGradeMap[subjName];
       const avg = data && data.count > 0 ? Math.round(data.total / data.count) : 0;
-      
+
       let predicate = "-";
       if (data && data.count > 0) {
         if (avg >= 90) predicate = "A";
@@ -610,7 +610,7 @@ export default function ReportCardsPage() {
 
       const masterSubj = subjects.find(
         s => normalizeSubjectName(s.name).toLowerCase() === subjName.toLowerCase() ||
-             (s.code && s.code.toLowerCase() === subjName.toLowerCase())
+          (s.code && s.code.toLowerCase() === subjName.toLowerCase())
       );
       const presetSubj = STANDARD_SUBJECT_PRESETS.find(p => p.name.toLowerCase() === subjName.toLowerCase());
 
@@ -710,24 +710,24 @@ export default function ReportCardsPage() {
   // Calculate Ranking in Class
   const studentRank = useMemo(() => {
     if (!currentStudent || !currentStudent.classId) return { rank: 1, totalInClass: 1 };
-    
+
     const classStudents = students.filter(s => s.classId === currentStudent.classId || s.className === currentStudent.classId);
-    
+
     const rankedList = classStudents.map(st => {
-      const stGrades = grades.filter(g => 
-        g.studentId === st.id || 
-        g.studentId === st.uid || 
-        g.studentId === st._firestoreId || 
+      const stGrades = grades.filter(g =>
+        g.studentId === st.id ||
+        g.studentId === st.uid ||
+        g.studentId === st._firestoreId ||
         (g.studentName && st.name && g.studentName.toLowerCase().trim() === st.name.toLowerCase().trim())
       );
-      const avg = stGrades.length > 0 
-        ? Math.round(stGrades.reduce((acc, g) => acc + (Number(g.score) || 0), 0) / stGrades.length) 
+      const avg = stGrades.length > 0
+        ? Math.round(stGrades.reduce((acc, g) => acc + (Number(g.score) || 0), 0) / stGrades.length)
         : 0;
       return { id: st.id, _firestoreId: st._firestoreId, uid: st.uid, avg };
     }).sort((a, b) => b.avg - a.avg);
 
-    const rankIdx = rankedList.findIndex(r => 
-      r.id === currentStudent.id || 
+    const rankIdx = rankedList.findIndex(r =>
+      r.id === currentStudent.id ||
       (currentStudent._firestoreId && r._firestoreId === currentStudent._firestoreId) ||
       (currentStudent.uid && r.uid === currentStudent.uid)
     );
@@ -830,7 +830,7 @@ export default function ReportCardsPage() {
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-full mx-auto w-full flex-1 flex flex-col min-h-screen bg-gray-50/50 animate-in fade-in duration-300 relative">
-      
+
       {/* FLOATING TOAST ALERT NOTIFICATION BOX */}
       {alertState && (
         <div className="fixed top-6 right-6 z-50 max-w-md w-full animate-in slide-in-from-top-4 fade-in duration-300">
@@ -844,7 +844,7 @@ export default function ReportCardsPage() {
       )}
 
       {/* Header Bar */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 bg-white p-5 md:p-6 rounded-2xl border border-gray-100 shadow-xs">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 bg-white p-5 md:p-6 rounded-lg border border-gray-100 shadow-xs">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">
@@ -867,7 +867,7 @@ export default function ReportCardsPage() {
               </span>
             )}
             {previewAsGuru && (
-              <span className="px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-800 rounded-md border border-amber-200">
+              <span className="px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200">
                 Pratinjau Role Guru
               </span>
             )}
@@ -893,7 +893,7 @@ export default function ReportCardsPage() {
             <button
               type="button"
               onClick={() => setPreviewAsGuru(true)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-purple-50 text-[#531FFF] border border-purple-200/80 rounded-xl hover:bg-purple-100 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
+              className="flex items-center gap-2 px-3.5 py-2 bg-purple-50 text-[#531FFF] border border-purple-200/80 rounded-lg hover:bg-purple-100 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
               title="Pratinjau tampilan khusus Wali Kelas (Role Guru)"
             >
               <GraduationCap className="w-4 h-4" />
@@ -908,7 +908,7 @@ export default function ReportCardsPage() {
                 setPreviewAsGuru(false);
                 setSelectedClass("All");
               }}
-              className="flex items-center gap-2 px-3.5 py-2 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl hover:bg-rose-100 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
+              className="flex items-center gap-2 px-3.5 py-2 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg hover:bg-rose-100 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
             >
               <X className="w-4 h-4" />
               <span>Keluar Preview Guru</span>
@@ -916,11 +916,11 @@ export default function ReportCardsPage() {
           )}
 
           {/* Tab Nav Buttons */}
-          <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 w-full sm:w-auto">
+          <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200 w-full sm:w-auto">
             <button
               onClick={() => setActiveTab("report")}
               className={cn(
-                "flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                "flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all",
                 activeTab === "report" ? "bg-white text-gray-900 shadow-xs" : "text-gray-500 hover:text-gray-900"
               )}
             >
@@ -930,7 +930,7 @@ export default function ReportCardsPage() {
             <button
               onClick={() => setActiveTab("analytics")}
               className={cn(
-                "flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                "flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all",
                 activeTab === "analytics" ? "bg-white text-[#531FFF] shadow-xs" : "text-gray-500 hover:text-gray-900"
               )}
             >
@@ -942,7 +942,7 @@ export default function ReportCardsPage() {
           <button
             onClick={() => setIsPrintModalOpen(true)}
             disabled={!currentStudent}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-[0.98] cursor-pointer"
+            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white px-4 py-2.5 rounded-lg text-xs font-bold shadow-xs transition-all active:scale-[0.98] cursor-pointer"
           >
             <Printer className="w-4 h-4" />
             <span>Cetak Rapor (PDF)</span>
@@ -952,7 +952,7 @@ export default function ReportCardsPage() {
 
       {/* Banner notification if Guru is not assigned as Wali Kelas */}
       {isGuru && !isTeacherWaliKelas && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex items-start gap-3 shadow-xs">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex items-start gap-3 shadow-xs">
           <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
           <div>
             <h4 className="text-sm font-bold text-amber-900">Akses Terbatas: Belum Ditugaskan Sebagai Wali Kelas</h4>
@@ -964,7 +964,7 @@ export default function ReportCardsPage() {
       )}
 
       {/* Filter Bar */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-4 mb-6 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+      <div className="bg-white rounded-lg border border-gray-100 shadow-xs p-4 mb-6 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
           {/* Class Filter */}
           {!isStudentRole && (
@@ -975,7 +975,7 @@ export default function ReportCardsPage() {
               <select
                 value={selectedClass}
                 onChange={(e) => setSelectedClass(e.target.value)}
-                className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-xl py-2 px-3 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-lg py-2 px-3 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
               >
                 {!isGuru && (
                   <option value="All">Semua Kelas ({classes.length})</option>
@@ -995,7 +995,7 @@ export default function ReportCardsPage() {
             <select
               value={semester}
               onChange={(e) => setSemester(e.target.value)}
-              className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-xl py-2 px-3 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+              className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-lg py-2 px-3 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
             >
               <option value="Ganjil">Semester Ganjil</option>
               <option value="Genap">Semester Genap</option>
@@ -1008,7 +1008,7 @@ export default function ReportCardsPage() {
             <select
               value={academicYear}
               onChange={(e) => setAcademicYear(e.target.value)}
-              className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-xl py-2 px-3 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+              className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-lg py-2 px-3 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
             >
               <option value="2025/2026">2025/2026</option>
               <option value="2024/2025">2024/2025</option>
@@ -1025,23 +1025,23 @@ export default function ReportCardsPage() {
               placeholder="Cari nama / NISN siswa..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs font-medium bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+              className="w-full pl-9 pr-3 py-2 text-xs font-medium bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
             />
           </div>
         )}
       </div>
 
       {(loading || studentsLoading) ? (
-        <div className="bg-white rounded-2xl border border-gray-100 p-12 flex flex-col items-center justify-center text-gray-500 flex-1 min-h-[400px]">
+        <div className="bg-white rounded-lg border border-gray-100 p-12 flex flex-col items-center justify-center text-gray-500 flex-1 min-h-[400px]">
           <Loader2 className="w-8 h-8 animate-spin text-[#531FFF] mb-3" />
           <p className="text-sm font-medium">Memuat data Rapor Digital...</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
-          
+
           {/* LEFT SIDEBAR: Student List (3.5 cols) - Hidden for Student Role */}
           {!isStudentRole && (
-            <div className="lg:col-span-4 bg-white rounded-2xl border border-gray-100 shadow-xs flex flex-col overflow-hidden h-fit max-h-[800px]">
+            <div className="lg:col-span-4 bg-white rounded-lg border border-gray-100 shadow-xs flex flex-col overflow-hidden h-fit max-h-[800px]">
               <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
                 <h3 className="font-bold text-xs text-gray-700 uppercase tracking-wider">Daftar Siswa ({filteredStudents.length})</h3>
                 <span className="text-[11px] text-gray-400 font-medium">Klik untuk ganti siswa</span>
@@ -1054,15 +1054,15 @@ export default function ReportCardsPage() {
                     currentStudent._firestoreId === student._firestoreId ||
                     currentStudent.uid === student.uid
                   );
-                  
-                  const stGrades = grades.filter(g => 
-                    g.studentId === student.id || 
-                    g.studentId === student.uid || 
+
+                  const stGrades = grades.filter(g =>
+                    g.studentId === student.id ||
+                    g.studentId === student.uid ||
                     g.studentId === student._firestoreId ||
                     (g.studentName && student.name && g.studentName.toLowerCase().trim() === student.name.toLowerCase().trim())
                   );
-                  const avg = stGrades.length > 0 
-                    ? Math.round(stGrades.reduce((acc, g) => acc + (Number(g.score) || 0), 0) / stGrades.length) 
+                  const avg = stGrades.length > 0
+                    ? Math.round(stGrades.reduce((acc, g) => acc + (Number(g.score) || 0), 0) / stGrades.length)
                     : 0;
 
                   const studentNisn = getStudentNisn(student);
@@ -1072,15 +1072,15 @@ export default function ReportCardsPage() {
                       key={student._firestoreId || student.uid || student.id}
                       onClick={() => setSelectedStudentId(student._firestoreId || student.uid || student.id)}
                       className={cn(
-                        "w-full text-left p-3 rounded-xl transition-all flex items-center justify-between gap-3 group border cursor-pointer",
-                        isSelected 
-                          ? "bg-[#531FFF] text-white border-[#531FFF] shadow-md shadow-[#531FFF]/20" 
+                        "w-full text-left p-3 rounded-lg transition-all flex items-center justify-between gap-3 group border cursor-pointer",
+                        isSelected
+                          ? "bg-[#531FFF] text-white border-[#531FFF] shadow-md shadow-[#531FFF]/20"
                           : "bg-white border-transparent hover:bg-gray-50 hover:border-gray-200 text-gray-800"
                       )}
                     >
                       <div className="flex items-center gap-3 truncate">
                         <div className={cn(
-                          "w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border transition-all",
+                          "w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 border transition-all",
                           isSelected ? "bg-white/20 border-white/30 text-white" : "bg-blue-50 border-blue-100 text-blue-700"
                         )}>
                           {student.name ? student.name.charAt(0) : "S"}
@@ -1095,9 +1095,9 @@ export default function ReportCardsPage() {
 
                       <div className="text-right shrink-0">
                         <span className={cn(
-                          "inline-block px-2 py-0.5 rounded-md text-[10px] font-extrabold",
-                          isSelected 
-                            ? "bg-white/20 text-white" 
+                          "inline-block px-2 py-0.5 rounded text-[10px] font-extrabold",
+                          isSelected
+                            ? "bg-white/20 text-white"
                             : avg >= 75 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"
                         )}>
                           Rata: {avg}
@@ -1123,16 +1123,16 @@ export default function ReportCardsPage() {
             "flex flex-col gap-6",
             isStudentRole ? "lg:col-span-12" : "lg:col-span-8"
           )}>
-            
+
             {currentStudent ? (
               <>
                 {/* Student Profile Overview Card */}
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-6 relative overflow-hidden">
+                <div className="bg-white rounded-lg border border-gray-100 shadow-xs p-6 relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-[#531FFF]/10 via-[#531FFF]/5 to-transparent rounded-bl-full pointer-events-none" />
-                  
+
                   <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
                     <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 via-[#531FFF] to-indigo-700 text-white flex items-center justify-center font-extrabold text-2xl shadow-lg shadow-[#531FFF]/20 shrink-0">
+                      <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-blue-600 via-[#531FFF] to-indigo-700 text-white flex items-center justify-center font-extrabold text-2xl shadow-lg shadow-[#531FFF]/20 shrink-0">
                         {currentStudent.name ? currentStudent.name.charAt(0) : "S"}
                       </div>
                       <div>
@@ -1146,8 +1146,8 @@ export default function ReportCardsPage() {
                           </span>
                         </div>
                         <p className="text-xs text-gray-500 font-medium mt-1">
-                          NISN: <span className="font-bold text-gray-800">{getStudentNisn(currentStudent)}</span> · 
-                          Kelas: <span className="font-bold text-gray-800">{currentStudent.classId || currentStudent.className || "-"}</span> · 
+                          NISN: <span className="font-bold text-gray-800">{getStudentNisn(currentStudent)}</span> ·
+                          Kelas: <span className="font-bold text-gray-800">{currentStudent.classId || currentStudent.className || "-"}</span> ·
                           Tahun Ajaran: <span className="font-bold text-gray-800">{academicYear} ({semester})</span>
                         </p>
                       </div>
@@ -1155,7 +1155,7 @@ export default function ReportCardsPage() {
 
                     {/* Stats Metric Cards & Quick Save Button */}
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
-                      <div className="grid grid-cols-3 gap-2 w-full md:w-auto bg-gray-50 p-2.5 rounded-xl border border-gray-200/80">
+                      <div className="grid grid-cols-3 gap-2 w-full md:w-auto bg-gray-50 p-2.5 rounded-lg border border-gray-200/80">
                         <div className="text-center px-3 py-1 border-r border-gray-200">
                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Rata-rata</span>
                           <p className="text-lg font-extrabold text-[#531FFF]">{overallAverage}</p>
@@ -1178,23 +1178,23 @@ export default function ReportCardsPage() {
                 {/* TAB 1: LEMBAR RAPOR UTAMA */}
                 {activeTab === "report" && (
                   <div className="space-y-6">
-                    
+
                     {/* Section A: Capaian Hasil Belajar Akademik */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+                    <div className="bg-white rounded-lg border border-gray-100 shadow-xs overflow-hidden">
                       <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <BookOpen className="w-4 h-4 text-[#531FFF]" />
                           <h3 className="font-bold text-xs text-gray-800 uppercase tracking-wider">A. Capaian Hasil Belajar Akademik</h3>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500 font-medium bg-white px-2.5 py-1 rounded-lg border border-gray-200">
+                          <span className="text-xs text-gray-500 font-medium bg-white px-2.5 py-1 rounded-md border border-gray-200">
                             {studentSubjectScores.length} Mata Pelajaran
                           </span>
                           {!isStudentRole && missingSubjects.length > 0 && (
                             <button
                               onClick={handleSyncMissingSubjectsToMaster}
                               disabled={isSyncingSubjects}
-                              className="text-[11px] font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 border border-[#531FFF]/20 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                              className="text-[11px] font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 border border-[#531FFF]/20 px-2.5 py-1 rounded-md transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                               title="Simpan mata pelajaran kurikulum ini ke master collection subjects di database"
                             >
                               {isSyncingSubjects ? (
@@ -1236,9 +1236,9 @@ export default function ReportCardsPage() {
                                   <span className={cn(
                                     "inline-block px-2 py-0.5 rounded text-[9px] font-semibold mt-0.5 border",
                                     item.category.includes("Kelompok A") ? "bg-purple-50 text-purple-700 border-purple-200" :
-                                    item.category.includes("Kelompok B") ? "bg-blue-50 text-blue-700 border-blue-200" :
-                                    item.category.includes("Kelompok C") ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                                    "bg-amber-50 text-amber-700 border-amber-200"
+                                      item.category.includes("Kelompok B") ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                        item.category.includes("Kelompok C") ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                          "bg-amber-50 text-amber-700 border-amber-200"
                                   )}>
                                     {item.category}
                                   </span>
@@ -1250,7 +1250,7 @@ export default function ReportCardsPage() {
                                 <td className="py-3 px-4 text-center">
                                   {item.hasData ? (
                                     <span className={cn(
-                                      "inline-block px-2.5 py-0.5 rounded-md font-extrabold text-xs border",
+                                      "inline-block px-2.5 py-0.5 rounded font-extrabold text-xs border",
                                       item.predicate === "A" && "bg-emerald-50 text-emerald-800 border-emerald-200",
                                       item.predicate === "B" && "bg-blue-50 text-blue-800 border-blue-200",
                                       item.predicate === "C" && "bg-amber-50 text-amber-800 border-amber-200",
@@ -1270,7 +1270,7 @@ export default function ReportCardsPage() {
                                       rows={2}
                                       value={subjectNotes[item.name] ?? item.description}
                                       onChange={(e) => setSubjectNotes(prev => ({ ...prev, [item.name]: e.target.value }))}
-                                      className="w-full p-2 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                                      className="w-full p-2 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-md focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                                     />
                                   )}
                                 </td>
@@ -1291,9 +1291,9 @@ export default function ReportCardsPage() {
 
                     {/* Section B & C: Sikap & Ketidakhadiran */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      
+
                       {/* Section B: Penilaian Sikap & Karakter */}
-                      <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5 space-y-4 flex flex-col justify-between">
+                      <div className="bg-white rounded-lg border border-gray-100 shadow-xs p-5 space-y-4 flex flex-col justify-between">
                         <div>
                           <div className="flex items-center justify-between border-b border-gray-100 pb-3 gap-2">
                             <div className="flex items-center gap-2">
@@ -1311,7 +1311,7 @@ export default function ReportCardsPage() {
                                   disabled={isStudentRole}
                                   value={spiritualAttitude}
                                   onChange={(e) => setSpiritualAttitude(e.target.value)}
-                                  className="px-2.5 py-1 text-xs font-bold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 disabled:opacity-80"
+                                  className="px-2.5 py-1 text-xs font-bold bg-gray-50 border border-gray-200 rounded-md focus:ring-2 focus:ring-[#531FFF]/20 disabled:opacity-80"
                                 >
                                   <option value="Sangat Baik">Sangat Baik (A)</option>
                                   <option value="Baik">Baik (B)</option>
@@ -1346,7 +1346,7 @@ export default function ReportCardsPage() {
                                 value={spiritualDesc}
                                 onChange={(e) => setSpiritualDesc(e.target.value)}
                                 placeholder="Deskripsi perkembangan sikap spiritual siswa..."
-                                className="w-full p-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 disabled:opacity-80 leading-relaxed"
+                                className="w-full p-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 disabled:opacity-80 leading-relaxed"
                               />
                             </div>
 
@@ -1358,7 +1358,7 @@ export default function ReportCardsPage() {
                                   disabled={isStudentRole}
                                   value={socialAttitude}
                                   onChange={(e) => setSocialAttitude(e.target.value)}
-                                  className="px-2.5 py-1 text-xs font-bold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 disabled:opacity-80"
+                                  className="px-2.5 py-1 text-xs font-bold bg-gray-50 border border-gray-200 rounded-md focus:ring-2 focus:ring-[#531FFF]/20 disabled:opacity-80"
                                 >
                                   <option value="Sangat Baik">Sangat Baik (A)</option>
                                   <option value="Baik">Baik (B)</option>
@@ -1393,7 +1393,7 @@ export default function ReportCardsPage() {
                                 value={socialDesc}
                                 onChange={(e) => setSocialDesc(e.target.value)}
                                 placeholder="Deskripsi perkembangan sikap sosial siswa..."
-                                className="w-full p-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 disabled:opacity-80 leading-relaxed"
+                                className="w-full p-2.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 disabled:opacity-80 leading-relaxed"
                               />
                             </div>
                           </div>
@@ -1401,7 +1401,7 @@ export default function ReportCardsPage() {
                       </div>
 
                       {/* Section C: Ketidakhadiran (Presensi) */}
-                      <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5 space-y-4 flex flex-col justify-between">
+                      <div className="bg-white rounded-lg border border-gray-100 shadow-xs p-5 space-y-4 flex flex-col justify-between">
                         <div>
                           <div className="flex items-center justify-between border-b border-gray-100 pb-3 gap-2">
                             <div className="flex items-center gap-2">
@@ -1418,7 +1418,7 @@ export default function ReportCardsPage() {
                                 <button
                                   type="button"
                                   onClick={handleSyncAttendanceFromDb}
-                                  className="text-[10px] font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 px-2.5 py-1 rounded-lg border border-[#531FFF]/20 transition-all flex items-center gap-1 cursor-pointer"
+                                  className="text-[10px] font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 px-2.5 py-1 rounded-md border border-[#531FFF]/20 transition-all flex items-center gap-1 cursor-pointer"
                                   title="Tarik & cocokkan ulang data dari log absensi harian"
                                 >
                                   <RefreshCw className="w-3 h-3" />
@@ -1429,7 +1429,7 @@ export default function ReportCardsPage() {
                           </div>
 
                           {/* Live DB Attendance Sync Banner */}
-                          <div className="mt-3 bg-gradient-to-r from-blue-50/80 to-purple-50/80 p-3 rounded-xl border border-blue-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                          <div className="mt-3 bg-gradient-to-r from-blue-50/80 to-purple-50/80 p-3 rounded-lg border border-blue-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
                             <div className="flex items-center gap-2">
                               <Database className="w-4 h-4 text-[#531FFF] shrink-0" />
                               <div className="text-[11px]">
@@ -1448,7 +1448,7 @@ export default function ReportCardsPage() {
                               <button
                                 type="button"
                                 onClick={handleSyncAttendanceFromDb}
-                                className="shrink-0 flex items-center gap-1.5 bg-white hover:bg-gray-50 text-[#531FFF] border border-purple-200 px-2.5 py-1 rounded-lg text-[10px] font-bold shadow-xs transition-colors"
+                                className="shrink-0 flex items-center gap-1.5 bg-white hover:bg-gray-50 text-[#531FFF] border border-purple-200 px-2.5 py-1 rounded-md text-[10px] font-bold shadow-xs transition-colors"
                                 title="Tarik dan terapkan data dari koleksi presensi harian"
                               >
                                 <RefreshCw className="w-3 h-3" />
@@ -1459,13 +1459,13 @@ export default function ReportCardsPage() {
 
                           <div className="grid grid-cols-3 gap-3 mt-4">
                             {/* Sakit */}
-                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 text-center hover:border-gray-300 transition-colors">
+                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-center hover:border-gray-300 transition-colors">
                               <label className="block text-[11px] font-bold text-gray-600 mb-1.5">Sakit (Hari)</label>
                               <div className="flex items-center justify-center gap-1.5">
                                 {!isStudentRole && (
                                   <button
                                     onClick={() => setSickCount(Math.max(0, sickCount - 1))}
-                                    className="w-6 h-6 rounded-md bg-white border border-gray-300 flex items-center justify-center text-xs font-bold text-gray-600 hover:bg-gray-100 active:scale-95"
+                                    className="w-6 h-6 rounded bg-white border border-gray-300 flex items-center justify-center text-xs font-bold text-gray-600 hover:bg-gray-100 active:scale-95"
                                   >
                                     -
                                   </button>
@@ -1476,12 +1476,12 @@ export default function ReportCardsPage() {
                                   disabled={isStudentRole}
                                   value={sickCount}
                                   onChange={(e) => setSickCount(Math.max(0, parseInt(e.target.value) || 0))}
-                                  className="w-12 text-center text-base font-extrabold text-gray-900 bg-white border border-gray-200 rounded-md py-0.5"
+                                  className="w-12 text-center text-base font-extrabold text-gray-900 bg-white border border-gray-200 rounded py-0.5"
                                 />
                                 {!isStudentRole && (
                                   <button
                                     onClick={() => setSickCount(sickCount + 1)}
-                                    className="w-6 h-6 rounded-md bg-white border border-gray-300 flex items-center justify-center text-xs font-bold text-gray-600 hover:bg-gray-100 active:scale-95"
+                                    className="w-6 h-6 rounded bg-white border border-gray-300 flex items-center justify-center text-xs font-bold text-gray-600 hover:bg-gray-100 active:scale-95"
                                   >
                                     +
                                   </button>
@@ -1490,13 +1490,13 @@ export default function ReportCardsPage() {
                             </div>
 
                             {/* Izin */}
-                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 text-center hover:border-gray-300 transition-colors">
+                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-center hover:border-gray-300 transition-colors">
                               <label className="block text-[11px] font-bold text-gray-600 mb-1.5">Izin (Hari)</label>
                               <div className="flex items-center justify-center gap-1.5">
                                 {!isStudentRole && (
                                   <button
                                     onClick={() => setPermitCount(Math.max(0, permitCount - 1))}
-                                    className="w-6 h-6 rounded-md bg-white border border-gray-300 flex items-center justify-center text-xs font-bold text-gray-600 hover:bg-gray-100 active:scale-95"
+                                    className="w-6 h-6 rounded bg-white border border-gray-300 flex items-center justify-center text-xs font-bold text-gray-600 hover:bg-gray-100 active:scale-95"
                                   >
                                     -
                                   </button>
@@ -1507,12 +1507,12 @@ export default function ReportCardsPage() {
                                   disabled={isStudentRole}
                                   value={permitCount}
                                   onChange={(e) => setPermitCount(Math.max(0, parseInt(e.target.value) || 0))}
-                                  className="w-12 text-center text-base font-extrabold text-gray-900 bg-white border border-gray-200 rounded-md py-0.5"
+                                  className="w-12 text-center text-base font-extrabold text-gray-900 bg-white border border-gray-200 rounded py-0.5"
                                 />
                                 {!isStudentRole && (
                                   <button
                                     onClick={() => setPermitCount(permitCount + 1)}
-                                    className="w-6 h-6 rounded-md bg-white border border-gray-300 flex items-center justify-center text-xs font-bold text-gray-600 hover:bg-gray-100 active:scale-95"
+                                    className="w-6 h-6 rounded bg-white border border-gray-300 flex items-center justify-center text-xs font-bold text-gray-600 hover:bg-gray-100 active:scale-95"
                                   >
                                     +
                                   </button>
@@ -1521,13 +1521,13 @@ export default function ReportCardsPage() {
                             </div>
 
                             {/* Tanpa Keterangan */}
-                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 text-center hover:border-gray-300 transition-colors">
+                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-center hover:border-gray-300 transition-colors">
                               <label className="block text-[11px] font-bold text-gray-600 mb-1.5">Alpa (Hari)</label>
                               <div className="flex items-center justify-center gap-1.5">
                                 {!isStudentRole && (
                                   <button
                                     onClick={() => setAlphaCount(Math.max(0, alphaCount - 1))}
-                                    className="w-6 h-6 rounded-md bg-white border border-gray-300 flex items-center justify-center text-xs font-bold text-gray-600 hover:bg-gray-100 active:scale-95"
+                                    className="w-6 h-6 rounded bg-white border border-gray-300 flex items-center justify-center text-xs font-bold text-gray-600 hover:bg-gray-100 active:scale-95"
                                   >
                                     -
                                   </button>
@@ -1538,12 +1538,12 @@ export default function ReportCardsPage() {
                                   disabled={isStudentRole}
                                   value={alphaCount}
                                   onChange={(e) => setAlphaCount(Math.max(0, parseInt(e.target.value) || 0))}
-                                  className="w-12 text-center text-base font-extrabold text-gray-900 bg-white border border-gray-200 rounded-md py-0.5"
+                                  className="w-12 text-center text-base font-extrabold text-gray-900 bg-white border border-gray-200 rounded py-0.5"
                                 />
                                 {!isStudentRole && (
                                   <button
                                     onClick={() => setAlphaCount(alphaCount + 1)}
-                                    className="w-6 h-6 rounded-md bg-white border border-gray-300 flex items-center justify-center text-xs font-bold text-gray-600 hover:bg-gray-100 active:scale-95"
+                                    className="w-6 h-6 rounded bg-white border border-gray-300 flex items-center justify-center text-xs font-bold text-gray-600 hover:bg-gray-100 active:scale-95"
                                   >
                                     +
                                   </button>
@@ -1553,7 +1553,7 @@ export default function ReportCardsPage() {
                           </div>
                         </div>
 
-                        <div className="text-[11px] text-gray-500 bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-100 flex items-center gap-2 mt-3">
+                        <div className="text-[11px] text-gray-500 bg-emerald-50/60 p-2.5 rounded-lg border border-emerald-100 flex items-center gap-2 mt-3">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                           <span>Status kehadiran otomatis menghitung persentase keikutsertaan siswa dalam kegiatan belajar mengajar semester ini.</span>
                         </div>
@@ -1562,7 +1562,7 @@ export default function ReportCardsPage() {
                     </div>
 
                     {/* Section D: Kegiatan Ekstrakurikuler */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5 space-y-4">
+                    <div className="bg-white rounded-lg border border-gray-100 shadow-xs p-5 space-y-4">
                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
                         <div className="flex items-center gap-2">
                           <Award className="w-4 h-4 text-[#531FFF]" />
@@ -1571,13 +1571,13 @@ export default function ReportCardsPage() {
                       </div>
 
                       {!isStudentRole && (
-                        <div className="flex items-center gap-2 flex-wrap bg-gray-50/80 p-2.5 rounded-xl border border-gray-200/70">
+                        <div className="flex items-center gap-2 flex-wrap bg-gray-50/80 p-2.5 rounded-lg border border-gray-200/70">
                           <span className="text-[11px] font-bold text-gray-500">Preset Cepat:</span>
                           {["Pramuka Wajib", "PMR (Palang Merah)", "Paskibra", "Rohis & Keagamaan", "English Club", "Futsal", "Seni Tari", "Robotik & KIR"].map((p, pIdx) => (
                             <button
                               key={pIdx}
                               onClick={() => handleAddExtra(p)}
-                              className="text-[10px] font-bold text-[#531FFF] bg-white hover:bg-[#531FFF]/10 border border-[#531FFF]/20 px-2 py-1 rounded-md transition-colors shadow-2xs"
+                              className="text-[10px] font-bold text-[#531FFF] bg-white hover:bg-[#531FFF]/10 border border-[#531FFF]/20 px-2 py-1 rounded transition-colors shadow-2xs"
                             >
                               + {p}
                             </button>
@@ -1587,7 +1587,7 @@ export default function ReportCardsPage() {
 
                       <div className="space-y-3">
                         {extraCurriculars.map((ex, exIdx) => (
-                          <div key={exIdx} className="p-3 bg-gray-50 rounded-xl border border-gray-200 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
+                          <div key={exIdx} className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
                             <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-3">
                               <input
                                 type="text"
@@ -1595,13 +1595,13 @@ export default function ReportCardsPage() {
                                 value={ex.name}
                                 onChange={(e) => handleUpdateExtra(exIdx, "name", e.target.value)}
                                 placeholder="Nama Ekstrakurikuler..."
-                                className="md:col-span-4 px-3 py-1.5 font-bold bg-white border border-gray-200 rounded-lg disabled:opacity-80 focus:ring-2 focus:ring-[#531FFF]/20"
+                                className="md:col-span-4 px-3 py-1.5 font-bold bg-white border border-gray-200 rounded-md disabled:opacity-80 focus:ring-2 focus:ring-[#531FFF]/20"
                               />
                               <select
                                 disabled={isStudentRole}
                                 value={ex.grade}
                                 onChange={(e) => handleUpdateExtra(exIdx, "grade", e.target.value)}
-                                className="md:col-span-2 px-2.5 py-1.5 font-bold bg-white border border-gray-200 rounded-lg disabled:opacity-80 focus:ring-2 focus:ring-[#531FFF]/20"
+                                className="md:col-span-2 px-2.5 py-1.5 font-bold bg-white border border-gray-200 rounded-md disabled:opacity-80 focus:ring-2 focus:ring-[#531FFF]/20"
                               >
                                 <option value="A">Nilai A (Sangat Baik)</option>
                                 <option value="B">Nilai B (Baik)</option>
@@ -1614,14 +1614,14 @@ export default function ReportCardsPage() {
                                 value={ex.desc}
                                 onChange={(e) => handleUpdateExtra(exIdx, "desc", e.target.value)}
                                 placeholder="Keterangan perkembangan, keaktifan, dan capaian prestasi..."
-                                className="md:col-span-6 px-3 py-1.5 font-medium bg-white border border-gray-200 rounded-lg disabled:opacity-80 focus:ring-2 focus:ring-[#531FFF]/20"
+                                className="md:col-span-6 px-3 py-1.5 font-medium bg-white border border-gray-200 rounded-md disabled:opacity-80 focus:ring-2 focus:ring-[#531FFF]/20"
                               />
                             </div>
 
                             {!isStudentRole && (
                               <button
                                 onClick={() => handleRemoveExtra(exIdx)}
-                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-white rounded-lg transition-colors shrink-0"
+                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-white rounded-md transition-colors shrink-0"
                                 title="Hapus Ekstrakurikuler"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -1631,12 +1631,12 @@ export default function ReportCardsPage() {
                         ))}
 
                         {extraCurriculars.length === 0 && (
-                          <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-xl">
+                          <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-lg">
                             <p className="text-xs text-gray-400 mb-2">Belum ada kegiatan ekstrakurikuler tercatat untuk siswa ini.</p>
                             {!isStudentRole && (
                               <button
                                 onClick={() => handleAddExtra()}
-                                className="text-xs font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 px-3 py-1.5 rounded-lg transition-colors inline-flex items-center gap-1.5"
+                                className="text-xs font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 px-3 py-1.5 rounded-md transition-colors inline-flex items-center gap-1.5"
                               >
                                 <Plus className="w-3.5 h-3.5" />
                                 <span>Tambah Ekstrakurikuler</span>
@@ -1658,7 +1658,7 @@ export default function ReportCardsPage() {
                     </div>
 
                     {/* Section E: Catatan Perkembangan Wali Kelas */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5 space-y-4">
+                    <div className="bg-white rounded-lg border border-gray-100 shadow-xs p-5 space-y-4">
                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
                         <div className="flex items-center gap-2">
                           <Edit3 className="w-4 h-4 text-[#531FFF]" />
@@ -1671,25 +1671,25 @@ export default function ReportCardsPage() {
                           <span className="text-[11px] font-medium text-gray-400">Template Cepat:</span>
                           <button
                             onClick={() => applyPresetNote("Selamat atas pencapaian prestasi belajar yang sangat gemilang semester ini! Pertahankan semangat belajar, keaktifan berorganisasi, dan tetap rendah hati.")}
-                            className="text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-200 transition-colors"
+                            className="text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-200 transition-colors"
                           >
                             🌟 Sangat Memuaskan
                           </button>
                           <button
                             onClick={() => applyPresetNote("Ananda menunjukkan kemajuan belajar yang konsisten dan aktif berpartisipasi di kelas. Tingkatkan terus minat literasi dan ketekunan untuk meraih hasil yang lebih prima.")}
-                            className="text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 transition-colors"
+                            className="text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-md border border-blue-200 transition-colors"
                           >
                             📈 Menunjukkan Kemajuan
                           </button>
                           <button
                             onClick={() => applyPresetNote("Perlu meningkatkan fokus belajar mandiri di rumah dan kedisiplinan mengumpulkan tugas. Jangan ragu berkonsultasi dengan bapak/ibu guru jika mengalami kendala materi.")}
-                            className="text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-200 transition-colors"
+                            className="text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-md border border-amber-200 transition-colors"
                           >
                             💪 Motivasi Belajar
                           </button>
                           <button
                             onClick={() => applyPresetNote("Tingkatkan kehadiran harian dan ketepatan waktu agar tidak tertinggal materi esensial. Potensi diri ananda sangat baik jika diasah dengan kedisiplinan.")}
-                            className="text-[10px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-200 transition-colors"
+                            className="text-[10px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-md border border-purple-200 transition-colors"
                           >
                             🎯 Peningkatan Disiplin
                           </button>
@@ -1704,20 +1704,20 @@ export default function ReportCardsPage() {
                           value={teacherNotes}
                           onChange={(e) => setTeacherNotes(e.target.value)}
                           placeholder="Tuliskan catatan motivasi dan saran perkembangan untuk siswa..."
-                          className="w-full p-3 text-xs font-medium bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] disabled:opacity-80 leading-relaxed"
+                          className="w-full p-3 text-xs font-medium bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] disabled:opacity-80 leading-relaxed"
                         />
                       </div>
 
                       {/* Administrative Fields: Promotion Decision, Homeroom Info, Decision Date */}
                       <div className="pt-3 border-t border-gray-100 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                         {/* Status Kenaikan / Kelulusan */}
-                        <div className="bg-gray-50/80 p-3 rounded-xl border border-gray-200/80">
+                        <div className="bg-gray-50/80 p-3 rounded-lg border border-gray-200/80">
                           <label className="block text-[11px] font-bold text-gray-700 mb-1.5">Status Kenaikan / Kelulusan:</label>
                           <select
                             disabled={isStudentRole}
                             value={promotionStatus}
                             onChange={(e) => setPromotionStatus(e.target.value)}
-                            className="w-full p-2 text-xs font-bold bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 disabled:opacity-80"
+                            className="w-full p-2 text-xs font-bold bg-white border border-gray-200 rounded-md focus:ring-2 focus:ring-[#531FFF]/20 disabled:opacity-80"
                           >
                             <option value="Naik ke Kelas Berikutnya">Naik ke Kelas Berikutnya</option>
                             <option value="Lulus (Memenuhi Seluruh Syarat Kelulusan)">Lulus (Memenuhi Kriteria)</option>
@@ -1727,7 +1727,7 @@ export default function ReportCardsPage() {
                         </div>
 
                         {/* Wali Kelas Penanggung Jawab (from Database) */}
-                        <div className="bg-gray-50/80 p-3 rounded-xl border border-gray-200/80">
+                        <div className="bg-gray-50/80 p-3 rounded-lg border border-gray-200/80">
                           <div className="flex items-center justify-between mb-1.5">
                             <label className="block text-[11px] font-bold text-gray-700">Wali Kelas Penanggung Jawab:</label>
                             <span className="text-[9px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
@@ -1740,7 +1740,7 @@ export default function ReportCardsPage() {
                             value={customHomeroomName || homeroomTeacher?.name || ""}
                             onChange={(e) => setCustomHomeroomName(e.target.value)}
                             placeholder="Nama Wali Kelas..."
-                            className="w-full p-2 text-xs font-bold bg-white border border-gray-200 rounded-lg disabled:opacity-80 focus:ring-2 focus:ring-[#531FFF]/20"
+                            className="w-full p-2 text-xs font-bold bg-white border border-gray-200 rounded-md disabled:opacity-80 focus:ring-2 focus:ring-[#531FFF]/20"
                           />
                           <div className="mt-1 flex items-center justify-between text-[10px] text-gray-500">
                             <span>NIP:</span>
@@ -1756,7 +1756,7 @@ export default function ReportCardsPage() {
                         </div>
 
                         {/* Tanggal Penetapan / Titimangsa Rapor */}
-                        <div className="bg-gray-50/80 p-3 rounded-xl border border-gray-200/80">
+                        <div className="bg-gray-50/80 p-3 rounded-lg border border-gray-200/80">
                           <label className="block text-[11px] font-bold text-gray-700 mb-1.5">Tanggal Titimangsa Rapor:</label>
                           <input
                             type="text"
@@ -1764,7 +1764,7 @@ export default function ReportCardsPage() {
                             value={decisionDate}
                             onChange={(e) => setDecisionDate(e.target.value)}
                             placeholder="Contoh: 19 Desember 2025"
-                            className="w-full p-2 text-xs font-bold bg-white border border-gray-200 rounded-lg disabled:opacity-80 focus:ring-2 focus:ring-[#531FFF]/20"
+                            className="w-full p-2 text-xs font-bold bg-white border border-gray-200 rounded-md disabled:opacity-80 focus:ring-2 focus:ring-[#531FFF]/20"
                           />
                           <p className="text-[10px] text-gray-400 mt-1">Dicantumkan pada lembar tanda tangan rapor.</p>
                         </div>
@@ -1775,9 +1775,9 @@ export default function ReportCardsPage() {
                     {/* SELESAI PENGISIAN RAPOR - ACTION CARD (Alur Akhir Pengisian)   */}
                     {/* ------------------------------------------------------------- */}
                     {!isStudentRole && (
-                      <div className="bg-gradient-to-r from-purple-50/90 via-white to-purple-50/60 rounded-2xl border-2 border-[#531FFF]/20 p-5 sm:p-6 shadow-md shadow-[#531FFF]/5 flex flex-col md:flex-row items-center justify-between gap-5 transition-all hover:border-[#531FFF]/40">
+                      <div className="bg-gradient-to-r from-purple-50/90 via-white to-purple-50/60 rounded-lg border-2 border-[#531FFF]/20 p-5 sm:p-6 shadow-md shadow-[#531FFF]/5 flex flex-col md:flex-row items-center justify-between gap-5 transition-all hover:border-[#531FFF]/40">
                         <div className="flex items-start sm:items-center gap-4 w-full md:w-auto">
-                          <div className="w-12 h-12 rounded-2xl bg-[#531FFF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/30 shrink-0">
+                          <div className="w-12 h-12 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/30 shrink-0">
                             <Save className="w-6 h-6" />
                           </div>
                           <div>
@@ -1800,7 +1800,7 @@ export default function ReportCardsPage() {
                             type="button"
                             onClick={() => setIsPrintModalOpen(true)}
                             disabled={!currentStudent}
-                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 px-4 py-3 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-[0.98] cursor-pointer"
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 px-4 py-3 rounded-lg text-xs font-bold transition-all shadow-xs active:scale-[0.98] cursor-pointer"
                           >
                             <Printer className="w-4 h-4 text-gray-500" />
                             <span>Pratinjau / Cetak</span>
@@ -1810,7 +1810,7 @@ export default function ReportCardsPage() {
                             type="button"
                             onClick={handleSaveReportCard}
                             disabled={isSaving || !currentStudent}
-                            className="flex-1 md:flex-none flex items-center justify-center gap-2.5 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-6 py-3 rounded-xl text-xs sm:text-sm font-bold shadow-lg shadow-[#531FFF]/25 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 cursor-pointer"
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2.5 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-6 py-3 rounded-lg text-xs sm:text-sm font-bold shadow-lg shadow-[#531FFF]/25 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 cursor-pointer"
                             title={`Simpan seluruh data rapor khusus untuk siswa ${currentStudent?.name || ""}`}
                           >
                             {isSaving ? (
@@ -1840,11 +1840,11 @@ export default function ReportCardsPage() {
                 {/* TAB 2: ANALISIS & GRAFIK PERFORMA */}
                 {activeTab === "analytics" && (
                   <div className="space-y-6">
-                    
+
                     {/* Performance Overview Banner */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+                      <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-xs flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
                           <TrendingUp className="w-6 h-6" />
                         </div>
                         <div>
@@ -1855,8 +1855,8 @@ export default function ReportCardsPage() {
                         </div>
                       </div>
 
-                      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold shrink-0">
+                      <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-xs flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold shrink-0">
                           <CheckCircle2 className="w-6 h-6" />
                         </div>
                         <div>
@@ -1867,8 +1867,8 @@ export default function ReportCardsPage() {
                         </div>
                       </div>
 
-                      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
+                      <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-xs flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
                           <Award className="w-6 h-6" />
                         </div>
                         <div>
@@ -1881,7 +1881,7 @@ export default function ReportCardsPage() {
                     </div>
 
                     {/* Chart 1: Subject Scores vs KKM Baseline Bar Chart */}
-                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs">
+                    <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-xs">
                       <div className="flex items-center justify-between mb-6">
                         <div>
                           <h3 className="font-extrabold text-sm text-gray-900">Perbandingan Nilai Akhir vs KKM</h3>
@@ -1897,8 +1897,8 @@ export default function ReportCardsPage() {
                           <BarChart data={studentSubjectScores} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
                             <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-25} textAnchor="end" />
                             <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                            <Tooltip 
-                              contentStyle={{ borderRadius: '12px', fontSize: '12px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }} 
+                            <Tooltip
+                              contentStyle={{ borderRadius: '12px', fontSize: '12px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
                             />
                             <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
                             <Bar dataKey="score" name="Nilai Siswa" fill="#531FFF" radius={[6, 6, 0, 0]}>
@@ -1914,10 +1914,10 @@ export default function ReportCardsPage() {
 
                     {/* Chart 2: Competency Radar Chart */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs">
+                      <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-xs">
                         <h3 className="font-extrabold text-sm text-gray-900 mb-1">Radar Penguasaan Kompetensi</h3>
                         <p className="text-xs text-gray-400 mb-4">Peta kekuatan bidang akademik siswa</p>
-                        
+
                         <div className="w-full h-64">
                           <ResponsiveContainer width="100%" height="100%">
                             <RadarChart data={studentSubjectScores}>
@@ -1931,25 +1931,25 @@ export default function ReportCardsPage() {
                       </div>
 
                       {/* Summary & Suggestions Card */}
-                      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
+                      <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-xs flex flex-col justify-between">
                         <div>
                           <div className="flex items-center gap-2 mb-3">
                             <Sparkles className="w-5 h-5 text-[#531FFF]" />
                             <h3 className="font-extrabold text-sm text-gray-900">Rekomendasi & Analisis Pembelajaran</h3>
                           </div>
-                          
+
                           <div className="space-y-3 text-xs">
-                            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
                               <span className="font-bold text-emerald-800 block mb-1">💪 Bidang Keunggulan:</span>
                               <p className="text-emerald-700">
-                                Siswa sangat menonjol pada mata pelajaran 
-                                <span className="font-bold"> {studentSubjectScores.filter(s => s.score >= 85).map(s => s.name).join(", ") || "Umum"}</span>. 
+                                Siswa sangat menonjol pada mata pelajaran
+                                <span className="font-bold"> {studentSubjectScores.filter(s => s.score >= 85).map(s => s.name).join(", ") || "Umum"}</span>.
                                 Dorong partisipasi dalam perlombaan akademik atau olimpiade.
                               </p>
                             </div>
 
                             {studentSubjectScores.some(s => s.score < 75) && (
-                              <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
+                              <div className="p-3 rounded-lg bg-amber-50 border border-amber-100">
                                 <span className="font-bold text-amber-800 block mb-1">⚠️ Perlu Peningkatan:</span>
                                 <p className="text-amber-700">
                                   Mata pelajaran <span className="font-bold">{studentSubjectScores.filter(s => s.score < 75).map(s => s.name).join(", ")}</span> memerlukan bimbingan ekstra dan jadwal remedial.
@@ -1957,7 +1957,7 @@ export default function ReportCardsPage() {
                               </div>
                             )}
 
-                            <div className="p-3 rounded-xl bg-blue-50 border border-blue-100">
+                            <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
                               <span className="font-bold text-blue-800 block mb-1">📌 Catatan Kehadiran & Karakter:</span>
                               <p className="text-blue-700">
                                 Kehadiran {attendanceRate}% dan predikat sikap {spiritualAttitude} menunjukkan kesiapan belajar yang prima.
@@ -1978,14 +1978,14 @@ export default function ReportCardsPage() {
 
               </>
             ) : (
-              <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center text-gray-400 flex flex-col items-center justify-center gap-3">
+              <div className="bg-white rounded-lg border border-gray-100 p-12 text-center text-gray-400 flex flex-col items-center justify-center gap-3">
                 <GraduationCap className="w-10 h-10 text-gray-300" />
                 <p className="text-sm font-semibold text-gray-600">
                   {isGuru && teacherHomeroomClasses.length === 0
                     ? "Anda belum ditugaskan sebagai Wali Kelas. Hubungi Administrator untuk penugasan kelas."
                     : filteredStudents.length === 0
-                    ? "Tidak ada data siswa pada kelas binaan Anda."
-                    : "Pilih siswa dari daftar di samping untuk melihat lembar Rapor Digital."}
+                      ? "Tidak ada data siswa pada kelas binaan Anda."
+                      : "Pilih siswa dari daftar di samping untuk melihat lembar Rapor Digital."}
                 </p>
               </div>
             )}
@@ -1998,8 +1998,8 @@ export default function ReportCardsPage() {
       {/* PRINT-READY OFFICIAL REPORT CARD MODAL */}
       {isPrintModalOpen && currentStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar p-8 text-gray-900 font-sans print-area">
-            
+          <div className="bg-white rounded-lg shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar p-8 text-gray-900 font-sans print-area">
+
             {/* Modal Controls */}
             <div className="flex justify-between items-center pb-6 border-b border-gray-200 no-print">
               <div className="flex items-center gap-2">
@@ -2009,13 +2009,13 @@ export default function ReportCardsPage() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => window.print()}
-                  className="flex items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs"
+                  className="flex items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-xs"
                 >
                   <Printer className="w-4 h-4" /> Cetak / Download PDF
                 </button>
                 <button
                   onClick={() => setIsPrintModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-xl"
+                  className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-lg"
                 >
                   Tutup
                 </button>
@@ -2024,7 +2024,7 @@ export default function ReportCardsPage() {
 
             {/* Printable Document Sheet */}
             <div className="pt-6 space-y-6">
-              
+
               {/* KOP SEKOLAH */}
               <div className="text-center border-b-2 border-gray-900 pb-4">
                 <h2 className="text-2xl font-extrabold tracking-widest text-gray-900 uppercase">SMA QUICK SCHOOLS INDONESIA</h2>
@@ -2037,7 +2037,7 @@ export default function ReportCardsPage() {
               </div>
 
               {/* Student Metadata */}
-              <div className="grid grid-cols-2 gap-4 text-xs font-semibold bg-gray-50 p-4 rounded-xl border border-gray-300">
+              <div className="grid grid-cols-2 gap-4 text-xs font-semibold bg-gray-50 p-4 rounded-lg border border-gray-300">
                 <div className="space-y-1.5">
                   <p><span className="text-gray-500 font-normal">Nama Siswa:</span> <span className="font-extrabold text-gray-900">{currentStudent.name}</span></p>
                   <p><span className="text-gray-500 font-normal">NISN:</span> <span className="font-bold text-gray-800">{getStudentNisn(currentStudent)}</span></p>
@@ -2081,7 +2081,7 @@ export default function ReportCardsPage() {
 
               {/* Attitude & Attendance Grid */}
               <div className="grid grid-cols-2 gap-4 text-xs">
-                <div className="border border-gray-300 rounded-xl p-3">
+                <div className="border border-gray-300 rounded-lg p-3">
                   <h4 className="font-bold uppercase mb-2 text-gray-800">B. PENILAIAN SIKAP & KARAKTER</h4>
                   <p><span className="font-bold">1. Sikap Spiritual:</span> <span className="font-extrabold">{spiritualAttitude}</span></p>
                   <p className="text-[11px] text-gray-600 italic mt-0.5 mb-2">"{spiritualDesc}"</p>
@@ -2089,7 +2089,7 @@ export default function ReportCardsPage() {
                   <p className="text-[11px] text-gray-600 italic mt-0.5">"{socialDesc}"</p>
                 </div>
 
-                <div className="border border-gray-300 rounded-xl p-3">
+                <div className="border border-gray-300 rounded-lg p-3">
                   <h4 className="font-bold uppercase mb-2 text-gray-800">C. KETIDAKHADIRAN (PRESENSI)</h4>
                   <div className="space-y-1">
                     <p>Sakit: <span className="font-bold">{sickCount}</span> hari</p>
@@ -2103,7 +2103,7 @@ export default function ReportCardsPage() {
               </div>
 
               {/* Extracurriculars */}
-              <div className="border border-gray-300 rounded-xl p-3 text-xs">
+              <div className="border border-gray-300 rounded-lg p-3 text-xs">
                 <h4 className="font-bold uppercase mb-2 text-gray-800">D. KEGIATAN EKSTRAKURIKULER</h4>
                 <table className="w-full border-collapse border border-gray-300 text-xs text-left">
                   <thead>
@@ -2128,7 +2128,7 @@ export default function ReportCardsPage() {
               </div>
 
               {/* Teacher Notes & Promotion Decision */}
-              <div className="border border-gray-300 rounded-xl p-4 text-xs space-y-2">
+              <div className="border border-gray-300 rounded-lg p-4 text-xs space-y-2">
                 <h4 className="font-bold uppercase text-gray-800">E. CATATAN & KEPUTUSAN WALI KELAS</h4>
                 <p className="italic leading-relaxed text-gray-800">"{teacherNotes}"</p>
                 {promotionStatus && (
@@ -2171,7 +2171,8 @@ export default function ReportCardsPage() {
       )}
 
       {/* Custom print CSS */}
-      <style dangerouslySetInnerHTML={{__html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @media print {
           body * {
             visibility: hidden;

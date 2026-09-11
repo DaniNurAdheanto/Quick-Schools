@@ -4,23 +4,17 @@ import React, { useState, useEffect, useMemo } from "react";
 import { 
   Plus, PenTool, Trash2, Loader2, Calendar, Clock, LayoutGrid, List, Table,
   Search, Filter, AlertTriangle, User, BookOpen, GraduationCap, X,
-  BadgeCheck, AlertCircle
+  BadgeCheck, AlertCircle, Settings
 } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
+import { useTimePresets, DEFAULT_TIME_PRESETS } from "@/lib/time-presets";
+import TimePresetManagerModal from "@/components/schedule/TimePresetManagerModal";
 
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-
-const TIME_PRESETS = [
-  { label: "Jam 1 (07:00 - 08:30)", start: "07:00", end: "08:30" },
-  { label: "Jam 2 (08:30 - 10:00)", start: "08:30", end: "10:00" },
-  { label: "Jam 3 (10:15 - 11:45)", start: "10:15", end: "11:45" },
-  { label: "Jam 4 (12:30 - 14:00)", start: "12:30", end: "14:00" },
-  { label: "Jam 5 (14:00 - 15:30)", start: "14:00", end: "15:30" },
-];
 
 const COLOR_PALETTES = [
   { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-900", badge: "bg-blue-100 text-blue-800", dot: "bg-blue-500", hover: "hover:bg-blue-100/70" },
@@ -71,6 +65,10 @@ export default function SchedulePage() {
   const [formStartTime, setFormStartTime] = useState<string>("07:00");
   const [formEndTime, setFormEndTime] = useState<string>("08:30");
   
+  const { presets: dynamicTimePresets } = useTimePresets();
+  const [showTimePresetModal, setShowTimePresetModal] = useState(false);
+  const timePresets = dynamicTimePresets && dynamicTimePresets.length > 0 ? dynamicTimePresets : DEFAULT_TIME_PRESETS;
+
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -366,8 +364,8 @@ export default function SchedulePage() {
     if (!studentMyClass && !studentClassId) {
       return (
         <div className="p-4 sm:p-8 max-w-[1200px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-12">
-            <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200 shadow-sm">
+          <div className="bg-white rounded-xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-12">
+            <div className="w-16 h-16 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200 shadow-sm">
               <AlertCircle className="w-8 h-8" />
             </div>
             <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-50 text-amber-800 border border-amber-200 uppercase tracking-wider">
@@ -386,11 +384,11 @@ export default function SchedulePage() {
       <div className="p-4 sm:p-8 pb-16 max-w-[1500px] mx-auto w-full flex flex-col space-y-6 animate-in fade-in duration-300">
         
         {/* Top Header Card */}
-        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col lg:flex-row lg:items-center justify-between gap-5 relative overflow-hidden">
+        <div className="bg-white rounded-xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col lg:flex-row lg:items-center justify-between gap-5 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-96 h-full bg-gradient-to-l from-[#531FFF]/5 via-[#531FFF]/2 to-transparent pointer-events-none" />
           
           <div className="flex items-center gap-4 relative z-10">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] flex items-center justify-center text-white shadow-lg shadow-[#531FFF]/25 shrink-0">
+            <div className="w-14 h-14 rounded-lg bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] flex items-center justify-center text-white shadow-lg shadow-[#531FFF]/25 shrink-0">
               <Calendar className="w-7 h-7" />
             </div>
             <div>
@@ -418,11 +416,11 @@ export default function SchedulePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 relative z-10 self-start lg:self-auto">
-            <div className="flex items-center gap-2 bg-white px-3.5 py-2 rounded-2xl border border-gray-200 shadow-sm text-xs sm:text-sm font-bold text-gray-700">
+            <div className="flex items-center gap-2 bg-white px-3.5 py-2 rounded-lg border border-gray-200 shadow-sm text-xs sm:text-sm font-bold text-gray-700">
               <Clock className="w-4 h-4 text-[#531FFF]" />
               <span>{mounted ? `${currentDayString}, ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : ""}</span>
             </div>
-            <div className="px-3.5 py-2 bg-gray-50 rounded-2xl border border-gray-200 text-right">
+            <div className="px-3.5 py-2 bg-gray-50 rounded-lg border border-gray-200 text-right">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tahun Ajaran</p>
               <p className="text-xs font-black text-gray-800">2025/2026 Ganjil</p>
             </div>
@@ -433,7 +431,7 @@ export default function SchedulePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           
           {/* Tile 1: Status Jadwal Hari Ini */}
-          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
+          <div className="bg-white rounded-xl border border-gray-100 p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black tracking-wider uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100 flex items-center gap-1.5">
@@ -451,7 +449,7 @@ export default function SchedulePage() {
                   <span className="text-xs font-bold text-gray-500">Sesi Pelajaran</span>
                 </div>
                 
-                <div className="mt-3 p-3 rounded-2xl bg-gray-50/80 border border-gray-100">
+                <div className="mt-3 p-3 rounded-lg bg-gray-50/80 border border-gray-100">
                   {currentActiveSchedule ? (
                     <div className="space-y-1">
                       <div className="flex items-center gap-1.5 text-xs font-black text-[#531FFF]">
@@ -490,7 +488,7 @@ export default function SchedulePage() {
           </div>
 
           {/* Tile 2: Total Beban Belajar Mingguan */}
-          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
+          <div className="bg-white rounded-xl border border-gray-100 p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black tracking-wider uppercase text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
@@ -519,7 +517,7 @@ export default function SchedulePage() {
           </div>
 
           {/* Tile 3: Rombel & Wali Kelas */}
-          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
+          <div className="bg-white rounded-xl border border-gray-100 p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black tracking-wider uppercase text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-100">
@@ -529,7 +527,7 @@ export default function SchedulePage() {
               </div>
 
               <div className="flex items-center gap-3 pt-1">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white flex items-center justify-center font-black text-lg shadow-md shadow-[#531FFF]/20 shrink-0">
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white flex items-center justify-center font-black text-lg shadow-md shadow-[#531FFF]/20 shrink-0">
                   {studentHomeroomTeacher?.name ? studentHomeroomTeacher.name.charAt(0).toUpperCase() : (studentMyClass?.homeroom ? studentMyClass.homeroom.charAt(0).toUpperCase() : "W")}
                 </div>
                 <div className="min-w-0">
@@ -552,14 +550,14 @@ export default function SchedulePage() {
         </div>
 
         {/* Control Bar: View Switcher & Search */}
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-xs p-4 sm:p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-xs p-4 sm:p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
           
           {/* View Switcher */}
-          <div className="flex bg-gray-100/80 p-1.5 rounded-2xl">
+          <div className="flex bg-gray-100/80 p-1.5 rounded-lg">
             <button
               onClick={() => setViewMode("weekly")}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer",
                 viewMode === "weekly" ? "bg-white text-[#531FFF] shadow-xs" : "text-gray-500 hover:text-gray-800"
               )}
             >
@@ -569,7 +567,7 @@ export default function SchedulePage() {
             <button
               onClick={() => setViewMode("matrix")}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer",
                 viewMode === "matrix" ? "bg-white text-[#531FFF] shadow-xs" : "text-gray-500 hover:text-gray-800"
               )}
             >
@@ -579,7 +577,7 @@ export default function SchedulePage() {
             <button
               onClick={() => setViewMode("daily")}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer",
                 viewMode === "daily" ? "bg-white text-[#531FFF] shadow-xs" : "text-gray-500 hover:text-gray-800"
               )}
             >
@@ -597,10 +595,10 @@ export default function SchedulePage() {
                 placeholder="Cari mata pelajaran atau guru..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs font-medium bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                className="w-full pl-9 pr-3 py-2 text-xs font-medium bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
               />
             </div>
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-purple-50 text-purple-700 text-xs font-bold rounded-xl border border-purple-100">
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-purple-50 text-purple-700 text-xs font-bold rounded-lg border border-purple-100">
               <GraduationCap className="w-3.5 h-3.5 text-[#531FFF]" />
               <span>Kelas {studentMyClass?.name || studentClassId}</span>
             </div>
@@ -621,7 +619,7 @@ export default function SchedulePage() {
                 const isToday = mounted && day === currentDayString;
 
                 return (
-                  <div key={day} className="flex flex-col bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden min-h-[420px]">
+                  <div key={day} className="flex flex-col bg-white rounded-xl border border-gray-100 shadow-xs overflow-hidden min-h-[420px]">
                     {/* Day Column Header */}
                     <div className={cn(
                       "p-4 flex items-center justify-between border-b transition-colors",
@@ -653,7 +651,7 @@ export default function SchedulePage() {
                           <div 
                             key={schedule._firestoreId || idx}
                             className={cn(
-                              "group relative p-3.5 rounded-2xl border transition-all duration-200",
+                              "group relative p-3.5 rounded-lg border transition-all duration-200",
                               palette.bg, palette.border, palette.hover,
                               active && "ring-2 ring-[#531FFF] shadow-md scale-[1.01]"
                             )}
@@ -667,11 +665,11 @@ export default function SchedulePage() {
                             )}
 
                             <div className="flex justify-between items-start mb-2">
-                              <span className={cn("text-[11px] font-extrabold px-2 py-0.5 rounded-lg", palette.badge)}>
+                              <span className={cn("text-[11px] font-extrabold px-2 py-0.5 rounded-md", palette.badge)}>
                                 {schedule.startTime} - {schedule.endTime}
                               </span>
                               {active && (
-                                <span className="text-[9px] font-black uppercase text-[#531FFF] bg-white px-1.5 py-0.5 rounded-md shadow-xs">
+                                <span className="text-[9px] font-black uppercase text-[#531FFF] bg-white px-1.5 py-0.5 rounded shadow-xs">
                                   Aktif
                                 </span>
                               )}
@@ -701,7 +699,7 @@ export default function SchedulePage() {
 
                       {/* Empty Day State */}
                       {daySchedules.length === 0 && (
-                        <div className="w-full h-48 flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-100 p-4 text-center">
+                        <div className="w-full h-48 flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-100 p-4 text-center">
                           <p className="text-xs font-bold text-gray-400">Tidak ada sesi pelajaran</p>
                           <span className="text-[11px] text-gray-300 mt-1">Hari libur / mandiri</span>
                         </div>
@@ -715,7 +713,7 @@ export default function SchedulePage() {
 
           {/* VIEW MODE 2: TIMETABLE MATRIX GRID */}
           {viewMode === "matrix" && (
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden flex-1 flex flex-col">
+            <div className="bg-white rounded-xl border border-gray-100 shadow-xs overflow-hidden flex-1 flex flex-col">
               <div className="overflow-x-auto custom-scrollbar flex-1">
                 <table className="w-full border-collapse text-left min-w-[800px]">
                   <thead>
@@ -732,8 +730,8 @@ export default function SchedulePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs">
-                    {TIME_PRESETS.map((slot, slotIdx) => (
-                      <tr key={slotIdx} className="hover:bg-gray-50/50 transition-colors">
+                    {timePresets.map((slot, slotIdx) => (
+                      <tr key={slot.id || slotIdx} className="hover:bg-gray-50/50 transition-colors">
                         <td className="py-3.5 px-4 font-bold text-gray-700 bg-gray-50/40 border-r border-gray-100 align-top">
                           <div className="flex items-center gap-1.5 text-[#531FFF]">
                             <Clock className="w-3.5 h-3.5" />
@@ -760,7 +758,7 @@ export default function SchedulePage() {
                                       <div 
                                         key={s._firestoreId || sIdx}
                                         className={cn(
-                                          "p-3 rounded-xl border text-left transition-all",
+                                          "p-3 rounded-lg border text-left transition-all",
                                           palette.bg, palette.border,
                                           active && "ring-2 ring-[#531FFF] shadow-sm"
                                         )}
@@ -798,7 +796,7 @@ export default function SchedulePage() {
 
           {/* VIEW MODE 3: TIMELINE HARIAN */}
           {viewMode === "daily" && (
-            <div className="flex-1 flex flex-col bg-white rounded-3xl border border-gray-100 shadow-xs p-6 overflow-hidden">
+            <div className="flex-1 flex flex-col bg-white rounded-xl border border-gray-100 shadow-xs p-6 overflow-hidden">
               
               {/* Day Selector Pills */}
               <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 border-b border-gray-100 custom-scrollbar">
@@ -810,7 +808,7 @@ export default function SchedulePage() {
                       key={day}
                       onClick={() => setSelectedDay(day)}
                       className={cn(
-                        "px-5 py-2.5 rounded-2xl text-xs font-extrabold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer",
+                        "px-5 py-2.5 rounded-lg text-xs font-extrabold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer",
                         isDayActive 
                           ? "bg-[#531FFF] text-white shadow-md shadow-[#531FFF]/20" 
                           : "bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200"
@@ -848,13 +846,13 @@ export default function SchedulePage() {
                             )} />
 
                             <div className={cn(
-                              "p-5 rounded-2xl border transition-all",
+                              "p-5 rounded-lg border transition-all",
                               palette.bg, palette.border,
                               active && "ring-2 ring-[#531FFF] shadow-md"
                             )}>
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
                                 <div>
-                                  <span className={cn("text-xs font-black px-2.5 py-1 rounded-lg", palette.badge)}>
+                                  <span className={cn("text-xs font-black px-2.5 py-1 rounded-md", palette.badge)}>
                                     {schedule.startTime} - {schedule.endTime} WIB
                                   </span>
                                   <h4 className="font-black text-lg mt-2 text-gray-900">
@@ -870,7 +868,7 @@ export default function SchedulePage() {
                                 )}
                               </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white/70 backdrop-blur-xs p-3.5 rounded-xl border border-black/5 text-xs">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white/70 backdrop-blur-xs p-3.5 rounded-lg border border-black/5 text-xs">
                                 <div>
                                   <span className="text-gray-400 font-medium">Guru Pengampu:</span>
                                   <p className="font-bold text-gray-900 mt-0.5">{schedule.teacher}</p>
@@ -889,7 +887,7 @@ export default function SchedulePage() {
                   </div>
                 ) : (
                   <div className="py-16 flex flex-col items-center justify-center text-center">
-                    <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mb-3 text-gray-400">
+                    <div className="w-14 h-14 bg-gray-50 rounded-lg flex items-center justify-center mb-3 text-gray-400">
                       <Calendar className="w-7 h-7" />
                     </div>
                     <h3 className="text-base font-bold text-gray-900">Tidak ada jadwal untuk hari {selectedDay}</h3>
@@ -934,7 +932,7 @@ export default function SchedulePage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          <div className="flex items-center gap-2 bg-white px-3.5 py-2 rounded-xl border border-gray-200 shadow-sm text-sm font-semibold text-gray-700">
+          <div className="flex items-center gap-2 bg-white px-3.5 py-2 rounded-lg border border-gray-200 shadow-sm text-sm font-semibold text-gray-700">
              <Clock className="w-4 h-4 text-[#531FFF]" />
              <span>{mounted ? `${currentDayString}, ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : ""}</span>
           </div>
@@ -942,7 +940,7 @@ export default function SchedulePage() {
           {userRole !== "siswa" && (
             <button 
               onClick={() => handleOpenAddModal()}
-              className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
             >
               <Plus className="w-5 h-5" />
               <span>Tambah Jadwal</span>
@@ -952,14 +950,14 @@ export default function SchedulePage() {
       </div>
 
       {/* Control Bar: Filters & View Switcher */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+      <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4 mb-6 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         
         {/* View Switcher */}
-        <div className="flex bg-gray-100/80 p-1 rounded-xl">
+        <div className="flex bg-gray-100/80 p-1 rounded-lg">
           <button
             onClick={() => setViewMode("weekly")}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
+              "flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold transition-all",
               viewMode === "weekly" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
             )}
           >
@@ -969,7 +967,7 @@ export default function SchedulePage() {
           <button
             onClick={() => setViewMode("matrix")}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
+              "flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold transition-all",
               viewMode === "matrix" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
             )}
           >
@@ -979,7 +977,7 @@ export default function SchedulePage() {
           <button
             onClick={() => setViewMode("daily")}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
+              "flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold transition-all",
               viewMode === "daily" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
             )}
           >
@@ -998,7 +996,7 @@ export default function SchedulePage() {
               placeholder="Cari mata pelajaran / guru..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs font-medium bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+              className="w-full pl-9 pr-3 py-2 text-xs font-medium bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
             />
           </div>
 
@@ -1008,7 +1006,7 @@ export default function SchedulePage() {
             <select 
               value={selectedClassFilter} 
               onChange={(e) => setSelectedClassFilter(e.target.value)}
-              className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] py-2 px-3 h-9 shadow-sm cursor-pointer"
+              className="bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] py-2 px-3 h-9 shadow-sm cursor-pointer"
             >
               <option value="All">Semua Kelas ({classes.length})</option>
               {classes.map(c => (
@@ -1022,7 +1020,7 @@ export default function SchedulePage() {
 
       {/* Main Content Area */}
       {loading ? (
-        <div className="bg-white rounded-2xl border border-gray-100 p-12 flex flex-col items-center justify-center text-gray-500 flex-1">
+        <div className="bg-white rounded-lg border border-gray-100 p-12 flex flex-col items-center justify-center text-gray-500 flex-1">
           <Loader2 className="w-8 h-8 animate-spin text-[#531FFF] mb-3" />
           <p className="text-sm font-medium">Memuat data jadwal pelajaran...</p>
         </div>
@@ -1039,7 +1037,7 @@ export default function SchedulePage() {
                 const isToday = mounted && day === currentDayString;
 
                 return (
-                  <div key={day} className="flex flex-col bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden min-h-[420px]">
+                  <div key={day} className="flex flex-col bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden min-h-[420px]">
                     {/* Day Column Header */}
                     <div className={cn(
                       "p-3.5 flex items-center justify-between border-b transition-colors",
@@ -1060,7 +1058,7 @@ export default function SchedulePage() {
                         onClick={() => handleOpenAddModal(day)}
                         title={`Tambah jadwal di hari ${day}`}
                         className={cn(
-                          "p-1 rounded-lg transition-all",
+                          "p-1 rounded-md transition-all",
                           isToday 
                             ? "hover:bg-white/20 text-white" 
                             : "hover:bg-white text-gray-500 hover:text-[#531FFF] shadow-xs"
@@ -1080,7 +1078,7 @@ export default function SchedulePage() {
                           <div 
                             key={schedule._firestoreId || idx}
                             className={cn(
-                              "group relative p-3.5 rounded-xl border transition-all duration-200",
+                              "group relative p-3.5 rounded-lg border transition-all duration-200",
                               palette.bg, palette.border, palette.hover,
                               active && "ring-2 ring-[#531FFF] shadow-md scale-[1.01]"
                             )}
@@ -1094,7 +1092,7 @@ export default function SchedulePage() {
                             )}
 
                             <div className="flex justify-between items-start mb-2">
-                              <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded-md", palette.badge)}>
+                              <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded", palette.badge)}>
                                 {schedule.startTime} - {schedule.endTime}
                               </span>
 
@@ -1103,14 +1101,14 @@ export default function SchedulePage() {
                                 <div className="flex items-center gap-1">
                                   <button 
                                     onClick={() => handleOpenEditModal(schedule)}
-                                    className="p-1 text-gray-400 hover:text-[#531FFF] hover:bg-white/80 rounded-md transition-colors cursor-pointer"
+                                    className="p-1 text-gray-400 hover:text-[#531FFF] hover:bg-white/80 rounded transition-colors cursor-pointer"
                                     title="Edit"
                                   >
                                     <PenTool className="w-3.5 h-3.5" />
                                   </button>
                                   <button 
                                     onClick={() => handleOpenDeleteModal(schedule)}
-                                    className="p-1 text-gray-400 hover:text-red-500 hover:bg-white/80 rounded-md transition-colors cursor-pointer"
+                                    className="p-1 text-gray-400 hover:text-red-500 hover:bg-white/80 rounded transition-colors cursor-pointer"
                                     title="Hapus"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -1143,7 +1141,7 @@ export default function SchedulePage() {
                       {daySchedules.length === 0 && userRole !== "siswa" && (
                         <button
                           onClick={() => handleOpenAddModal(day)}
-                          className="w-full h-32 flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 hover:border-[#531FFF]/40 hover:bg-[#531FFF]/5 text-gray-400 hover:text-[#531FFF] transition-all group p-4 cursor-pointer"
+                          className="w-full h-32 flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 hover:border-[#531FFF]/40 hover:bg-[#531FFF]/5 text-gray-400 hover:text-[#531FFF] transition-all group p-4 cursor-pointer"
                         >
                           <Plus className="w-6 h-6 mb-1 group-hover:scale-110 transition-transform" />
                           <span className="text-xs font-semibold">Tambah Slot</span>
@@ -1158,7 +1156,7 @@ export default function SchedulePage() {
 
           {/* VIEW MODE 2: TIMETABLE MATRIX GRID */}
           {viewMode === "matrix" && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex-1 flex flex-col">
+            <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden flex-1 flex flex-col">
               <div className="overflow-x-auto custom-scrollbar flex-1">
                 <table className="w-full border-collapse text-left min-w-[800px]">
                   <thead>
@@ -1175,8 +1173,8 @@ export default function SchedulePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs">
-                    {TIME_PRESETS.map((slot, slotIdx) => (
-                      <tr key={slotIdx} className="hover:bg-gray-50/50 transition-colors">
+                    {timePresets.map((slot, slotIdx) => (
+                      <tr key={slot.id || slotIdx} className="hover:bg-gray-50/50 transition-colors">
                         <td className="py-3 px-4 font-bold text-gray-700 bg-gray-50/40 border-r border-gray-100 align-top">
                           <div className="flex items-center gap-1.5 text-[#531FFF]">
                             <Clock className="w-3.5 h-3.5" />
@@ -1202,7 +1200,7 @@ export default function SchedulePage() {
                                       <div 
                                         key={s._firestoreId || sIdx}
                                         className={cn(
-                                          "p-2.5 rounded-lg border text-left transition-all",
+                                          "p-2.5 rounded-md border text-left transition-all",
                                           palette.bg, palette.border
                                         )}
                                       >
@@ -1237,7 +1235,7 @@ export default function SchedulePage() {
                               ) : userRole !== "siswa" ? (
                                 <button
                                   onClick={() => handleOpenAddModal(day, selectedClassFilter !== "All" ? selectedClassFilter : "", slot.start, slot.end)}
-                                  className="w-full h-full flex flex-col items-center justify-center text-gray-300 hover:text-[#531FFF] hover:bg-[#531FFF]/5 rounded-lg border border-dashed border-transparent hover:border-[#531FFF]/20 transition-all group py-3 cursor-pointer"
+                                  className="w-full h-full flex flex-col items-center justify-center text-gray-300 hover:text-[#531FFF] hover:bg-[#531FFF]/5 rounded-md border border-dashed border-transparent hover:border-[#531FFF]/20 transition-all group py-3 cursor-pointer"
                                 >
                                   <Plus className="w-4 h-4 mb-0.5 group-hover:scale-110 transition-transform" />
                                   <span className="text-[10px] font-semibold">Isi Slot</span>
@@ -1256,7 +1254,7 @@ export default function SchedulePage() {
 
           {/* VIEW MODE 3: DAILY TIMELINE */}
           {viewMode === "daily" && (
-            <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-100 shadow-sm p-6 overflow-hidden">
+            <div className="flex-1 flex flex-col bg-white rounded-lg border border-gray-100 shadow-sm p-6 overflow-hidden">
               
               {/* Day Selector Pills */}
               <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-6 border-b border-gray-100 custom-scrollbar">
@@ -1265,7 +1263,7 @@ export default function SchedulePage() {
                     key={day}
                     onClick={() => setSelectedDay(day)}
                     className={cn(
-                      "px-5 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2",
+                      "px-5 py-2.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2",
                       selectedDay === day 
                         ? "bg-[#531FFF] text-white shadow-md shadow-[#531FFF]/20" 
                         : "bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200"
@@ -1302,13 +1300,13 @@ export default function SchedulePage() {
                             )} />
 
                             <div className={cn(
-                              "p-5 rounded-2xl border transition-all",
+                              "p-5 rounded-lg border transition-all",
                               palette.bg, palette.border,
                               active && "ring-2 ring-[#531FFF] shadow-md"
                             )}>
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
                                 <div>
-                                  <span className={cn("text-xs font-bold px-2.5 py-1 rounded-md", palette.badge)}>
+                                  <span className={cn("text-xs font-bold px-2.5 py-1 rounded", palette.badge)}>
                                     {schedule.startTime} - {schedule.endTime}
                                   </span>
                                   <h4 className={cn("font-extrabold text-lg mt-2 text-gray-900")}>
@@ -1320,13 +1318,13 @@ export default function SchedulePage() {
                                   <div className="flex items-center gap-2">
                                     <button
                                       onClick={() => handleOpenEditModal(schedule)}
-                                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-gray-700 hover:text-[#531FFF] text-xs font-bold rounded-lg border border-gray-200 shadow-xs transition-colors cursor-pointer"
+                                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-gray-700 hover:text-[#531FFF] text-xs font-bold rounded-md border border-gray-200 shadow-xs transition-colors cursor-pointer"
                                     >
                                       <PenTool className="w-3.5 h-3.5" /> Edit
                                     </button>
                                     <button
                                       onClick={() => handleOpenDeleteModal(schedule)}
-                                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-600 hover:bg-red-50 text-xs font-bold rounded-lg border border-gray-200 shadow-xs transition-colors cursor-pointer"
+                                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-600 hover:bg-red-50 text-xs font-bold rounded-md border border-gray-200 shadow-xs transition-colors cursor-pointer"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" /> Hapus
                                     </button>
@@ -1334,7 +1332,7 @@ export default function SchedulePage() {
                                 )}
                               </div>
 
-                              <div className="grid grid-cols-2 gap-4 bg-white/70 backdrop-blur-xs p-3.5 rounded-xl border border-black/5 text-xs">
+                              <div className="grid grid-cols-2 gap-4 bg-white/70 backdrop-blur-xs p-3.5 rounded-lg border border-black/5 text-xs">
                                 <div>
                                   <span className="text-gray-400 font-medium">Kelas:</span>
                                   <p className="font-bold text-gray-900 mt-0.5">{schedule.class}</p>
@@ -1351,7 +1349,7 @@ export default function SchedulePage() {
                   </div>
                 ) : (
                   <div className="py-16 flex flex-col items-center justify-center text-center">
-                    <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mb-3 text-gray-400">
+                    <div className="w-14 h-14 bg-gray-50 rounded-lg flex items-center justify-center mb-3 text-gray-400">
                       <Calendar className="w-7 h-7" />
                     </div>
                     <h3 className="text-base font-bold text-gray-900">Belum ada jadwal untuk {selectedDay}</h3>
@@ -1359,7 +1357,7 @@ export default function SchedulePage() {
                     {userRole !== "siswa" && (
                       <button
                         onClick={() => handleOpenAddModal(selectedDay)}
-                        className="mt-4 inline-flex items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm cursor-pointer"
+                        className="mt-4 inline-flex items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm cursor-pointer"
                       >
                         <Plus className="w-4 h-4" />
                         <span>Tambah Jadwal {selectedDay}</span>
@@ -1377,12 +1375,12 @@ export default function SchedulePage() {
       {/* QUICK-ADD & EDIT MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-100 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
             
             {/* Modal Header */}
             <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-[#531FFF]/5 to-transparent">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-[#531FFF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/30">
+                <div className="w-10 h-10 rounded-lg bg-[#531FFF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/30">
                   {modalMode === "delete" ? <Trash2 className="w-5 h-5" /> : <Calendar className="w-5 h-5" />}
                 </div>
                 <div>
@@ -1409,7 +1407,7 @@ export default function SchedulePage() {
               
               {/* Conflict Error Banner */}
               {conflictError && (
-                <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3 text-xs text-red-800 animate-in slide-in-from-top-2">
+                <div className="p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-xs text-red-800 animate-in slide-in-from-top-2">
                   <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                   <div className="font-medium leading-relaxed">{conflictError}</div>
                 </div>
@@ -1424,7 +1422,7 @@ export default function SchedulePage() {
                       <select
                         value={formDay}
                         onChange={(e) => setFormDay(e.target.value)}
-                        className="w-full px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                        className="w-full px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                       >
                         {DAYS.map(d => (
                           <option key={d} value={d}>{d}</option>
@@ -1437,7 +1435,7 @@ export default function SchedulePage() {
                       <select
                         value={formClass}
                         onChange={(e) => setFormClass(e.target.value)}
-                        className="w-full px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                        className="w-full px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                       >
                         {classes.length === 0 && <option value="">Pilih Kelas</option>}
                         {classes.map(c => (
@@ -1453,7 +1451,7 @@ export default function SchedulePage() {
                     <select
                       value={formSubject}
                       onChange={(e) => handleSubjectChange(e.target.value)}
-                      className="w-full px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                      className="w-full px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                     >
                       {subjects.length === 0 && <option value="">Pilih Mata Pelajaran</option>}
                       {subjects.map(s => (
@@ -1468,7 +1466,7 @@ export default function SchedulePage() {
                     <select
                       value={formTeacher}
                       onChange={(e) => setFormTeacher(e.target.value)}
-                      className="w-full px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                      className="w-full px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                     >
                       {teachers.length === 0 && <option value="">Pilih Guru</option>}
                       {teachers.map(t => (
@@ -1480,27 +1478,46 @@ export default function SchedulePage() {
                   </div>
 
                   {/* Time Presets */}
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1.5">Preset Jam Cepat</label>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#531FFF]" />
+                        Preset Jam Cepat
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowTimePresetModal(true)}
+                        className="text-[11px] font-semibold text-[#531FFF] hover:text-[#4216d6] hover:underline flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <Settings className="w-3 h-3" />
+                        Kelola Template Jam
+                      </button>
+                    </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {TIME_PRESETS.map((preset, pIdx) => (
-                        <button
-                          key={pIdx}
-                          type="button"
-                          onClick={() => {
-                            setFormStartTime(preset.start);
-                            setFormEndTime(preset.end);
-                          }}
-                          className={cn(
-                            "px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all",
-                            formStartTime === preset.start && formEndTime === preset.end
-                              ? "bg-[#531FFF] text-white border-[#531FFF] shadow-xs"
-                              : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
-                          )}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
+                      {timePresets.map((preset) => {
+                        const isSelected = formStartTime === preset.start && formEndTime === preset.end;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => {
+                              setFormStartTime(preset.start);
+                              setFormEndTime(preset.end);
+                            }}
+                            className={cn(
+                              "px-2.5 py-1.5 rounded-md text-[11px] font-semibold border transition-all flex items-center gap-1 cursor-pointer",
+                              isSelected
+                                ? "bg-[#531FFF] text-white border-[#531FFF] shadow-xs"
+                                : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                            )}
+                          >
+                            <span>{preset.start}–{preset.end}</span>
+                            <span className={cn("text-[10px]", isSelected ? "text-purple-200" : "text-gray-400")}>
+                              ({preset.name})
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -1512,7 +1529,7 @@ export default function SchedulePage() {
                         type="time"
                         value={formStartTime}
                         onChange={(e) => setFormStartTime(e.target.value)}
-                        className="w-full px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                        className="w-full px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                       />
                     </div>
                     <div>
@@ -1521,7 +1538,7 @@ export default function SchedulePage() {
                         type="time"
                         value={formEndTime}
                         onChange={(e) => setFormEndTime(e.target.value)}
-                        className="w-full px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                        className="w-full px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                       />
                     </div>
                   </div>
@@ -1539,7 +1556,7 @@ export default function SchedulePage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+                  className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   Batal
                 </button>
@@ -1548,7 +1565,7 @@ export default function SchedulePage() {
                   type="submit"
                   disabled={isSubmitting}
                   className={cn(
-                    "px-5 py-2 text-xs font-bold text-white rounded-xl shadow-md transition-all flex items-center gap-2",
+                    "px-5 py-2 text-xs font-bold text-white rounded-lg shadow-md transition-all flex items-center gap-2",
                     modalMode === "delete"
                       ? "bg-red-600 hover:bg-red-700 shadow-red-600/20"
                       : "bg-[#531FFF] hover:bg-[#531FFF]/90 shadow-[#531FFF]/20"
@@ -1568,6 +1585,16 @@ export default function SchedulePage() {
           </div>
         </div>
       )}
+
+      {/* Time Preset Manager Modal */}
+      <TimePresetManagerModal
+        isOpen={showTimePresetModal}
+        onClose={() => setShowTimePresetModal(false)}
+        onSelectPreset={(p) => {
+          setFormStartTime(p.startTime);
+          setFormEndTime(p.endTime);
+        }}
+      />
 
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar {

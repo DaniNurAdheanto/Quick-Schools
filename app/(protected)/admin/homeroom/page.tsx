@@ -420,11 +420,11 @@ export default function HomeroomPage() {
     <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full h-full space-y-6 animate-in fade-in duration-300">
       
       {/* PAGE HEADER */}
-      <div className="bg-white rounded-3xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden">
+      <div className="bg-white rounded-xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-full bg-gradient-to-l from-[#531FFF]/5 via-[#531FFF]/2 to-transparent pointer-events-none" />
         
         <div className="flex items-center gap-4 relative z-10">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] flex items-center justify-center text-white shadow-lg shadow-[#531FFF]/25 shrink-0">
+          <div className="w-14 h-14 rounded-lg bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] flex items-center justify-center text-white shadow-lg shadow-[#531FFF]/25 shrink-0">
             <UserCheck className="w-7 h-7" />
           </div>
           <div>
@@ -450,7 +450,7 @@ export default function HomeroomPage() {
           <button 
             onClick={handleExportCSV}
             disabled={filteredClasses.length === 0}
-            className="flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-bold border border-gray-200 shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+            className="flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-bold border border-gray-200 shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
           >
             <Download className="w-4 h-4 text-[#531FFF]" />
             <span className="hidden sm:inline">Export Rekap CSV</span>
@@ -461,19 +461,19 @@ export default function HomeroomPage() {
       {/* KPI METRICS OVERVIEW CARDS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Kelas */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">Total Kelas</p>
             <h3 className="text-2xl sm:text-3xl font-black text-gray-900 mt-1 tracking-tight">{totalClasses}</h3>
             <p className="text-[11px] font-semibold text-gray-400 mt-0.5">Rombongan Belajar</p>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-[#531FFF]/10 flex items-center justify-center text-[#531FFF] shrink-0 font-bold">
+          <div className="w-12 h-12 rounded-lg bg-[#531FFF]/10 flex items-center justify-center text-[#531FFF] shrink-0 font-bold">
             <GraduationCap className="w-6 h-6" />
           </div>
         </div>
 
         {/* Kelas Berwali & Progress */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[11px] font-extrabold text-emerald-600 uppercase tracking-wider">Kelas Berwali</p>
@@ -481,7 +481,7 @@ export default function HomeroomPage() {
                 {filledHomerooms} <span className="text-sm text-gray-400 font-bold">/ {totalClasses}</span>
               </h3>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0 font-bold">
+            <div className="w-12 h-12 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0 font-bold">
               <CheckCircle2 className="w-6 h-6" />
             </div>
           </div>
@@ -500,7 +500,7 @@ export default function HomeroomPage() {
         </div>
 
         {/* Belum Ada Wali */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[11px] font-extrabold text-rose-600 uppercase tracking-wider">Belum Ada Wali</p>
             <div className="flex items-baseline gap-2 mt-1">
@@ -513,13 +513,13 @@ export default function HomeroomPage() {
             </div>
             <p className="text-[11px] font-semibold text-gray-400 mt-0.5">Memerlukan Penugasan</p>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-rose-100 flex items-center justify-center text-rose-700 shrink-0 font-bold">
+          <div className="w-12 h-12 rounded-lg bg-rose-100 flex items-center justify-center text-rose-700 shrink-0 font-bold">
             <AlertCircle className="w-6 h-6" />
           </div>
         </div>
 
         {/* Guru Siap Ditugaskan */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-[11px] font-extrabold text-blue-600 uppercase tracking-wider">Guru Bebas Tugas Wali</p>
             <h3 className="text-2xl sm:text-3xl font-black text-blue-700 mt-1 tracking-tight">
@@ -527,7 +527,7 @@ export default function HomeroomPage() {
             </h3>
             <p className="text-[11px] font-semibold text-gray-400 mt-0.5">Tersedia untuk Ditugaskan</p>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-700 shrink-0 font-bold">
+          <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700 shrink-0 font-bold">
             <Users className="w-6 h-6" />
           </div>
         </div>
@@ -535,9 +535,9 @@ export default function HomeroomPage() {
 
       {/* CALLOUT BANNER IF THERE ARE UNASSIGNED CLASSES */}
       {emptyHomerooms > 0 && (
-        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-200 rounded-lg p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-800 flex items-center justify-center shrink-0 font-bold">
+            <div className="w-10 h-10 rounded-lg bg-amber-500/20 text-amber-800 flex items-center justify-center shrink-0 font-bold">
               <AlertCircle className="w-5 h-5 text-amber-600" />
             </div>
             <div>
@@ -554,7 +554,7 @@ export default function HomeroomPage() {
               setActiveTab("classes");
               setSelectedStatus("Belum");
             }}
-            className="px-4 py-2 rounded-xl text-xs font-extrabold text-amber-900 bg-amber-200/80 hover:bg-amber-300 transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className="px-4 py-2 rounded-lg text-xs font-extrabold text-amber-900 bg-amber-200/80 hover:bg-amber-300 transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
             <span>Tampilkan Kelas Belum Terisi</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -564,11 +564,11 @@ export default function HomeroomPage() {
 
       {/* DUAL VIEW NAVIGATION TABS */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-gray-200/80 pb-2">
-        <div className="flex items-center gap-2 bg-gray-100/90 p-1.5 rounded-2xl border border-gray-200">
+        <div className="flex items-center gap-2 bg-gray-100/90 p-1.5 rounded-lg border border-gray-200">
           <button
             onClick={() => setActiveTab("classes")}
             className={cn(
-              "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer",
+              "flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs sm:text-sm font-extrabold transition-all cursor-pointer",
               activeTab === "classes"
                 ? "bg-white text-gray-900 shadow-md shadow-black/5"
                 : "text-gray-500 hover:text-gray-900"
@@ -587,7 +587,7 @@ export default function HomeroomPage() {
           <button
             onClick={() => setActiveTab("teachers")}
             className={cn(
-              "flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer",
+              "flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs sm:text-sm font-extrabold transition-all cursor-pointer",
               activeTab === "teachers"
                 ? "bg-white text-gray-900 shadow-md shadow-black/5"
                 : "text-gray-500 hover:text-gray-900"
@@ -610,11 +610,11 @@ export default function HomeroomPage() {
               {filteredClasses.length} dari {classes.length} Kelas
             </span>
 
-            <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0 border border-gray-200">
+            <div className="flex items-center bg-gray-100 p-1 rounded-lg shrink-0 border border-gray-200">
               <button 
                 onClick={() => setViewMode("grid")}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer", 
+                  "px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer", 
                   viewMode === "grid" ? "bg-white text-gray-900 shadow-xs" : "text-gray-500 hover:text-gray-900"
                 )}
                 title="Tampilan Grid Card"
@@ -625,7 +625,7 @@ export default function HomeroomPage() {
               <button 
                 onClick={() => setViewMode("list")}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer", 
+                  "px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer", 
                   viewMode === "list" ? "bg-white text-gray-900 shadow-xs" : "text-gray-500 hover:text-gray-900"
                 )}
                 title="Tampilan Tabel Rapi"
@@ -644,7 +644,7 @@ export default function HomeroomPage() {
       {activeTab === "classes" && (
         <div className="space-y-6">
           {/* Filters Bar */}
-          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-xs flex flex-wrap items-center justify-between gap-3">
+          <div className="bg-white rounded-lg p-4 sm:p-5 border border-gray-100 shadow-xs flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3 flex-1">
               {/* Search Box */}
               <div className="relative flex-1 min-w-[220px] max-w-md">
@@ -654,7 +654,7 @@ export default function HomeroomPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Cari nama kelas, tingkat, jurusan, atau wali kelas..." 
-                  className="w-full pl-9 pr-9 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                  className="w-full pl-9 pr-9 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
                 />
                 {searchQuery && (
                   <button 
@@ -671,7 +671,7 @@ export default function HomeroomPage() {
                 <select
                   value={selectedLevel}
                   onChange={(e) => setSelectedLevel(e.target.value)}
-                  className="w-full pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] appearance-none cursor-pointer"
+                  className="w-full pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-lg text-xs sm:text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] appearance-none cursor-pointer"
                 >
                   <option value="All">Semua Tingkat</option>
                   {levelOptions.map(l => (
@@ -686,7 +686,7 @@ export default function HomeroomPage() {
                 <select
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value)}
-                  className="w-full pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] appearance-none cursor-pointer"
+                  className="w-full pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-lg text-xs sm:text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] appearance-none cursor-pointer"
                 >
                   <option value="All">Semua Status</option>
                   <option value="Terisi">Terisi Wali Kelas</option>
@@ -699,7 +699,7 @@ export default function HomeroomPage() {
               {isFiltered && (
                 <button
                   onClick={handleResetFilters}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors cursor-pointer"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   <span>Reset Filter</span>
@@ -710,7 +710,7 @@ export default function HomeroomPage() {
 
           {/* Main Classes Content */}
           {loading ? (
-            <div className="py-24 bg-white rounded-3xl border border-gray-100 flex flex-col items-center justify-center gap-3 text-gray-400 shadow-xs">
+            <div className="py-24 bg-white rounded-xl border border-gray-100 flex flex-col items-center justify-center gap-3 text-gray-400 shadow-xs">
               <Loader2 className="w-8 h-8 animate-spin text-[#531FFF]" />
               <p className="text-sm font-semibold">Memuat penugasan wali kelas...</p>
             </div>
@@ -733,7 +733,7 @@ export default function HomeroomPage() {
                       <div 
                         key={item._firestoreId || i}
                         className={cn(
-                          "group bg-white rounded-3xl border transition-all duration-300 relative overflow-hidden flex flex-col justify-between",
+                          "group bg-white rounded-xl border transition-all duration-300 relative overflow-hidden flex flex-col justify-between",
                           hasHomeroom 
                             ? "border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_30px_-8px_rgba(83,31,255,0.14)] hover:-translate-y-1"
                             : "border-rose-200/80 bg-rose-50/20 shadow-xs hover:border-rose-300"
@@ -752,7 +752,7 @@ export default function HomeroomPage() {
                                 <span className="text-base font-black text-gray-900 tracking-tight">
                                   {item.name || "Kelas"}
                                 </span>
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-white text-gray-700 border border-gray-200 shadow-2xs">
+                                <span className="px-2 py-0.5 rounded text-[10px] font-black bg-white text-gray-700 border border-gray-200 shadow-2xs">
                                   {item.level || "Kelas 10"}
                                 </span>
                               </div>
@@ -781,7 +781,7 @@ export default function HomeroomPage() {
                             {hasHomeroom ? (
                               <div className="space-y-3.5">
                                 <div className="flex items-center gap-3.5">
-                                  <div className="w-13 h-13 rounded-2xl ring-2 ring-[#531FFF]/20 bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-extrabold text-lg shrink-0 overflow-hidden relative border border-gray-100">
+                                  <div className="w-13 h-13 rounded-lg ring-2 ring-[#531FFF]/20 bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-extrabold text-lg shrink-0 overflow-hidden relative border border-gray-100">
                                     {teacherPhoto ? (
                                       <Image 
                                         src={teacherPhoto} 
@@ -811,7 +811,7 @@ export default function HomeroomPage() {
 
                                 {/* WhatsApp Quick Action if phone exists */}
                                 {teacherPhone && (
-                                  <div className="pt-1 flex items-center justify-between text-xs bg-emerald-50/70 border border-emerald-100 rounded-xl px-3 py-1.5">
+                                  <div className="pt-1 flex items-center justify-between text-xs bg-emerald-50/70 border border-emerald-100 rounded-lg px-3 py-1.5">
                                     <span className="text-[11px] font-semibold text-emerald-800 truncate">
                                       {teacherPhone}
                                     </span>
@@ -829,7 +829,7 @@ export default function HomeroomPage() {
                                 )}
                               </div>
                             ) : (
-                              <div className="py-6 px-3 border-2 border-dashed border-rose-200 rounded-2xl text-center flex flex-col items-center justify-center gap-2 bg-white">
+                              <div className="py-6 px-3 border-2 border-dashed border-rose-200 rounded-lg text-center flex flex-col items-center justify-center gap-2 bg-white">
                                 <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center">
                                   <UserCheck className="w-5 h-5" />
                                 </div>
@@ -849,7 +849,7 @@ export default function HomeroomPage() {
                               <>
                                 <button
                                   onClick={() => handleOpenAssignModal(item)}
-                                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-white hover:bg-[#531FFF] text-gray-700 hover:text-white border border-gray-200 hover:border-[#531FFF] text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg bg-white hover:bg-[#531FFF] text-gray-700 hover:text-white border border-gray-200 hover:border-[#531FFF] text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
                                 >
                                   <PenTool className="w-3.5 h-3.5 text-[#531FFF] group-hover:text-white" />
                                   <span>Ganti Wali</span>
@@ -857,7 +857,7 @@ export default function HomeroomPage() {
                                 
                                 <button
                                   onClick={() => setUnassignModal({ open: true, targetClass: item })}
-                                  className="p-2.5 rounded-xl bg-white hover:bg-rose-50 text-gray-400 hover:text-rose-600 border border-gray-200 hover:border-rose-200 transition-colors shadow-2xs cursor-pointer"
+                                  className="p-2.5 rounded-lg bg-white hover:bg-rose-50 text-gray-400 hover:text-rose-600 border border-gray-200 hover:border-rose-200 transition-colors shadow-2xs cursor-pointer"
                                   title="Lepas Penugasan Wali Kelas"
                                 >
                                   <UserMinus className="w-4 h-4" />
@@ -866,7 +866,7 @@ export default function HomeroomPage() {
                             ) : (
                               <button
                                 onClick={() => handleOpenAssignModal(item)}
-                                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-extrabold shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer active:scale-95"
+                                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-extrabold shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer active:scale-95"
                               >
                                 <Plus className="w-4 h-4" />
                                 <span>Tetapkan Wali Kelas</span>
@@ -882,7 +882,7 @@ export default function HomeroomPage() {
 
               {/* LIST / TABLE VIEW */}
               {viewMode === "list" && filteredClasses.length > 0 && (
-                <div className="bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden">
+                <div className="bg-white rounded-xl border border-gray-100 shadow-xs overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
@@ -929,7 +929,7 @@ export default function HomeroomPage() {
                                     </div>
                                   </div>
                                 ) : (
-                                  <span className="inline-flex py-1 px-2.5 bg-rose-50 text-rose-600 rounded-md text-xs font-bold border border-rose-200">
+                                  <span className="inline-flex py-1 px-2.5 bg-rose-50 text-rose-600 rounded text-xs font-bold border border-rose-200">
                                     Belum Diisi
                                   </span>
                                 )}
@@ -951,7 +951,7 @@ export default function HomeroomPage() {
                               </td>
                               <td className="py-4 px-6">
                                 <span className={cn(
-                                  "px-2.5 py-1 rounded-md text-xs font-bold inline-flex items-center gap-1.5 border",
+                                  "px-2.5 py-1 rounded text-xs font-bold inline-flex items-center gap-1.5 border",
                                   hasHomeroom
                                     ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                     : "bg-rose-50 text-rose-700 border-rose-200"
@@ -967,14 +967,14 @@ export default function HomeroomPage() {
                                       <>
                                         <button
                                           onClick={() => handleOpenAssignModal(item)}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 rounded-xl transition-colors cursor-pointer"
+                                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 rounded-lg transition-colors cursor-pointer"
                                         >
                                           <PenTool className="w-3.5 h-3.5" />
                                           <span>Ganti</span>
                                         </button>
                                         <button
                                           onClick={() => setUnassignModal({ open: true, targetClass: item })}
-                                          className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                          className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
                                           title="Lepas Wali"
                                         >
                                           <UserMinus className="w-3.5 h-3.5" />
@@ -983,7 +983,7 @@ export default function HomeroomPage() {
                                     ) : (
                                       <button
                                         onClick={() => handleOpenAssignModal(item)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4314cc] rounded-xl transition-all shadow-xs cursor-pointer"
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4314cc] rounded-lg transition-all shadow-xs cursor-pointer"
                                       >
                                         <Plus className="w-3.5 h-3.5" />
                                         <span>Tetapkan</span>
@@ -1003,7 +1003,7 @@ export default function HomeroomPage() {
 
               {/* EMPTY SEARCH RESULT */}
               {filteredClasses.length === 0 && (
-                <div className="py-20 bg-white rounded-3xl border border-gray-100 text-center flex flex-col items-center justify-center p-6 shadow-xs">
+                <div className="py-20 bg-white rounded-xl border border-gray-100 text-center flex flex-col items-center justify-center p-6 shadow-xs">
                   <div className="w-16 h-16 bg-purple-50 text-[#531FFF] rounded-full flex items-center justify-center mb-4">
                     <UserCheck className="w-8 h-8" />
                   </div>
@@ -1020,7 +1020,7 @@ export default function HomeroomPage() {
                   {isFiltered && (
                     <button 
                       onClick={handleResetFilters}
-                      className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-5 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer"
+                      className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-5 py-2.5 rounded-lg text-sm font-bold transition-all cursor-pointer"
                     >
                       Reset Filter
                     </button>
@@ -1038,7 +1038,7 @@ export default function HomeroomPage() {
       {activeTab === "teachers" && (
         <div className="space-y-6 animate-in fade-in duration-200">
           {/* Teacher Search & Filter Bar */}
-          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-xs flex flex-wrap items-center justify-between gap-4">
+          <div className="bg-white rounded-lg p-4 sm:p-5 border border-gray-100 shadow-xs flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3 flex-1">
               <div className="relative flex-1 min-w-[240px] max-w-md">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -1047,7 +1047,7 @@ export default function HomeroomPage() {
                   value={teacherSearch}
                   onChange={(e) => setTeacherSearch(e.target.value)}
                   placeholder="Cari guru berdasarkan nama, NIP, mapel, atau kontak..." 
-                  className="w-full pl-9 pr-9 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                  className="w-full pl-9 pr-9 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
                 />
                 {teacherSearch && (
                   <button 
@@ -1060,11 +1060,11 @@ export default function HomeroomPage() {
               </div>
 
               {/* Filter Pills */}
-              <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl border border-gray-200 text-xs font-bold">
+              <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-lg border border-gray-200 text-xs font-bold">
                 <button
                   onClick={() => setTeacherFilterStatus("all")}
                   className={cn(
-                    "px-3 py-1.5 rounded-lg transition-all cursor-pointer",
+                    "px-3 py-1.5 rounded-md transition-all cursor-pointer",
                     teacherFilterStatus === "all" ? "bg-white text-gray-900 shadow-xs" : "text-gray-500 hover:text-gray-900"
                   )}
                 >
@@ -1073,7 +1073,7 @@ export default function HomeroomPage() {
                 <button
                   onClick={() => setTeacherFilterStatus("available")}
                   className={cn(
-                    "px-3 py-1.5 rounded-lg transition-all cursor-pointer",
+                    "px-3 py-1.5 rounded-md transition-all cursor-pointer",
                     teacherFilterStatus === "available" ? "bg-white text-emerald-700 shadow-xs" : "text-gray-500 hover:text-gray-900"
                   )}
                 >
@@ -1082,7 +1082,7 @@ export default function HomeroomPage() {
                 <button
                   onClick={() => setTeacherFilterStatus("assigned")}
                   className={cn(
-                    "px-3 py-1.5 rounded-lg transition-all cursor-pointer",
+                    "px-3 py-1.5 rounded-md transition-all cursor-pointer",
                     teacherFilterStatus === "assigned" ? "bg-white text-[#531FFF] shadow-xs" : "text-gray-500 hover:text-gray-900"
                   )}
                 >
@@ -1105,11 +1105,11 @@ export default function HomeroomPage() {
               return (
                 <div 
                   key={teacher._firestoreId || i}
-                  className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
+                  className="bg-white rounded-lg border border-gray-100 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
                 >
                   <div className="space-y-3">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-extrabold text-base shrink-0 overflow-hidden relative border border-gray-100">
+                      <div className="w-12 h-12 rounded-lg bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-extrabold text-base shrink-0 overflow-hidden relative border border-gray-100">
                         {teacher.imageUrl ? (
                           <Image 
                             src={teacher.imageUrl} 
@@ -1147,7 +1147,7 @@ export default function HomeroomPage() {
 
                     {/* Assignment Status Pill */}
                     <div className={cn(
-                      "p-2.5 rounded-xl text-xs font-bold border",
+                      "p-2.5 rounded-lg text-xs font-bold border",
                       isAssigned 
                         ? "bg-[#531FFF]/5 border-[#531FFF]/15 text-gray-800" 
                         : "bg-gray-50 border-gray-200 text-gray-500"
@@ -1171,14 +1171,14 @@ export default function HomeroomPage() {
                       {isAssigned ? (
                         <button
                           onClick={() => handleOpenAssignModal(assignedClass)}
-                          className="w-full py-2 px-3 rounded-xl bg-gray-100 hover:bg-[#531FFF]/10 text-gray-700 hover:text-[#531FFF] text-xs font-extrabold transition-all cursor-pointer"
+                          className="w-full py-2 px-3 rounded-lg bg-gray-100 hover:bg-[#531FFF]/10 text-gray-700 hover:text-[#531FFF] text-xs font-extrabold transition-all cursor-pointer"
                         >
                           Ubah Kelas ({assignedClass.name})
                         </button>
                       ) : (
                         <button
                           onClick={() => handleAssignTeacherToClass(teacher)}
-                          className="w-full py-2 px-3 rounded-xl bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
+                          className="w-full py-2 px-3 rounded-lg bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           <span>Tugaskan ke Kelas</span>
@@ -1198,7 +1198,7 @@ export default function HomeroomPage() {
       {/* ========================================================================= */}
       {!isGuru && assignModal.open && assignModal.targetClass && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+          <div className="bg-white w-full max-w-xl rounded-xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             
             {/* Modal Header */}
             <div className="p-6 border-b border-gray-100 flex items-start justify-between bg-gradient-to-r from-[#531FFF]/5 via-white to-transparent">
@@ -1240,7 +1240,7 @@ export default function HomeroomPage() {
                         setAssignModal(prev => ({ ...prev, targetClass: selected }));
                       }
                     }}
-                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-extrabold text-[#531FFF] cursor-pointer"
+                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-extrabold text-[#531FFF] cursor-pointer"
                   >
                     {classes.map(c => (
                       <option key={c._firestoreId} value={c._firestoreId}>
@@ -1261,7 +1261,7 @@ export default function HomeroomPage() {
                   value={modalSearch}
                   onChange={(e) => setModalSearch(e.target.value)}
                   placeholder="Cari guru berdasarkan nama, NIP, atau mata pelajaran..." 
-                  className="w-full pl-9 pr-9 py-2 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                  className="w-full pl-9 pr-9 py-2 bg-white border border-gray-200 rounded-lg text-xs sm:text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                 />
                 {modalSearch && (
                   <button 
@@ -1279,7 +1279,7 @@ export default function HomeroomPage() {
                   type="button"
                   onClick={() => setModalFilter("available")}
                   className={cn(
-                    "px-3 py-1.5 rounded-lg border transition-all cursor-pointer",
+                    "px-3 py-1.5 rounded-md border transition-all cursor-pointer",
                     modalFilter === "available"
                       ? "bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs font-extrabold"
                       : "bg-white text-gray-600 border-gray-200 hover:bg-gray-100"
@@ -1291,7 +1291,7 @@ export default function HomeroomPage() {
                   type="button"
                   onClick={() => setModalFilter("all")}
                   className={cn(
-                    "px-3 py-1.5 rounded-lg border transition-all cursor-pointer",
+                    "px-3 py-1.5 rounded-md border transition-all cursor-pointer",
                     modalFilter === "all"
                       ? "bg-[#531FFF]/10 text-[#531FFF] border-[#531FFF]/30 shadow-2xs font-extrabold"
                       : "bg-white text-gray-600 border-gray-200 hover:bg-gray-100"
@@ -1303,7 +1303,7 @@ export default function HomeroomPage() {
                   type="button"
                   onClick={() => setModalFilter("assigned")}
                   className={cn(
-                    "px-3 py-1.5 rounded-lg border transition-all cursor-pointer",
+                    "px-3 py-1.5 rounded-md border transition-all cursor-pointer",
                     modalFilter === "assigned"
                       ? "bg-amber-50 text-amber-800 border-amber-300 shadow-2xs font-extrabold"
                       : "bg-white text-gray-600 border-gray-200 hover:bg-gray-100"
@@ -1320,14 +1320,14 @@ export default function HomeroomPage() {
               <div
                 onClick={() => setSelectedTeacherId("")}
                 className={cn(
-                  "p-3 rounded-2xl border transition-all flex items-center justify-between cursor-pointer",
+                  "p-3 rounded-lg border transition-all flex items-center justify-between cursor-pointer",
                   selectedTeacherId === ""
                     ? "bg-rose-50/70 border-rose-300 ring-2 ring-rose-500/20"
                     : "bg-white border-gray-200 hover:bg-gray-50"
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold">
+                  <div className="w-10 h-10 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center font-bold">
                     <UserMinus className="w-5 h-5" />
                   </div>
                   <div>
@@ -1355,14 +1355,14 @@ export default function HomeroomPage() {
                     key={t._firestoreId}
                     onClick={() => setSelectedTeacherId(t._firestoreId)}
                     className={cn(
-                      "p-3.5 rounded-2xl border transition-all flex items-center justify-between cursor-pointer",
+                      "p-3.5 rounded-lg border transition-all flex items-center justify-between cursor-pointer",
                       isSelected
                         ? "bg-[#531FFF]/5 border-[#531FFF] ring-2 ring-[#531FFF]/20"
                         : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/80"
                     )}
                   >
                     <div className="flex items-center gap-3.5 min-w-0">
-                      <div className="w-11 h-11 rounded-2xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-extrabold text-sm shrink-0 overflow-hidden relative border border-gray-100">
+                      <div className="w-11 h-11 rounded-lg bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-extrabold text-sm shrink-0 overflow-hidden relative border border-gray-100">
                         {t.imageUrl ? (
                           <Image src={t.imageUrl} alt={t.name} fill className="object-cover" unoptimized />
                         ) : (
@@ -1420,7 +1420,7 @@ export default function HomeroomPage() {
               <button
                 type="button"
                 onClick={() => setAssignModal({ open: false })}
-                className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
+                className="px-5 py-2.5 rounded-lg text-xs sm:text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
                 disabled={isSaving}
               >
                 Batal
@@ -1430,7 +1430,7 @@ export default function HomeroomPage() {
                 type="button"
                 onClick={handleSaveAssignment}
                 disabled={isSaving}
-                className="px-6 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold text-white bg-[#531FFF] hover:bg-[#4314cc] shadow-md shadow-[#531FFF]/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                className="px-6 py-2.5 rounded-lg text-xs sm:text-sm font-extrabold text-white bg-[#531FFF] hover:bg-[#4314cc] shadow-md shadow-[#531FFF]/20 transition-all flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 <span>Simpan Penugasan</span>
@@ -1446,8 +1446,8 @@ export default function HomeroomPage() {
       {/* ========================================================================= */}
       {!isGuru && unassignModal.open && unassignModal.targetClass && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-gray-100 overflow-hidden p-6 space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+          <div className="bg-white w-full max-w-md rounded-xl shadow-2xl border border-gray-100 overflow-hidden p-6 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
               <UserMinus className="w-6 h-6" />
             </div>
 
@@ -1461,7 +1461,7 @@ export default function HomeroomPage() {
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={() => setUnassignModal({ open: false })}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
+                className="flex-1 py-2.5 rounded-lg text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
                 disabled={isSaving}
               >
                 Batal
@@ -1469,7 +1469,7 @@ export default function HomeroomPage() {
               <button
                 onClick={handleConfirmUnassign}
                 disabled={isSaving}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 <span>Ya, Lepas Penugasan</span>

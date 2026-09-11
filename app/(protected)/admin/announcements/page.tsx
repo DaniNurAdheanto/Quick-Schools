@@ -183,16 +183,16 @@ export default function AnnouncementsPage() {
           <p className="text-[13px] text-gray-500 mt-1 font-medium">Informasi resmi dan pengumuman untuk siswa & warga sekolah.</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 rounded-xl text-[13px] font-bold shadow-sm transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 rounded-lg text-[13px] font-bold shadow-sm transition-colors">
             <Filter className="w-4 h-4" /> Filter
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 rounded-xl text-[13px] font-bold shadow-sm transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 rounded-lg text-[13px] font-bold shadow-sm transition-colors">
             <Grid className="w-4 h-4" /> Kategori
           </button>
           {!isStudent && (
             <button 
               onClick={() => setCrudState({ open: true, mode: "create" })}
-              className="flex items-center gap-2 px-4 py-2 bg-[#531FFF] text-white hover:bg-[#4314E5] rounded-xl text-[13px] font-bold shadow-sm transition-colors cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2 bg-[#531FFF] text-white hover:bg-[#4314E5] rounded-lg text-[13px] font-bold shadow-sm transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" /> Buat Pengumuman
             </button>
@@ -244,7 +244,7 @@ export default function AnnouncementsPage() {
                  <input 
                    type="text"
                    placeholder="Cari pengumuman..."
-                   className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-[13px] placeholder:text-gray-400 bg-white focus:outline-none focus:border-[#531FFF] focus:ring-1 focus:ring-[#531FFF] transition-all"
+                   className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-[13px] placeholder:text-gray-400 bg-white focus:outline-none focus:border-[#531FFF] focus:ring-1 focus:ring-[#531FFF] transition-all"
                  />
                </div>
             </div>
@@ -254,15 +254,15 @@ export default function AnnouncementsPage() {
               {loading ? (
                 <div className="py-12 flex justify-center text-gray-400">Loading...</div>
               ) : announcements.length === 0 ? (
-                <div className="py-12 flex flex-col items-center justify-center text-gray-400 bg-white border border-gray-100 rounded-3xl border-dashed">
+                <div className="py-12 flex flex-col items-center justify-center text-gray-400 bg-white border border-gray-100 rounded-xl border-dashed">
                   <Megaphone className="w-12 h-12 mb-3 text-gray-200" />
                   <p className="text-sm font-medium">Belum ada pengumuman.</p>
                 </div>
               ) : announcements.map((item) => (
-                <div key={item.id} className="flex flex-col sm:flex-row bg-white border border-gray-100 rounded-3xl p-3 shadow-sm hover:shadow-md transition-all gap-4 items-stretch group">
+                <div key={item.id} className="flex flex-col sm:flex-row bg-white border border-gray-100 rounded-xl p-3 shadow-sm hover:shadow-md transition-all gap-4 items-stretch group">
                    {/* Illustration Thumbnail */}
                    <div className={cn(
-                     "w-full sm:w-[220px] h-[140px] sm:h-auto rounded-2xl relative overflow-hidden shrink-0 flex items-center justify-center p-4",
+                     "w-full sm:w-[220px] h-[140px] sm:h-auto rounded-lg relative overflow-hidden shrink-0 flex items-center justify-center p-4",
                      item.theme === "purple" ? "bg-purple-100" :
                      item.theme === "orange" ? "bg-orange-100" :
                      item.theme === "green" ? "bg-emerald-100" : "bg-teal-100"
@@ -284,12 +284,12 @@ export default function AnnouncementsPage() {
                    <div className="flex-1 flex flex-col justify-between py-2 pr-2">
                      <div>
                        <div className="flex justify-between items-start mb-2">
-                         <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider", item.tagColor)}>
+                         <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider", item.tagColor)}>
                            {item.tag}
                          </span>
                          <div className="flex items-center gap-2">
                            <span className={cn(
-                             "text-[11px] font-bold px-2.5 py-1 rounded-md",
+                             "text-[11px] font-bold px-2.5 py-1 rounded",
                              item.status === "Aktif" ? "text-emerald-600 bg-emerald-50" : "text-amber-600 bg-amber-50"
                            )}>
                              {item.status}
@@ -297,19 +297,19 @@ export default function AnnouncementsPage() {
                              <div className="flex items-center gap-1">
                                <button 
                                  onClick={() => setCrudState({ open: true, mode: "view", data: item })}
-                                 className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded-md transition-colors cursor-pointer" title="Lihat Detail">
+                                 className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded transition-colors cursor-pointer" title="Lihat Detail">
                                  <Eye className="w-4 h-4" />
                                </button>
                                {!isStudent && (
                                  <>
                                    <button 
                                      onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                                     className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded-md transition-colors cursor-pointer" title="Edit">
+                                     className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded transition-colors cursor-pointer" title="Edit">
                                      <PenTool className="w-4 h-4" />
                                    </button>
                                    <button 
                                      onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
-                                     className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors cursor-pointer" title="Hapus">
+                                     className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors cursor-pointer" title="Hapus">
                                      <Trash2 className="w-4 h-4" />
                                    </button>
                                  </>
@@ -348,7 +348,7 @@ export default function AnnouncementsPage() {
          <div className="w-full xl:w-[340px] shrink-0 flex flex-col gap-6">
             
             {/* Categories */}
-            <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+            <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
                <div className="flex justify-between items-center mb-5">
                  <h3 className="text-[14px] font-bold text-gray-900">Kategori Pengumuman</h3>
                  {!isStudent && (
@@ -357,21 +357,21 @@ export default function AnnouncementsPage() {
                </div>
                <div className="flex flex-col gap-3">
                  {categories.map((c, i) => (
-                   <div key={i} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-xl transition-colors cursor-pointer group">
+                   <div key={i} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer group">
                      <div className="flex items-center gap-3">
-                       <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", c.bgColor)}>
+                       <div className={cn("w-8 h-8 rounded-md flex items-center justify-center", c.bgColor)}>
                          <c.icon className={cn("w-4 h-4", c.color)} />
                        </div>
                        <span className="text-[13px] font-semibold text-gray-700 group-hover:text-gray-900 transition-colors">{c.label}</span>
                      </div>
-                     <span className="text-[12px] font-bold text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-md">{c.count}</span>
+                     <span className="text-[12px] font-bold text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded">{c.count}</span>
                    </div>
                  ))}
                </div>
             </div>
 
             {/* Popular Announcements */}
-            <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
+            <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
                <h3 className="text-[14px] font-bold text-gray-900 mb-5">Pengumuman Terpopuler</h3>
                <div className="flex flex-col gap-4">
                  {POPULAR_ANNOUNCEMENTS.map((p, i) => (
@@ -397,7 +397,7 @@ export default function AnnouncementsPage() {
             {/* Quick Send & AI Assistant (Only for Staff / Admin) */}
             {!isStudent && (
               <>
-                <div className="bg-[#F8F9FE] border border-[#531FFF]/10 rounded-3xl p-6 shadow-sm relative overflow-hidden">
+                <div className="bg-[#F8F9FE] border border-[#531FFF]/10 rounded-xl p-6 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-24 h-24 bg-[#531FFF]/5 rounded-bl-[100px] pointer-events-none"></div>
                   
                   <div className="flex items-center justify-between mb-2 relative z-10">
@@ -413,7 +413,7 @@ export default function AnnouncementsPage() {
                     <div>
                       <label className="text-[11px] font-bold text-gray-700 block mb-1.5">Pilih Penerima</label>
                       <div className="relative">
-                        <select className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-[13px] rounded-xl px-3 py-2.5 outline-none focus:border-[#531FFF] font-medium">
+                        <select className="w-full appearance-none bg-white border border-gray-200 text-gray-700 text-[13px] rounded-lg px-3 py-2.5 outline-none focus:border-[#531FFF] font-medium">
                           <option>Pilih kelompok penerima...</option>
                           <option>Semua Warga Sekolah</option>
                           <option>Semua Guru & Staff</option>
@@ -425,17 +425,17 @@ export default function AnnouncementsPage() {
                     
                     <button 
                       onClick={() => setCrudState({ open: true, mode: "create" })}
-                      className="w-full bg-[#531FFF] text-white font-bold text-[13px] py-2.5 rounded-xl hover:bg-[#4314E5] transition-colors shadow-sm mt-2 cursor-pointer">
+                      className="w-full bg-[#531FFF] text-white font-bold text-[13px] py-2.5 rounded-lg hover:bg-[#4314E5] transition-colors shadow-sm mt-2 cursor-pointer">
                       Buat Pengumuman
                     </button>
                   </div>
                 </div>
 
                 {/* AI Assistant Promo */}
-                <div className="bg-white border border-gray-100 rounded-3xl p-6 flex flex-col items-center justify-center shadow-sm">
+                <div className="bg-white border border-gray-100 rounded-xl p-6 flex flex-col items-center justify-center shadow-sm">
                   <div className="flex w-full justify-between items-center mb-3">
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-md bg-gradient-to-tr from-cyan-500 to-blue-500 flex items-center justify-center shadow-sm">
+                      <div className="w-6 h-6 rounded bg-gradient-to-tr from-cyan-500 to-blue-500 flex items-center justify-center shadow-sm">
                         <Sparkles className="w-3.5 h-3.5 text-white" />
                       </div>
                       <span className="font-bold text-[13px] text-gray-900">AI Assistant</span>
@@ -443,7 +443,7 @@ export default function AnnouncementsPage() {
                     <span className="text-[9px] font-bold bg-[#531FFF]/10 text-[#531FFF] px-2 py-0.5 rounded-full tracking-wider">BETA</span>
                   </div>
                   <p className="text-[12px] text-gray-500 w-full mb-4">Butuh bantuan membuat pengumuman?</p>
-                  <button className="w-full py-2.5 border border-[#531FFF]/20 text-[#531FFF] hover:bg-[#531FFF]/5 font-bold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer">
+                  <button className="w-full py-2.5 border border-[#531FFF]/20 text-[#531FFF] hover:bg-[#531FFF]/5 font-bold text-[13px] rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer">
                     <Sparkles className="w-4 h-4" /> Buat dengan AI
                   </button>
                 </div>

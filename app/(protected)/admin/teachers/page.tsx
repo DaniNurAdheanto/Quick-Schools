@@ -324,9 +324,9 @@ export default function TeachersPage() {
       />
 
       {/* Page Header Card */}
-      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-lg p-6 border border-gray-100 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-[#531FFF]/10 flex items-center justify-center text-[#531FFF] shrink-0 font-bold">
+          <div className="w-12 h-12 rounded-lg bg-[#531FFF]/10 flex items-center justify-center text-[#531FFF] shrink-0 font-bold">
             <Users className="w-6 h-6" />
           </div>
           <div>
@@ -348,7 +348,7 @@ export default function TeachersPage() {
           {!isGuru && (
             <button 
               onClick={() => setCrudState({ open: true, mode: "create" })}
-              className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <Plus className="w-4 h-4" />
               <span>Tambah Guru</span>
@@ -358,7 +358,7 @@ export default function TeachersPage() {
           <button 
             onClick={handleExportCSV}
             disabled={filteredTeachers.length === 0}
-            className="flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-bold border border-gray-200 shadow-xs transition-colors disabled:opacity-50"
+            className="flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-bold border border-gray-200 shadow-xs transition-colors disabled:opacity-50"
           >
             <Download className="w-4 h-4 text-[#531FFF]" />
             <span className="hidden sm:inline">Export CSV</span>
@@ -371,12 +371,12 @@ export default function TeachersPage() {
         {dynamicStats.map((stat, i) => {
           const IconComp = stat.icon;
           return (
-            <div key={i} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
+            <div key={i} className="bg-white p-5 rounded-lg border border-gray-100 shadow-xs flex items-center justify-between">
               <div>
                 <p className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">{stat.label}</p>
                 <h3 className="text-2xl md:text-3xl font-black text-gray-900 mt-1 tracking-tight">{stat.value}</h3>
               </div>
-              <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center font-bold", stat.color)}>
+              <div className={cn("w-12 h-12 rounded-lg flex items-center justify-center font-bold", stat.color)}>
                 <IconComp className="w-6 h-6" />
               </div>
             </div>
@@ -385,7 +385,7 @@ export default function TeachersPage() {
       </div>
 
       {/* Interactive Filter & Toolbar Bar */}
-      <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+      <div className="bg-white rounded-lg p-5 border border-gray-100 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         {/* Search & Filters Left Group */}
         <div className="flex flex-wrap items-center gap-3 flex-1">
           {/* Search Box */}
@@ -396,7 +396,7 @@ export default function TeachersPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Cari nama guru, NIP, atau mata pelajaran..." 
-              className="w-full pl-9 pr-9 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+              className="w-full pl-9 pr-9 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
             />
             {searchQuery && (
               <button 
@@ -413,7 +413,7 @@ export default function TeachersPage() {
             <select
               value={selectedSubject}
               onChange={(e) => setSelectedSubject(e.target.value)}
-              className="w-full pl-4 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] appearance-none cursor-pointer"
+              className="w-full pl-4 pr-8 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] appearance-none cursor-pointer"
             >
               <option value="All">Semua Mapel</option>
               {subjectOptions.map(s => (
@@ -428,7 +428,7 @@ export default function TeachersPage() {
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full pl-4 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] appearance-none cursor-pointer"
+              className="w-full pl-4 pr-8 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] appearance-none cursor-pointer"
             >
               <option value="All">Semua Status</option>
               <option value="Aktif">Aktif</option>
@@ -442,7 +442,7 @@ export default function TeachersPage() {
           {isFiltered && (
             <button
               onClick={handleResetFilters}
-              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors"
               title="Reset Filter"
             >
               <RefreshCw className="w-3.5 h-3.5" />
@@ -457,11 +457,11 @@ export default function TeachersPage() {
             {filteredTeachers.length} dari {teachers.length} Guru
           </span>
 
-          <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0 border border-gray-200">
+          <div className="flex items-center bg-gray-100 p-1 rounded-lg shrink-0 border border-gray-200">
             <button 
               onClick={() => setViewMode("grid")}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5", 
+                "px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5", 
                 viewMode === "grid" ? "bg-white text-gray-900 shadow-xs" : "text-gray-500 hover:text-gray-900"
               )}
             >
@@ -471,7 +471,7 @@ export default function TeachersPage() {
             <button 
               onClick={() => setViewMode("list")}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5", 
+                "px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5", 
                 viewMode === "list" ? "bg-white text-gray-900 shadow-xs" : "text-gray-500 hover:text-gray-900"
               )}
             >
@@ -484,7 +484,7 @@ export default function TeachersPage() {
 
       {/* Main Content Area */}
       {loading ? (
-        <div className="py-24 bg-white rounded-2xl border border-gray-100 flex flex-col items-center justify-center gap-3 text-gray-400 shadow-xs">
+        <div className="py-24 bg-white rounded-lg border border-gray-100 flex flex-col items-center justify-center gap-3 text-gray-400 shadow-xs">
           <Loader2 className="w-8 h-8 animate-spin text-[#531FFF]" />
           <p className="text-sm font-semibold">Memuat direktori data guru...</p>
         </div>
@@ -496,7 +496,7 @@ export default function TeachersPage() {
               {filteredTeachers.map((teacher, i) => (
                 <div 
                   key={teacher._firestoreId || i} 
-                  className="group bg-white rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_30px_-8px_rgba(83,31,255,0.12)] transition-all duration-300 hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between"
+                  className="group bg-white rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_30px_-8px_rgba(83,31,255,0.12)] transition-all duration-300 hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between"
                 >
                   {/* Top Decorative Cover Header */}
                   <div>
@@ -524,7 +524,7 @@ export default function TeachersPage() {
 
                     {/* Overlapping Avatar */}
                     <div className="px-4 flex items-end justify-between -mt-8 relative z-10 mb-3">
-                      <div className="w-16 h-16 rounded-2xl ring-4 ring-white shadow-md relative overflow-hidden border border-gray-100 bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-extrabold text-xl shrink-0">
+                      <div className="w-16 h-16 rounded-lg ring-4 ring-white shadow-md relative overflow-hidden border border-gray-100 bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-extrabold text-xl shrink-0">
                         {teacher.imageUrl ? (
                           <Image 
                             src={teacher.imageUrl} 
@@ -539,7 +539,7 @@ export default function TeachersPage() {
                       </div>
 
                       {/* Subject Badge */}
-                      <span className="px-3 py-1 rounded-xl bg-[#531FFF]/10 text-[#531FFF] font-extrabold text-xs border border-[#531FFF]/20 max-w-[130px] truncate" title={teacher.role || "Guru"}>
+                      <span className="px-3 py-1 rounded-lg bg-[#531FFF]/10 text-[#531FFF] font-extrabold text-xs border border-[#531FFF]/20 max-w-[130px] truncate" title={teacher.role || "Guru"}>
                         {teacher.role || "Pengajar"}
                       </span>
                     </div>
@@ -569,7 +569,7 @@ export default function TeachersPage() {
                     <div className="flex items-center gap-1.5">
                       <button 
                         onClick={() => setCrudState({ open: true, mode: "view", data: teacher })}
-                        className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
+                        className="w-8 h-8 rounded-lg bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
                         title="Lihat Detail Guru"
                       >
                         <Eye className="w-3.5 h-3.5" />
@@ -578,14 +578,14 @@ export default function TeachersPage() {
                         <>
                           <button 
                             onClick={() => setCrudState({ open: true, mode: "edit", data: teacher })}
-                            className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
+                            className="w-8 h-8 rounded-lg bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
                             title="Edit Data Guru"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button 
                             onClick={() => setCrudState({ open: true, mode: "delete", data: teacher })}
-                            className="w-8 h-8 rounded-xl bg-gray-50 hover:bg-rose-50 text-gray-500 hover:text-rose-600 transition-all flex items-center justify-center"
+                            className="w-8 h-8 rounded-lg bg-gray-50 hover:bg-rose-50 text-gray-500 hover:text-rose-600 transition-all flex items-center justify-center"
                             title="Hapus Data Guru"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -601,7 +601,7 @@ export default function TeachersPage() {
 
           {/* LIST / TABLE VIEW */}
           {viewMode === "list" && filteredTeachers.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+            <div className="bg-white rounded-lg border border-gray-100 shadow-xs overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -650,7 +650,7 @@ export default function TeachersPage() {
                         </td>
                         <td className="py-3.5 px-6">
                           <span className={cn(
-                            "px-2.5 py-1 rounded-md text-xs font-bold inline-flex items-center gap-1.5 border",
+                            "px-2.5 py-1 rounded text-xs font-bold inline-flex items-center gap-1.5 border",
                             (teacher.status || "Aktif") === "Aktif"
                               ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                               : teacher.status === "Cuti"
@@ -668,7 +668,7 @@ export default function TeachersPage() {
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => setCrudState({ open: true, mode: "view", data: teacher })}
-                              className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-xl transition-colors"
+                              className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-lg transition-colors"
                               title="Lihat Detail"
                             >
                               <Eye className="w-4 h-4" />
@@ -677,14 +677,14 @@ export default function TeachersPage() {
                               <>
                                 <button
                                   onClick={() => setCrudState({ open: true, mode: "edit", data: teacher })}
-                                  className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-xl transition-colors"
+                                  className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-lg transition-colors"
                                   title="Edit"
                                 >
                                   <Edit2 className="w-4 h-4" />
                                 </button>
                                 <button
                                   onClick={() => setCrudState({ open: true, mode: "delete", data: teacher })}
-                                  className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                                  className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                                   title="Hapus"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -703,7 +703,7 @@ export default function TeachersPage() {
 
           {/* EMPTY STATE */}
           {filteredTeachers.length === 0 && (
-            <div className="py-20 bg-white rounded-2xl border border-gray-100 text-center flex flex-col items-center justify-center p-6 shadow-xs">
+            <div className="py-20 bg-white rounded-lg border border-gray-100 text-center flex flex-col items-center justify-center p-6 shadow-xs">
               <div className="w-16 h-16 bg-purple-50 text-[#531FFF] rounded-full flex items-center justify-center mb-4">
                 <Users className="w-8 h-8" />
               </div>
@@ -722,14 +722,14 @@ export default function TeachersPage() {
               {isFiltered ? (
                 <button 
                   onClick={handleResetFilters}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-5 py-2.5 rounded-xl text-sm font-bold transition-all"
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-5 py-2.5 rounded-lg text-sm font-bold transition-all"
                 >
                   Reset Filter
                 </button>
               ) : !isGuru ? (
                 <button 
                   onClick={() => setCrudState({ open: true, mode: "create" })}
-                  className="bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-[#531FFF]/20"
+                  className="bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md shadow-[#531FFF]/20"
                 >
                   + Tambah Guru Baru
                 </button>

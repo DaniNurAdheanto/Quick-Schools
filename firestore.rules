@@ -122,11 +122,19 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
     }
+    match /examGroups/{groupId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
     match /attendance/{attendanceId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
     }
     match /attendance_config/{configId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /payments/{paymentId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
     }

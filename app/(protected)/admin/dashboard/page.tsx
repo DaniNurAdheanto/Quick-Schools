@@ -444,6 +444,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
     
     // Filter for student's class and semester exams (PTS/UTS & PAS/UAS)
     const filtered = allExams.filter(e => {
+      if (e.isGroup || !e.subject) return false;
       if (!matchClass(e.classId || "", studentClass)) return false;
       const typeUpper = (e.examType || "").toUpperCase();
       const titleUpper = (e.title || "").toUpperCase();
@@ -556,7 +557,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
       />
 
       {/* Hero Welcome Banner */}
-      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-[#4410D9] via-[#531FFF] to-[#7942FF] p-6 md:p-8 text-white shadow-xl flex flex-col lg:flex-row justify-between lg:items-center gap-6 border border-white/15">
+      <div className="relative rounded-xl overflow-hidden bg-gradient-to-r from-[#4410D9] via-[#531FFF] to-[#7942FF] p-6 md:p-8 text-white shadow-xl flex flex-col lg:flex-row justify-between lg:items-center gap-6 border border-white/15">
         
         {/* Background glow effects */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
@@ -591,7 +592,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
           <div className="flex flex-wrap items-center gap-3 pt-1">
             {/* Realtime Attendance Status Chip or Action */}
             {attendanceComputed.todayRecord ? (
-              <div className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-500/25 border border-emerald-300/40 text-emerald-100 rounded-2xl text-xs font-extrabold backdrop-blur-md shadow-sm">
+              <div className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-500/25 border border-emerald-300/40 text-emerald-100 rounded-lg text-xs font-extrabold backdrop-blur-md shadow-sm">
                 <CheckCircle className="w-4 h-4 text-emerald-300 shrink-0" />
                 <span>Sudah Presensi Hari Ini ({attendanceComputed.todayRecord.timestamp || "07:15 WIB"})</span>
                 {attendanceComputed.todayRecord.faceVerified && (
@@ -603,7 +604,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
             ) : (
               <button
                 onClick={() => setShowAttendanceModal(true)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white rounded-2xl font-extrabold text-xs md:text-sm shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer border border-white/20"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white rounded-lg font-extrabold text-xs md:text-sm shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer border border-white/20"
               >
                 <ScanFace className="w-4 h-4 animate-pulse" />
                 <span>Absen Masuk (Face & GPS)</span>
@@ -611,13 +612,13 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
               </button>
             )}
 
-            <div className="bg-white/10 hover:bg-white/20 px-3.5 py-2 rounded-2xl border border-white/15 backdrop-blur-md text-xs font-bold flex items-center gap-1.5 transition-colors">
+            <div className="bg-white/10 hover:bg-white/20 px-3.5 py-2 rounded-lg border border-white/15 backdrop-blur-md text-xs font-bold flex items-center gap-1.5 transition-colors">
               <span className="text-white/60">NISN:</span>
               <span className="tracking-wide text-white">{studentNisn}</span>
             </div>
 
             {homeroomTeacher && (
-              <div className="bg-white/10 hover:bg-white/20 px-3.5 py-2 rounded-2xl border border-white/15 backdrop-blur-md text-xs font-bold flex items-center gap-1.5 transition-colors">
+              <div className="bg-white/10 hover:bg-white/20 px-3.5 py-2 rounded-lg border border-white/15 backdrop-blur-md text-xs font-bold flex items-center gap-1.5 transition-colors">
                 <span className="text-white/60">Wali Kelas:</span>
                 <span className="text-white">{homeroomTeacher}</span>
               </div>
@@ -626,16 +627,16 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
         </div>
 
         {/* Motivational Card Right */}
-        <div className="z-10 relative bg-white/15 backdrop-blur-md border border-white/25 p-5 rounded-2xl shrink-0 lg:w-[320px] flex flex-col justify-between space-y-3 shadow-lg">
+        <div className="z-10 relative bg-white/15 backdrop-blur-md border border-white/25 p-5 rounded-lg shrink-0 lg:w-[320px] flex flex-col justify-between space-y-3 shadow-lg">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-white/80">Indeks Prestasi Siswa</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-400/20 flex items-center justify-center text-amber-300">
+            <div className="w-8 h-8 rounded-lg bg-amber-400/20 flex items-center justify-center text-amber-300">
               <Star className="w-4 h-4 fill-amber-300" />
             </div>
           </div>
           <div>
             <div className="text-3xl font-extrabold text-white tracking-tight flex items-baseline gap-2">
-              {gradesComputed.averageScore} <span className="text-xs font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-400/30">KKM: 75</span>
+              {gradesComputed.averageScore} <span className="text-xs font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-400/30">KKM: 75</span>
             </div>
             <p className="text-xs text-white/90 font-semibold mt-1 flex items-center gap-1">
               <span>{gradesComputed.predikat}</span>
@@ -652,10 +653,10 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
         
         {/* KPI 1: Rata-Rata Nilai */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
+        <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-xs hover:shadow-md transition-all group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Rata-Rata Nilai</span>
-            <div className="w-10 h-10 rounded-2xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 rounded-lg bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Award className="w-5 h-5" />
             </div>
           </div>
@@ -663,7 +664,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
             {gradesComputed.averageScore} <span className="text-xs text-gray-400 font-normal">/ 100</span>
           </div>
           <div className="flex items-center gap-1.5 text-xs">
-            <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 flex items-center gap-0.5">
+            <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 flex items-center gap-0.5">
               <TrendingUp className="w-3 h-3" /> {gradesComputed.passRate}% Tuntas KKM
             </span>
           </div>
@@ -672,11 +673,11 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
         {/* KPI 2: Kehadiran Presensi */}
         <div 
           onClick={() => setShowAttendanceModal(true)}
-          className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all group cursor-pointer hover:border-emerald-200"
+          className="bg-white p-5 rounded-lg border border-gray-100 shadow-xs hover:shadow-md transition-all group cursor-pointer hover:border-emerald-200"
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Tingkat Presensi</span>
-            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <ScanFace className="w-5 h-5" />
             </div>
           </div>
@@ -684,7 +685,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
             <div className="text-2xl font-black text-gray-900 tracking-tight">
               {attendanceComputed.percentage}%
             </div>
-            <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+            <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
               + Presensi
             </span>
           </div>
@@ -694,29 +695,29 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
         </div>
 
         {/* KPI 3: Jadwal Pelajaran Hari Ini */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
+        <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-xs hover:shadow-md transition-all group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
               {scheduleComputed.isWeekend ? "Jadwal Hari Senin" : "Pelajaran Hari Ini"}
             </span>
-            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <BookOpen className="w-5 h-5" />
             </div>
           </div>
           <div className="text-2xl font-black text-gray-900 tracking-tight mb-1">
             {scheduleComputed.dayList.length} Mata Pelajaran
           </div>
-          <div className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md inline-flex items-center gap-1 max-w-full truncate">
+          <div className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded inline-flex items-center gap-1 max-w-full truncate">
             <Clock className="w-3 h-3 shrink-0" />
             <span className="truncate">Next: {scheduleComputed.nextSubject} ({scheduleComputed.nextTime})</span>
           </div>
         </div>
 
         {/* KPI 4: Ujian Semester Terdekat (UTS / UAS) */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
+        <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-xs hover:shadow-md transition-all group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Ujian Semester (UTS/UAS)</span>
-            <div className="w-10 h-10 rounded-2xl bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <CalendarRange className="w-5 h-5" />
             </div>
           </div>
@@ -741,7 +742,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
         <div className="lg:col-span-2 space-y-6">
           
           {/* Widget 1: Jadwal Pelajaran Hari Ini */}
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-xs overflow-hidden">
             <div className="p-5 md:p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <div>
                 <h2 className="text-base font-extrabold text-gray-900 flex items-center gap-2">
@@ -787,7 +788,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
                         <span className="text-[10px] text-gray-400 font-medium">{item.type || "Wajib"}</span>
                       </td>
                       <td className="py-3.5 px-5 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-[#531FFF] rounded-lg font-bold">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-[#531FFF] rounded-md font-bold">
                           <MapPin className="w-3 h-3 text-[#531FFF]" /> {item.room || "Ruang Kelas"}
                         </span>
                       </td>
@@ -818,7 +819,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
           </div>
 
           {/* Widget 2: Grafik Batang Pencapaian Nilai per Mata Pelajaran */}
-          <div className="bg-white p-5 md:p-6 rounded-3xl border border-gray-100 shadow-xs flex flex-col justify-between">
+          <div className="bg-white p-5 md:p-6 rounded-xl border border-gray-100 shadow-xs flex flex-col justify-between">
             <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
               <div>
                 <h2 className="text-base font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
@@ -857,16 +858,16 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
             <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between text-xs font-semibold text-gray-500 gap-2">
               <div className="flex items-center gap-4 flex-wrap">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-md bg-[#531FFF]" /> Nilai Istimewa (≥ 90)
+                  <span className="w-3 h-3 rounded bg-[#531FFF]" /> Nilai Istimewa (≥ 90)
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-md bg-[#7B42FF]" /> Tuntas KKM (75 - 89)
+                  <span className="w-3 h-3 rounded bg-[#7B42FF]" /> Tuntas KKM (75 - 89)
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-md bg-[#F59E0B]" /> Di Bawah KKM (&lt; 75)
+                  <span className="w-3 h-3 rounded bg-[#F59E0B]" /> Di Bawah KKM (&lt; 75)
                 </span>
               </div>
-              <span className="text-emerald-600 font-bold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
+              <span className="text-emerald-600 font-bold bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100">
                 {gradesComputed.passRate}% Lulus KKM
               </span>
             </div>
@@ -878,10 +879,10 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
         <div className="space-y-6">
           
           {/* Card 1: Pengingat Ujian Semester (UTS/UAS) Khusus Kelas Anda */}
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-xs p-5 md:p-6 space-y-4">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-xs p-5 md:p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center">
                   <CalendarRange className="w-4 h-4" />
                 </div>
                 <div>
@@ -895,9 +896,9 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
             </div>
 
             {upcomingExamsComputed.nearest ? (
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-50/80 via-white to-purple-50/40 border border-purple-100 space-y-3">
+              <div className="p-4 rounded-lg bg-gradient-to-br from-purple-50/80 via-white to-purple-50/40 border border-purple-100 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="px-2.5 py-1 rounded-md text-[10px] font-black bg-[#531FFF] text-white uppercase tracking-wider">
+                  <span className="px-2.5 py-1 rounded text-[10px] font-black bg-[#531FFF] text-white uppercase tracking-wider">
                     {upcomingExamsComputed.nearest.examType || "UTS"}
                   </span>
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
@@ -931,7 +932,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
           </div>
 
           {/* Card 2: Donut Chart Ringkasan Kehadiran */}
-          <div className="bg-white p-5 md:p-6 rounded-3xl border border-gray-100 shadow-xs flex flex-col justify-between space-y-4">
+          <div className="bg-white p-5 md:p-6 rounded-xl border border-gray-100 shadow-xs flex flex-col justify-between space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
                 <h3 className="text-sm font-extrabold text-gray-900 flex items-center gap-2">
@@ -986,10 +987,10 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
           </div>
 
           {/* Card 3: Nilai & Evaluasi Terbaru */}
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-xs p-5 md:p-6 space-y-3">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-xs p-5 md:p-6 space-y-3">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
                   <Award className="w-4 h-4" />
                 </div>
                 <div>
@@ -1004,7 +1005,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
 
             <div className="space-y-2.5">
               {gradesComputed.recentEvaluations.map((evalItem, i) => (
-                <div key={i} className="p-3 bg-gray-50/80 hover:bg-gray-50 border border-gray-100 rounded-2xl flex items-center justify-between transition-all">
+                <div key={i} className="p-3 bg-gray-50/80 hover:bg-gray-50 border border-gray-100 rounded-lg flex items-center justify-between transition-all">
                   <div>
                     <h4 className="text-xs font-bold text-gray-900">{evalItem.subject}</h4>
                     <p className="text-[10px] text-gray-400 mt-0.5">{evalItem.type} · {evalItem.date}</p>
@@ -1012,7 +1013,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
                   <div className="text-right">
                     <div className="text-sm font-black text-[#531FFF]">{evalItem.score}</div>
                     <span className={cn(
-                      "text-[9px] font-extrabold px-1.5 py-0.5 rounded-md border inline-block mt-0.5",
+                      "text-[9px] font-extrabold px-1.5 py-0.5 rounded border inline-block mt-0.5",
                       evalItem.score >= 75 
                         ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
                         : "bg-red-50 text-red-600 border-red-200"
@@ -1026,10 +1027,10 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
           </div>
 
           {/* Card 4: Pengumuman Sekolah */}
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-xs p-5 md:p-6 space-y-3">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-xs p-5 md:p-6 space-y-3">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center">
                   <Megaphone className="w-4 h-4" />
                 </div>
                 <div>
@@ -1044,7 +1045,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
 
             <div className="space-y-3">
               {recentAnnouncements.map((ann, i) => (
-                <div key={ann.id || i} className="p-3 bg-gray-50/70 border border-gray-100 rounded-2xl space-y-1">
+                <div key={ann.id || i} className="p-3 bg-gray-50/70 border border-gray-100 rounded-lg space-y-1">
                   <div className="flex items-center justify-between">
                     <span className={cn(
                       "px-2 py-0.5 rounded text-[9px] font-extrabold tracking-wide uppercase",
@@ -1062,17 +1063,17 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
           </div>
 
           {/* Quick Academic Shortcuts */}
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-xs p-4 grid grid-cols-2 gap-2 text-center text-xs font-bold">
-            <Link href="/admin/schedule" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-2xl text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-xs p-4 grid grid-cols-2 gap-2 text-center text-xs font-bold">
+            <Link href="/admin/schedule" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-lg text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
               <Calendar className="w-4 h-4" /> Jadwal Pelajaran
             </Link>
-            <Link href="/admin/exams" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-2xl text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
+            <Link href="/admin/exams" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-lg text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
               <CalendarRange className="w-4 h-4" /> Jadwal Ujian
             </Link>
-            <Link href="/admin/grades" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-2xl text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
+            <Link href="/admin/grades" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-lg text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
               <Award className="w-4 h-4" /> Nilai Siswa
             </Link>
-            <Link href="/admin/report-cards" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-2xl text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
+            <Link href="/admin/report-cards" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-lg text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
               <FileText className="w-4 h-4" /> Rapor Digital
             </Link>
           </div>
@@ -1183,7 +1184,7 @@ export default function DashboardPage() {
             </div>
             <button
               onClick={() => setPreviewRole(null)}
-              className="px-3 py-1 bg-white text-amber-900 rounded-lg text-xs font-black hover:bg-amber-100 transition-colors cursor-pointer"
+              className="px-3 py-1 bg-white text-amber-900 rounded-md text-xs font-black hover:bg-amber-100 transition-colors cursor-pointer"
             >
               Kembali ke Mode Asli ({userRole})
             </button>
@@ -1204,7 +1205,7 @@ export default function DashboardPage() {
     <div className="p-8 pb-12 max-w-[1600px] mx-auto w-full h-full space-y-6">
       
       {/* Top Banner */}
-      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-[#4E54C8] to-[#8F94FB] p-8 text-white shadow-md flex justify-between items-center">
+      <div className="relative rounded-xl overflow-hidden bg-gradient-to-r from-[#4E54C8] to-[#8F94FB] p-8 text-white shadow-md flex justify-between items-center">
         <div className="z-10 relative space-y-6 flex-1">
           <div>
             <h1 className="text-[32px] font-bold tracking-tight mb-2 flex items-center gap-2">
@@ -1261,19 +1262,19 @@ export default function DashboardPage() {
           {(userRole === "admin" || userRole === "super-admin" || userRole === "superadmin") && (
             <button
               onClick={() => setPreviewRole("guru")}
-              className="w-full flex items-center justify-center gap-2 bg-amber-400/90 hover:bg-amber-400 text-amber-950 px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 bg-amber-400/90 hover:bg-amber-400 text-amber-950 px-4 py-2.5 rounded-lg text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer"
             >
               <GraduationCap className="w-4 h-4" />
               Pratinjau Dashboard Guru
             </button>
           )}
           {userRole !== "siswa" && (
-            <button className="w-full flex items-center justify-center gap-2 bg-white text-[#4E54C8] hover:bg-gray-50 px-5 py-3 rounded-xl text-sm font-bold transition-colors shadow-sm">
+            <button className="w-full flex items-center justify-center gap-2 bg-white text-[#4E54C8] hover:bg-gray-50 px-5 py-3 rounded-lg text-sm font-bold transition-colors shadow-sm">
               <BarChart2 className="w-4 h-4" />
               Generate Report
             </button>
           )}
-          <button className="w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 px-5 py-3 rounded-xl text-sm font-bold transition-all backdrop-blur-sm">
+          <button className="w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 px-5 py-3 rounded-lg text-sm font-bold transition-all backdrop-blur-sm">
             <Calendar className="w-4 h-4" />
             Lihat Kalender
           </button>
@@ -1298,7 +1299,7 @@ export default function DashboardPage() {
       {/* KPI Cards Row */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         {/* Total Siswa */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] relative overflow-hidden flex flex-col justify-between h-[130px]">
+        <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] relative overflow-hidden flex flex-col justify-between h-[130px]">
           <div className="flex gap-4 z-10">
             <div className="w-10 h-10 rounded-full bg-[#531FFF]/10 flex items-center justify-center shrink-0">
               <GraduationCap className="w-5 h-5 text-[#531FFF]" />
@@ -1330,7 +1331,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Total Guru */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] relative overflow-hidden flex flex-col justify-between h-[130px]">
+        <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] relative overflow-hidden flex flex-col justify-between h-[130px]">
           <div className="flex gap-4 z-10">
             <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
               <Users className="w-5 h-5 text-blue-500" />
@@ -1361,7 +1362,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Total Kelas */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] relative overflow-hidden flex flex-col justify-between h-[130px]">
+        <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] relative overflow-hidden flex flex-col justify-between h-[130px]">
           <div className="flex gap-4 z-10">
             <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1394,7 +1395,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Kehadiran Hari Ini */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] relative overflow-hidden flex flex-col justify-between h-[130px]">
+        <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] relative overflow-hidden flex flex-col justify-between h-[130px]">
           <div className="flex gap-4 z-10">
             <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
               <CalendarCheck className="w-5 h-5 text-amber-500" />
@@ -1425,7 +1426,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Pendapatan */}
-        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] relative overflow-hidden flex flex-col justify-between h-[130px]">
+        <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] relative overflow-hidden flex flex-col justify-between h-[130px]">
           <div className="flex gap-4 z-10">
             <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
               <Wallet className="w-5 h-5 text-red-500" />
@@ -1460,10 +1461,10 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         
         {/* Area Chart Kehadiran */}
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] flex flex-col h-[400px]">
+        <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] flex flex-col h-[400px]">
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-bold text-[16px] text-gray-900">Analitik Kehadiran</h2>
-            <button className="flex items-center gap-2 text-[11px] font-semibold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-sm">
+            <button className="flex items-center gap-2 text-[11px] font-semibold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 px-3 py-1.5 rounded-md shadow-sm">
               7 Hari Terakhir
               <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
             </button>
@@ -1494,7 +1495,7 @@ export default function DashboardPage() {
                       content={({ active, payload, label }) => {
                         if (active && payload && payload.length) {
                           return (
-                            <div className="bg-white p-3 rounded-xl shadow-lg border border-gray-100 min-w-[120px]">
+                            <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-100 min-w-[120px]">
                               <p className="text-[11px] text-gray-500 mb-1 font-medium">{label}</p>
                               <p className="font-bold text-gray-900 text-sm">
                                 Kehadiran: <span className="text-[#531FFF]">{payload[0].value}%</span>
@@ -1519,7 +1520,7 @@ export default function DashboardPage() {
              
              {/* Legend Stats */}
              <div className="w-[150px] flex flex-col justify-center gap-4 shrink-0">
-               <div className="bg-white border border-emerald-100/60 rounded-xl p-4 shadow-sm shadow-emerald-50">
+               <div className="bg-white border border-emerald-100/60 rounded-lg p-4 shadow-sm shadow-emerald-50">
                  <div className="flex items-center justify-between mb-2">
                    <div className="flex items-center gap-1.5">
                      <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
@@ -1534,7 +1535,7 @@ export default function DashboardPage() {
                  </div>
                </div>
                
-               <div className="bg-white border border-amber-100/60 rounded-xl p-4 shadow-sm shadow-amber-50">
+               <div className="bg-white border border-amber-100/60 rounded-lg p-4 shadow-sm shadow-amber-50">
                  <div className="flex items-center justify-between mb-2">
                    <div className="flex items-center gap-1.5">
                      <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
@@ -1549,7 +1550,7 @@ export default function DashboardPage() {
                  </div>
                </div>
 
-               <div className="bg-white border border-red-100/60 rounded-xl p-4 shadow-sm shadow-red-50">
+               <div className="bg-white border border-red-100/60 rounded-lg p-4 shadow-sm shadow-red-50">
                  <div className="flex items-center justify-between mb-2">
                    <div className="flex items-center gap-1.5">
                      <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center shrink-0">
@@ -1568,10 +1569,10 @@ export default function DashboardPage() {
         </div>
 
         {/* Performa Akademik chart */}
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] h-[400px] flex flex-col">
+        <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] h-[400px] flex flex-col">
           <div className="flex items-center justify-between">
             <h2 className="font-bold text-[16px] text-gray-900">Performa Akademik</h2>
-            <button className="flex items-center gap-2 text-[11px] font-semibold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-sm">
+            <button className="flex items-center gap-2 text-[11px] font-semibold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 px-3 py-1.5 rounded-md shadow-sm">
               Semester Genap
               <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
             </button>
@@ -1650,7 +1651,7 @@ export default function DashboardPage() {
                  </div>
                </div>
 
-               <div className="mt-6 bg-red-50/50 rounded-xl p-3.5 flex gap-3 border border-red-100 items-center shrink-0">
+               <div className="mt-6 bg-red-50/50 rounded-lg p-3.5 flex gap-3 border border-red-100 items-center shrink-0">
                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
                    <Users className="w-5 h-5 text-red-600" />
                  </div>
@@ -1671,7 +1672,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         
         {/* Jadwal Hari Ini */}
-        <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] flex flex-col h-[280px]">
+        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] flex flex-col h-[280px]">
           <div className="flex items-center justify-between mb-5">
             <h2 className="font-bold text-[14px] text-gray-900">Jadwal Hari Ini</h2>
             <button className="text-[11px] font-semibold text-[#531FFF] hover:underline">Lihat Semua</button>
@@ -1679,7 +1680,7 @@ export default function DashboardPage() {
           <div className="space-y-4 overflow-y-auto pr-2 scrollbar-thin flex-1">
             <div className="flex items-start gap-3 relative pb-4">
               <div className="absolute left-5 top-8 bottom-0 w-px bg-gray-100"></div>
-              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 relative z-10 border-[3px] border-white shadow-sm">
+              <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 relative z-10 border-[3px] border-white shadow-sm">
                 <FileText className="w-4 h-4" />
               </div>
               <div className="w-full">
@@ -1696,7 +1697,7 @@ export default function DashboardPage() {
             
             <div className="flex items-start gap-3 relative pb-4">
               <div className="absolute left-5 top-8 bottom-0 w-px bg-gray-100"></div>
-              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0 relative z-10 border-[3px] border-white shadow-sm">
+              <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-500 flex items-center justify-center shrink-0 relative z-10 border-[3px] border-white shadow-sm">
                 <Shield className="w-4 h-4" />
               </div>
               <div className="w-full">
@@ -1712,7 +1713,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex items-start gap-3 relative">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0 relative z-10 border-[3px] border-white shadow-sm">
+              <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0 relative z-10 border-[3px] border-white shadow-sm">
                 <Droplet className="w-4 h-4" />
               </div>
               <div className="w-full">
@@ -1730,13 +1731,13 @@ export default function DashboardPage() {
         </div>
 
         {/* Pengumuman Terbaru */}
-        <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] flex flex-col h-[280px]">
+        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] flex flex-col h-[280px]">
            <div className="flex items-center justify-between mb-5">
             <h2 className="font-bold text-[14px] text-gray-900">Pengumuman Terbaru</h2>
             <button className="text-[11px] font-semibold text-[#531FFF] hover:underline">Lihat Semua</button>
           </div>
           <div className="space-y-2 flex-1 overflow-y-auto pr-1 scrollbar-thin">
-            <div className="flex gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
+            <div className="flex gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
               <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center shrink-0 text-red-500">
                 <Megaphone className="w-4 h-4 ml-[-2px] mt-[-2px]" />
               </div>
@@ -1749,7 +1750,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="flex gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
+            <div className="flex gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
               <div className="w-9 h-9 rounded-full bg-amber-50 flex items-center justify-center shrink-0 text-amber-500">
                 <Users className="w-4 h-4" />
               </div>
@@ -1762,7 +1763,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="flex gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
+            <div className="flex gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
               <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center shrink-0 text-emerald-600">
                 <Calendar className="w-4 h-4" />
               </div>
@@ -1778,11 +1779,11 @@ export default function DashboardPage() {
         </div>
 
         {/* Ringkasan Keuangan */}
-        <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] flex flex-col justify-between h-[280px]">
+        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] flex flex-col justify-between h-[280px]">
           <div>
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-bold text-[14px] text-gray-900">Ringkasan Keuangan</h2>
-              <button className="flex items-center gap-1 text-[10px] font-semibold text-gray-600 hover:text-gray-900 bg-gray-50 border border-gray-200 px-2 py-1 rounded-md">
+              <button className="flex items-center gap-1 text-[10px] font-semibold text-gray-600 hover:text-gray-900 bg-gray-50 border border-gray-200 px-2 py-1 rounded">
                 Bulan Ini
                 <ChevronDown className="w-3 h-3 text-gray-400" />
               </button>
@@ -1836,7 +1837,7 @@ export default function DashboardPage() {
         </div>
 
         {/* AI Insight */}
-        <div className="bg-[#F8F7FF] p-5 rounded-3xl border border-[#531FFF]/10 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] flex flex-col h-[280px]">
+        <div className="bg-[#F8F7FF] p-5 rounded-xl border border-[#531FFF]/10 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] flex flex-col h-[280px]">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-[14px] text-gray-900 flex items-center gap-1.5">
               AI Insight
@@ -1887,7 +1888,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         
         {/* Aktivitas Terbaru */}
-        <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] lg:col-span-3">
+        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)] lg:col-span-3">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-[14px] text-gray-900">Aktivitas Terbaru</h2>
             <button className="text-[11px] font-semibold text-[#531FFF] hover:underline">Lihat Semua</button>
@@ -1963,47 +1964,47 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick Access */}
-        <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)]">
+        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.02)]">
            <h2 className="font-bold text-[14px] text-gray-900 mb-4">Quick Access</h2>
            
            <div className="grid grid-cols-3 gap-y-4 gap-x-2">
              <div className="flex flex-col items-center gap-1.5 cursor-pointer group">
-               <div className="w-10 h-10 rounded-2xl bg-gray-50 group-hover:bg-[#531FFF]/5 flex items-center justify-center transition-colors shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] border border-gray-100/50">
+               <div className="w-10 h-10 rounded-lg bg-gray-50 group-hover:bg-[#531FFF]/5 flex items-center justify-center transition-colors shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] border border-gray-100/50">
                  <UserCheck className="w-4 h-4 text-[#531FFF]" />
                </div>
                <span className="text-[9px] font-bold text-gray-600 text-center">Tambah Siswa</span>
              </div>
 
              <div className="flex flex-col items-center gap-1.5 cursor-pointer group">
-               <div className="w-10 h-10 rounded-2xl bg-gray-50 group-hover:bg-emerald-50 flex items-center justify-center transition-colors shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] border border-gray-100/50">
+               <div className="w-10 h-10 rounded-lg bg-gray-50 group-hover:bg-emerald-50 flex items-center justify-center transition-colors shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] border border-gray-100/50">
                  <CalendarCheck className="w-4 h-4 text-emerald-500" />
                </div>
                <span className="text-[9px] font-bold text-gray-600 text-center">Absensi</span>
              </div>
 
              <div className="flex flex-col items-center gap-1.5 cursor-pointer group">
-               <div className="w-10 h-10 rounded-2xl bg-gray-50 group-hover:bg-amber-50 flex items-center justify-center transition-colors shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] border border-gray-100/50">
+               <div className="w-10 h-10 rounded-lg bg-gray-50 group-hover:bg-amber-50 flex items-center justify-center transition-colors shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] border border-gray-100/50">
                  <FileText className="w-4 h-4 text-amber-500" />
                </div>
                <span className="text-[9px] font-bold text-gray-600 text-center">Penilaian</span>
              </div>
 
              <div className="flex flex-col items-center gap-1.5 cursor-pointer group">
-               <div className="w-10 h-10 rounded-2xl bg-gray-50 group-hover:bg-red-50 flex items-center justify-center transition-colors shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] border border-gray-100/50">
+               <div className="w-10 h-10 rounded-lg bg-gray-50 group-hover:bg-red-50 flex items-center justify-center transition-colors shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] border border-gray-100/50">
                  <Megaphone className="w-4 h-4 text-red-500" />
                </div>
                <span className="text-[9px] font-bold text-gray-600 text-center">Pengumuman</span>
              </div>
 
              <div className="flex flex-col items-center gap-1.5 cursor-pointer group">
-               <div className="w-10 h-10 rounded-2xl bg-gray-50 group-hover:bg-blue-50 flex items-center justify-center transition-colors shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] border border-gray-100/50">
+               <div className="w-10 h-10 rounded-lg bg-gray-50 group-hover:bg-blue-50 flex items-center justify-center transition-colors shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] border border-gray-100/50">
                  <BarChart2 className="w-4 h-4 text-blue-500" />
                </div>
                <span className="text-[9px] font-bold text-gray-600 text-center">Laporan</span>
              </div>
 
              <div className="flex flex-col items-center gap-1.5 cursor-pointer group">
-               <div className="w-10 h-10 rounded-2xl bg-gray-50 group-hover:bg-gray-100 flex items-center justify-center transition-colors shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] border border-gray-100/50">
+               <div className="w-10 h-10 rounded-lg bg-gray-50 group-hover:bg-gray-100 flex items-center justify-center transition-colors shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] border border-gray-100/50">
                  <Settings className="w-4 h-4 text-gray-500" />
                </div>
                <span className="text-[9px] font-bold text-gray-600 text-center">Pengaturan</span>

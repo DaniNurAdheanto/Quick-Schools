@@ -30,18 +30,25 @@ import {
   ScanFace,
   CheckCircle2,
   MessageSquare,
-  Smartphone
+  Smartphone,
+  Plus,
+  Trash2,
+  Edit2,
+  AlertCircle,
+  Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
 import { db, auth } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
+import { useTimePresets, TimePreset } from "@/lib/time-presets";
 
 type SettingCategory = 
   | "profile" 
   | "grading" 
-  | "attendance";
+  | "attendance"
+  | "time_presets";
 
 interface NavGroupItem {
   id: SettingCategory;
@@ -70,9 +77,10 @@ const SETTINGS_GROUPS: NavGroup[] = [
     ]
   },
   {
-    groupTitle: "OPERASIONAL & PRESENSI",
+    groupTitle: "OPERASIONAL & JADWAL",
     items: [
-      { id: "attendance", label: "Absensi & Geofence", desc: "Face ID, toleransi & radius GPS", icon: FileCheck }
+      { id: "attendance", label: "Absensi & Geofence", desc: "Face ID, toleransi & radius GPS", icon: FileCheck },
+      { id: "time_presets", label: "Template Jam & Sesi", desc: "Preset sesi jam pelajaran & ujian", icon: Clock }
     ]
   }
 ];
@@ -227,6 +235,9 @@ export default function SettingsPage() {
       if (tabParam === "attendance" || tabParam === "absensi") {
         setActiveTab("attendance");
       }
+      if (tabParam === "time_presets" || tabParam === "preset" || tabParam === "jam" || tabParam === "jadwal") {
+        setActiveTab("time_presets");
+      }
     }
 
     try {
@@ -369,6 +380,138 @@ export default function SettingsPage() {
     })).filter(group => group.items.length > 0);
   }, [searchQuery]);
 
+  // Time Presets State & Handlers
+  const {
+    presets: timePresets,
+    addPreset: addTimePreset,
+    updatePreset: updateTimePreset,
+    deletePreset: deleteTimePreset,
+    resetToDefault: resetTimePresetsToDefault,
+  } = useTimePresets();
+
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+  const [isAddingPreset, setIsAddingPreset] = useState(false);
+  const [presetFormData, setPresetFormData] = useState({
+    name: "",
+    startTime: "07:00",
+    endTime: "08:30",
+    description: "",
+  });
+  const [savingPreset, setSavingPreset] = useState(false);
+
+  const calculateDuration = (start: string, end: string) => {
+    try {
+      const [sh, sm] = start.split(":").map(Number);
+      const [eh, em] = end.split(":").map(Number);
+      const totalMinutes = eh * 60 + em - (sh * 60 + sm);
+      if (totalMinutes <= 0) return "Waktu tidak valid";
+      const h = Math.floor(totalMinutes / 60);
+      const m = totalMinutes % 60;
+      if (h > 0 && m > 0) return `${h} jam ${m} mnt (${totalMinutes} mnt)`;
+      if (h > 0) return `${h} jam (${totalMinutes} mnt)`;
+      return `${m} Menit`;
+    } catch {
+      return "-";
+    }
+  };
+
+  const handleStartAddPreset = () => {
+    setEditingPresetId(null);
+    setPresetFormData({
+      name: `Sesi ${timePresets.length + 1}`,
+      startTime: "07:00",
+      endTime: "08:30",
+      description: "",
+    });
+    setIsAddingPreset(true);
+  };
+
+  const handleStartEditPreset = (preset: TimePreset) => {
+    setIsAddingPreset(false);
+    setEditingPresetId(preset.id);
+    setPresetFormData({
+      name: preset.name,
+      startTime: preset.startTime,
+      endTime: preset.endTime,
+      description: preset.description || "",
+    });
+  };
+
+  const handleSavePreset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!presetFormData.name.trim()) {
+      if (showError) showError("Nama template sesi wajib diisi!");
+      return;
+    }
+    if (!presetFormData.startTime || !presetFormData.endTime) {
+      if (showError) showError("Jam mulai dan jam selesai wajib ditentukan!");
+      return;
+    }
+    if (presetFormData.startTime >= presetFormData.endTime) {
+      if (showError) showError("Jam mulai harus lebih awal dari jam selesai!");
+      return;
+    }
+
+    setSavingPreset(true);
+    try {
+      if (editingPresetId) {
+        await updateTimePreset(editingPresetId, {
+          name: presetFormData.name.trim(),
+          startTime: presetFormData.startTime,
+          endTime: presetFormData.endTime,
+          start: presetFormData.startTime,
+          end: presetFormData.endTime,
+          label: `${presetFormData.startTime} - ${presetFormData.endTime} (${presetFormData.name.trim()})`,
+          description: presetFormData.description.trim(),
+        });
+        if (showSuccess) showSuccess("Template jam berhasil diperbarui!");
+        setEditingPresetId(null);
+      } else {
+        await addTimePreset({
+          name: presetFormData.name.trim(),
+          startTime: presetFormData.startTime,
+          endTime: presetFormData.endTime,
+          description: presetFormData.description.trim(),
+        });
+        if (showSuccess) showSuccess("Template jam baru berhasil ditambahkan!");
+        setIsAddingPreset(false);
+      }
+    } catch (err) {
+      if (showError) showError("Gagal menyimpan template jam!");
+    } finally {
+      setSavingPreset(false);
+    }
+  };
+
+  const handleDeletePreset = async (id: string, name: string) => {
+    if (!confirm(`Apakah Anda yakin ingin menghapus template jam "${name}"?`)) return;
+    try {
+      await deleteTimePreset(id);
+      if (showSuccess) showSuccess(`Template jam "${name}" berhasil dihapus!`);
+      if (editingPresetId === id) setEditingPresetId(null);
+    } catch (err) {
+      if (showError) showError("Gagal menghapus template jam!");
+    }
+  };
+
+  const handleResetPresets = async () => {
+    if (
+      !confirm(
+        "Kembalikan template jam ke 5 preset standar sistem (07:00–08:30, 08:30–10:00, 10:30–12:00, 13:00–14:30, 14:30–16:00)?"
+      )
+    ) {
+      return;
+    }
+    try {
+      await resetTimePresetsToDefault();
+      if (showInfo) showInfo("Template jam berhasil direset ke standar!");
+      setEditingPresetId(null);
+      setIsAddingPreset(false);
+    } catch (err) {
+      if (showError) showError("Gagal mereset template jam!");
+    }
+  };
+
   // Detect current admin geolocation
   const handleDetectCurrentLocation = () => {
     if (navigator.geolocation) {
@@ -500,10 +643,10 @@ export default function SettingsPage() {
     <div className="p-4 md:p-8 max-w-[1600px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
       
       {/* Top Main Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-bold">
+            <div className="w-10 h-10 rounded-lg bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-bold">
               <Building2 className="w-5 h-5" />
             </div>
             <div>
@@ -523,7 +666,7 @@ export default function SettingsPage() {
             onClick={() => {
               if (showInfo) showInfo("Formulir pengaturan diset ulang ke nilai semula", "Reset Default");
             }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
           >
             <RotateCcw className="w-4 h-4 text-gray-500" />
             Reset
@@ -532,7 +675,7 @@ export default function SettingsPage() {
           <button
             onClick={handleSaveSettings}
             disabled={saving}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white rounded-xl hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] transition-all text-xs font-extrabold shadow-sm cursor-pointer border border-white/20 disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white rounded-lg hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] transition-all text-xs font-extrabold shadow-sm cursor-pointer border border-white/20 disabled:opacity-50"
           >
             {saving ? (
               <RefreshCw className="w-4 h-4 animate-spin text-white" />
@@ -548,7 +691,7 @@ export default function SettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* Left Side Settings Navigation (4 Columns) */}
-        <div className="lg:col-span-4 bg-white p-5 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5 sticky top-6">
+        <div className="lg:col-span-4 bg-white p-5 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5 sticky top-6">
           
           {/* Search Settings Input */}
           <div className="relative">
@@ -558,7 +701,7 @@ export default function SettingsPage() {
               placeholder="Cari pengaturan (contoh: KKM, GPS, Logo)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
             />
           </div>
 
@@ -580,7 +723,7 @@ export default function SettingsPage() {
                         key={item.id}
                         onClick={() => setActiveTab(item.id)}
                         className={cn(
-                          "w-full text-left p-3 rounded-2xl transition-all flex items-center justify-between group cursor-pointer border",
+                          "w-full text-left p-3 rounded-lg transition-all flex items-center justify-between group cursor-pointer border",
                           isActive 
                             ? "bg-[#F3F0FF] text-[#531FFF] border-[#531FFF]/30 shadow-xs font-bold" 
                             : "bg-white text-gray-700 border-transparent hover:bg-gray-50 hover:border-gray-100"
@@ -588,7 +731,7 @@ export default function SettingsPage() {
                       >
                         <div className="flex items-center gap-3 overflow-hidden">
                           <div className={cn(
-                            "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border transition-transform group-hover:scale-105",
+                            "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-transform group-hover:scale-105",
                             isActive ? "bg-[#531FFF] text-white border-transparent" : "bg-gray-100 text-gray-500 border-gray-200"
                           )}>
                             <IconComp className="w-4 h-4" />
@@ -597,7 +740,7 @@ export default function SettingsPage() {
                             <p className="text-xs font-bold truncate flex items-center gap-2">
                               {item.label}
                               {item.badge && (
-                                <span className="px-1.5 py-0.2 text-[9px] font-extrabold bg-amber-100 text-amber-800 rounded-md">
+                                <span className="px-1.5 py-0.2 text-[9px] font-extrabold bg-amber-100 text-amber-800 rounded">
                                   {item.badge}
                                 </span>
                               )}
@@ -621,7 +764,7 @@ export default function SettingsPage() {
           
           {/* TAB 1: School Profile */}
           {activeTab === "profile" && (
-            <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
+            <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
               <div className="border-b border-gray-100 pb-4">
                 <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-[#531FFF]" />
@@ -633,18 +776,18 @@ export default function SettingsPage() {
               </div>
 
               {/* Logo Upload Card */}
-              <div className="p-5 rounded-2xl bg-gray-50/80 border border-gray-200/80 flex flex-col sm:flex-row items-center gap-5">
-                <div className="w-24 h-24 rounded-2xl bg-white overflow-hidden relative shrink-0 border-2 border-gray-200 shadow-md">
+              <div className="p-5 rounded-lg bg-gray-50/80 border border-gray-200/80 flex flex-col sm:flex-row items-center gap-5">
+                <div className="w-24 h-24 rounded-lg bg-white overflow-hidden relative shrink-0 border-2 border-gray-200 shadow-md">
                   <Image src={profile.logoUrl} alt="Logo Sekolah" fill className="object-cover" unoptimized />
                 </div>
                 <div className="space-y-2 text-center sm:text-left">
                   <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Logo Resmi Instansi</h4>
                   <p className="text-xs text-gray-500">Format PNG, JPG, atau SVG (Maksimal 2MB, Rasio 1:1).</p>
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
-                    <button className="px-3 py-1.5 bg-[#531FFF] text-white rounded-xl text-xs font-bold hover:bg-[#4317CC] transition-all flex items-center gap-1.5 shadow-xs">
+                    <button className="px-3 py-1.5 bg-[#531FFF] text-white rounded-lg text-xs font-bold hover:bg-[#4317CC] transition-all flex items-center gap-1.5 shadow-xs">
                       <Upload className="w-3.5 h-3.5" /> Unggah Logo Baru
                     </button>
-                    <button className="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-100 transition-all">
+                    <button className="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-100 transition-all">
                       Hapus
                     </button>
                   </div>
@@ -659,7 +802,7 @@ export default function SettingsPage() {
                     type="text" 
                     value={profile.schoolName}
                     onChange={(e) => setProfile({ ...profile, schoolName: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-gray-900"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-gray-900"
                   />
                 </div>
 
@@ -669,7 +812,7 @@ export default function SettingsPage() {
                     type="text" 
                     value={profile.schoolCode}
                     onChange={(e) => setProfile({ ...profile, schoolCode: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-mono text-gray-900"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-mono text-gray-900"
                   />
                 </div>
 
@@ -679,7 +822,7 @@ export default function SettingsPage() {
                     type="text" 
                     value={profile.npsn}
                     onChange={(e) => setProfile({ ...profile, npsn: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-mono text-gray-900"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-mono text-gray-900"
                   />
                 </div>
 
@@ -688,7 +831,7 @@ export default function SettingsPage() {
                   <select 
                     value={profile.accreditation}
                     onChange={(e) => setProfile({ ...profile, accreditation: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-gray-900"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-gray-900"
                   >
                     <option value="A (Sangat Baik / Unggul)">A (Sangat Baik / Unggul)</option>
                     <option value="B (Baik)">B (Baik)</option>
@@ -702,7 +845,7 @@ export default function SettingsPage() {
                     type="text" 
                     value={profile.address}
                     onChange={(e) => setProfile({ ...profile, address: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
                   />
                 </div>
 
@@ -712,7 +855,7 @@ export default function SettingsPage() {
                     type="text" 
                     value={profile.city}
                     onChange={(e) => setProfile({ ...profile, city: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
                   />
                 </div>
 
@@ -722,7 +865,7 @@ export default function SettingsPage() {
                     type="text" 
                     value={profile.province}
                     onChange={(e) => setProfile({ ...profile, province: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
                   />
                 </div>
 
@@ -732,7 +875,7 @@ export default function SettingsPage() {
                     type="text" 
                     value={profile.principalName}
                     onChange={(e) => setProfile({ ...profile, principalName: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-gray-900"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-gray-900"
                   />
                 </div>
 
@@ -742,7 +885,7 @@ export default function SettingsPage() {
                     type="text" 
                     value={profile.operatingHours}
                     onChange={(e) => setProfile({ ...profile, operatingHours: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
                   />
                 </div>
               </div>
@@ -751,7 +894,7 @@ export default function SettingsPage() {
 
           {/* TAB 2: Appearance & Branding */}
           {(activeTab as string) === "branding" && (
-            <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
+            <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
               <div className="border-b border-gray-100 pb-4">
                 <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
                   <Palette className="w-5 h-5 text-[#531FFF]" />
@@ -764,40 +907,40 @@ export default function SettingsPage() {
 
               {/* Color Pickers Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-2">
+                <div className="p-4 rounded-lg bg-gray-50 border border-gray-200 space-y-2">
                   <label className="block text-xs font-bold text-gray-700">Warna Utama (Primary)</label>
                   <div className="flex items-center gap-3">
                     <input 
                       type="color" 
                       value={branding.primaryColor}
                       onChange={(e) => setBranding({ ...branding, primaryColor: e.target.value })}
-                      className="w-10 h-10 rounded-xl border border-gray-300 cursor-pointer p-0.5"
+                      className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-0.5"
                     />
                     <span className="text-xs font-mono font-bold text-gray-900">{branding.primaryColor}</span>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-2">
+                <div className="p-4 rounded-lg bg-gray-50 border border-gray-200 space-y-2">
                   <label className="block text-xs font-bold text-gray-700">Warna Sekunder (Secondary)</label>
                   <div className="flex items-center gap-3">
                     <input 
                       type="color" 
                       value={branding.secondaryColor}
                       onChange={(e) => setBranding({ ...branding, secondaryColor: e.target.value })}
-                      className="w-10 h-10 rounded-xl border border-gray-300 cursor-pointer p-0.5"
+                      className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-0.5"
                     />
                     <span className="text-xs font-mono font-bold text-gray-900">{branding.secondaryColor}</span>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-2">
+                <div className="p-4 rounded-lg bg-gray-50 border border-gray-200 space-y-2">
                   <label className="block text-xs font-bold text-gray-700">Warna Akses (Accent)</label>
                   <div className="flex items-center gap-3">
                     <input 
                       type="color" 
                       value={branding.accentColor}
                       onChange={(e) => setBranding({ ...branding, accentColor: e.target.value })}
-                      className="w-10 h-10 rounded-xl border border-gray-300 cursor-pointer p-0.5"
+                      className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-0.5"
                     />
                     <span className="text-xs font-mono font-bold text-gray-900">{branding.accentColor}</span>
                   </div>
@@ -805,7 +948,7 @@ export default function SettingsPage() {
               </div>
 
               {/* Live Interactive Branding Preview Box */}
-              <div className="p-6 rounded-3xl border border-gray-200 space-y-4 shadow-sm relative overflow-hidden" style={{ backgroundColor: '#FAF9FF' }}>
+              <div className="p-6 rounded-xl border border-gray-200 space-y-4 shadow-sm relative overflow-hidden" style={{ backgroundColor: '#FAF9FF' }}>
                 <div className="flex items-center justify-between border-b border-gray-200 pb-3">
                   <span className="text-xs font-extrabold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-[#531FFF]" /> Live UI Component Preview
@@ -817,20 +960,20 @@ export default function SettingsPage() {
 
                 {/* Simulated UI Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-2xl bg-white border border-gray-100 shadow-sm space-y-3">
+                  <div className="p-4 rounded-lg bg-white border border-gray-100 shadow-sm space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-gray-900">Tombol Utama</span>
-                      <button className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-white shadow-xs" style={{ backgroundColor: branding.primaryColor }}>
+                      <button className="px-3 py-1.5 rounded-lg text-xs font-extrabold text-white shadow-xs" style={{ backgroundColor: branding.primaryColor }}>
                         Simpan Data
                       </button>
                     </div>
                     <p className="text-[11px] text-gray-500">Pratinjau elemen tombol navigasi utama pada sistem.</p>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-white border border-gray-100 shadow-sm space-y-3">
+                  <div className="p-4 rounded-lg bg-white border border-gray-100 shadow-sm space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-gray-900">Badge & Status</span>
-                      <span className="px-2.5 py-1 rounded-lg text-xs font-bold text-white" style={{ backgroundColor: branding.accentColor }}>
+                      <span className="px-2.5 py-1 rounded-md text-xs font-bold text-white" style={{ backgroundColor: branding.accentColor }}>
                         Presensi Hadir
                       </span>
                     </div>
@@ -845,10 +988,10 @@ export default function SettingsPage() {
           {activeTab === "attendance" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               {/* Header Card with Instant Save */}
-              <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#531FFF] to-[#7344FF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/20">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#531FFF] to-[#7344FF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/20">
                       <Compass className="w-5 h-5" />
                     </div>
                     <div>
@@ -872,7 +1015,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={handleDetectCurrentLocation}
-                    className="px-3.5 py-2.5 bg-purple-50 hover:bg-purple-100 text-[#531FFF] text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border border-purple-200/60 shadow-xs"
+                    className="px-3.5 py-2.5 bg-purple-50 hover:bg-purple-100 text-[#531FFF] text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 border border-purple-200/60 shadow-xs"
                   >
                     <MapPin className="w-4 h-4" />
                     Deteksi Lokasi Saya
@@ -882,7 +1025,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={handleSaveAttendanceConfig}
                     disabled={savingAttendance}
-                    className="px-5 py-2.5 bg-[#531FFF] hover:bg-[#4316D0] active:scale-[0.98] text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
+                    className="px-5 py-2.5 bg-[#531FFF] hover:bg-[#4316D0] active:scale-[0.98] text-white text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
                   >
                     {savingAttendance ? (
                       <>
@@ -900,10 +1043,10 @@ export default function SettingsPage() {
               </div>
 
               {/* CARD 1: Peta Interaktif & Dynamic Radius Geofencing (Hero Component) */}
-              <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
+              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
                       <Map className="w-5 h-5" />
                     </div>
                     <div>
@@ -915,7 +1058,7 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="font-mono text-gray-700 bg-gray-100 px-3 py-1 rounded-xl border border-gray-200 font-bold">
+                    <span className="font-mono text-gray-700 bg-gray-100 px-3 py-1 rounded-lg border border-gray-200 font-bold">
                       {Number(attendance.schoolCenterLat || attendance.schoolLat).toFixed(5)}, {Number(attendance.schoolCenterLng || attendance.schoolLng).toFixed(5)}
                     </span>
                   </div>
@@ -967,7 +1110,7 @@ export default function SettingsPage() {
                               gpsRadiusMeter: val,
                             }))}
                             className={cn(
-                              "px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all border cursor-pointer",
+                              "px-2.5 py-1 text-[11px] font-bold rounded-md transition-all border cursor-pointer",
                               (attendance.geofenceRadiusMeters || attendance.gpsRadiusMeter) === val
                                 ? "bg-[#531FFF] text-white border-[#531FFF] shadow-xs"
                                 : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
@@ -1002,7 +1145,7 @@ export default function SettingsPage() {
                             const v = Number(e.target.value);
                             setAttendance((prev) => ({ ...prev, geofenceRadiusMeters: v, gpsRadiusMeter: v }));
                           }}
-                          className="w-20 px-2.5 py-1.5 border border-gray-200 rounded-xl font-bold text-gray-900 text-center text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                          className="w-20 px-2.5 py-1.5 border border-gray-200 rounded-lg font-bold text-gray-900 text-center text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
                         />
                         <span className="text-xs font-bold text-gray-500">meter</span>
                       </div>
@@ -1022,7 +1165,7 @@ export default function SettingsPage() {
                           const v = Number(e.target.value);
                           setAttendance((prev) => ({ ...prev, schoolCenterLat: v, schoolLat: v }));
                         }}
-                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-mono text-gray-900 text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-mono text-gray-900 text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
                       />
                     </div>
 
@@ -1037,7 +1180,7 @@ export default function SettingsPage() {
                           const v = Number(e.target.value);
                           setAttendance((prev) => ({ ...prev, schoolCenterLng: v, schoolLng: v }));
                         }}
-                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-mono text-gray-900 text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-mono text-gray-900 text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
                       />
                     </div>
 
@@ -1063,9 +1206,9 @@ export default function SettingsPage() {
               </div>
 
               {/* CARD 2: Jadwal & Jam Operasional Presensi */}
-              <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
+              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
                 <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
-                  <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center">
                     <Clock className="w-5 h-5" />
                   </div>
                   <div>
@@ -1082,7 +1225,7 @@ export default function SettingsPage() {
                       required
                       value={attendance.schoolStartTime || attendance.checkInStart}
                       onChange={(e) => setAttendance((prev) => ({ ...prev, schoolStartTime: e.target.value, checkInStart: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
                     />
                     <p className="text-[10px] text-gray-400 mt-1">Siswa dihitung tepat waktu jika sebelum jam ini.</p>
                   </div>
@@ -1096,7 +1239,7 @@ export default function SettingsPage() {
                       required
                       value={attendance.lateToleranceMinutes || attendance.lateToleranceMin}
                       onChange={(e) => setAttendance((prev) => ({ ...prev, lateToleranceMinutes: Number(e.target.value), lateToleranceMin: Number(e.target.value) }))}
-                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
                     />
                     <p className="text-[10px] text-gray-400 mt-1">Masa toleransi sebelum status berubah menjadi Terlambat.</p>
                   </div>
@@ -1108,7 +1251,7 @@ export default function SettingsPage() {
                       required
                       value={attendance.absentThresholdTime || attendance.autoAbsentTime}
                       onChange={(e) => setAttendance((prev) => ({ ...prev, absentThresholdTime: e.target.value, autoAbsentTime: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
                     />
                     <p className="text-[10px] text-gray-400 mt-1">Belum hadir lewat jam ini otomatis berstatus Alpa.</p>
                   </div>
@@ -1120,7 +1263,7 @@ export default function SettingsPage() {
                       required
                       value={attendance.schoolEndTime || attendance.checkOutEnd}
                       onChange={(e) => setAttendance((prev) => ({ ...prev, schoolEndTime: e.target.value, checkOutEnd: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
                     />
                     <p className="text-[10px] text-gray-400 mt-1">Presensi kepulangan dibuka setelah jam ini.</p>
                   </div>
@@ -1128,9 +1271,9 @@ export default function SettingsPage() {
               </div>
 
               {/* CARD 3: Metode Presensi & Biometrik Kamera AI */}
-              <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
+              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
                 <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
-                  <div className="w-9 h-9 rounded-xl bg-cyan-50 text-cyan-700 flex items-center justify-center">
+                  <div className="w-9 h-9 rounded-lg bg-cyan-50 text-cyan-700 flex items-center justify-center">
                     <ScanFace className="w-5 h-5" />
                   </div>
                   <div>
@@ -1141,7 +1284,7 @@ export default function SettingsPage() {
 
                 {/* Methods checkboxes */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-between">
+                  <div className="p-4 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-between">
                     <div>
                       <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
                         <ScanFace className="w-4 h-4 text-[#531FFF]" />
@@ -1153,11 +1296,11 @@ export default function SettingsPage() {
                       type="checkbox" 
                       checked={attendance.methodFaceId}
                       onChange={(e) => setAttendance({ ...attendance, methodFaceId: e.target.checked })}
-                      className="w-5 h-5 accent-[#531FFF] rounded-md cursor-pointer"
+                      className="w-5 h-5 accent-[#531FFF] rounded cursor-pointer"
                     />
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-between">
+                  <div className="p-4 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-between">
                     <div>
                       <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
                         <Smartphone className="w-4 h-4 text-cyan-600" />
@@ -1169,11 +1312,11 @@ export default function SettingsPage() {
                       type="checkbox" 
                       checked={attendance.methodQr}
                       onChange={(e) => setAttendance({ ...attendance, methodQr: e.target.checked })}
-                      className="w-5 h-5 accent-[#531FFF] rounded-md cursor-pointer"
+                      className="w-5 h-5 accent-[#531FFF] rounded cursor-pointer"
                     />
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-between">
+                  <div className="p-4 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-between">
                     <div>
                       <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
                         <UserCog className="w-4 h-4 text-emerald-600" />
@@ -1185,7 +1328,7 @@ export default function SettingsPage() {
                       type="checkbox" 
                       checked={attendance.methodManual}
                       onChange={(e) => setAttendance({ ...attendance, methodManual: e.target.checked })}
-                      className="w-5 h-5 accent-[#531FFF] rounded-md cursor-pointer"
+                      className="w-5 h-5 accent-[#531FFF] rounded cursor-pointer"
                     />
                   </div>
                 </div>
@@ -1207,7 +1350,7 @@ export default function SettingsPage() {
                     <p className="text-[10px] text-gray-400 mt-1">Presensi ditolak jika skor verifikasi wajah di bawah batas ini.</p>
                   </div>
 
-                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gray-50 border border-gray-200">
+                  <div className="flex items-center justify-between p-3.5 rounded-lg bg-gray-50 border border-gray-200">
                     <div>
                       <p className="font-bold text-gray-900">Anti-Spoofing & Liveness Detection</p>
                       <p className="text-[11px] text-gray-500">Mencegah penggunaan foto cetak atau layar perangkat lain.</p>
@@ -1225,7 +1368,7 @@ export default function SettingsPage() {
                 </div>
 
                 {/* WhatsApp Notification Toggle */}
-                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-purple-50/50 border border-purple-100">
+                <div className="flex items-center justify-between p-3.5 rounded-lg bg-purple-50/50 border border-purple-100">
                   <div className="flex items-center gap-2.5">
                     <MessageSquare className="w-4 h-4 text-[#531FFF]" />
                     <div>
@@ -1246,7 +1389,7 @@ export default function SettingsPage() {
               </div>
 
               {/* Bottom Sticky Action Bar */}
-              <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="text-xs text-gray-500 flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   <span>Semua perubahan tersimpan secara aman ke server dan sesi aktif.</span>
@@ -1257,7 +1400,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={handleSaveAttendanceConfig}
                     disabled={savingAttendance}
-                    className="px-5 py-2.5 bg-[#531FFF] hover:bg-[#4316D0] active:scale-[0.98] text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
+                    className="px-5 py-2.5 bg-[#531FFF] hover:bg-[#4316D0] active:scale-[0.98] text-white text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
                   >
                     {savingAttendance ? (
                       <>
@@ -1278,7 +1421,7 @@ export default function SettingsPage() {
 
           {/* TAB 4: Grading & Reports */}
           {activeTab === "grading" && (
-            <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
+            <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
               <div className="border-b border-gray-100 pb-4">
                 <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
                   <Award className="w-5 h-5 text-amber-500" />
@@ -1291,64 +1434,64 @@ export default function SettingsPage() {
 
               {/* KKM & Weight Slider Controls */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-medium">
-                <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200">
+                <div className="p-4 rounded-lg bg-amber-50/60 border border-amber-200">
                   <label className="block font-bold text-amber-900 mb-1">Batas KKM Minimum</label>
                   <input 
                     type="number" 
                     value={grading.kkmScore}
                     onChange={(e) => setGrading({ ...grading, kkmScore: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-lg font-black text-amber-900"
+                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-lg text-lg font-black text-amber-900"
                   />
                   <p className="text-[10px] text-amber-700 mt-1 font-medium">Skor minimal kelulusan matpel</p>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-200">
+                <div className="p-4 rounded-lg bg-purple-50/60 border border-purple-200">
                   <label className="block font-bold text-purple-900 mb-1">Bobot Tugas (%)</label>
                   <input 
                     type="number" 
                     value={grading.assignmentWeight}
                     onChange={(e) => setGrading({ ...grading, assignmentWeight: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-white border border-purple-300 rounded-xl text-lg font-black text-purple-900"
+                    className="w-full px-3 py-2 bg-white border border-purple-300 rounded-lg text-lg font-black text-purple-900"
                   />
                 </div>
 
-                <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200">
+                <div className="p-4 rounded-lg bg-blue-50/60 border border-blue-200">
                   <label className="block font-bold text-blue-900 mb-1">Bobot UTS (%)</label>
                   <input 
                     type="number" 
                     value={grading.midtermWeight}
                     onChange={(e) => setGrading({ ...grading, midtermWeight: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-white border border-blue-300 rounded-xl text-lg font-black text-blue-900"
+                    className="w-full px-3 py-2 bg-white border border-blue-300 rounded-lg text-lg font-black text-blue-900"
                   />
                 </div>
 
-                <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200">
+                <div className="p-4 rounded-lg bg-emerald-50/60 border border-emerald-200">
                   <label className="block font-bold text-emerald-900 mb-1">Bobot UAS (%)</label>
                   <input 
                     type="number" 
                     value={grading.finalWeight}
                     onChange={(e) => setGrading({ ...grading, finalWeight: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-lg font-black text-emerald-900"
+                    className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-lg text-lg font-black text-emerald-900"
                   />
                 </div>
               </div>
 
               {/* Dynamic Formula Display Box */}
-              <div className="p-5 rounded-2xl bg-gray-900 text-white space-y-2 shadow-md">
+              <div className="p-5 rounded-lg bg-gray-900 text-white space-y-2 shadow-md">
                 <span className="text-[10px] font-extrabold uppercase tracking-widest text-cyan-400">
                   FORMULA KALKULASI NILAI AKHIR RAPOR
                 </span>
                 <div className="text-sm font-mono font-bold text-white flex flex-wrap items-center gap-2">
                   <span>Nilai Akhir =</span>
-                  <span className="bg-purple-800/80 px-2.5 py-1 rounded-lg border border-purple-400/30">
+                  <span className="bg-purple-800/80 px-2.5 py-1 rounded-md border border-purple-400/30">
                     (Tugas × {grading.assignmentWeight}%)
                   </span>
                   <span>+</span>
-                  <span className="bg-blue-800/80 px-2.5 py-1 rounded-lg border border-blue-400/30">
+                  <span className="bg-blue-800/80 px-2.5 py-1 rounded-md border border-blue-400/30">
                     (UTS × {grading.midtermWeight}%)
                   </span>
                   <span>+</span>
-                  <span className="bg-emerald-800/80 px-2.5 py-1 rounded-lg border border-emerald-400/30">
+                  <span className="bg-emerald-800/80 px-2.5 py-1 rounded-md border border-emerald-400/30">
                     (UAS × {grading.finalWeight}%)
                   </span>
                 </div>
@@ -1358,7 +1501,7 @@ export default function SettingsPage() {
 
           {/* TAB 8: Roles & Permissions */}
           {(activeTab as string) === "roles" && (
-            <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
+            <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
               <div className="border-b border-gray-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
@@ -1370,13 +1513,13 @@ export default function SettingsPage() {
                   </p>
                 </div>
 
-                <Link href="/admin/roles" className="px-3.5 py-2 bg-[#531FFF] text-white rounded-xl text-xs font-bold hover:bg-[#4317CC] transition-all flex items-center gap-1.5 shrink-0 shadow-xs">
+                <Link href="/admin/roles" className="px-3.5 py-2 bg-[#531FFF] text-white rounded-lg text-xs font-bold hover:bg-[#4317CC] transition-all flex items-center gap-1.5 shrink-0 shadow-xs">
                   <ShieldCheck className="w-4 h-4" /> Kelola Detail Role →
                 </Link>
               </div>
 
               {/* Permission Matrix Table */}
-              <div className="overflow-x-auto border border-gray-200 rounded-2xl">
+              <div className="overflow-x-auto border border-gray-200 rounded-lg">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200 font-extrabold text-gray-700">
@@ -1399,7 +1542,7 @@ export default function SettingsPage() {
                               ...rolesPermissions,
                               [modKey]: { ...perm, read: e.target.checked }
                             })}
-                            className="w-4 h-4 accent-[#531FFF] rounded-md cursor-pointer"
+                            className="w-4 h-4 accent-[#531FFF] rounded cursor-pointer"
                           />
                         </td>
                         <td className="p-3.5 text-center">
@@ -1410,7 +1553,7 @@ export default function SettingsPage() {
                               ...rolesPermissions,
                               [modKey]: { ...perm, write: e.target.checked }
                             })}
-                            className="w-4 h-4 accent-[#531FFF] rounded-md cursor-pointer"
+                            className="w-4 h-4 accent-[#531FFF] rounded cursor-pointer"
                           />
                         </td>
                         <td className="p-3.5 text-center">
@@ -1421,7 +1564,7 @@ export default function SettingsPage() {
                               ...rolesPermissions,
                               [modKey]: { ...perm, write: e.target.checked }
                             })}
-                            className="w-4 h-4 accent-[#531FFF] rounded-md cursor-pointer"
+                            className="w-4 h-4 accent-[#531FFF] rounded cursor-pointer"
                           />
                         </td>
                         <td className="p-3.5 text-center">
@@ -1432,7 +1575,7 @@ export default function SettingsPage() {
                               ...rolesPermissions,
                               [modKey]: { ...perm, delete: e.target.checked }
                             })}
-                            className="w-4 h-4 accent-[#531FFF] rounded-md cursor-pointer"
+                            className="w-4 h-4 accent-[#531FFF] rounded cursor-pointer"
                           />
                         </td>
                       </tr>
@@ -1445,7 +1588,7 @@ export default function SettingsPage() {
 
           {/* TAB 14: Activity History & Diff Viewer */}
           {(activeTab as string) === "history" && (
-            <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
+            <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
               <div className="border-b border-gray-100 pb-4">
                 <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
                   <History className="w-5 h-5 text-[#531FFF]" />
@@ -1457,7 +1600,7 @@ export default function SettingsPage() {
               </div>
 
               {/* Audit Trail Log Table */}
-              <div className="overflow-x-auto border border-gray-200 rounded-2xl">
+              <div className="overflow-x-auto border border-gray-200 rounded-lg">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200 font-extrabold text-gray-700">
@@ -1481,7 +1624,7 @@ export default function SettingsPage() {
                         <td className="p-3.5 text-right">
                           <button
                             onClick={() => setSelectedAuditLog(log)}
-                            className="px-3 py-1.5 bg-gray-100 hover:bg-[#F3F0FF] text-gray-700 hover:text-[#531FFF] rounded-xl text-xs font-bold transition-all border border-gray-200"
+                            className="px-3 py-1.5 bg-gray-100 hover:bg-[#F3F0FF] text-gray-700 hover:text-[#531FFF] rounded-lg text-xs font-bold transition-all border border-gray-200"
                           >
                             See Details
                           </button>
@@ -1496,7 +1639,7 @@ export default function SettingsPage() {
 
           {/* TAB 15: Security Settings */}
           {(activeTab as string) === "security" && (
-            <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
+            <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
               <div className="border-b border-gray-100 pb-4 flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
@@ -1519,7 +1662,7 @@ export default function SettingsPage() {
                     type="number" 
                     value={security.minPasswordLength}
                     onChange={(e) => setSecurity({ ...security, minPasswordLength: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 font-bold"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-gray-900 font-bold"
                   />
                 </div>
 
@@ -1529,12 +1672,12 @@ export default function SettingsPage() {
                     type="number" 
                     value={security.sessionTimeoutMinutes}
                     onChange={(e) => setSecurity({ ...security, sessionTimeoutMinutes: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 font-bold"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-gray-900 font-bold"
                   />
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-between">
+              <div className="p-4 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-bold text-gray-900">Autentikasi Dua Faktor (2FA)</p>
                   <p className="text-[10px] text-gray-500">Wajibkan verifikasi OTP untuk akun Administrator & Guru</p>
@@ -1543,7 +1686,7 @@ export default function SettingsPage() {
                   type="checkbox" 
                   checked={security.enable2FA}
                   onChange={(e) => setSecurity({ ...security, enable2FA: e.target.checked })}
-                  className="w-5 h-5 accent-[#531FFF] rounded-md cursor-pointer"
+                  className="w-5 h-5 accent-[#531FFF] rounded cursor-pointer"
                 />
               </div>
             </div>
@@ -1551,7 +1694,7 @@ export default function SettingsPage() {
 
           {/* TAB 16: System Preferences */}
           {(activeTab as string) === "preferences" && (
-            <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
+            <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
               <div className="border-b border-gray-100 pb-4">
                 <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
                   <Sliders className="w-5 h-5 text-[#531FFF]" />
@@ -1568,7 +1711,7 @@ export default function SettingsPage() {
                   <select 
                     value={preferences.language}
                     onChange={(e) => setPreferences({ ...preferences, language: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-900"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg font-bold text-gray-900"
                   >
                     <option value="id">Bahasa Indonesia</option>
                     <option value="en">English (US)</option>
@@ -1580,7 +1723,7 @@ export default function SettingsPage() {
                   <select 
                     value={preferences.timezone}
                     onChange={(e) => setPreferences({ ...preferences, timezone: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl font-bold text-gray-900"
+                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg font-bold text-gray-900"
                   >
                     <option value="WIB (UTC+7)">WIB - Waktu Indonesia Barat (UTC+7)</option>
                     <option value="WITA (UTC+8)">WITA - Waktu Indonesia Tengah (UTC+8)</option>
@@ -1593,7 +1736,7 @@ export default function SettingsPage() {
 
           {/* TAB 13: Data & Privacy Danger Zone */}
           {(activeTab as string) === "privacy" && (
-            <div className="bg-white p-6 md:p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
+            <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
               <div className="border-b border-gray-100 pb-4">
                 <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
                   <ShieldAlert className="w-5 h-5 text-rose-600" />
@@ -1605,7 +1748,7 @@ export default function SettingsPage() {
               </div>
 
               {/* Export Data Cards */}
-              <div className="p-5 rounded-2xl bg-purple-50/60 border border-purple-200 flex items-center justify-between">
+              <div className="p-5 rounded-lg bg-purple-50/60 border border-purple-200 flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-bold text-purple-900">Ekspor Arsip Lengkap Sekolah</h4>
                   <p className="text-[11px] text-purple-700 mt-0.5">Unduh seluruh database siswa, nilai, dan absensi dalam format ZIP / CSV.</p>
@@ -1614,14 +1757,14 @@ export default function SettingsPage() {
                   onClick={() => {
                     if (showInfo) showInfo("Menyiapkan unduhan arsip data sekolah (ZIP)...", "Ekspor Data");
                   }}
-                  className="px-4 py-2 bg-[#531FFF] text-white rounded-xl text-xs font-bold hover:bg-[#4317CC] transition-all flex items-center gap-1.5 shadow-xs"
+                  className="px-4 py-2 bg-[#531FFF] text-white rounded-lg text-xs font-bold hover:bg-[#4317CC] transition-all flex items-center gap-1.5 shadow-xs"
                 >
                   <Download className="w-4 h-4" /> Unduh Arsip ZIP
                 </button>
               </div>
 
               {/* Danger Zone Box */}
-              <div className="p-5 rounded-2xl bg-rose-50 border border-rose-200 space-y-3">
+              <div className="p-5 rounded-lg bg-rose-50 border border-rose-200 space-y-3">
                 <div className="flex items-center gap-2 text-rose-700 font-black text-xs">
                   <AlertTriangle className="w-4 h-4" /> DANGER ZONE - PEMBERSIHAN DATA
                 </div>
@@ -1630,7 +1773,7 @@ export default function SettingsPage() {
                 </p>
                 <button
                   onClick={() => setShowPurgeModal(true)}
-                  className="px-4 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700 transition-all shadow-xs cursor-pointer"
+                  className="px-4 py-2 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-700 transition-all shadow-xs cursor-pointer"
                 >
                   Purge Data & Reset Pabrik
                 </button>
@@ -1638,9 +1781,279 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {/* ========================================================================= */}
+          {/* 4. TAB TIME PRESETS (TEMPLATE JAM & SESI)                                 */}
+          {/* ========================================================================= */}
+          {activeTab === "time_presets" && (
+            <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-5">
+                <div>
+                  <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-[#531FFF]" />
+                    Template Jam Pelajaran & Ujian
+                  </h2>
+                  <p className="text-xs text-gray-500 font-medium mt-1">
+                    Kelola pilihan preset jam cepat yang digunakan pada formulir Jadwal Ujian dan Jadwal Pelajaran (KBM) sekolah.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleResetPresets}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
+                    title="Kembalikan ke 5 preset standar sistem"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Reset Standar
+                  </button>
+                  {!isAddingPreset && !editingPresetId && (
+                    <button
+                      type="button"
+                      onClick={handleStartAddPreset}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4317CC] rounded-lg shadow-xs transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Tambah Preset Baru
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Summary Stats Card */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3.5 bg-purple-50/60 border border-purple-200 rounded-xl">
+                  <span className="text-[11px] text-purple-700 font-bold uppercase tracking-wider block mb-1">
+                    Total Template Jam
+                  </span>
+                  <div className="text-xl font-black text-purple-950 flex items-baseline gap-1.5">
+                    {timePresets.length} <span className="text-xs font-semibold text-purple-600">Preset Aktif</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-blue-50/60 border border-blue-200 rounded-xl">
+                  <span className="text-[11px] text-blue-700 font-bold uppercase tracking-wider block mb-1">
+                    Rentang Waktu KBM / Ujian
+                  </span>
+                  <div className="text-xl font-black text-blue-950 flex items-baseline gap-1.5">
+                    {timePresets[0]?.startTime || "07:00"} – {timePresets[timePresets.length - 1]?.endTime || "16:00"}
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-emerald-50/60 border border-emerald-200 rounded-xl">
+                  <span className="text-[11px] text-emerald-700 font-bold uppercase tracking-wider block mb-1">
+                    Sinkronisasi Modul
+                  </span>
+                  <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5 mt-1">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    Tersambung ke Ujian & Jadwal
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Add / Edit */}
+              {(isAddingPreset || editingPresetId) && (
+                <form
+                  onSubmit={handleSavePreset}
+                  className="p-5 bg-purple-50/40 border-2 border-purple-200 rounded-xl space-y-4 animate-in fade-in"
+                >
+                  <div className="flex items-center justify-between border-b border-purple-200/80 pb-2.5">
+                    <span className="font-bold text-purple-950 text-xs flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-[#531FFF]" />
+                      {editingPresetId ? "Edit Template Jam" : "Tambah Template Jam Baru"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingPreset(false);
+                        setEditingPresetId(null);
+                      }}
+                      className="text-gray-400 hover:text-gray-600 p-1 rounded"
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Nama Sesi / Label</label>
+                      <input
+                        type="text"
+                        required
+                        value={presetFormData.name}
+                        onChange={(e) => setPresetFormData({ ...presetFormData, name: e.target.value })}
+                        placeholder="Contoh: Sesi 1 / Jam Ke-1"
+                        className="w-full px-3 py-2 text-xs font-semibold bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Jam Mulai</label>
+                      <input
+                        type="time"
+                        required
+                        value={presetFormData.startTime}
+                        onChange={(e) => setPresetFormData({ ...presetFormData, startTime: e.target.value })}
+                        className="w-full px-3 py-2 text-xs font-semibold bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-center"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Jam Selesai</label>
+                      <input
+                        type="time"
+                        required
+                        value={presetFormData.endTime}
+                        onChange={(e) => setPresetFormData({ ...presetFormData, endTime: e.target.value })}
+                        className="w-full px-3 py-2 text-xs font-semibold bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-center"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">Keterangan / Catatan (Opsional)</label>
+                      <input
+                        type="text"
+                        value={presetFormData.description}
+                        onChange={(e) => setPresetFormData({ ...presetFormData, description: e.target.value })}
+                        placeholder="Contoh: Sesi Pagi / Ujian Teori"
+                        className="w-full px-3 py-2 text-xs font-semibold bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <div className="w-full px-3.5 py-2.5 bg-purple-100/60 rounded-lg border border-purple-200 text-xs text-purple-900 font-medium">
+                        Durasi Pelaksanaan:{" "}
+                        <span className="font-bold text-purple-950">
+                          {calculateDuration(presetFormData.startTime, presetFormData.endTime)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-1 border-t border-purple-200/50">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingPreset(false);
+                        setEditingPresetId(null);
+                      }}
+                      className="px-3 py-2 text-xs font-semibold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingPreset}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4317CC] rounded-lg shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <Check className="w-4 h-4" />
+                      {editingPresetId ? "Simpan Perubahan Preset" : "Tambahkan Preset Baru"}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Table of Presets */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+                <table className="w-full text-left divide-y divide-gray-200 text-xs">
+                  <thead className="bg-gray-50 font-bold text-gray-700">
+                    <tr>
+                      <th className="py-3 px-4 w-14 text-center">No</th>
+                      <th className="py-3 px-4">Nama Sesi</th>
+                      <th className="py-3 px-4">Rentang Waktu</th>
+                      <th className="py-3 px-4">Durasi</th>
+                      <th className="py-3 px-4">Keterangan</th>
+                      <th className="py-3 px-4 text-right w-28">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 font-medium text-gray-700 bg-white">
+                    {timePresets.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="text-center py-10 text-gray-400">
+                          Belum ada template jam. Klik "Reset Standar" atau "Tambah Preset Baru" di atas.
+                        </td>
+                      </tr>
+                    ) : (
+                      timePresets.map((preset, idx) => (
+                        <tr key={preset.id} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="py-3 px-4 text-center text-gray-400 font-bold">{idx + 1}</td>
+                          <td className="py-3 px-4 font-bold text-gray-900">{preset.name}</td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-50 text-[#531FFF] border border-purple-100 font-mono font-bold text-xs">
+                              <Clock className="w-3 h-3" />
+                              {preset.startTime} – {preset.endTime}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-gray-700 font-semibold">
+                            {calculateDuration(preset.startTime, preset.endTime)}
+                          </td>
+                          <td className="py-3 px-4 text-gray-500 text-[11px]">
+                            {preset.description || "-"}
+                          </td>
+                          <td className="py-3 px-4 text-right space-x-1">
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditPreset(preset)}
+                              className="p-1.5 text-gray-500 hover:text-[#531FFF] hover:bg-purple-50 rounded-md transition-colors cursor-pointer"
+                              title="Edit Preset"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePreset(preset.id, preset.name)}
+                              className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+                              title="Hapus Preset"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Preview Chips */}
+              <div className="p-4 bg-gray-50/80 border border-gray-200 rounded-xl space-y-2">
+                <div className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-[#531FFF]" />
+                  Pratinjau Tampilan Chip pada Form Jadwal Ujian & Pelajaran
+                </div>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {timePresets.map((preset) => (
+                    <div
+                      key={preset.id}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white text-gray-700 border border-gray-200 flex items-center gap-1.5 shadow-2xs"
+                    >
+                      <span className="font-mono text-[#531FFF]">{preset.startTime}–{preset.endTime}</span>
+                      <span className="text-[10px] text-gray-400">({preset.name})</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-gray-500 pt-1">
+                  Tombol chip di atas dapat langsung diklik oleh pengguna di form Jadwal Ujian dan Jadwal Pelajaran untuk mengisi jam secara otomatis tanpa perlu mengetik manual.
+                </p>
+              </div>
+
+              {/* Notice info */}
+              <div className="flex items-start gap-3 p-4 bg-blue-50/70 border border-blue-200 rounded-xl text-blue-900 text-xs leading-relaxed">
+                <AlertCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold mb-0.5">Integrasi Sistem Terpadu</h4>
+                  <p>
+                    Setiap penambahan, pengubahan, atau penghapusan template jam akan otomatis tersinkronisasi
+                    secara real-time ke seluruh akun pengguna dan halaman Jadwal Ujian maupun Jadwal Pelajaran. Pengguna
+                    tetap bebas mengubah jam mulai atau selesai secara manual apabila terdapat jadwal ujian/kelas di luar preset.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Render Default Placeholder for Other Active Tabs */}
-          {!["profile", "branding", "attendance", "grading", "roles", "history", "security", "preferences", "privacy"].includes(activeTab) && (
-            <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] text-center space-y-4">
+          {!["profile", "branding", "attendance", "grading", "roles", "history", "security", "preferences", "privacy", "time_presets"].includes(activeTab) && (
+            <div className="bg-white p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] text-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto border border-purple-100">
                 <Sparkles className="w-8 h-8" />
               </div>
@@ -1652,7 +2065,7 @@ export default function SettingsPage() {
               </div>
               <button
                 onClick={handleSaveSettings}
-                className="px-5 py-2.5 bg-[#531FFF] text-white rounded-xl text-xs font-bold hover:bg-[#4317CC] transition-all shadow-xs"
+                className="px-5 py-2.5 bg-[#531FFF] text-white rounded-lg text-xs font-bold hover:bg-[#4317CC] transition-all shadow-xs"
               >
                 Simpan Konfigurasi Modul
               </button>
@@ -1667,7 +2080,7 @@ export default function SettingsPage() {
       {selectedAuditLog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setSelectedAuditLog(null)} />
-          <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden z-10 animate-in zoom-in-95 duration-200">
+          <div className="relative w-full max-w-xl bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-10 animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-900 text-white">
               <div className="flex items-center gap-2">
                 <History className="w-5 h-5 text-[#531FFF]" />
@@ -1679,20 +2092,20 @@ export default function SettingsPage() {
             </div>
 
             <div className="p-6 space-y-4 text-xs">
-              <div className="p-3 rounded-xl bg-gray-50 border border-gray-100 space-y-1">
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100 space-y-1">
                 <p className="font-bold text-gray-900">{selectedAuditLog.summary}</p>
                 <p className="text-gray-500">Oleh {selectedAuditLog.user} ({selectedAuditLog.role}) • {selectedAuditLog.timestamp}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3 font-mono">
-                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 space-y-1">
+                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 space-y-1">
                   <span className="text-[10px] font-bold text-rose-700 uppercase">Sebelum (Before)</span>
                   <pre className="text-[11px] text-rose-900 overflow-x-auto whitespace-pre-wrap">
                     {JSON.stringify(selectedAuditLog.before, null, 2)}
                   </pre>
                 </div>
 
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 space-y-1">
+                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 space-y-1">
                   <span className="text-[10px] font-bold text-emerald-700 uppercase">Sesudah (After)</span>
                   <pre className="text-[11px] text-emerald-900 overflow-x-auto whitespace-pre-wrap">
                     {JSON.stringify(selectedAuditLog.after, null, 2)}
@@ -1702,7 +2115,7 @@ export default function SettingsPage() {
 
               <button 
                 onClick={() => setSelectedAuditLog(null)}
-                className="w-full py-2.5 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition-all"
+                className="w-full py-2.5 bg-gray-900 text-white rounded-lg font-bold hover:bg-gray-800 transition-all"
               >
                 Tutup Diff Viewer
               </button>
@@ -1715,7 +2128,7 @@ export default function SettingsPage() {
       {showPurgeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowPurgeModal(false)} />
-          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 z-10 space-y-4 text-center">
+          <div className="relative w-full max-w-md bg-white rounded-xl shadow-2xl border border-gray-100 p-6 z-10 space-y-4 text-center">
             <div className="w-14 h-14 rounded-full bg-rose-100 border-4 border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-8 h-8" />
             </div>
@@ -1728,7 +2141,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3 pt-2">
               <button 
                 onClick={() => setShowPurgeModal(false)}
-                className="w-full py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200"
+                className="w-full py-2.5 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200"
               >
                 Batal
               </button>
@@ -1737,7 +2150,7 @@ export default function SettingsPage() {
                   setShowPurgeModal(false);
                   if (showError) showError("Pembersihan data dibatalkan demi keamanan!", "Perhatian Security");
                 }}
-                className="w-full py-2.5 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700 shadow-md"
+                className="w-full py-2.5 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-700 shadow-md"
               >
                 Konfirmasi Purge
               </button>

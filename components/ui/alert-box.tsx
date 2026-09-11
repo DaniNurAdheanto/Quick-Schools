@@ -44,13 +44,13 @@ export function AlertBox({ type, title, message, onClose, className }: AlertBoxP
   return (
     <div
       className={cn(
-        "p-4 rounded-2xl border shadow-md flex items-center justify-between gap-3 transition-all animate-in fade-in slide-in-from-top-2 duration-300",
+        "p-4 rounded-lg border shadow-md flex items-center justify-between gap-3 transition-all animate-in fade-in slide-in-from-top-2 duration-300",
         style.bg,
         className
       )}
     >
       <div className="flex items-center gap-3">
-        <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-bold", style.iconBg)}>
+        <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0 font-bold", style.iconBg)}>
           <IconComponent className="w-5 h-5" />
         </div>
 
@@ -63,7 +63,7 @@ export function AlertBox({ type, title, message, onClose, className }: AlertBoxP
       {onClose && (
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg hover:bg-black/5 transition-colors shrink-0 text-current opacity-70 hover:opacity-100"
+          className="p-1.5 rounded-md hover:bg-black/5 transition-colors shrink-0 text-current opacity-70 hover:opacity-100"
           title="Tutup"
         >
           <X className="w-4 h-4" />

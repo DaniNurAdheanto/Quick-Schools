@@ -162,7 +162,7 @@ export default function StudentPersonalAttendanceView({
       {/* ----------------------------------------------------------------- */}
       {/* 1. HERO BANNER: PERSONAL STUDENT PROFILE & ATTENDANCE ACTION */}
       {/* ----------------------------------------------------------------- */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-gray-950 via-[#190C36] to-[#2E125B] p-6 sm:p-8 text-white shadow-xl shadow-purple-950/20 border border-white/10">
+      <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-gray-950 via-[#190C36] to-[#2E125B] p-6 sm:p-8 text-white shadow-xl shadow-purple-950/20 border border-white/10">
         {/* Glow ambient background ornaments */}
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 rounded-full bg-[#531FFF]/30 blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-1/3 -mb-20 w-60 h-60 rounded-full bg-emerald-500/20 blur-2xl pointer-events-none" />
@@ -171,12 +171,12 @@ export default function StudentPersonalAttendanceView({
           {/* Student Profile Info */}
           <div className="flex items-start gap-4 sm:gap-5">
             <div className="relative shrink-0">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-[#531FFF] to-[#8C52FF] p-1 shadow-lg shadow-[#531FFF]/40 flex items-center justify-center text-white text-2xl font-black">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg bg-gradient-to-br from-[#531FFF] to-[#8C52FF] p-1 shadow-lg shadow-[#531FFF]/40 flex items-center justify-center text-white text-2xl font-black">
                 {student.avatar ? (
                   <img
                     src={student.avatar}
                     alt={student.name}
-                    className="w-full h-full object-cover rounded-xl"
+                    className="w-full h-full object-cover rounded-lg"
                   />
                 ) : (
                   <span>{student.name.charAt(0).toUpperCase()}</span>
@@ -209,9 +209,9 @@ export default function StudentPersonalAttendanceView({
           {/* Today's Status Box & Quick Scan Button */}
           <div className="w-full lg:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             {todayAttendance ? (
-              <div className="flex items-center gap-3 px-4 py-3 bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl">
+              <div className="flex items-center gap-3 px-4 py-3 bg-white/10 backdrop-blur-md border border-white/15 rounded-lg">
                 <div className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow",
+                  "w-10 h-10 rounded-lg flex items-center justify-center shrink-0 shadow",
                   todayAttendance.status === "Hadir"
                     ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
                     : "bg-amber-500/20 text-amber-300 border border-amber-400/30"
@@ -231,8 +231,8 @@ export default function StudentPersonalAttendanceView({
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-3 px-4 py-3 bg-amber-500/20 backdrop-blur-md border border-amber-400/30 rounded-2xl">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/30 text-amber-300 flex items-center justify-center shrink-0">
+              <div className="flex items-center gap-3 px-4 py-3 bg-amber-500/20 backdrop-blur-md border border-amber-400/30 rounded-lg">
+                <div className="w-10 h-10 rounded-lg bg-amber-500/30 text-amber-300 flex items-center justify-center shrink-0">
                   <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div>
@@ -249,7 +249,7 @@ export default function StudentPersonalAttendanceView({
             <button
               type="button"
               onClick={onOpenScanModal}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-gradient-to-r from-[#531FFF] to-[#7E42EA] hover:from-[#4516db] hover:to-[#6f33db] text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-lg shadow-[#531FFF]/40 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-gradient-to-r from-[#531FFF] to-[#7E42EA] hover:from-[#4516db] hover:to-[#6f33db] text-white font-extrabold text-xs sm:text-sm rounded-lg shadow-lg shadow-[#531FFF]/40 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
             >
               <Camera className="w-4 h-4" />
               <span>{todayAttendance ? "Presensi Ulang" : "Ambil Presensi Sekarang"}</span>
@@ -263,12 +263,12 @@ export default function StudentPersonalAttendanceView({
       {/* ----------------------------------------------------------------- */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
         {/* Hadir */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-emerald-200 transition-all flex flex-col justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-emerald-200 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
               Total Hadir
             </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
@@ -282,12 +282,12 @@ export default function StudentPersonalAttendanceView({
         </div>
 
         {/* Terlambat */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-amber-200 transition-all flex flex-col justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-amber-200 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
               Terlambat
             </span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
               <Clock className="w-4 h-4" />
             </div>
           </div>
@@ -301,12 +301,12 @@ export default function StudentPersonalAttendanceView({
         </div>
 
         {/* Izin */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-purple-200 transition-all flex flex-col justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-purple-200 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
               Izin
             </span>
-            <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
               <Calendar className="w-4 h-4" />
             </div>
           </div>
@@ -320,12 +320,12 @@ export default function StudentPersonalAttendanceView({
         </div>
 
         {/* Sakit */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-blue-200 transition-all flex flex-col justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-blue-200 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider">
               Sakit
             </span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
               <AlertCircle className="w-4 h-4" />
             </div>
           </div>
@@ -339,12 +339,12 @@ export default function StudentPersonalAttendanceView({
         </div>
 
         {/* Persentase Kehadiran */}
-        <div className="col-span-2 lg:col-span-1 bg-gradient-to-br from-[#531FFF] to-[#3910A3] p-4 sm:p-5 rounded-2xl text-white shadow-md shadow-[#531FFF]/20 flex flex-col justify-between">
+        <div className="col-span-2 lg:col-span-1 bg-gradient-to-br from-[#531FFF] to-[#3910A3] p-4 sm:p-5 rounded-lg text-white shadow-md shadow-[#531FFF]/20 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-extrabold text-purple-200 uppercase tracking-wider">
               Persentase
             </span>
-            <div className="w-8 h-8 rounded-xl bg-white/15 text-white flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-white/15 text-white flex items-center justify-center font-bold">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
@@ -370,7 +370,7 @@ export default function StudentPersonalAttendanceView({
       {/* ----------------------------------------------------------------- */}
       {/* 3. MODERN CONTROLS BAR: SEARCH & STATUS DROPDOWN */}
       {/* ----------------------------------------------------------------- */}
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] p-4 sm:p-5">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           
           {/* Search Box */}
@@ -381,7 +381,7 @@ export default function StudentPersonalAttendanceView({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Cari tanggal, status, atau catatan presensi..."
-              className="w-full bg-gray-50/80 border border-gray-200 text-gray-900 text-xs font-bold pl-9 pr-3.5 py-2.5 rounded-2xl focus:bg-white focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all placeholder:text-gray-400"
+              className="w-full bg-gray-50/80 border border-gray-200 text-gray-900 text-xs font-bold pl-9 pr-3.5 py-2.5 rounded-lg focus:bg-white focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all placeholder:text-gray-400"
             />
           </div>
 
@@ -394,7 +394,7 @@ export default function StudentPersonalAttendanceView({
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full appearance-none bg-gray-50/80 hover:bg-white border border-gray-200 text-gray-900 text-xs font-extrabold pl-9 pr-9 py-2.5 rounded-2xl focus:bg-white focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all cursor-pointer shadow-xs"
+                className="w-full appearance-none bg-gray-50/80 hover:bg-white border border-gray-200 text-gray-900 text-xs font-extrabold pl-9 pr-9 py-2.5 rounded-lg focus:bg-white focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all cursor-pointer shadow-xs"
               >
                 {STATUS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -415,7 +415,7 @@ export default function StudentPersonalAttendanceView({
                   setStatusFilter("Semua");
                   setSearchQuery("");
                 }}
-                className="p-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl text-xs font-bold transition-all cursor-pointer"
+                className="p-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-xs font-bold transition-all cursor-pointer"
                 title="Reset Filter & Pencarian"
               >
                 <RotateCcw className="w-4 h-4" />
@@ -428,7 +428,7 @@ export default function StudentPersonalAttendanceView({
       {/* ----------------------------------------------------------------- */}
       {/* 4. RIWAYAT PRESENSI PERSONAL SISWA */}
       {/* ----------------------------------------------------------------- */}
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
           <div>
             <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
@@ -450,7 +450,7 @@ export default function StudentPersonalAttendanceView({
 
         {finalDisplayRecords.length === 0 ? (
           <div className="p-12 text-center space-y-3">
-            <div className="w-16 h-16 bg-purple-50 text-[#531FFF] rounded-3xl mx-auto flex items-center justify-center">
+            <div className="w-16 h-16 bg-purple-50 text-[#531FFF] rounded-xl mx-auto flex items-center justify-center">
               <Calendar className="w-8 h-8 opacity-60" />
             </div>
             <h4 className="text-base font-extrabold text-gray-900">
@@ -489,7 +489,7 @@ export default function StudentPersonalAttendanceView({
                     {/* Thumbnail foto bukti absensi */}
                     <div className="relative group shrink-0">
                       <div
-                        className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-gray-100 border-2 border-white shadow-md relative cursor-pointer"
+                        className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden bg-gray-100 border-2 border-white shadow-md relative cursor-pointer"
                         onClick={() => setSelectedProofRecord(rec)}
                         title="Klik untuk memperbesar foto bukti"
                       >
@@ -556,7 +556,7 @@ export default function StudentPersonalAttendanceView({
                           </span>
                         )}
                         {rec.faceMatchScore && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 bg-purple-50 text-[#531FFF] rounded-md border border-purple-100">
+                          <span className="text-[10px] font-bold px-2 py-0.5 bg-purple-50 text-[#531FFF] rounded border border-purple-100">
                             AI Match: {rec.faceMatchScore}%
                           </span>
                         )}
@@ -592,7 +592,7 @@ export default function StudentPersonalAttendanceView({
                     <button
                       type="button"
                       onClick={() => setSelectedProofRecord(rec)}
-                      className="px-3.5 py-2 bg-purple-50/60 hover:bg-purple-100 text-[#531FFF] border border-purple-200/80 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                      className="px-3.5 py-2 bg-purple-50/60 hover:bg-purple-100 text-[#531FFF] border border-purple-200/80 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
                     >
                       <Eye className="w-3.5 h-3.5" />
                       <span>Lihat Bukti</span>
@@ -610,12 +610,12 @@ export default function StudentPersonalAttendanceView({
       {/* ----------------------------------------------------------------- */}
       {selectedProofRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-gray-950/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col max-h-[90vh]">
+          <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col max-h-[90vh]">
             
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-900 to-gray-950 text-white shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#531FFF] flex items-center justify-center text-white">
+                <div className="w-8 h-8 rounded-lg bg-[#531FFF] flex items-center justify-center text-white">
                   <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div>
@@ -637,7 +637,7 @@ export default function StudentPersonalAttendanceView({
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-5">
               {/* Photo Proof */}
-              <div className="relative w-full h-64 rounded-2xl overflow-hidden bg-gray-900 border border-gray-100 shadow-inner flex items-center justify-center">
+              <div className="relative w-full h-64 rounded-lg overflow-hidden bg-gray-900 border border-gray-100 shadow-inner flex items-center justify-center">
                 {selectedProofRecord.capturedImage ? (
                   <img
                     src={selectedProofRecord.capturedImage}
@@ -666,17 +666,17 @@ export default function StudentPersonalAttendanceView({
 
               {/* Data Table */}
               <div className="space-y-2.5 text-xs">
-                <div className="flex justify-between p-3 bg-gray-50 rounded-xl">
+                <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
                   <span className="text-gray-500 font-bold">Siswa</span>
                   <span className="text-gray-900 font-black">{selectedProofRecord.studentName} ({student.className})</span>
                 </div>
 
-                <div className="flex justify-between p-3 bg-gray-50 rounded-xl">
+                <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
                   <span className="text-gray-500 font-bold">Waktu Absensi</span>
                   <span className="text-gray-900 font-black">{selectedProofRecord.timestamp} WIB</span>
                 </div>
 
-                <div className="flex justify-between p-3 bg-gray-50 rounded-xl">
+                <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
                   <span className="text-gray-500 font-bold">Jarak GPS ke Sekolah</span>
                   <span className="text-[#531FFF] font-black">
                     {selectedProofRecord.location?.distance ? `${selectedProofRecord.location.distance} meter` : "5 meter"}
@@ -684,7 +684,7 @@ export default function StudentPersonalAttendanceView({
                 </div>
 
                 {selectedProofRecord.location?.lat && (
-                  <div className="flex justify-between p-3 bg-gray-50 rounded-xl">
+                  <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
                     <span className="text-gray-500 font-bold">Koordinat Lokasi</span>
                     <span className="text-gray-700 font-mono font-bold">
                       {selectedProofRecord.location.lat.toFixed(6)}, {selectedProofRecord.location.lng.toFixed(6)}
@@ -692,7 +692,7 @@ export default function StudentPersonalAttendanceView({
                   </div>
                 )}
 
-                <div className="flex justify-between p-3 bg-gray-50 rounded-xl">
+                <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
                   <span className="text-gray-500 font-bold">Metode Verifikasi</span>
                   <span className="text-emerald-700 font-bold flex items-center gap-1">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
@@ -701,7 +701,7 @@ export default function StudentPersonalAttendanceView({
                 </div>
 
                 {selectedProofRecord.notes && (
-                  <div className="p-3 bg-purple-50/60 border border-purple-100 rounded-xl">
+                  <div className="p-3 bg-purple-50/60 border border-purple-100 rounded-lg">
                     <span className="text-[10px] font-extrabold text-[#531FFF] uppercase tracking-wider block mb-1">
                       Catatan Siswa / Keterangan
                     </span>
@@ -716,7 +716,7 @@ export default function StudentPersonalAttendanceView({
               <button
                 type="button"
                 onClick={() => setSelectedProofRecord(null)}
-                className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+                className="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold rounded-lg transition-all cursor-pointer"
               >
                 Tutup
               </button>

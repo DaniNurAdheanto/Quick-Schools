@@ -338,7 +338,7 @@ export function CrudSheet({
   const renderFormattedValue = (field: CrudField, rawValue: any) => {
     if (rawValue === undefined || rawValue === null || rawValue === "" || rawValue === "-") {
       return (
-        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50/80 px-2.5 py-0.5 rounded-lg border border-amber-200/60">
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50/80 px-2.5 py-0.5 rounded-md border border-amber-200/60">
           <AlertCircle className="w-3 h-3 text-amber-500 shrink-0" />
           Belum Dilengkapi
         </span>
@@ -371,7 +371,7 @@ export function CrudSheet({
       }
 
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-purple-50 text-[#531FFF] border border-purple-100 rounded-lg font-bold text-xs">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-purple-50 text-[#531FFF] border border-purple-100 rounded-md font-bold text-xs">
           {text}
         </span>
       );
@@ -455,7 +455,7 @@ export function CrudSheet({
       isDelete ? "items-center justify-center" : "justify-end"
     )}>
       <div className={cn(
-        "bg-white rounded-3xl w-full shadow-2xl flex flex-col relative overflow-hidden border border-gray-100 transition-all duration-300",
+        "bg-white rounded-xl w-full shadow-2xl flex flex-col relative overflow-hidden border border-gray-100 transition-all duration-300",
         isDelete 
           ? "max-w-[440px] h-auto max-h-[90vh] animate-in zoom-in-95 duration-200" 
           : isView 
@@ -479,7 +479,7 @@ export function CrudSheet({
 
           {isDelete ? (
             <div className="pt-2 pb-1 flex flex-col items-center text-center">
-              <div className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-3 shadow-sm border border-rose-200">
+              <div className="w-14 h-14 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center mb-3 shadow-sm border border-rose-200">
                 <AlertTriangle className="w-7 h-7" />
               </div>
               <h2 className="text-[20px] font-extrabold text-gray-900 tracking-tight">{getTitle()}</h2>
@@ -494,11 +494,11 @@ export function CrudSheet({
                 {/* Avatar with Status Indicator */}
                 <div className="relative shrink-0">
                   {photoUrl ? (
-                    <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-2xl overflow-hidden ring-4 ring-white shadow-md border border-gray-100 bg-gray-100">
+                    <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-lg overflow-hidden ring-4 ring-white shadow-md border border-gray-100 bg-gray-100">
                       <img src={photoUrl} alt={primaryTitle} className="w-full h-full object-cover" />
                     </div>
                   ) : (
-                    <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-black text-2xl shadow-md shadow-[#531FFF]/20">
+                    <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-lg bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-black text-2xl shadow-md shadow-[#531FFF]/20">
                       {primaryTitle ? primaryTitle.charAt(0).toUpperCase() : <User className="w-8 h-8" />}
                     </div>
                   )}
@@ -522,7 +522,7 @@ export function CrudSheet({
                       {primaryTitle}
                     </h2>
                     {initialData?.nickname && (
-                      <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-md">
+                      <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded">
                         &ldquo;{initialData.nickname}&rdquo;
                       </span>
                     )}
@@ -531,22 +531,22 @@ export function CrudSheet({
                   {/* Badges row */}
                   <div className="flex flex-wrap items-center gap-2 mt-2 justify-center sm:justify-start">
                     {secondarySubtitle && secondarySubtitle !== "-" && (
-                      <span className="px-2.5 py-0.5 bg-[#531FFF]/10 text-[#531FFF] text-xs font-bold rounded-lg border border-[#531FFF]/20">
+                      <span className="px-2.5 py-0.5 bg-[#531FFF]/10 text-[#531FFF] text-xs font-bold rounded-md border border-[#531FFF]/20">
                         NISN: {secondarySubtitle}
                       </span>
                     )}
                     {initialData?.classId && (
-                      <span className="px-2.5 py-0.5 bg-purple-50 text-[#531FFF] text-xs font-bold rounded-lg border border-purple-200">
+                      <span className="px-2.5 py-0.5 bg-purple-50 text-[#531FFF] text-xs font-bold rounded-md border border-purple-200">
                         Kelas: {initialData.classId}
                       </span>
                     )}
                     {initialData?.major && (
-                      <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 text-xs font-bold rounded-lg border border-blue-200">
+                      <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 text-xs font-bold rounded-md border border-blue-200">
                         {initialData.major}
                       </span>
                     )}
                     {initialData?.gender && (
-                      <span className="px-2.5 py-0.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-lg">
+                      <span className="px-2.5 py-0.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-md">
                         {initialData.gender}
                       </span>
                     )}
@@ -575,7 +575,7 @@ export function CrudSheet({
                     type="button"
                     onClick={handleCopySummary}
                     className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shadow-2xs cursor-pointer",
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-2xs cursor-pointer",
                       summaryCopied
                         ? "bg-emerald-50 text-emerald-700 border-emerald-300"
                         : "bg-white text-gray-700 border-gray-200 hover:border-[#531FFF]/40 hover:text-[#531FFF]"
@@ -589,10 +589,10 @@ export function CrudSheet({
               </div>
 
               {/* Data Completeness Progress Bar (Audit Tool) */}
-              <div className="bg-white/80 border border-gray-100 rounded-2xl p-2.5 sm:px-3.5 sm:py-2.5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-2.5">
+              <div className="bg-white/80 border border-gray-100 rounded-lg p-2.5 sm:px-3.5 sm:py-2.5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2.5 w-full sm:w-auto">
                   <div className={cn(
-                    "w-8 h-8 rounded-xl flex items-center justify-center shrink-0",
+                    "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
                     dataStats.percentage === 100 
                       ? "bg-emerald-100 text-emerald-600" 
                       : dataStats.percentage >= 60 
@@ -641,7 +641,7 @@ export function CrudSheet({
                       placeholder="Cari atribut..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-7 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-[#531FFF] focus:border-[#531FFF] transition-all font-medium"
+                      className="w-full pl-8 pr-7 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-[#531FFF] focus:border-[#531FFF] transition-all font-medium"
                     />
                     {searchQuery && (
                       <button 
@@ -654,12 +654,12 @@ export function CrudSheet({
                   </div>
 
                   {/* View Format Toggle: Grid vs Table */}
-                  <div className="flex items-center bg-gray-100 p-0.5 rounded-xl border border-gray-200/60 shrink-0">
+                  <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200/60 shrink-0">
                     <button
                       type="button"
                       onClick={() => setViewFormat("grid")}
                       className={cn(
-                        "p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                        "p-1.5 rounded-md text-xs font-bold transition-all cursor-pointer",
                         viewFormat === "grid" 
                           ? "bg-white text-[#531FFF] shadow-xs" 
                           : "text-gray-400 hover:text-gray-700"
@@ -672,7 +672,7 @@ export function CrudSheet({
                       type="button"
                       onClick={() => setViewFormat("table")}
                       className={cn(
-                        "p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                        "p-1.5 rounded-md text-xs font-bold transition-all cursor-pointer",
                         viewFormat === "table" 
                           ? "bg-white text-[#531FFF] shadow-xs" 
                           : "text-gray-400 hover:text-gray-700"
@@ -687,7 +687,7 @@ export function CrudSheet({
 
               {/* Segmented Navigation Tabs */}
               {!searchQuery && availableTabs.length > 1 && (
-                <div className="flex items-center gap-1.5 p-1 bg-gray-100/90 rounded-2xl overflow-x-auto custom-scrollbar">
+                <div className="flex items-center gap-1.5 p-1 bg-gray-100/90 rounded-lg overflow-x-auto custom-scrollbar">
                   {availableTabs.map((tab) => {
                     const Icon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -697,7 +697,7 @@ export function CrudSheet({
                         type="button"
                         onClick={() => setActiveTab(tab.id)}
                         className={cn(
-                          "flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer",
+                          "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer",
                           isActive 
                             ? "bg-white text-[#531FFF] shadow-xs scale-[1.01]" 
                             : "text-gray-500 hover:text-gray-900 hover:bg-white/50"
@@ -753,7 +753,7 @@ export function CrudSheet({
             <div className="space-y-4">
               {/* Unboarded Warning Pill if applicable */}
               {isUnboarded && (
-                <div className="p-3.5 bg-amber-50 border border-amber-200/90 rounded-2xl flex items-center justify-between gap-3 shadow-2xs">
+                <div className="p-3.5 bg-amber-50 border border-amber-200/90 rounded-lg flex items-center justify-between gap-3 shadow-2xs">
                   <div className="flex items-center gap-2.5">
                     <Clock className="w-4 h-4 text-amber-600 shrink-0" />
                     <p className="text-xs font-bold text-amber-900">
@@ -780,7 +780,7 @@ export function CrudSheet({
                       <div 
                         key={field.name}
                         className={cn(
-                          "bg-gray-50/80 hover:bg-white border border-gray-100 hover:border-[#531FFF]/30 rounded-2xl p-3.5 sm:p-4 transition-all flex flex-col justify-between shadow-2xs hover:shadow-xs group relative",
+                          "bg-gray-50/80 hover:bg-white border border-gray-100 hover:border-[#531FFF]/30 rounded-lg p-3.5 sm:p-4 transition-all flex flex-col justify-between shadow-2xs hover:shadow-xs group relative",
                           isLongField ? "sm:col-span-2" : "sm:col-span-1"
                         )}
                       >
@@ -796,7 +796,7 @@ export function CrudSheet({
                               type="button"
                               onClick={() => handleCopyValue(field.name, value, field.label)}
                               className={cn(
-                                "p-1 rounded-lg transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer",
+                                "p-1 rounded-md transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer",
                                 isCopied 
                                   ? "bg-emerald-50 text-emerald-600 opacity-100" 
                                   : "text-gray-400 hover:text-[#531FFF] hover:bg-purple-50"
@@ -817,7 +817,7 @@ export function CrudSheet({
                 </div>
               ) : (
                 /* FORMAT 2: TABEL DOSSIER (ULTRA-COMPACT, ZERO SCROLL AUDITING) */
-                <div className="border border-gray-200/80 rounded-2xl overflow-hidden bg-white shadow-2xs divide-y divide-gray-100">
+                <div className="border border-gray-200/80 rounded-lg overflow-hidden bg-white shadow-2xs divide-y divide-gray-100">
                   {visibleFields.map((field, idx) => {
                     const value = initialData ? initialData[field.name] : formData[field.name];
                     const FieldIcon = getFieldIcon(field.name);
@@ -851,7 +851,7 @@ export function CrudSheet({
                               type="button"
                               onClick={() => handleCopyValue(field.name, value, field.label)}
                               className={cn(
-                                "p-1 rounded-lg transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 shrink-0 cursor-pointer",
+                                "p-1 rounded-md transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 shrink-0 cursor-pointer",
                                 isCopied 
                                   ? "bg-emerald-50 text-emerald-600 opacity-100" 
                                   : "text-gray-400 hover:text-[#531FFF] hover:bg-purple-50"
@@ -870,7 +870,7 @@ export function CrudSheet({
 
               {visibleFields.length === 0 && (
                 <div className="py-16 text-center space-y-2">
-                  <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto">
+                  <div className="w-12 h-12 rounded-lg bg-gray-100 text-gray-400 flex items-center justify-center mx-auto">
                     <Search className="w-6 h-6" />
                   </div>
                   <p className="text-gray-600 font-bold text-sm">Tidak ada data ditemukan</p>
@@ -901,7 +901,7 @@ export function CrudSheet({
                         id={field.name}
                         value={formData[field.name] || ""}
                         onChange={(e) => handleChange(field.name, e.target.value)}
-                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium appearance-none bg-white cursor-pointer"
+                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-[13px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium appearance-none bg-white cursor-pointer"
                         disabled={isSubmitting || field.disabled || field.readOnly}
                       >
                         <option value="" disabled>{field.placeholder || `Pilih ${field.label.toLowerCase()}`}</option>
@@ -923,7 +923,7 @@ export function CrudSheet({
                           }
                         }}
                         disabled={isSubmitting || field.disabled || field.readOnly}
-                        className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#531FFF]/10 file:text-[#531FFF] hover:file:bg-[#531FFF]/20 cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-[#531FFF]/10 file:text-[#531FFF] hover:file:bg-[#531FFF]/20 cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
                       />
                     ) : (
                       <input
@@ -935,7 +935,7 @@ export function CrudSheet({
                         disabled={isSubmitting || field.disabled || field.readOnly}
                         readOnly={field.readOnly}
                         className={cn(
-                          "w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium",
+                          "w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium",
                           (field.disabled || field.readOnly) && "bg-gray-100/90 text-gray-500 cursor-not-allowed select-none"
                         )}
                       />
@@ -949,7 +949,7 @@ export function CrudSheet({
             </div>
           ) : (
             <div className="py-3 px-1 space-y-4">
-              <div className="p-4 bg-rose-50 border border-rose-200/80 rounded-2xl flex items-start gap-3 text-left">
+              <div className="p-4 bg-rose-50 border border-rose-200/80 rounded-lg flex items-start gap-3 text-left">
                 <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <h4 className="text-sm font-extrabold text-rose-900">Perhatian Penting!</h4>
@@ -972,7 +972,7 @@ export function CrudSheet({
               <div className="flex items-center gap-2">
                 <button 
                   onClick={() => onOpenChange(false)}
-                  className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
+                  className="px-5 py-2.5 rounded-lg text-xs sm:text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
                 >
                   Tutup
                 </button>
@@ -980,7 +980,7 @@ export function CrudSheet({
                   type="button"
                   onClick={handleCopySummary}
                   className={cn(
-                    "flex lg:hidden items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all border cursor-pointer",
+                    "flex lg:hidden items-center gap-1.5 px-3.5 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all border cursor-pointer",
                     summaryCopied 
                       ? "bg-emerald-50 text-emerald-700 border-emerald-300" 
                       : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
@@ -997,7 +997,7 @@ export function CrudSheet({
                   onClick={() => {
                     onEditRequested();
                   }}
-                  className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white bg-[#531FFF] hover:bg-[#4314cc] shadow-md shadow-[#531FFF]/20 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
+                  className="px-5 py-2.5 rounded-lg text-xs sm:text-sm font-bold text-white bg-[#531FFF] hover:bg-[#4314cc] shadow-md shadow-[#531FFF]/20 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
                 >
                   <Edit3 className="w-4 h-4" />
                   <span>Edit Data {entityName}</span>
@@ -1009,7 +1009,7 @@ export function CrudSheet({
               <button 
                 type="button"
                 onClick={() => onOpenChange(false)}
-                className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
+                className="px-5 py-2.5 rounded-lg text-xs sm:text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
                 disabled={isSubmitting}
               >
                 Batal
@@ -1019,7 +1019,7 @@ export function CrudSheet({
                 onClick={handleSubmit}
                 disabled={isSubmitting}
                 className={cn(
-                  "px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white shadow-md transition-all flex items-center gap-2 active:scale-95 cursor-pointer",
+                  "px-6 py-2.5 rounded-lg text-xs sm:text-sm font-bold text-white shadow-md transition-all flex items-center gap-2 active:scale-95 cursor-pointer",
                   isDelete 
                     ? "bg-rose-600 hover:bg-rose-700 shadow-rose-600/20" 
                     : "bg-[#531FFF] hover:bg-[#4314cc] shadow-[#531FFF]/20"

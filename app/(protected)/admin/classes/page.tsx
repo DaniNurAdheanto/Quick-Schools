@@ -732,8 +732,8 @@ export default function ClassesPage() {
     if (!studentMyClass && !studentClassId) {
       return (
         <div className="p-4 sm:p-8 max-w-[1200px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-12">
-            <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200 shadow-sm">
+          <div className="bg-white rounded-xl border border-gray-100 p-8 sm:p-12 text-center max-w-lg mx-auto shadow-xs my-12">
+            <div className="w-16 h-16 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-200 shadow-sm">
               <AlertCircle className="w-8 h-8" />
             </div>
             <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-50 text-amber-800 border border-amber-200 uppercase tracking-wider">
@@ -756,11 +756,11 @@ export default function ClassesPage() {
       <div className="p-4 sm:p-8 pb-16 max-w-[1500px] mx-auto w-full flex flex-col space-y-6 animate-in fade-in duration-300">
         
         {/* Top Header Card */}
-        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
+        <div className="bg-white rounded-xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-96 h-full bg-gradient-to-l from-[#531FFF]/5 via-[#531FFF]/2 to-transparent pointer-events-none" />
           
           <div className="flex items-center gap-4 relative z-10">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] flex items-center justify-center text-white shadow-lg shadow-[#531FFF]/25 shrink-0">
+            <div className="w-14 h-14 rounded-lg bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] flex items-center justify-center text-white shadow-lg shadow-[#531FFF]/25 shrink-0">
               <GraduationCap className="w-7 h-7" />
             </div>
             <div>
@@ -783,7 +783,7 @@ export default function ClassesPage() {
           </div>
 
           <div className="flex items-center gap-2 relative z-10 self-start sm:self-auto">
-            <div className="px-4 py-2 bg-gray-50 rounded-2xl border border-gray-100 text-right">
+            <div className="px-4 py-2 bg-gray-50 rounded-lg border border-gray-100 text-right">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tahun Ajaran</p>
               <p className="text-xs font-black text-gray-800">2025/2026 Ganjil</p>
             </div>
@@ -794,7 +794,7 @@ export default function ClassesPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           
           {/* Card 1: Wali Kelas Pembimbing */}
-          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
+          <div className="bg-white rounded-xl border border-gray-100 p-5 sm:p-6 shadow-xs relative overflow-hidden flex flex-col justify-between">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black tracking-wider uppercase text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-100">
@@ -804,7 +804,7 @@ export default function ClassesPage() {
               </div>
 
               <div className="flex items-center gap-3.5 pt-1">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white flex items-center justify-center font-black text-lg shadow-md shadow-[#531FFF]/20 shrink-0">
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white flex items-center justify-center font-black text-lg shadow-md shadow-[#531FFF]/20 shrink-0">
                   {studentHomeroomTeacher?.name ? studentHomeroomTeacher.name.charAt(0).toUpperCase() : "G"}
                 </div>
                 <div className="min-w-0">
@@ -827,13 +827,13 @@ export default function ClassesPage() {
                   href={`https://wa.me/${(studentHomeroomTeacher?.contact || studentMyClass?.homeroomContact || "").replace(/\D/g, "")}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-all border border-emerald-200 shadow-2xs"
+                  className="flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-all border border-emerald-200 shadow-2xs"
                 >
                   <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
                   <span>Chat WhatsApp Wali Kelas</span>
                 </a>
               ) : (
-                <div className="flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gray-50 text-gray-400 text-[11px] font-medium border border-gray-100">
+                <div className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-gray-50 text-gray-400 text-[11px] font-medium border border-gray-100">
                   <span>Kontak belum tersedia</span>
                 </div>
               )}
@@ -841,7 +841,7 @@ export default function ClassesPage() {
           </div>
 
           {/* Card 2: Identitas Rombongan Belajar */}
-          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+          <div className="bg-white rounded-xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black tracking-wider uppercase text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
@@ -860,11 +860,11 @@ export default function ClassesPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
-                <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-100">
+                <div className="p-2.5 rounded-lg bg-gray-50 border border-gray-100">
                   <p className="text-[10px] font-bold text-gray-400 uppercase">Kapasitas</p>
                   <p className="font-extrabold text-gray-900 mt-0.5">{studentMyClass?.maxCapacity || 36} Kursi</p>
                 </div>
-                <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-100">
+                <div className="p-2.5 rounded-lg bg-gray-50 border border-gray-100">
                   <p className="text-[10px] font-bold text-gray-400 uppercase">Status</p>
                   <p className="font-extrabold text-emerald-600 mt-0.5">{studentMyClass?.status || "Aktif"}</p>
                 </div>
@@ -878,7 +878,7 @@ export default function ClassesPage() {
           </div>
 
           {/* Card 3: Statistik Siswa di Kelas */}
-          <div className="bg-white rounded-3xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+          <div className="bg-white rounded-xl border border-gray-100 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black tracking-wider uppercase text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
@@ -906,7 +906,7 @@ export default function ClassesPage() {
             </div>
 
             <div className="pt-3 mt-3 border-t border-gray-100">
-              <div className="p-2 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-emerald-900 text-[11px] font-bold flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-emerald-50/70 border border-emerald-200/80 text-emerald-900 text-[11px] font-bold flex items-center gap-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span>Akun Anda terdaftar aktif di rombel ini</span>
               </div>
@@ -916,7 +916,7 @@ export default function ClassesPage() {
         </div>
 
         {/* Section: Daftar Teman Sekelas */}
-        <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-xs space-y-5">
+        <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-xs space-y-5">
           
           {/* Header & Filter Controls */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
@@ -938,19 +938,19 @@ export default function ClassesPage() {
                   placeholder="Cari teman sekelas..."
                   value={studentSearchQuery}
                   onChange={(e) => setStudentSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                  className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                 />
               </div>
 
               {/* Gender Filter */}
-              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border border-gray-200 text-xs font-bold">
+              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200 text-xs font-bold">
                 {["All", "Laki-laki", "Perempuan"].map((g) => (
                   <button
                     key={g}
                     type="button"
                     onClick={() => setStudentGenderFilter(g)}
                     className={cn(
-                      "px-2.5 py-1 rounded-lg transition-all cursor-pointer",
+                      "px-2.5 py-1 rounded-md transition-all cursor-pointer",
                       studentGenderFilter === g ? "bg-white text-gray-900 shadow-2xs" : "text-gray-500 hover:text-gray-900"
                     )}
                   >
@@ -960,12 +960,12 @@ export default function ClassesPage() {
               </div>
 
               {/* View Toggle */}
-              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border border-gray-200">
+              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
                 <button
                   type="button"
                   onClick={() => setStudentViewMode("grid")}
                   className={cn(
-                    "p-1.5 rounded-lg transition-all cursor-pointer",
+                    "p-1.5 rounded-md transition-all cursor-pointer",
                     studentViewMode === "grid" ? "bg-white text-[#531FFF] shadow-2xs" : "text-gray-400 hover:text-gray-600"
                   )}
                   title="Tampilan Kartu"
@@ -976,7 +976,7 @@ export default function ClassesPage() {
                   type="button"
                   onClick={() => setStudentViewMode("table")}
                   className={cn(
-                    "p-1.5 rounded-lg transition-all cursor-pointer",
+                    "p-1.5 rounded-md transition-all cursor-pointer",
                     studentViewMode === "table" ? "bg-white text-[#531FFF] shadow-2xs" : "text-gray-400 hover:text-gray-600"
                   )}
                   title="Tampilan Tabel"
@@ -999,7 +999,7 @@ export default function ClassesPage() {
                     <div
                       key={s.id || s._firestoreId || idx}
                       className={cn(
-                        "rounded-2xl p-4 border transition-all relative overflow-hidden flex flex-col justify-between",
+                        "rounded-lg p-4 border transition-all relative overflow-hidden flex flex-col justify-between",
                         isCurrentStudent
                           ? "bg-purple-50/50 border-[#531FFF]/30 shadow-xs ring-1 ring-[#531FFF]/20"
                           : "bg-white border-gray-100 hover:border-gray-200 hover:shadow-2xs"
@@ -1007,7 +1007,7 @@ export default function ClassesPage() {
                     >
                       <div className="flex items-start gap-3">
                         <div className={cn(
-                          "w-11 h-11 rounded-2xl flex items-center justify-center text-white font-black text-base shrink-0 relative overflow-hidden shadow-2xs",
+                          "w-11 h-11 rounded-lg flex items-center justify-center text-white font-black text-base shrink-0 relative overflow-hidden shadow-2xs",
                           isCurrentStudent
                             ? "bg-gradient-to-tr from-[#531FFF] to-[#8252FF]"
                             : isFemale
@@ -1033,7 +1033,7 @@ export default function ClassesPage() {
                               {s.name}
                             </h4>
                             {isCurrentStudent && (
-                              <span className="px-1.5 py-0.2 rounded-md bg-[#531FFF] text-white text-[9px] font-black uppercase tracking-wider">
+                              <span className="px-1.5 py-0.2 rounded bg-[#531FFF] text-white text-[9px] font-black uppercase tracking-wider">
                                 Anda
                               </span>
                             )}
@@ -1061,7 +1061,7 @@ export default function ClassesPage() {
                 })}
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-2xl border border-gray-100">
+              <div className="overflow-x-auto rounded-lg border border-gray-100">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50/60 font-bold text-gray-400 uppercase tracking-wider text-[10px]">
@@ -1082,7 +1082,7 @@ export default function ClassesPage() {
                           <td className="py-3 px-4 text-center font-bold text-gray-400">{idx + 1}</td>
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-xl bg-gray-100 text-gray-600 font-bold text-xs flex items-center justify-center shrink-0 overflow-hidden relative">
+                              <div className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 font-bold text-xs flex items-center justify-center shrink-0 overflow-hidden relative">
                                 {s.imageUrl ? (
                                   <Image src={s.imageUrl} alt={s.name} fill className="object-cover" unoptimized />
                                 ) : (
@@ -1092,7 +1092,7 @@ export default function ClassesPage() {
                               <div className="flex items-center gap-1.5">
                                 <span className="font-bold text-gray-900">{s.name}</span>
                                 {isCurrentStudent && (
-                                  <span className="px-1.5 py-0.2 rounded-md bg-[#531FFF] text-white text-[9px] font-black uppercase tracking-wider">
+                                  <span className="px-1.5 py-0.2 rounded bg-[#531FFF] text-white text-[9px] font-black uppercase tracking-wider">
                                     Anda
                                   </span>
                                 )}
@@ -1149,10 +1149,10 @@ export default function ClassesPage() {
       />
 
       {/* ================= HEADER SECTION ================= */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/40 p-6 rounded-3xl border border-purple-100/60 shadow-2xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/40 p-6 rounded-xl border border-purple-100/60 shadow-2xs">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-[#531FFF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/25">
+            <div className="w-10 h-10 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/25">
               <Users className="w-5 h-5" />
             </div>
             <div>
@@ -1189,7 +1189,7 @@ export default function ClassesPage() {
                   status: "Aktif"
                 }
               })}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-[13px] font-bold shadow-md shadow-[#531FFF]/25 transition-all active:scale-95 cursor-pointer"
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg text-[13px] font-bold shadow-md shadow-[#531FFF]/25 transition-all active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Tambah Kelas Baru</span>
@@ -1200,7 +1200,7 @@ export default function ClassesPage() {
 
       {/* ================= QUICK PRESET TEMPLATES BAR ================= */}
       {!isGuru && (
-        <div className="bg-white border border-gray-100 rounded-3xl p-4 sm:p-5 shadow-2xs space-y-3">
+        <div className="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-2xs space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-[#531FFF]" />
@@ -1222,7 +1222,7 @@ export default function ClassesPage() {
                   type="button"
                   onClick={() => handleApplyClassPreset(preset)}
                   className={cn(
-                    "flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all border cursor-pointer",
+                    "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold shrink-0 transition-all border cursor-pointer",
                     isAlreadyAdded 
                       ? "bg-gray-50/80 text-gray-600 border-gray-200 hover:border-[#531FFF]/50" 
                       : "bg-purple-50/60 text-[#531FFF] border-purple-200 hover:bg-purple-100 hover:border-purple-300"
@@ -1230,7 +1230,7 @@ export default function ClassesPage() {
                   title={`Kapasitas: ${preset.maxCapacity} siswa`}
                 >
                   <span>{preset.name}</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-white border text-gray-500">
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-white border text-gray-500">
                     {preset.major}
                   </span>
                   {isAlreadyAdded && (
@@ -1246,7 +1246,7 @@ export default function ClassesPage() {
       {/* ================= METRICS STATS TILES ================= */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Kelas */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-lg border border-gray-100 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Kelas</p>
             <p className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">{classes.length}</p>
@@ -1254,13 +1254,13 @@ export default function ClassesPage() {
               {classes.filter(c => (c.status || "Aktif") === "Aktif").length} Kelas Aktif
             </span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-[#531FFF] flex items-center justify-center">
+          <div className="w-12 h-12 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center">
             <Users className="w-6 h-6" />
           </div>
         </div>
 
         {/* Siswa Terdaftar */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-lg border border-gray-100 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Siswa Terdaftar</p>
             <p className="text-2xl sm:text-3xl font-black text-blue-600 mt-1">
@@ -1270,13 +1270,13 @@ export default function ClassesPage() {
               {students.length - totalAssignedStudents} Belum Punya Kelas
             </span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
             <GraduationCap className="w-6 h-6" />
           </div>
         </div>
 
         {/* Wali Kelas Terpenuhi */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-lg border border-gray-100 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Wali Kelas</p>
             <p className="text-2xl sm:text-3xl font-black text-emerald-600 mt-1">
@@ -1286,13 +1286,13 @@ export default function ClassesPage() {
               {classes.length > 0 ? Math.round((classesWithHomeroom / classes.length) * 100) : 0}% Terisi
             </span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
             <CheckCircle2 className="w-6 h-6" />
           </div>
         </div>
 
         {/* Rata-rata Kapasitas */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+        <div className="bg-white p-4 sm:p-5 rounded-lg border border-gray-100 shadow-2xs flex items-center justify-between">
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Rata-rata Siswa</p>
             <p className="text-2xl sm:text-3xl font-black text-amber-600 mt-1">
@@ -1302,14 +1302,14 @@ export default function ClassesPage() {
               Ideal 32-36 Siswa
             </span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
             <Layers className="w-6 h-6" />
           </div>
         </div>
       </div>
 
       {/* ================= FILTER & SEARCH TOOLBAR ================= */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-2xs flex flex-col lg:flex-row items-center justify-between gap-4">
+      <div className="bg-white border border-gray-100 rounded-lg p-4 shadow-2xs flex flex-col lg:flex-row items-center justify-between gap-4">
         {/* Search & Level Pills */}
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
           {/* Search box */}
@@ -1320,7 +1320,7 @@ export default function ClassesPage() {
               placeholder="Cari nama kelas, wali, jurusan..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+              className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
             />
             {searchQuery && (
               <button 
@@ -1333,7 +1333,7 @@ export default function ClassesPage() {
           </div>
 
           {/* Level Tabs */}
-          <div className="flex items-center gap-1 p-1 bg-gray-100/80 rounded-xl overflow-x-auto w-full sm:w-auto shrink-0">
+          <div className="flex items-center gap-1 p-1 bg-gray-100/80 rounded-lg overflow-x-auto w-full sm:w-auto shrink-0">
             {["All", "Kelas 10", "Kelas 11", "Kelas 12"].map((lvl) => {
               const isActive = selectedLevel === lvl;
               return (
@@ -1342,7 +1342,7 @@ export default function ClassesPage() {
                   type="button"
                   onClick={() => setSelectedLevel(lvl)}
                   className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer",
+                    "px-3 py-1.5 rounded-md text-xs font-bold transition-all shrink-0 cursor-pointer",
                     isActive 
                       ? "bg-white text-[#531FFF] shadow-2xs" 
                       : "text-gray-500 hover:text-gray-800"
@@ -1360,7 +1360,7 @@ export default function ClassesPage() {
           <select
             value={selectedMajor}
             onChange={(e) => setSelectedMajor(e.target.value)}
-            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer"
+            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer"
           >
             <option value="All">Semua Jurusan</option>
             <option value="IPA">IPA / MIPA</option>
@@ -1370,12 +1370,12 @@ export default function ClassesPage() {
           </select>
 
           {/* View Format Switcher */}
-          <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200/60 shrink-0">
+          <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200/60 shrink-0">
             <button
               type="button"
               onClick={() => setViewMode("grid")}
               className={cn(
-                "p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                "p-1.5 rounded-md text-xs font-bold transition-all cursor-pointer",
                 viewMode === "grid" 
                   ? "bg-white text-[#531FFF] shadow-xs" 
                   : "text-gray-400 hover:text-gray-700"
@@ -1388,7 +1388,7 @@ export default function ClassesPage() {
               type="button"
               onClick={() => setViewMode("table")}
               className={cn(
-                "p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                "p-1.5 rounded-md text-xs font-bold transition-all cursor-pointer",
                 viewMode === "table" 
                   ? "bg-white text-[#531FFF] shadow-xs" 
                   : "text-gray-400 hover:text-gray-700"
@@ -1403,13 +1403,13 @@ export default function ClassesPage() {
 
       {/* ================= MAIN CLASSES LISTING ================= */}
       {loading ? (
-        <div className="py-24 bg-white border border-gray-100 rounded-3xl flex flex-col items-center justify-center space-y-3">
+        <div className="py-24 bg-white border border-gray-100 rounded-xl flex flex-col items-center justify-center space-y-3">
           <Loader2 className="w-8 h-8 animate-spin text-[#531FFF]" />
           <p className="text-xs font-bold text-gray-500">Memuat daftar kelas...</p>
         </div>
       ) : filteredClasses.length === 0 ? (
-        <div className="py-20 bg-white border border-gray-100 rounded-3xl flex flex-col items-center justify-center text-center p-6 space-y-4">
-          <div className="w-16 h-16 rounded-3xl bg-purple-50 text-[#531FFF] flex items-center justify-center">
+        <div className="py-20 bg-white border border-gray-100 rounded-xl flex flex-col items-center justify-center text-center p-6 space-y-4">
+          <div className="w-16 h-16 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center">
             <Users className="w-8 h-8" />
           </div>
           <div>
@@ -1427,7 +1427,7 @@ export default function ClassesPage() {
               setSelectedLevel("All");
               setSelectedMajor("All");
             }}
-            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-colors cursor-pointer"
           >
             Reset Filter
           </button>
@@ -1443,16 +1443,16 @@ export default function ClassesPage() {
             return (
               <div
                 key={item._firestoreId}
-                className="bg-white hover:bg-gradient-to-b hover:from-white hover:to-purple-50/20 border border-gray-100 hover:border-[#531FFF]/30 rounded-3xl p-5 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group"
+                className="bg-white hover:bg-gradient-to-b hover:from-white hover:to-purple-50/20 border border-gray-100 hover:border-[#531FFF]/30 rounded-xl p-5 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group"
               >
                 <div>
                   {/* Top Bar: Level & Major pills + Status */}
                   <div className="flex items-center justify-between gap-2 mb-3">
                     <div className="flex items-center gap-1.5">
-                      <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                         {item.level || "Kelas 10"}
                       </span>
-                      <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
                         {item.major || "IPA"}
                       </span>
                     </div>
@@ -1473,7 +1473,7 @@ export default function ClassesPage() {
 
                   {/* Class Name */}
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-black text-lg shadow-md shadow-[#531FFF]/20 shrink-0">
+                    <div className="w-12 h-12 rounded-lg bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-black text-lg shadow-md shadow-[#531FFF]/20 shrink-0">
                       {item.name.slice(0, 3)}
                     </div>
                     <div className="min-w-0">
@@ -1571,7 +1571,7 @@ export default function ClassesPage() {
                       setSelectedStudentIdsToAdd([]);
                       setManageSearch("");
                     }}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-purple-50 hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer group/btn"
+                    className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-purple-50 hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-lg text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer group/btn"
                   >
                     <Users className="w-3.5 h-3.5" />
                     <span>{isGuru ? "Lihat Siswa" : "Kelola Siswa"} ({enrolled.length})</span>
@@ -1581,7 +1581,7 @@ export default function ClassesPage() {
                     <button
                       type="button"
                       onClick={() => setCrudState({ open: true, mode: "view", data: item })}
-                      className="p-2 rounded-xl text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-all cursor-pointer"
+                      className="p-2 rounded-lg text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-all cursor-pointer"
                       title="Lihat Detail Kelas"
                     >
                       <Eye className="w-3.5 h-3.5" />
@@ -1591,7 +1591,7 @@ export default function ClassesPage() {
                         <button
                           type="button"
                           onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                          className="p-2 rounded-xl text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-all cursor-pointer"
+                          className="p-2 rounded-lg text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-all cursor-pointer"
                           title="Edit Kelas"
                         >
                           <PenTool className="w-3.5 h-3.5" />
@@ -1599,7 +1599,7 @@ export default function ClassesPage() {
                         <button
                           type="button"
                           onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
-                          className="p-2 rounded-xl text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                          className="p-2 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
                           title="Hapus Kelas"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -1614,7 +1614,7 @@ export default function ClassesPage() {
         </div>
       ) : (
         /* ================= TABLE VIEW ================= */
-        <div className="bg-white border border-gray-100 rounded-3xl shadow-2xs overflow-hidden">
+        <div className="bg-white border border-gray-100 rounded-xl shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -1637,7 +1637,7 @@ export default function ClassesPage() {
                     <tr key={item._firestoreId} className="hover:bg-purple-50/20 transition-colors group">
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-black text-xs">
+                          <div className="w-9 h-9 rounded-lg bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-black text-xs">
                             {item.name.slice(0, 3)}
                           </div>
                           <div>
@@ -1667,7 +1667,7 @@ export default function ClassesPage() {
                         )}
                       </td>
                       <td className="py-4 px-6 text-center">
-                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-50 text-[#531FFF] border border-purple-200/60 rounded-xl text-xs font-black">
+                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-50 text-[#531FFF] border border-purple-200/60 rounded-lg text-xs font-black">
                           <Users className="w-3 h-3" />
                           {enrolled.length} / {capacity}
                         </span>
@@ -1692,7 +1692,7 @@ export default function ClassesPage() {
                               setSelectedStudentIdsToAdd([]);
                               setManageSearch("");
                             }}
-                            className="px-3 py-1.5 bg-purple-50 hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                            className="px-3 py-1.5 bg-purple-50 hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
                             title={isGuru ? "Lihat Siswa di Kelas Ini" : "Kelola Siswa di Kelas Ini"}
                           >
                             <Users className="w-3.5 h-3.5" />
@@ -1701,7 +1701,7 @@ export default function ClassesPage() {
                           <button
                             type="button"
                             onClick={() => setCrudState({ open: true, mode: "view", data: item })}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-md text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
                             title="Lihat Detail"
                           >
                             <Eye className="w-4 h-4" />
@@ -1711,7 +1711,7 @@ export default function ClassesPage() {
                               <button
                                 type="button"
                                 onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
+                                className="p-1.5 rounded-md text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
                                 title="Edit"
                               >
                                 <PenTool className="w-4 h-4" />
@@ -1719,7 +1719,7 @@ export default function ClassesPage() {
                               <button
                                 type="button"
                                 onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
-                                className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                className="p-1.5 rounded-md text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                                 title="Hapus"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -1742,12 +1742,12 @@ export default function ClassesPage() {
       {/* ========================================================================= */}
       {managingClass && (
         <div className="fixed inset-0 z-50 p-2 sm:p-6 bg-gray-950/60 backdrop-blur-xs flex items-center justify-center animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[92vh] shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-xl w-full max-w-4xl max-h-[92vh] shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             
             {/* Modal Header */}
             <div className="p-5 sm:p-6 border-b border-gray-100 bg-gradient-to-r from-purple-50/80 via-white to-indigo-50/40 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-[#531FFF] text-white flex items-center justify-center font-black text-base shadow-md shadow-[#531FFF]/25">
+                <div className="w-12 h-12 rounded-lg bg-[#531FFF] text-white flex items-center justify-center font-black text-base shadow-md shadow-[#531FFF]/25">
                   <Users className="w-6 h-6" />
                 </div>
                 <div>
@@ -1755,7 +1755,7 @@ export default function ClassesPage() {
                     <h3 className="text-xl font-black text-gray-900 tracking-tight">
                       {isGuru ? "Daftar Siswa:" : "Kelola Siswa:"} Kelas {managingClass.name}
                     </h3>
-                    <span className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                    <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
                       {managingClass.level} • {managingClass.major}
                     </span>
                   </div>
@@ -1786,7 +1786,7 @@ export default function ClassesPage() {
                   type="button"
                   onClick={() => setManageTab("enrolled")}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer",
+                    "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer",
                     manageTab === "enrolled"
                       ? "bg-[#531FFF] text-white shadow-sm shadow-[#531FFF]/25"
                       : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
@@ -1808,7 +1808,7 @@ export default function ClassesPage() {
                       type="button"
                       onClick={() => setManageTab("add")}
                       className={cn(
-                        "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer",
+                        "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer",
                         manageTab === "add"
                           ? "bg-[#531FFF] text-white shadow-sm shadow-[#531FFF]/25"
                           : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
@@ -1822,7 +1822,7 @@ export default function ClassesPage() {
                       type="button"
                       onClick={() => setManageTab("quickAdd")}
                       className={cn(
-                        "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer",
+                        "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer",
                         manageTab === "quickAdd"
                           ? "bg-[#531FFF] text-white shadow-sm shadow-[#531FFF]/25"
                           : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"
@@ -1850,7 +1850,7 @@ export default function ClassesPage() {
                 <div className="space-y-4">
                   {currentlyEnrolledStudents.length === 0 ? (
                     <div className="py-16 text-center space-y-3">
-                      <div className="w-14 h-14 rounded-2xl bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto">
+                      <div className="w-14 h-14 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto">
                         <Users className="w-7 h-7" />
                       </div>
                       <h4 className="text-base font-extrabold text-gray-900">Belum ada siswa di kelas ini</h4>
@@ -1863,7 +1863,7 @@ export default function ClassesPage() {
                         <button
                           type="button"
                           onClick={() => setManageTab("add")}
-                          className="px-4 py-2 bg-[#531FFF] text-white rounded-xl text-xs font-bold hover:bg-[#4314cc] transition-all cursor-pointer"
+                          className="px-4 py-2 bg-[#531FFF] text-white rounded-lg text-xs font-bold hover:bg-[#4314cc] transition-all cursor-pointer"
                         >
                           + Tambah Siswa Sekarang
                         </button>
@@ -1874,10 +1874,10 @@ export default function ClassesPage() {
                       {currentlyEnrolledStudents.map((s, idx) => (
                         <div
                           key={s._firestoreId || idx}
-                          className="bg-white border border-gray-100 hover:border-purple-200 rounded-2xl p-3.5 sm:p-4 shadow-2xs hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                          className="bg-white border border-gray-100 hover:border-purple-200 rounded-lg p-3.5 sm:p-4 shadow-2xs hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 ring-2 ring-gray-100 shrink-0">
+                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 ring-2 ring-gray-100 shrink-0">
                               {s.imageUrl ? (
                                 <img src={s.imageUrl} alt="" className="w-full h-full object-cover" />
                               ) : (
@@ -1919,7 +1919,7 @@ export default function ClassesPage() {
                                   setTransferringStudent(s);
                                   setTargetClassId("");
                                 }}
-                                className="px-3 py-1.5 bg-gray-100 hover:bg-purple-50 text-gray-700 hover:text-[#531FFF] rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                                className="px-3 py-1.5 bg-gray-100 hover:bg-purple-50 text-gray-700 hover:text-[#531FFF] rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
                                 title="Pindahkan ke kelas lain"
                               >
                                 <ArrowRightLeft className="w-3.5 h-3.5" />
@@ -1931,7 +1931,7 @@ export default function ClassesPage() {
                                 type="button"
                                 onClick={() => handleRemoveStudentFromClass(s)}
                                 disabled={isProcessingStudent}
-                                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                                 title="Keluarkan dari kelas"
                               >
                                 <UserMinus className="w-3.5 h-3.5" />
@@ -1950,7 +1950,7 @@ export default function ClassesPage() {
               {manageTab === "add" && (
                 <div className="space-y-4">
                   {/* Search and Filters Bar */}
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-gray-50/80 p-3.5 rounded-lg border border-gray-100">
                     <div className="relative w-full sm:w-80">
                       <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
@@ -1958,7 +1958,7 @@ export default function ClassesPage() {
                         placeholder="Cari nama atau NISN siswa..."
                         value={manageSearch}
                         onChange={(e) => setManageSearch(e.target.value)}
-                        className="w-full pl-9 pr-7 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                        className="w-full pl-9 pr-7 py-2 bg-white border border-gray-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                       />
                       {manageSearch && (
                         <button onClick={() => setManageSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -1982,7 +1982,7 @@ export default function ClassesPage() {
 
                   {/* Bulk Action Bar (when selected) */}
                   {selectedStudentIdsToAdd.length > 0 && (
-                    <div className="p-3 bg-purple-50 border border-purple-200 rounded-2xl flex items-center justify-between gap-3 animate-in fade-in duration-150">
+                    <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg flex items-center justify-between gap-3 animate-in fade-in duration-150">
                       <span className="text-xs font-bold text-[#531FFF]">
                         {selectedStudentIdsToAdd.length} siswa terpilih
                       </span>
@@ -1990,7 +1990,7 @@ export default function ClassesPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedStudentIdsToAdd([])}
-                          className="px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 hover:bg-purple-100/60"
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 hover:bg-purple-100/60"
                         >
                           Batal
                         </button>
@@ -1998,7 +1998,7 @@ export default function ClassesPage() {
                           type="button"
                           onClick={handleBulkAddStudents}
                           disabled={isProcessingStudent}
-                          className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4314cc] shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          className="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4314cc] shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                         >
                           <UserPlus className="w-3.5 h-3.5" />
                           <span>Masukkan Terpilih ke Kelas {managingClass.name}</span>
@@ -2028,7 +2028,7 @@ export default function ClassesPage() {
                           <div
                             key={s._firestoreId}
                             className={cn(
-                              "p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3",
+                              "p-3.5 rounded-lg border transition-all flex items-center justify-between gap-3",
                               isSelected 
                                 ? "bg-purple-50/60 border-[#531FFF] shadow-2xs" 
                                 : "bg-white border-gray-100 hover:border-gray-200"
@@ -2048,7 +2048,7 @@ export default function ClassesPage() {
                                 className="w-4 h-4 rounded text-[#531FFF] focus:ring-[#531FFF] cursor-pointer"
                               />
 
-                              <div className="w-9 h-9 rounded-xl bg-gray-100 overflow-hidden ring-1 ring-gray-200 shrink-0">
+                              <div className="w-9 h-9 rounded-lg bg-gray-100 overflow-hidden ring-1 ring-gray-200 shrink-0">
                                 {s.imageUrl ? (
                                   <img src={s.imageUrl} alt="" className="w-full h-full object-cover" />
                                 ) : (
@@ -2081,7 +2081,7 @@ export default function ClassesPage() {
                               type="button"
                               onClick={() => handleAddSingleStudent(s)}
                               disabled={isProcessingStudent}
-                              className="px-3.5 py-1.5 bg-purple-50 hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+                              className="px-3.5 py-1.5 bg-purple-50 hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
                             >
                               <UserPlus className="w-3.5 h-3.5" />
                               <span>Masukkan</span>
@@ -2097,9 +2097,9 @@ export default function ClassesPage() {
               {/* ================= TAB 3: QUICK REGISTER NEW STUDENT ================= */}
               {manageTab === "quickAdd" && (
                 <div className="max-w-lg mx-auto py-4">
-                  <form onSubmit={handleQuickCreateStudent} className="space-y-4 bg-gray-50/80 p-6 rounded-3xl border border-gray-100">
+                  <form onSubmit={handleQuickCreateStudent} className="space-y-4 bg-gray-50/80 p-6 rounded-xl border border-gray-100">
                     <div className="text-center space-y-1 mb-2">
-                      <div className="w-12 h-12 rounded-2xl bg-purple-100 text-[#531FFF] flex items-center justify-center mx-auto mb-2">
+                      <div className="w-12 h-12 rounded-lg bg-purple-100 text-[#531FFF] flex items-center justify-center mx-auto mb-2">
                         <UserPlus className="w-6 h-6" />
                       </div>
                       <h4 className="text-base font-extrabold text-gray-900">Pendaftaran Siswa Cepat</h4>
@@ -2116,7 +2116,7 @@ export default function ClassesPage() {
                         value={newStudentForm.name}
                         onChange={(e) => setNewStudentForm(prev => ({ ...prev, name: e.target.value }))}
                         required
-                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                       />
                     </div>
 
@@ -2127,7 +2127,7 @@ export default function ClassesPage() {
                         placeholder="Contoh: 0081234567"
                         value={newStudentForm.nisn}
                         onChange={(e) => setNewStudentForm(prev => ({ ...prev, nisn: e.target.value }))}
-                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                       />
                     </div>
 
@@ -2140,7 +2140,7 @@ export default function ClassesPage() {
                             type="button"
                             onClick={() => setNewStudentForm(prev => ({ ...prev, gender: g }))}
                             className={cn(
-                              "py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer",
+                              "py-2 px-3 rounded-lg text-xs font-bold border transition-all cursor-pointer",
                               newStudentForm.gender === g
                                 ? "bg-[#531FFF] text-white border-[#531FFF]"
                                 : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
@@ -2156,7 +2156,7 @@ export default function ClassesPage() {
                       <button
                         type="submit"
                         disabled={isProcessingStudent || !newStudentForm.name.trim()}
-                        className="w-full py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-xs font-extrabold shadow-md shadow-[#531FFF]/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        className="w-full py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg text-xs font-extrabold shadow-md shadow-[#531FFF]/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                       >
                         {isProcessingStudent ? (
                           <>
@@ -2188,7 +2188,7 @@ export default function ClassesPage() {
                   setManagingClass(null);
                   setTransferringStudent(null);
                 }}
-                className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
+                className="px-5 py-2.5 rounded-lg text-xs sm:text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer"
               >
                 Selesai
               </button>
@@ -2203,9 +2203,9 @@ export default function ClassesPage() {
       {/* ========================================================================= */}
       {transferringStudent && !isGuru && (
         <div className="fixed inset-0 z-60 p-4 bg-gray-950/70 backdrop-blur-xs flex items-center justify-center animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl border border-gray-100 space-y-4 animate-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl border border-gray-100 space-y-4 animate-in zoom-in-95 duration-150">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-purple-100 text-[#531FFF] flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-lg bg-purple-100 text-[#531FFF] flex items-center justify-center shrink-0">
                 <ArrowRightLeft className="w-5 h-5" />
               </div>
               <div>
@@ -2221,7 +2221,7 @@ export default function ClassesPage() {
               <select
                 value={targetClassId}
                 onChange={(e) => setTargetClassId(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
               >
                 <option value="">-- Pilih Kelas Tujuan --</option>
                 {classes
@@ -2238,7 +2238,7 @@ export default function ClassesPage() {
               <button
                 type="button"
                 onClick={() => setTransferringStudent(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 cursor-pointer"
+                className="px-4 py-2 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-100 cursor-pointer"
               >
                 Batal
               </button>
@@ -2246,7 +2246,7 @@ export default function ClassesPage() {
                 type="button"
                 onClick={handleTransferStudent}
                 disabled={!targetClassId || isProcessingStudent}
-                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4314cc] shadow-md shadow-[#531FFF]/25 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="px-5 py-2 rounded-lg text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4314cc] shadow-md shadow-[#531FFF]/25 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 {isProcessingStudent ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                 <span>Pindahkan Sekarang</span>

@@ -213,7 +213,7 @@ export default function RolesAndPermissionsPage() {
           onClick={handleSave}
           disabled={isSaving || activeRole === "super-admin"}
           className={cn(
-            "flex items-center gap-2 px-6 py-2.5 rounded-lg font-bold transition-all text-sm shadow-sm active:scale-[0.98]",
+            "flex items-center gap-2 px-6 py-2.5 rounded-md font-bold transition-all text-sm shadow-sm active:scale-[0.98]",
             activeRole === "super-admin"
               ? "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200"
               : saveSuccess
@@ -238,10 +238,10 @@ export default function RolesAndPermissionsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         
         {/* Left Roles Selector Sidebar */}
-        <div className="lg:col-span-1 bg-white border border-gray-100 rounded-2xl p-4 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] h-fit space-y-4">
+        <div className="lg:col-span-1 bg-white border border-gray-100 rounded-lg p-4 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] h-fit space-y-4">
           <div className="px-2 pt-1 flex items-center justify-between">
             <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Peran (Roles) Sekolah</h2>
-            <span className="text-[11px] font-extrabold text-[#531FFF] bg-purple-50 px-2 py-0.5 rounded-md">
+            <span className="text-[11px] font-extrabold text-[#531FFF] bg-purple-50 px-2 py-0.5 rounded">
               {ROLES.length} Roles
             </span>
           </div>
@@ -256,14 +256,14 @@ export default function RolesAndPermissionsPage() {
                   key={role.id}
                   onClick={() => setActiveRole(role.id)}
                   className={cn(
-                    "w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all group",
+                    "w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all group",
                     isActive 
                       ? "bg-[#531FFF] text-white shadow-md shadow-[#531FFF]/20 font-bold" 
                       : "text-gray-700 hover:bg-gray-50 hover:text-gray-900 border border-transparent hover:border-gray-200"
                   )}
                 >
                   <div className={cn(
-                    "p-2 rounded-lg shrink-0 transition-colors",
+                    "p-2 rounded-md shrink-0 transition-colors",
                     isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500 group-hover:text-[#531FFF]"
                   )}>
                     <Icon className="w-4 h-4" />
@@ -284,16 +284,16 @@ export default function RolesAndPermissionsPage() {
         <div className="lg:col-span-3 space-y-6">
           
           {/* Active Role Banner & Summary */}
-          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-4">
+          <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-purple-50 border border-purple-100 text-[#531FFF] flex items-center justify-center font-bold">
+                <div className="w-11 h-11 rounded-lg bg-purple-50 border border-purple-100 text-[#531FFF] flex items-center justify-center font-bold">
                   <activeRoleData.icon className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-bold text-gray-900">Otorisasi Modul: {activeRoleData.name}</h3>
-                    <span className="px-2.5 py-0.5 text-[10px] font-extrabold bg-purple-50 text-[#531FFF] rounded-md border border-purple-100">
+                    <span className="px-2.5 py-0.5 text-[10px] font-extrabold bg-purple-50 text-[#531FFF] rounded border border-purple-100">
                       {activeRoleData.badge}
                     </span>
                   </div>
@@ -302,7 +302,7 @@ export default function RolesAndPermissionsPage() {
               </div>
 
               {activeRole === "super-admin" && (
-                <div className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                <div className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-md text-xs font-bold flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5" />
                   Super Admin Memiliki Akses Penuh
                 </div>
@@ -320,7 +320,7 @@ export default function RolesAndPermissionsPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => applyPreset("standard")}
-                    className="px-3 py-1.5 bg-[#F3F0FF] hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-lg text-xs font-bold transition-all border border-[#531FFF]/20 flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-[#F3F0FF] hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-md text-xs font-bold transition-all border border-[#531FFF]/20 flex items-center gap-1.5"
                   >
                     <Building2 className="w-3.5 h-3.5" />
                     Standar Sekolah
@@ -328,7 +328,7 @@ export default function RolesAndPermissionsPage() {
 
                   <button
                     onClick={() => applyPreset("readOnly")}
-                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-all border border-gray-200 flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs font-bold transition-all border border-gray-200 flex items-center gap-1.5"
                   >
                     <Eye className="w-3.5 h-3.5 text-blue-600" />
                     Read-Only All
@@ -336,7 +336,7 @@ export default function RolesAndPermissionsPage() {
 
                   <button
                     onClick={() => applyPreset("fullWrite")}
-                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-all border border-gray-200 flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs font-bold transition-all border border-gray-200 flex items-center gap-1.5"
                   >
                     <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
                     Full Write
@@ -344,7 +344,7 @@ export default function RolesAndPermissionsPage() {
 
                   <button
                     onClick={() => applyPreset("clear")}
-                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-xs font-bold transition-all border border-rose-200 flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md text-xs font-bold transition-all border border-rose-200 flex items-center gap-1.5"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     Batasi Semua
@@ -355,7 +355,7 @@ export default function RolesAndPermissionsPage() {
           </div>
 
           {/* Permissions Matrix Container */}
-          <div className="bg-white border border-gray-100 rounded-2xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
+          <div className="bg-white border border-gray-100 rounded-lg shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
             
             {/* Filter & Bulk Select Bar */}
             <div className="p-4 border-b border-gray-100 bg-gray-50/60 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -369,7 +369,7 @@ export default function RolesAndPermissionsPage() {
                     placeholder="Cari nama modul..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                    className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                   />
                 </div>
 
@@ -379,7 +379,7 @@ export default function RolesAndPermissionsPage() {
                       key={cat}
                       onClick={() => setCategoryFilter(cat)}
                       className={cn(
-                        "px-2.5 py-1 rounded-md text-xs font-semibold transition-all whitespace-nowrap",
+                        "px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap",
                         categoryFilter === cat 
                           ? "bg-white text-[#531FFF] border border-[#531FFF]/30 shadow-xs" 
                           : "text-gray-600 hover:text-gray-900"
@@ -396,13 +396,13 @@ export default function RolesAndPermissionsPage() {
                 <div className="flex items-center gap-2 text-xs">
                   <button 
                     onClick={() => handleToggleColumn("read")}
-                    className="px-2.5 py-1 bg-white border border-gray-200 hover:border-blue-300 text-blue-700 rounded-md font-bold transition-all shadow-xs"
+                    className="px-2.5 py-1 bg-white border border-gray-200 hover:border-blue-300 text-blue-700 rounded font-bold transition-all shadow-xs"
                   >
                     Toggle All Read
                   </button>
                   <button 
                     onClick={() => handleToggleColumn("write")}
-                    className="px-2.5 py-1 bg-white border border-gray-200 hover:border-emerald-300 text-emerald-700 rounded-md font-bold transition-all shadow-xs"
+                    className="px-2.5 py-1 bg-white border border-gray-200 hover:border-emerald-300 text-emerald-700 rounded font-bold transition-all shadow-xs"
                   >
                     Toggle All Write
                   </button>
@@ -448,7 +448,7 @@ export default function RolesAndPermissionsPage() {
                           </td>
 
                           <td className="px-6 py-4 text-center">
-                            <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">
+                            <span className="px-2.5 py-1 rounded text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">
                               {mod.category}
                             </span>
                           </td>
@@ -518,7 +518,7 @@ function PermissionCheckbox({
 }) {
   return (
     <label className={cn(
-      "relative inline-flex items-center justify-center cursor-pointer p-1.5 rounded-lg transition-all",
+      "relative inline-flex items-center justify-center cursor-pointer p-1.5 rounded-md transition-all",
       disabled ? "cursor-not-allowed opacity-60" : "hover:bg-gray-100"
     )}>
       <input
@@ -529,7 +529,7 @@ function PermissionCheckbox({
         disabled={disabled}
       />
       <div className={cn(
-        "w-5 h-5 flex items-center justify-center rounded-md border transition-all duration-200",
+        "w-5 h-5 flex items-center justify-center rounded border transition-all duration-200",
         checked 
           ? `${activeColor} text-white shadow-xs` 
           : "bg-white border-gray-300 text-transparent hover:border-gray-400"

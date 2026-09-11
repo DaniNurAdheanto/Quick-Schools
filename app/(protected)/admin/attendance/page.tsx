@@ -1179,9 +1179,9 @@ export default function AttendancePage() {
       {isStudentRole ? (
         <div className="space-y-4">
           {previewAsStudent && (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-200/80 rounded-2xl text-xs shadow-xs">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-200/80 rounded-lg text-xs shadow-xs">
               <div className="flex items-center gap-2.5 text-purple-900 font-bold">
-                <div className="w-6 h-6 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shrink-0">
+                <div className="w-6 h-6 rounded-md bg-[#531FFF] text-white flex items-center justify-center shrink-0">
                   <Eye className="w-3.5 h-3.5" />
                 </div>
                 <span>Mode Pratinjau Siswa Aktif — Menampilkan portal presensi mandiri dengan isolasi data personal siswa.</span>
@@ -1189,7 +1189,7 @@ export default function AttendancePage() {
               <button
                 type="button"
                 onClick={() => setPreviewAsStudent(false)}
-                className="px-3.5 py-1.5 bg-[#531FFF] hover:bg-[#4215cb] text-white font-extrabold text-xs rounded-xl shadow-xs transition-all cursor-pointer shrink-0"
+                className="px-3.5 py-1.5 bg-[#531FFF] hover:bg-[#4215cb] text-white font-extrabold text-xs rounded-lg shadow-xs transition-all cursor-pointer shrink-0"
               >
                 Kembali ke Mode Admin
               </button>
@@ -1217,7 +1217,7 @@ export default function AttendancePage() {
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-gray-100">
             <div>
               <div className="flex items-center gap-2.5 flex-wrap">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#531FFF] to-[#7344FF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/20">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#531FFF] to-[#7344FF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/20">
                   {isGuru ? <GraduationCap className="w-5 h-5" /> : <CalendarDays className="w-5 h-5" />}
                 </div>
                 <div>
@@ -1243,7 +1243,7 @@ export default function AttendancePage() {
                       </span>
                     )}
                     {previewAsGuru && (
-                      <span className="px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-800 rounded-md border border-amber-200">
+                      <span className="px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200">
                         Pratinjau Role Guru
                       </span>
                     )}
@@ -1265,7 +1265,7 @@ export default function AttendancePage() {
                 <button
                   type="button"
                   onClick={() => setPreviewAsGuru(true)}
-                  className="flex items-center gap-2 px-3.5 py-2.5 bg-purple-50 text-[#531FFF] border border-purple-200/80 rounded-xl hover:bg-purple-100 active:scale-[0.98] transition-all text-xs font-extrabold shadow-xs cursor-pointer"
+                  className="flex items-center gap-2 px-3.5 py-2.5 bg-purple-50 text-[#531FFF] border border-purple-200/80 rounded-lg hover:bg-purple-100 active:scale-[0.98] transition-all text-xs font-extrabold shadow-xs cursor-pointer"
                   title="Pratinjau tampilan khusus Wali Kelas (Role Guru)"
                 >
                   <GraduationCap className="w-4 h-4" />
@@ -1280,7 +1280,7 @@ export default function AttendancePage() {
                     setPreviewAsGuru(false);
                     setSelectedClass("Semua Kelas");
                   }}
-                  className="flex items-center gap-2 px-3.5 py-2.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl hover:bg-rose-100 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
+                  className="flex items-center gap-2 px-3.5 py-2.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg hover:bg-rose-100 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                   <span>Keluar Preview Guru</span>
@@ -1290,7 +1290,7 @@ export default function AttendancePage() {
               <button
                 type="button"
                 onClick={() => setPreviewAsStudent(true)}
-                className="flex items-center gap-2 px-3.5 py-2.5 bg-purple-50 text-[#531FFF] border border-purple-200/80 rounded-xl hover:bg-purple-100 active:scale-[0.98] transition-all text-xs font-extrabold shadow-xs cursor-pointer"
+                className="flex items-center gap-2 px-3.5 py-2.5 bg-purple-50 text-[#531FFF] border border-purple-200/80 rounded-lg hover:bg-purple-100 active:scale-[0.98] transition-all text-xs font-extrabold shadow-xs cursor-pointer"
                 title="Pratinjau tampilan portal absensi siswa"
               >
                 <Eye className="w-4 h-4" />
@@ -1299,7 +1299,7 @@ export default function AttendancePage() {
 
               <button
                 onClick={() => setShowScanModal(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:shadow-lg hover:shadow-emerald-500/25 active:scale-[0.98] transition-all text-xs font-extrabold shadow-sm cursor-pointer border border-white/20"
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/25 active:scale-[0.98] transition-all text-xs font-extrabold shadow-sm cursor-pointer border border-white/20"
               >
                 <ScanFace className="w-4 h-4 text-white animate-pulse" />
                 <span>Kamera & GPS Scan</span>
@@ -1307,7 +1307,7 @@ export default function AttendancePage() {
 
               <button
                 onClick={handleExportCSV}
-                className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
+                className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
               >
                 <Download className="w-4 h-4 text-gray-500" />
                 <span>Ekspor CSV</span>
@@ -1315,7 +1315,7 @@ export default function AttendancePage() {
 
               <button
                 onClick={handlePrint}
-                className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-xs print:hidden cursor-pointer"
+                className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-xs print:hidden cursor-pointer"
               >
                 <Printer className="w-4 h-4 text-gray-500" />
                 <span>Cetak Rekap</span>
@@ -1325,7 +1325,7 @@ export default function AttendancePage() {
 
           {/* Banner notification if Guru is not assigned as Wali Kelas */}
           {isGuru && !isTeacherWaliKelas && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3 shadow-xs">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3 shadow-xs">
               <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
               <div>
                 <h4 className="text-sm font-bold text-amber-900">Akses Terbatas: Belum Ditugaskan Sebagai Wali Kelas</h4>
@@ -1341,10 +1341,10 @@ export default function AttendancePage() {
       {/* ------------------------------------------------------------- */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
         {/* Tingkat Kehadiran */}
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-[#531FFF]/30 transition-all flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-[#531FFF]/30 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between text-gray-400">
             <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Tingkat Hadir</span>
-            <div className="w-7 h-7 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center">
+            <div className="w-7 h-7 rounded-md bg-purple-50 text-[#531FFF] flex items-center justify-center">
               <Sparkles className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -1355,10 +1355,10 @@ export default function AttendancePage() {
         </div>
 
         {/* Total Siswa */}
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-gray-200 transition-all flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-gray-200 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between text-gray-400">
             <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Total Siswa</span>
-            <div className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-md bg-gray-100 text-gray-600 flex items-center justify-center">
               <Users className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -1369,10 +1369,10 @@ export default function AttendancePage() {
         </div>
 
         {/* Hadir Tepat */}
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-emerald-200 transition-all flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-emerald-200 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between text-gray-400">
             <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Hadir Tepat</span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <CheckCircle2 className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -1383,10 +1383,10 @@ export default function AttendancePage() {
         </div>
 
         {/* Terlambat */}
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-amber-200 transition-all flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-amber-200 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between text-gray-400">
             <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Terlambat</span>
-            <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-md bg-amber-50 text-amber-600 flex items-center justify-center">
               <Clock className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -1397,10 +1397,10 @@ export default function AttendancePage() {
         </div>
 
         {/* Sakit & Izin */}
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-blue-200 transition-all flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-blue-200 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between text-gray-400">
             <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Sakit / Izin</span>
-            <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
               <Info className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -1411,10 +1411,10 @@ export default function AttendancePage() {
         </div>
 
         {/* Alpa / Tanpa Keterangan */}
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-rose-200 transition-all flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-rose-200 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between text-gray-400">
             <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Alpa</span>
-            <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-md bg-rose-50 text-rose-600 flex items-center justify-center">
               <AlertTriangle className="w-3.5 h-3.5" />
             </div>
           </div>
@@ -1492,7 +1492,7 @@ export default function AttendancePage() {
         <div className="space-y-4">
           
           {/* A. Top Controls & Action Bar */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 p-4 sm:p-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+          <div className="bg-white rounded-lg sm:rounded-xl border border-gray-100 p-4 sm:p-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3">
               {/* Class Selector Dropdown */}
               <div>
@@ -1503,7 +1503,7 @@ export default function AttendancePage() {
                   <select
                     value={selectedClass}
                     onChange={(e) => setSelectedClass(e.target.value)}
-                    className="w-full appearance-none bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 text-gray-900 font-bold pl-3.5 pr-9 py-2 rounded-xl text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all cursor-pointer shadow-xs"
+                    className="w-full appearance-none bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 text-gray-900 font-bold pl-3.5 pr-9 py-2 rounded-lg text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all cursor-pointer shadow-xs"
                   >
                     {!isGuru && (
                       <option value="Semua Kelas">Semua Kelas (Seluruh Siswa)</option>
@@ -1528,13 +1528,13 @@ export default function AttendancePage() {
                     type="date"
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    className="bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 text-gray-900 font-bold px-3 py-2 rounded-xl text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all shadow-xs"
+                    className="bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 text-gray-900 font-bold px-3 py-2 rounded-lg text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all shadow-xs"
                   />
                   {selectedDate !== new Date().toISOString().split("T")[0] && (
                     <button
                       type="button"
                       onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])}
-                      className="px-2.5 py-2 bg-purple-50 text-[#531FFF] rounded-xl text-[11px] font-bold hover:bg-purple-100 transition-colors cursor-pointer"
+                      className="px-2.5 py-2 bg-purple-50 text-[#531FFF] rounded-lg text-[11px] font-bold hover:bg-purple-100 transition-colors cursor-pointer"
                     >
                       Hari Ini
                     </button>
@@ -1554,7 +1554,7 @@ export default function AttendancePage() {
                     placeholder="Nama / NISN..."
                     value={searchTermDaily}
                     onChange={(e) => setSearchTermDaily(e.target.value)}
-                    className="pl-8 pr-3 py-2 bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none w-48 sm:w-56 transition-all"
+                    className="pl-8 pr-3 py-2 bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none w-48 sm:w-56 transition-all"
                   />
                   {searchTermDaily && (
                     <button
@@ -1574,7 +1574,7 @@ export default function AttendancePage() {
               <button
                 type="button"
                 onClick={handleMarkAllHadir}
-                className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
+                className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
                 title="Tandai semua siswa di kelas ini Hadir"
               >
                 <Check className="w-3.5 h-3.5" />
@@ -1584,7 +1584,7 @@ export default function AttendancePage() {
               <button
                 type="button"
                 onClick={handleMarkRemainingAlpa}
-                className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
+                className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
                 title="Tandai siswa yang belum ada data absensi sebagai Alpa"
               >
                 <UserX className="w-3.5 h-3.5" />
@@ -1595,7 +1595,7 @@ export default function AttendancePage() {
                 type="button"
                 onClick={handleSaveClassAttendance}
                 disabled={isSavingBatch}
-                className="px-4 sm:px-5 py-2 bg-gradient-to-r from-[#531FFF] to-[#7344FF] hover:from-[#4314cc] hover:to-[#5e31e6] text-white rounded-xl text-xs font-extrabold transition-all active:scale-[0.98] flex items-center gap-2 shadow-sm shadow-[#531FFF]/25 cursor-pointer disabled:opacity-50"
+                className="px-4 sm:px-5 py-2 bg-gradient-to-r from-[#531FFF] to-[#7344FF] hover:from-[#4314cc] hover:to-[#5e31e6] text-white rounded-lg text-xs font-extrabold transition-all active:scale-[0.98] flex items-center gap-2 shadow-sm shadow-[#531FFF]/25 cursor-pointer disabled:opacity-50"
               >
                 <Save className={cn("w-4 h-4", isSavingBatch && "animate-spin")} />
                 <span>{isSavingBatch ? "Menyimpan..." : "Simpan Presensi Kelas"}</span>
@@ -1604,7 +1604,7 @@ export default function AttendancePage() {
           </div>
 
           {/* B. Live Monitoring Dashboard Card for the Selected Class */}
-          <div className="bg-gradient-to-br from-purple-950 via-[#3a0ca3] to-[#531FFF] text-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-lg relative overflow-hidden">
+          <div className="bg-gradient-to-br from-purple-950 via-[#3a0ca3] to-[#531FFF] text-white rounded-lg sm:rounded-xl p-5 sm:p-6 shadow-lg relative overflow-hidden">
             <div className="absolute -right-10 -bottom-10 w-56 h-56 bg-white/10 rounded-full blur-2xl pointer-events-none" />
             <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
               
@@ -1650,7 +1650,7 @@ export default function AttendancePage() {
                 <div
                   onClick={() => setDailySubFilter("sudah")}
                   className={cn(
-                    "rounded-2xl p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                    "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
                     dailySubFilter === "sudah"
                       ? "bg-white/25 border-white text-white shadow-sm"
                       : "bg-white/10 hover:bg-white/20 border-white/15"
@@ -1668,7 +1668,7 @@ export default function AttendancePage() {
                 <div
                   onClick={() => setDailySubFilter("belum")}
                   className={cn(
-                    "rounded-2xl p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                    "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
                     dailySubFilter === "belum"
                       ? "bg-amber-500/40 border-amber-300 text-white shadow-sm"
                       : classStats.belumAbsen > 0
@@ -1690,7 +1690,7 @@ export default function AttendancePage() {
                 <div
                   onClick={() => setDailySubFilter("hadir")}
                   className={cn(
-                    "rounded-2xl p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                    "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
                     dailySubFilter === "hadir"
                       ? "bg-white/25 border-white text-white shadow-sm"
                       : "bg-white/10 hover:bg-white/20 border-white/15"
@@ -1708,7 +1708,7 @@ export default function AttendancePage() {
                 <div
                   onClick={() => setDailySubFilter("terlambat")}
                   className={cn(
-                    "rounded-2xl p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                    "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
                     dailySubFilter === "terlambat"
                       ? "bg-white/25 border-white text-white shadow-sm"
                       : "bg-white/10 hover:bg-white/20 border-white/15"
@@ -1726,7 +1726,7 @@ export default function AttendancePage() {
                 <div
                   onClick={() => setDailySubFilter("izin_sakit")}
                   className={cn(
-                    "rounded-2xl p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                    "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
                     dailySubFilter === "izin_sakit"
                       ? "bg-white/25 border-white text-white shadow-sm"
                       : "bg-white/10 hover:bg-white/20 border-white/15"
@@ -1744,7 +1744,7 @@ export default function AttendancePage() {
                 <div
                   onClick={() => setDailySubFilter("alpa")}
                   className={cn(
-                    "rounded-2xl p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                    "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
                     dailySubFilter === "alpa"
                       ? "bg-white/25 border-white text-white shadow-sm"
                       : "bg-white/10 hover:bg-white/20 border-white/15"
@@ -1763,7 +1763,7 @@ export default function AttendancePage() {
           </div>
 
           {/* C. Sub-Filters Chips & Table Container */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
+          <div className="bg-white rounded-lg sm:rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
             
             {/* Sub-filter Chips Bar */}
             <div className="p-3.5 sm:p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3 overflow-x-auto scrollbar-none">
@@ -1777,7 +1777,7 @@ export default function AttendancePage() {
                   type="button"
                   onClick={() => setDailySubFilter("all")}
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
                     dailySubFilter === "all"
                       ? "bg-[#531FFF] text-white shadow-xs"
                       : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200/80"
@@ -1790,7 +1790,7 @@ export default function AttendancePage() {
                   type="button"
                   onClick={() => setDailySubFilter("sudah")}
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
+                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
                     dailySubFilter === "sudah"
                       ? "bg-emerald-600 text-white shadow-xs"
                       : "bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-200/80"
@@ -1804,7 +1804,7 @@ export default function AttendancePage() {
                   type="button"
                   onClick={() => setDailySubFilter("belum")}
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
+                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
                     dailySubFilter === "belum"
                       ? "bg-amber-600 text-white shadow-xs"
                       : "bg-white text-amber-700 hover:bg-amber-50 border border-amber-200/80"
@@ -1823,7 +1823,7 @@ export default function AttendancePage() {
                   type="button"
                   onClick={() => setDailySubFilter("terlambat")}
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
                     dailySubFilter === "terlambat"
                       ? "bg-orange-600 text-white shadow-xs"
                       : "bg-white text-orange-700 hover:bg-orange-50 border border-orange-200/80"
@@ -1836,7 +1836,7 @@ export default function AttendancePage() {
                   type="button"
                   onClick={() => setDailySubFilter("izin_sakit")}
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
                     dailySubFilter === "izin_sakit"
                       ? "bg-blue-600 text-white shadow-xs"
                       : "bg-white text-blue-700 hover:bg-blue-50 border border-blue-200/80"
@@ -1849,7 +1849,7 @@ export default function AttendancePage() {
                   type="button"
                   onClick={() => setDailySubFilter("alpa")}
                   className={cn(
-                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer",
+                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
                     dailySubFilter === "alpa"
                       ? "bg-rose-600 text-white shadow-xs"
                       : "bg-white text-rose-700 hover:bg-rose-50 border border-rose-200/80"
@@ -1906,7 +1906,7 @@ export default function AttendancePage() {
                             <button
                               type="button"
                               onClick={() => setSelectedClass("Semua Kelas")}
-                              className="mt-2 px-3.5 py-1.5 bg-purple-50 text-[#531FFF] hover:bg-purple-100 rounded-xl text-xs font-bold transition-all cursor-pointer border border-purple-200"
+                              className="mt-2 px-3.5 py-1.5 bg-purple-50 text-[#531FFF] hover:bg-purple-100 rounded-lg text-xs font-bold transition-all cursor-pointer border border-purple-200"
                             >
                               Tampilkan Semua Kelas
                             </button>
@@ -1940,7 +1940,7 @@ export default function AttendancePage() {
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
                               <div className={cn(
-                                "w-9 h-9 rounded-xl font-bold flex items-center justify-center text-xs shrink-0 border",
+                                "w-9 h-9 rounded-lg font-bold flex items-center justify-center text-xs shrink-0 border",
                                 att.status === "Hadir" ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
                                 att.status === "Terlambat" ? "bg-amber-50 text-amber-700 border-amber-100" :
                                 att.status === "Belum Absen" ? "bg-gray-100 text-gray-600 border-gray-200" :
@@ -1957,7 +1957,7 @@ export default function AttendancePage() {
                                     <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" title="Belum absen" />
                                   )}
                                   {(student.classId || student.className || student.class) && (
-                                    <span className="px-1.5 py-0.5 rounded-md bg-purple-50 text-[#531FFF] text-[10px] font-extrabold border border-purple-100">
+                                    <span className="px-1.5 py-0.5 rounded bg-purple-50 text-[#531FFF] text-[10px] font-extrabold border border-purple-100">
                                       {student.classId || student.className || student.class}
                                     </span>
                                   )}
@@ -1976,7 +1976,7 @@ export default function AttendancePage() {
                                 value={att.status}
                                 onChange={(e) => handleStudentStatusChange(student.id, e.target.value as any)}
                                 className={cn(
-                                  "w-full appearance-none pl-3 pr-8 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20",
+                                  "w-full appearance-none pl-3 pr-8 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20",
                                   att.status === "Hadir" && "bg-emerald-50 text-emerald-700 border-emerald-200",
                                   att.status === "Terlambat" && "bg-amber-50 text-amber-700 border-amber-200",
                                   att.status === "Sakit" && "bg-blue-50 text-blue-700 border-blue-200",
@@ -2016,7 +2016,7 @@ export default function AttendancePage() {
                                       }
                                     }));
                                   }}
-                                  className="px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#531FFF]"
+                                  className="px-2 py-1 bg-white border border-gray-200 rounded-md text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#531FFF]"
                                 />
                               </div>
                             )}
@@ -2028,7 +2028,7 @@ export default function AttendancePage() {
                               <div className="flex items-center gap-2">
                                 <div
                                   onClick={() => setSelectedRecord(att.record || null)}
-                                  className="relative w-8 h-8 rounded-lg overflow-hidden border border-gray-200 cursor-pointer group shrink-0"
+                                  className="relative w-8 h-8 rounded-md overflow-hidden border border-gray-200 cursor-pointer group shrink-0"
                                   title="Klik untuk memperbesar bukti foto"
                                 >
                                   <img
@@ -2052,7 +2052,7 @@ export default function AttendancePage() {
                                 </div>
                               </div>
                             ) : att.status !== "Belum Absen" ? (
-                              <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">
+                              <span className="px-2 py-1 rounded text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">
                                 {att.source === "biometric" ? "Biometrik" : "Manual (Guru/Admin)"}
                               </span>
                             ) : (
@@ -2077,7 +2077,7 @@ export default function AttendancePage() {
                               }
                               value={att.notes}
                               onChange={(e) => handleStudentNotesChange(student.id, e.target.value)}
-                              className="w-full min-w-[160px] px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                              className="w-full min-w-[160px] px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
                             />
                           </td>
 
@@ -2088,7 +2088,7 @@ export default function AttendancePage() {
                                 <button
                                   type="button"
                                   onClick={() => handleStudentStatusChange(student.id, "Hadir")}
-                                  className="px-2 py-1 rounded-lg text-[11px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors cursor-pointer border border-emerald-200"
+                                  className="px-2 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors cursor-pointer border border-emerald-200"
                                   title="Tandai Hadir"
                                 >
                                   Hadir
@@ -2096,7 +2096,7 @@ export default function AttendancePage() {
                                 <button
                                   type="button"
                                   onClick={() => handleStudentStatusChange(student.id, "Izin")}
-                                  className="px-2 py-1 rounded-lg text-[11px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors cursor-pointer border border-indigo-200"
+                                  className="px-2 py-1 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors cursor-pointer border border-indigo-200"
                                   title="Tandai Izin"
                                 >
                                   Izin
@@ -2104,7 +2104,7 @@ export default function AttendancePage() {
                                 <button
                                   type="button"
                                   onClick={() => handleStudentStatusChange(student.id, "Alpa")}
-                                  className="px-2 py-1 rounded-lg text-[11px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors cursor-pointer border border-rose-200"
+                                  className="px-2 py-1 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors cursor-pointer border border-rose-200"
                                   title="Tandai Alpa"
                                 >
                                   Alpa
@@ -2114,7 +2114,7 @@ export default function AttendancePage() {
                               <button
                                 type="button"
                                 onClick={() => handleStudentStatusChange(student.id, "Belum Absen")}
-                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                className="px-2.5 py-1 rounded-md text-[10px] font-bold text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
                                 title="Reset status kembali ke Belum Absen"
                               >
                                 Reset
@@ -2149,7 +2149,7 @@ export default function AttendancePage() {
                   type="button"
                   onClick={handleSaveClassAttendance}
                   disabled={isSavingBatch}
-                  className="px-4 py-2 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
                 >
                   {isSavingBatch ? "Menyimpan..." : "Simpan Perubahan"}
                 </button>
@@ -2163,18 +2163,18 @@ export default function AttendancePage() {
       {/* 5. TAB 2: LOG BIOMETRIK & GPS FEED (PENGECEKAN BIOMETRIK) */}
       {/* ------------------------------------------------------------- */}
       {activeTab === "biometric" && (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col">
           
           {/* Biometric Filter Toolbar */}
           <div className="p-4 sm:p-5 border-b border-gray-100 flex flex-col md:flex-row gap-4 justify-between items-center bg-gray-50/50">
             {/* View Switcher & Search */}
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              <div className="flex items-center bg-gray-200/70 p-1 rounded-xl">
+              <div className="flex items-center bg-gray-200/70 p-1 rounded-lg">
                 <button
                   type="button"
                   onClick={() => setBiometricViewMode("table")}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                    "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer",
                     biometricViewMode === "table" ? "bg-white text-gray-900 shadow-xs" : "text-gray-600 hover:text-gray-900"
                   )}
                 >
@@ -2185,7 +2185,7 @@ export default function AttendancePage() {
                   type="button"
                   onClick={() => setBiometricViewMode("grid")}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                    "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer",
                     biometricViewMode === "grid" ? "bg-white text-gray-900 shadow-xs" : "text-gray-600 hover:text-gray-900"
                   )}
                 >
@@ -2196,7 +2196,7 @@ export default function AttendancePage() {
                   type="button"
                   onClick={() => setBiometricViewMode("map")}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                    "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer",
                     biometricViewMode === "map" ? "bg-white text-gray-900 shadow-xs" : "text-gray-600 hover:text-gray-900"
                   )}
                 >
@@ -2212,7 +2212,7 @@ export default function AttendancePage() {
                   placeholder="Cari nama, NISN, atau kelas..."
                   value={biometricSearch}
                   onChange={(e) => setBiometricSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                  className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
                 />
               </div>
             </div>
@@ -2223,7 +2223,7 @@ export default function AttendancePage() {
                 <select
                   value={biometricClassFilter}
                   onChange={(e) => setBiometricClassFilter(e.target.value)}
-                  className="appearance-none bg-white border border-gray-200 text-gray-700 pl-3.5 pr-8 py-2 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-xs"
+                  className="appearance-none bg-white border border-gray-200 text-gray-700 pl-3.5 pr-8 py-2 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-xs"
                 >
                   {!isGuru && <option value="Semua Kelas">Semua Kelas</option>}
                   {selectableClasses.map((cls) => (
@@ -2242,7 +2242,7 @@ export default function AttendancePage() {
                     type="button"
                     onClick={() => setBiometricStatusFilter(st)}
                     className={cn(
-                      "px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer",
+                      "px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer",
                       biometricStatusFilter === st
                         ? "bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/30 shadow-xs"
                         : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
@@ -2301,7 +2301,7 @@ export default function AttendancePage() {
                           <div className="flex items-center gap-2">
                             <span
                               className={cn(
-                                "px-2.5 py-1 rounded-lg text-xs font-extrabold inline-flex items-center gap-1.5 border",
+                                "px-2.5 py-1 rounded-md text-xs font-extrabold inline-flex items-center gap-1.5 border",
                                 item.faceVerified
                                   ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                   : "bg-rose-50 text-rose-700 border-rose-200"
@@ -2327,7 +2327,7 @@ export default function AttendancePage() {
                           <div className="flex items-center gap-2">
                             <div
                               className={cn(
-                                "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border",
+                                "w-7 h-7 rounded-md flex items-center justify-center shrink-0 border",
                                 item.location?.inRadius
                                   ? "bg-emerald-50 border-emerald-200 text-emerald-600"
                                   : "bg-rose-50 border-rose-200 text-rose-600"
@@ -2355,7 +2355,7 @@ export default function AttendancePage() {
                         <td className="px-6 py-4">
                           <span
                             className={cn(
-                              "px-2.5 py-1 text-xs font-bold rounded-lg inline-flex items-center gap-1 border shadow-2xs",
+                              "px-2.5 py-1 text-xs font-bold rounded-md inline-flex items-center gap-1 border shadow-2xs",
                               item.status === "Hadir" && "bg-emerald-50 text-emerald-700 border-emerald-200",
                               item.status === "Terlambat" && "bg-amber-50 text-amber-700 border-amber-200",
                               item.status === "Sakit" && "bg-blue-50 text-blue-700 border-blue-200",
@@ -2375,7 +2375,7 @@ export default function AttendancePage() {
                           <button
                             type="button"
                             onClick={() => setSelectedRecord(item)}
-                            className="px-3 py-1.5 bg-gray-100 hover:bg-[#F3F0FF] text-gray-700 hover:text-[#531FFF] rounded-xl font-bold transition-all border border-gray-200 cursor-pointer"
+                            className="px-3 py-1.5 bg-gray-100 hover:bg-[#F3F0FF] text-gray-700 hover:text-[#531FFF] rounded-lg font-bold transition-all border border-gray-200 cursor-pointer"
                           >
                             Detail AI
                           </button>
@@ -2401,7 +2401,7 @@ export default function AttendancePage() {
                 <div
                   key={item.id}
                   onClick={() => setSelectedRecord(item)}
-                  className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-lg hover:border-[#531FFF]/30 transition-all overflow-hidden cursor-pointer group flex flex-col"
+                  className="bg-white rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-lg hover:border-[#531FFF]/30 transition-all overflow-hidden cursor-pointer group flex flex-col"
                 >
                   <div className="relative aspect-[4/3] w-full bg-gray-100">
                     <Image
@@ -2414,7 +2414,7 @@ export default function AttendancePage() {
                     <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
                       <span
                         className={cn(
-                          "px-2 py-0.5 text-[10px] font-extrabold rounded-md backdrop-blur-md shadow-xs",
+                          "px-2 py-0.5 text-[10px] font-extrabold rounded backdrop-blur-md shadow-xs",
                           item.status === "Hadir" && "bg-emerald-500/90 text-white",
                           item.status === "Terlambat" && "bg-amber-500/90 text-white",
                           (item.status === "Alpa" || item.status === "Ditolak") && "bg-rose-500/90 text-white"
@@ -2422,12 +2422,12 @@ export default function AttendancePage() {
                       >
                         {item.status}
                       </span>
-                      <span className="px-2 py-0.5 text-[10px] font-extrabold bg-black/60 text-white rounded-md backdrop-blur-md flex items-center gap-1 shadow-xs">
+                      <span className="px-2 py-0.5 text-[10px] font-extrabold bg-black/60 text-white rounded backdrop-blur-md flex items-center gap-1 shadow-xs">
                         <ScanFace className="w-3 h-3 text-cyan-300" />
                         {item.faceMatchScore}%
                       </span>
                     </div>
-                    <div className="absolute bottom-2.5 left-2.5 bg-white/90 backdrop-blur-md px-2 py-0.5 rounded-md text-[11px] font-bold text-gray-900 shadow-xs flex items-center gap-1">
+                    <div className="absolute bottom-2.5 left-2.5 bg-white/90 backdrop-blur-md px-2 py-0.5 rounded text-[11px] font-bold text-gray-900 shadow-xs flex items-center gap-1">
                       <Clock className="w-3 h-3 text-[#531FFF]" />
                       {item.timestamp}
                     </div>
@@ -2469,10 +2469,10 @@ export default function AttendancePage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="flex items-center gap-1.5 font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                  <span className="flex items-center gap-1.5 font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" /> Di Dalam Radius
                   </span>
-                  <span className="flex items-center gap-1.5 font-medium text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">
+                  <span className="flex items-center gap-1.5 font-medium text-rose-700 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-200">
                     <span className="w-2 h-2 rounded-full bg-rose-500" /> Di Luar Radius
                   </span>
                 </div>
@@ -2503,9 +2503,9 @@ export default function AttendancePage() {
           
           {/* Early Warning Banner if critical students exist */}
           {criticalStudents.length > 0 && (
-            <div className="bg-gradient-to-r from-rose-50 to-orange-50 border border-rose-200 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="bg-gradient-to-r from-rose-50 to-orange-50 border border-rose-200 rounded-xl p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex items-start gap-3.5">
-                <div className="w-10 h-10 rounded-2xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-rose-500/20">
+                <div className="w-10 h-10 rounded-lg bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-rose-500/20">
                   <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div>
@@ -2524,7 +2524,7 @@ export default function AttendancePage() {
                   onClick={() => {
                     toast.showInfo("Pengingat notifikasi otomatis dikirimkan ke orang tua siswa yang bersangkutan.", "Notifikasi Peringatan");
                   }}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
                 >
                   <Send className="w-3.5 h-3.5" />
                   Kirim Notifikasi Peringatan
@@ -2534,7 +2534,7 @@ export default function AttendancePage() {
           )}
 
           {/* Monthly Table Card */}
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
             
             {/* Filter Header */}
             <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -2547,7 +2547,7 @@ export default function AttendancePage() {
                     type="month"
                     value={monthlyMonth}
                     onChange={(e) => setMonthlyMonth(e.target.value)}
-                    className="bg-white border border-gray-200 text-gray-900 font-bold px-3 py-1.5 rounded-xl text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none shadow-xs"
+                    className="bg-white border border-gray-200 text-gray-900 font-bold px-3 py-1.5 rounded-lg text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none shadow-xs"
                   />
                 </div>
 
@@ -2558,7 +2558,7 @@ export default function AttendancePage() {
                   <select
                     value={monthlyClassFilter}
                     onChange={(e) => setMonthlyClassFilter(e.target.value)}
-                    className="bg-white border border-gray-200 text-gray-900 font-bold px-3 py-1.5 rounded-xl text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none shadow-xs cursor-pointer"
+                    className="bg-white border border-gray-200 text-gray-900 font-bold px-3 py-1.5 rounded-lg text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none shadow-xs cursor-pointer"
                   >
                     {!isGuru && <option value="Semua">Semua Kelas</option>}
                     {selectableClasses.map((c) => (
@@ -2620,7 +2620,7 @@ export default function AttendancePage() {
                       <td className="px-5 py-3.5 text-center">
                         <span
                           className={cn(
-                            "px-2 py-0.5 rounded-md font-extrabold text-xs",
+                            "px-2 py-0.5 rounded font-extrabold text-xs",
                             item.rate >= 90
                               ? "bg-emerald-50 text-emerald-700"
                               : item.rate >= 75
@@ -2633,12 +2633,12 @@ export default function AttendancePage() {
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         {item.isCritical ? (
-                          <span className="px-2.5 py-1 text-[11px] font-black bg-rose-100 text-rose-800 rounded-lg inline-flex items-center gap-1">
+                          <span className="px-2.5 py-1 text-[11px] font-black bg-rose-100 text-rose-800 rounded-md inline-flex items-center gap-1">
                             <AlertCircle className="w-3 h-3 text-rose-600" />
                             Perhatian Khusus
                           </span>
                         ) : (
-                          <span className="px-2.5 py-1 text-[11px] font-bold bg-emerald-50 text-emerald-700 rounded-lg">
+                          <span className="px-2.5 py-1 text-[11px] font-bold bg-emerald-50 text-emerald-700 rounded-md">
                             Disiplin Baik
                           </span>
                         )}
@@ -2684,8 +2684,8 @@ export default function AttendancePage() {
             <div className="p-6 space-y-6 flex-1 overflow-y-auto text-xs">
               
               {/* Student info card */}
-              <div className="flex items-center gap-3.5 p-4 rounded-2xl bg-gray-50 border border-gray-100">
-                <div className="w-14 h-14 rounded-2xl bg-white overflow-hidden relative shrink-0 border border-gray-200 shadow-xs">
+              <div className="flex items-center gap-3.5 p-4 rounded-lg bg-gray-50 border border-gray-100">
+                <div className="w-14 h-14 rounded-lg bg-white overflow-hidden relative shrink-0 border border-gray-200 shadow-xs">
                   <Image
                     src={selectedRecord.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80"}
                     alt={selectedRecord.studentName}
@@ -2699,7 +2699,7 @@ export default function AttendancePage() {
                   <p className="text-gray-400 font-medium mt-0.5">{selectedRecord.studentId} • {selectedRecord.className}</p>
                   <span
                     className={cn(
-                      "mt-1.5 px-2 py-0.5 text-[10px] font-black rounded-md inline-block",
+                      "mt-1.5 px-2 py-0.5 text-[10px] font-black rounded inline-block",
                       selectedRecord.status === "Hadir" && "bg-emerald-100 text-emerald-800",
                       selectedRecord.status === "Terlambat" && "bg-amber-100 text-amber-800",
                       (selectedRecord.status === "Alpa" || selectedRecord.status === "Ditolak") && "bg-rose-100 text-rose-800"
@@ -2718,13 +2718,13 @@ export default function AttendancePage() {
                 </h4>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3.5 rounded-2xl bg-purple-50/50 border border-purple-100">
+                  <div className="p-3.5 rounded-lg bg-purple-50/50 border border-purple-100">
                     <p className="text-purple-700 font-bold">Face Match Score</p>
                     <p className="text-2xl font-black text-[#531FFF] mt-1">{selectedRecord.faceMatchScore || 0}%</p>
                     <p className="text-[10px] text-purple-600 mt-1">Batas Minimal: {config.minFaceMatchScore}%</p>
                   </div>
 
-                  <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-100">
+                  <div className="p-3.5 rounded-lg bg-gray-50 border border-gray-100">
                     <p className="text-gray-500 font-bold">Status Verifikasi</p>
                     <p className={cn("text-base font-black mt-1", selectedRecord.faceVerified ? "text-emerald-600" : "text-rose-600")}>
                       {selectedRecord.faceVerified ? "Valid Sesuai" : "Gagal Cocok"}
@@ -2734,7 +2734,7 @@ export default function AttendancePage() {
                 </div>
 
                 {/* Photo Preview */}
-                <div className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden bg-gray-900 border border-gray-200 shadow-inner">
+                <div className="relative aspect-[4/3] w-full rounded-lg overflow-hidden bg-gray-900 border border-gray-200 shadow-inner">
                   <Image
                     src={selectedRecord.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80"}
                     alt="Foto Presensi"
@@ -2759,14 +2759,14 @@ export default function AttendancePage() {
                     Lokasi GPS Presensi
                   </h4>
                   <span className={cn(
-                    "font-extrabold text-[11px] px-2 py-0.5 rounded-md",
+                    "font-extrabold text-[11px] px-2 py-0.5 rounded",
                     selectedRecord.location?.inRadius ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
                   )}>
                     {selectedRecord.location?.distance || 0} Meter
                   </span>
                 </div>
 
-                <div className="w-full h-36 rounded-2xl bg-gray-100 relative overflow-hidden border border-gray-200">
+                <div className="w-full h-36 rounded-lg bg-gray-100 relative overflow-hidden border border-gray-200">
                   <iframe
                     width="100%"
                     height="100%"
@@ -2777,7 +2777,7 @@ export default function AttendancePage() {
                   />
                 </div>
 
-                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between text-[11px]">
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-between text-[11px]">
                   <span className="text-gray-500 font-mono">
                     {selectedRecord.location?.lat || config.schoolCenterLat}, {selectedRecord.location?.lng || config.schoolCenterLng}
                   </span>
@@ -2798,7 +2798,7 @@ export default function AttendancePage() {
               <button
                 type="button"
                 onClick={() => setSelectedRecord(null)}
-                className="w-full py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-100 transition-all text-xs shadow-xs cursor-pointer"
+                className="w-full py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-100 transition-all text-xs shadow-xs cursor-pointer"
               >
                 Tutup Detail
               </button>

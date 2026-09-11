@@ -155,7 +155,7 @@ export function Header() {
         {/* Center - Academic Year Switcher */}
         <div className="flex items-center justify-center">
           {/* Global Academic Year Selector */}
-          <div className="flex items-center gap-2 bg-white border border-gray-200/80 px-3.5 py-1.5 rounded-xl shadow-2xs hover:border-[#531FFF]/40 transition-all">
+          <div className="flex items-center gap-2 bg-white border border-gray-200/80 px-3.5 py-1.5 rounded-lg shadow-2xs hover:border-[#531FFF]/40 transition-all">
             <Calendar className="w-3.5 h-3.5 text-[#531FFF] shrink-0" />
             <select
               value={activeAcademicYear}
@@ -190,7 +190,7 @@ export function Header() {
           <div className="relative">
             <button 
               onClick={() => setShowNotifDropdown(prev => !prev)}
-              className="relative text-gray-400 hover:text-gray-600 transition-colors p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer"
+              className="relative text-gray-400 hover:text-gray-600 transition-colors p-1.5 rounded-md hover:bg-gray-100 cursor-pointer"
               title="Notifikasi & Pengingat"
             >
               <Bell className="w-[18px] h-[18px]" />
@@ -203,7 +203,7 @@ export function Header() {
 
             {/* Notification Dropdown Panel */}
             {showNotifDropdown && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 z-50 animate-in fade-in zoom-in-95 duration-200">
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-2xl border border-gray-100 p-4 z-50 animate-in fade-in zoom-in-95 duration-200">
                 <div className="flex items-center justify-between pb-3 border-b border-gray-100">
                   <h4 className="font-bold text-gray-900 text-sm flex items-center gap-2">
                     <Bell className="w-4 h-4 text-[#531FFF]" />
@@ -219,7 +219,7 @@ export function Header() {
 
                 <div className="py-3 space-y-2.5">
                   {(!onboardingCompleted || hasPendingReminder) ? (
-                    <div className="p-3.5 bg-amber-50/90 border border-amber-200/80 rounded-xl space-y-2">
+                    <div className="p-3.5 bg-amber-50/90 border border-amber-200/80 rounded-lg space-y-2">
                       <div className="flex items-start gap-2.5">
                         <span className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shrink-0 animate-pulse" />
                         <div>
@@ -234,7 +234,7 @@ export function Header() {
                       <Link
                         href="/onboarding"
                         onClick={() => setShowNotifDropdown(false)}
-                        className="block text-center w-full py-2 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg text-xs font-bold transition-all shadow-xs"
+                        className="block text-center w-full py-2 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-md text-xs font-bold transition-all shadow-xs"
                       >
                         Lanjutkan Onboarding Sekarang ➔
                       </Link>
@@ -260,7 +260,7 @@ export function Header() {
                 setShowNotifDropdown(false);
               }}
               className={cn(
-                "flex items-center gap-2.5 sm:gap-3 cursor-pointer p-1.5 sm:px-2.5 sm:py-1.5 rounded-2xl transition-all border text-left",
+                "flex items-center gap-2.5 sm:gap-3 cursor-pointer p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg transition-all border text-left",
                 showProfileDropdown 
                   ? "bg-[#531FFF]/10 border-[#531FFF]/30 ring-2 ring-[#531FFF]/20" 
                   : "hover:bg-gray-100/80 border-transparent"
@@ -293,9 +293,9 @@ export function Header() {
 
             {/* Profile Dropdown Menu */}
             {showProfileDropdown && (
-              <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+              <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-2xl border border-gray-100 p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
                 {/* Header with Avatar, Name, and Role */}
-                <div className="p-3 bg-gradient-to-r from-[#531FFF]/5 via-[#531FFF]/10 to-transparent rounded-xl flex items-center gap-3 border border-[#531FFF]/10 mb-1">
+                <div className="p-3 bg-gradient-to-r from-[#531FFF]/5 via-[#531FFF]/10 to-transparent rounded-lg flex items-center gap-3 border border-[#531FFF]/10 mb-1">
                   <div className="w-11 h-11 rounded-full overflow-hidden bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs relative">
                     {userAvatar ? (
                       <Image src={userAvatar} alt={userName} fill className="object-cover" unoptimized />
@@ -325,9 +325,9 @@ export function Header() {
                   <Link
                     href="/admin/profile"
                     onClick={() => setShowProfileDropdown(false)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-gray-700 hover:text-[#531FFF] hover:bg-[#531FFF]/5 transition-all group cursor-pointer"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold text-gray-700 hover:text-[#531FFF] hover:bg-[#531FFF]/5 transition-all group cursor-pointer"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-[#531FFF]/10 text-gray-500 group-hover:text-[#531FFF] flex items-center justify-center transition-colors">
+                    <div className="w-8 h-8 rounded-md bg-gray-100 group-hover:bg-[#531FFF]/10 text-gray-500 group-hover:text-[#531FFF] flex items-center justify-center transition-colors">
                       <User className="w-4 h-4" />
                     </div>
                     <div className="flex-1">
@@ -342,9 +342,9 @@ export function Header() {
                       setShowProfileDropdown(false);
                       setShowLogoutConfirm(true);
                     }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-gray-700 hover:text-rose-600 hover:bg-rose-50 transition-all group cursor-pointer text-left"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold text-gray-700 hover:text-rose-600 hover:bg-rose-50 transition-all group cursor-pointer text-left"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-rose-100 text-gray-500 group-hover:text-rose-600 flex items-center justify-center transition-colors">
+                    <div className="w-8 h-8 rounded-md bg-gray-100 group-hover:bg-rose-100 text-gray-500 group-hover:text-rose-600 flex items-center justify-center transition-colors">
                       <LogOut className="w-4 h-4" />
                     </div>
                     <div className="flex-1">
@@ -362,8 +362,8 @@ export function Header() {
       {/* LOGOUT CONFIRMATION DIALOG */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl border border-gray-100 p-6 space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-xs">
+          <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl border border-gray-100 p-6 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 rounded-lg bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-xs">
               <LogOut className="w-7 h-7" />
             </div>
 
@@ -381,7 +381,7 @@ export function Header() {
                 type="button"
                 onClick={() => setShowLogoutConfirm(false)}
                 disabled={isLoggingOut}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-lg text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer disabled:opacity-50"
               >
                 Batal
               </button>
@@ -389,7 +389,7 @@ export function Header() {
                 type="button"
                 onClick={handleLogout}
                 disabled={isLoggingOut}
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
+                className="flex-1 py-2.5 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
               >
                 {isLoggingOut && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 <span>Keluar</span>
@@ -413,7 +413,7 @@ export function Header() {
             </div>
             <Link
               href="/onboarding"
-              className="px-4 py-1.5 bg-[#531FFF] hover:bg-[#4314cc] text-white font-bold rounded-xl shadow-xs transition-all hover:scale-105 active:scale-95 shrink-0"
+              className="px-4 py-1.5 bg-[#531FFF] hover:bg-[#4314cc] text-white font-bold rounded-lg shadow-xs transition-all hover:scale-105 active:scale-95 shrink-0"
             >
               Lengkapi Sekarang ➔
             </Link>
