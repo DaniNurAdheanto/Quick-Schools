@@ -134,7 +134,25 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
     }
+    // SPP Payments & Financial Management
     match /payments/{paymentId} {
+      allow read: if isSignedIn();
+      // Only Admin / Financial Staff can create, update, or delete payments; Teachers & Students are strictly read-only
+      allow write: if isSignedIn() && (
+        request.auth.token.role != 'siswa' && 
+        request.auth.token.role != 'guru' &&
+        request.auth.token.role != 'student' &&
+        request.auth.token.role != 'teacher'
+      );
+    }
+    match /spp_rates/{rateId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (
+        request.auth.token.role != 'siswa' && 
+        request.auth.token.role != 'guru'
+      );
+    }
+    match /payment_activities/{activityId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
     }

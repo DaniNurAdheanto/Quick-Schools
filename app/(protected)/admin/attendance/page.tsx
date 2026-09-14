@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   MapPin,
   ScanFace,
@@ -16,6 +17,7 @@ import {
   List,
   Download,
   ChevronDown,
+  ChevronRight,
   LayoutGrid,
   ShieldCheck,
   ExternalLink,
@@ -1223,7 +1225,7 @@ export default function AttendancePage() {
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-2xl font-black text-gray-900 tracking-tight">
-                      {isGuru ? "Absensi Kelas Binaan (Wali Kelas)" : "Manajemen & Monitoring Absensi"}
+                      {isGuru ? "Absensi Siswa Kelas Binaan (Wali Kelas)" : "Manajemen & Monitoring Absensi Siswa"}
                     </h1>
                     <span className="px-2.5 py-0.5 text-xs font-bold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20 flex items-center gap-1.5">
                       <span className={cn("w-1.5 h-1.5 rounded-full", loading ? "bg-amber-400 animate-ping" : "bg-emerald-500 animate-pulse")} />
@@ -1253,7 +1255,7 @@ export default function AttendancePage() {
                       ? isTeacherWaliKelas
                         ? `Memantau dan mengelola rekap absensi harian dan bulanan siswa di kelas ${teacherHomeroomClasses.join(", ")}.`
                         : "Anda masuk dengan role Guru. Penugasan kelas Wali Kelas belum terhubung dengan akun Anda."
-                      : "Pencatatan harian kelas, monitoring biometrik & GPS, dan rekapitulasi kehadiran siswa."}
+                      : "Pencatatan harian presensi siswa per kelas, monitoring biometrik & GPS siswa, dan rekapitulasi kehadiran."}
                   </p>
                 </div>
               </div>
@@ -1261,6 +1263,15 @@ export default function AttendancePage() {
 
             {/* Action Controls */}
             <div className="flex flex-wrap items-center gap-2.5">
+              <Link
+                href="/admin/teacher-attendance"
+                className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-all text-xs font-bold shadow-2xs cursor-pointer"
+                title="Buka Sistem Absensi Guru (Clock In & Clock Out)"
+              >
+                <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Absensi Guru (Clock In/Out)</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
               {!isGuru && (
                 <button
                   type="button"

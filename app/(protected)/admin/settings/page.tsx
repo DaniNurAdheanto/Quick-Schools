@@ -35,20 +35,24 @@ import {
   Trash2,
   Edit2,
   AlertCircle,
-  Check
+  Check,
+  CreditCard
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
 import { db, auth } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
 import { useTimePresets, TimePreset } from "@/lib/time-presets";
+import SPPPaymentSettings from "@/components/settings/spp-payment-settings";
 
 type SettingCategory = 
   | "profile" 
   | "grading" 
   | "attendance"
-  | "time_presets";
+  | "time_presets"
+  | "spp_config";
 
 interface NavGroupItem {
   id: SettingCategory;
@@ -68,6 +72,18 @@ const SETTINGS_GROUPS: NavGroup[] = [
     groupTitle: "PROFIL & IDENTITAS",
     items: [
       { id: "profile", label: "Profil Sekolah", desc: "Nama, logo, NPSN & alamat resmi", icon: Building2 }
+    ]
+  },
+  {
+    groupTitle: "KEUANGAN & TATA USAHA",
+    items: [
+      {
+        id: "spp_config",
+        label: "Pengaturan Pembayaran SPP",
+        desc: "Jenis SPP, tarif kelas, denda, cicilan & metode",
+        icon: CreditCard,
+        badge: "Penting",
+      }
     ]
   },
   {
@@ -143,9 +159,18 @@ export default function SettingsPage() {
   const showInfo = toastCtx?.showInfo;
   const showError = toastCtx?.showError;
 
+  const searchParams = useSearchParams();
+  const tabParam = searchParams?.get("tab") as SettingCategory | null;
+
   const [activeTab, setActiveTab] = useState<SettingCategory>("profile");
   const [searchQuery, setSearchQuery] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (tabParam && ["profile", "grading", "attendance", "time_presets", "spp_config"].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   // Modals state
   const [showPurgeModal, setShowPurgeModal] = useState(false);
@@ -2051,8 +2076,17 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {/* ========================================================================= */}
+          {/* 5. TAB PENGATURAN PEMBAYARAN SPP                                          */}
+          {/* ========================================================================= */}
+          {activeTab === "spp_config" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <SPPPaymentSettings />
+            </div>
+          )}
+
           {/* Render Default Placeholder for Other Active Tabs */}
-          {!["profile", "branding", "attendance", "grading", "roles", "history", "security", "preferences", "privacy", "time_presets"].includes(activeTab) && (
+          {!["profile", "branding", "attendance", "grading", "roles", "history", "security", "preferences", "privacy", "time_presets", "spp_config"].includes(activeTab) && (
             <div className="bg-white p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] text-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto border border-purple-100">
                 <Sparkles className="w-8 h-8" />

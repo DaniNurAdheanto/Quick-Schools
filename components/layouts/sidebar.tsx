@@ -42,6 +42,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/admin/homeroom": "users",
   "/admin/subjects": "academic",
   "/admin/attendance": "attendance",
+  "/admin/teacher-attendance": "attendance",
   "/admin/grades": "grades",
   "/admin/report-cards": "grades",
   "/admin/exams": "academic",
@@ -69,7 +70,8 @@ const MASTER_DATA_NAV = [
 ];
 
 const AKADEMIK_NAV = [
-  { href: "/admin/attendance", label: "Absensi", badge: 12, icon: FileCheck },
+  { href: "/admin/attendance", label: "Absensi Siswa", badge: 12, icon: FileCheck },
+  { href: "/admin/teacher-attendance", label: "Absensi Guru", icon: UserCheck },
   { href: "/admin/grades", label: "Penilaian", icon: PenLine },
   { href: "/admin/report-cards", label: "Rapor Digital", icon: Award },
   { href: "/admin/exams", label: "Jadwal Ujian", icon: CalendarRange },
@@ -115,6 +117,16 @@ function NavGroup({
     // Strict rule: Manajemen Akun System is exclusively visible & accessible to Super Admin / Admin
     if (item.href === "/admin/accounts" || NAV_MODULE_MAP[item.href] === "accounts") {
       return isSuperAdmin;
+    }
+
+    // Strict rule: Laporan Keuangan is exclusively for Super Admin / Admin
+    if (item.href === "/admin/financial-reports") {
+      return isSuperAdmin;
+    }
+
+    // Pembayaran SPP is accessible to Admin, Guru (Wali Kelas), Siswa, and Orang Tua
+    if (item.href === "/admin/payments") {
+      return true;
     }
 
     const modId = NAV_MODULE_MAP[item.href];

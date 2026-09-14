@@ -115,7 +115,7 @@ export const DEFAULT_PERMISSIONS: RolePermissions = {
     "academic": { read: true, write: false, delete: false },
     "attendance": { read: true, write: true, delete: false },
     "grades": { read: true, write: true, delete: false },
-    "finance": { read: false, write: false, delete: false },
+    "finance": { read: true, write: false, delete: false },
     "announcements": { read: true, write: false, delete: false },
     "settings": { read: false, write: false, delete: false },
   },
