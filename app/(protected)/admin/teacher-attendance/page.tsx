@@ -26,10 +26,13 @@ import {
   RefreshCw,
   RotateCcw,
   ScanFace,
+  Eye,
+  Maximize2,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { db, auth } from "@/lib/firebase";
-import { collection, onSnapshot, doc, getDoc, getDocs } from "firebase/firestore";
+import { collection, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
@@ -108,6 +111,15 @@ export default function TeacherAttendancePage() {
   const [actionNotes, setActionNotes] = useState("");
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Drawer state for viewing teacher attendance detail & verification photos
+  const [selectedDetailRecord, setSelectedDetailRecord] = useState<{
+    teacher: any;
+    record: TeacherAttendanceRecord | null;
+  } | null>(null);
+
+  // Photo Lightbox modal state
+  const [zoomedPhoto, setZoomedPhoto] = useState<{ url: string; title: string } | null>(null);
 
   // Geofence & Location State (matches Student Attendance coordinates)
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -230,42 +242,52 @@ export default function TeacherAttendancePage() {
     }
   }, [stream, isClockInModalOpen, isClockOutModalOpen]);
 
-  // Take Snapshot from live video feed into canvas with watermark
+  // Take Snapshot from live video feed into canvas with watermark (scaled to max 480px for Firestore safety)
   const handleCapturePhoto = (type: "CLOCK IN" | "CLOCK OUT") => {
     if (!videoRef.current) return;
     try {
       const video = videoRef.current;
+      const vWidth = video.videoWidth || 640;
+      const vHeight = video.videoHeight || 480;
+      const maxDimension = 480;
+      const ratio = vHeight / vWidth;
+      const targetW = Math.min(maxDimension, vWidth);
+      const targetH = Math.round(targetW * ratio);
+
       const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
+      canvas.width = targetW;
+      canvas.height = targetH;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
       // Flip horizontally for natural mirror selfie
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, 0, 0, targetW, targetH);
 
       // Watermark bar at the bottom
       ctx.scale(-1, 1);
       ctx.translate(-canvas.width, 0);
-      ctx.fillStyle = "rgba(15, 23, 42, 0.78)";
-      ctx.fillRect(0, canvas.height - 46, canvas.width, 46);
+      const barHeight = Math.max(38, Math.round(targetH * 0.16));
+      ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+      ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
 
       // Watermark text line 1: Name, NIP, Type, Time
       ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 13px sans-serif";
+      ctx.font = "bold 11px sans-serif";
       const nowTimeStr = new Date().toLocaleTimeString("id-ID");
       const teacherName = currentTeacherInfo?.name || "Bapak/Ibu Guru";
       const teacherNip = currentTeacherInfo?.nip || "-";
-      ctx.fillText(`${teacherName} (${teacherNip}) • ${type} • ${nowTimeStr} WIB`, 14, canvas.height - 24);
+      ctx.fillText(`${teacherName} (${teacherNip}) • ${type} • ${nowTimeStr} WIB`, 10, canvas.height - (barHeight / 2) - 2);
 
       // Watermark text line 2: Address & GPS coordinate
       ctx.fillStyle = "#a5b4fc";
-      ctx.font = "11px sans-serif";
-      ctx.fillText(`Presensi Guru • ${config.geofenceCenter.address} • GPS: ${locationData.lat.toFixed(5)}, ${locationData.lng.toFixed(5)}`, 14, canvas.height - 9);
+      ctx.font = "9px sans-serif";
+      const shortAddr = (config.geofenceCenter.address || "Area Sekolah").slice(0, 40);
+      ctx.fillText(`Presensi • ${shortAddr} • GPS: ${locationData.lat.toFixed(4)}, ${locationData.lng.toFixed(4)}`, 10, canvas.height - 4);
 
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+      // Compressed JPEG at 0.65 quality (~20KB payload) to prevent Firestore 1MB document limit
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.65);
       setPhotoPreview(dataUrl);
       stopCamera();
     } catch (err) {
@@ -278,14 +300,31 @@ export default function TeacherAttendancePage() {
     startCamera();
   };
 
-  // Fallback file upload
+  // Fallback file upload with automatic compression
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      setPhotoPreview(reader.result as string);
-      stopCamera();
+      const img = new Image();
+      img.onload = () => {
+        const maxDimension = 480;
+        const ratio = img.height / img.width;
+        const targetW = Math.min(maxDimension, img.width);
+        const targetH = Math.round(targetW * ratio);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, targetW, targetH);
+          const compressed = canvas.toDataURL("image/jpeg", 0.65);
+          setPhotoPreview(compressed);
+          stopCamera();
+        }
+      };
+      img.src = reader.result as string;
     };
     reader.readAsDataURL(file);
   };
@@ -343,6 +382,7 @@ export default function TeacherAttendancePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState("all");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("all");
+  const [selectedAdminDate, setSelectedAdminDate] = useState(() => getTodayDateString());
 
   // Filters for Monthly Recap
   const [monthlyMonth, setMonthlyMonth] = useState(() => {
@@ -379,11 +419,74 @@ export default function TeacherAttendancePage() {
       }
     });
 
-    // 1. Subscribe to real teachers from database (teachers collection and users with role guru)
+    // 1. Subscribe to real teachers from database (both teachers collection and users with role guru)
+    let rawTeachers: any[] = [];
+    let rawUsers: any[] = [];
+
+    const syncCombinedTeachers = () => {
+      const map = new Map<string, any>();
+      rawTeachers.forEach((t) => {
+        const key = t.uid || t.id;
+        map.set(key, t);
+      });
+      rawUsers.forEach((u) => {
+        const r = (u.role || "").toLowerCase();
+        if (r === "guru" || r === "teacher") {
+          const uEmail = (u.email || "").toLowerCase().trim();
+          const uNip = (u.nip || "").trim();
+          const uName = (u.fullName || u.name || "").toLowerCase().trim();
+          const uId = u.id || u.uid;
+
+          // Find if already exists in map
+          let existingKey: string | undefined;
+          for (const [k, v] of map.entries()) {
+            if (
+              k === uId ||
+              v.uid === uId ||
+              v.id === uId ||
+              (uEmail && v.email && v.email.toLowerCase().trim() === uEmail) ||
+              (uNip && uNip !== "-" && v.nip && v.nip.trim() === uNip) ||
+              (uName && v.name && v.name.toLowerCase().trim() === uName)
+            ) {
+              existingKey = k;
+              break;
+            }
+          }
+
+          if (existingKey) {
+            const cur = map.get(existingKey)!;
+            map.set(existingKey, {
+              ...cur,
+              uid: uId || cur.uid,
+              name: cur.name || u.fullName || u.name || "Guru",
+              email: cur.email || u.email || "",
+              nip: cur.nip && cur.nip !== "-" ? cur.nip : u.nip || "-",
+              phone: cur.phone || u.phone || "",
+              subject: cur.subject && cur.subject !== "Tenaga Pendidik" ? cur.subject : u.subject || cur.subject || "Guru Pengajar",
+            });
+          } else {
+            map.set(uId, {
+              id: uId,
+              _firestoreId: u._firestoreId || uId,
+              uid: uId,
+              name: u.fullName || u.name || "Guru",
+              nip: u.nip || "-",
+              subject: u.subject || "Guru Pengajar",
+              email: u.email || "",
+              phone: u.phone || "",
+              status: u.status || "Aktif",
+            });
+          }
+        }
+      });
+
+      setTeachersList(Array.from(map.values()));
+    };
+
     const unsubTeachers = onSnapshot(
       collection(db, "teachers"),
       (snap) => {
-        const tList: any[] = snap.docs.map((d) => {
+        rawTeachers = snap.docs.map((d) => {
           const raw = d.data();
           return {
             id: d.id,
@@ -397,48 +500,24 @@ export default function TeacherAttendancePage() {
             status: raw.status || "Aktif",
           };
         });
-
-        // Also query users collection to include all registered teacher accounts
-        getDocs(collection(db, "users")).then((userSnap) => {
-          userSnap.docs.forEach((uDoc) => {
-            const uData = uDoc.data();
-            const r = (uData.role || "").toLowerCase();
-            if (r === "guru" || r === "teacher") {
-              const exists = tList.some(
-                (t) =>
-                  t.uid === uDoc.id ||
-                  t.id === uDoc.id ||
-                  (uData.email && t.email?.toLowerCase() === uData.email.toLowerCase())
-              );
-              if (!exists) {
-                tList.push({
-                  id: uDoc.id,
-                  _firestoreId: uDoc.id,
-                  uid: uDoc.id,
-                  name: uData.fullName || uData.name || "Guru",
-                  nip: uData.nip || "-",
-                  subject: uData.subject || "Tenaga Pendidik",
-                  email: uData.email || "",
-                  phone: uData.phone || "",
-                  status: uData.status || "Aktif",
-                });
-              }
-            }
-          });
-          setTeachersList([...tList]);
-        }).catch(() => {
-          setTeachersList(tList);
-        });
+        syncCombinedTeachers();
       },
-      (err) => {
-        console.warn("Teachers listener error:", err);
-        setTeachersList([]);
-      }
+      (err) => console.warn("Teachers listener error:", err)
+    );
+
+    const unsubUsers = onSnapshot(
+      collection(db, "users"),
+      (snap) => {
+        rawUsers = snap.docs.map((d) => ({ _firestoreId: d.id, id: d.id, ...d.data() }));
+        syncCombinedTeachers();
+      },
+      (err) => console.warn("Users listener error in teacher attendance:", err)
     );
 
     return () => {
       unsubAuth();
       unsubTeachers();
+      unsubUsers();
     };
   }, []);
 
@@ -494,10 +573,11 @@ export default function TeacherAttendancePage() {
   // Today string
   const todayDateStr = useMemo(() => getTodayDateString(), []);
 
-  // Compute Today's Records
+  // Compute Selected Date's Records for Admin Table & Metrics
   const todayRecords = useMemo(() => {
-    return records.filter((r) => r.date === todayDateStr);
-  }, [records, todayDateStr]);
+    const targetDate = selectedAdminDate || todayDateStr;
+    return records.filter((r) => (r.date || "").slice(0, 10) === targetDate);
+  }, [records, selectedAdminDate, todayDateStr]);
 
   // Effective Role (Role guru NEVER sees admin monitoring)
   const isEffectiveGuru = isUserGuru || previewRole === "guru";
@@ -563,17 +643,62 @@ export default function TeacherAttendancePage() {
     return Array.from(s);
   }, [teachersList]);
 
-  // Filtered Today Records for Admin Table
+  // Filtered Records for Admin Table with complete matching & unmatched preservation
   const filteredTodayRecords = useMemo(() => {
-    return teachersList.map((teacher) => {
-      const rec = todayRecords.find(
-        (r) => r.teacherId === teacher.id || r.teacherId === teacher.uid || r.teacherName === teacher.name
-      );
+    const matchedRecordIds = new Set<string>();
+    const targetDate = selectedAdminDate || todayDateStr;
+
+    const rows = teachersList.map((teacher) => {
+      const rec = todayRecords.find((r) => {
+        const rDate = (r.date || "").slice(0, 10);
+        if (rDate !== targetDate) return false;
+
+        const rTeacherId = r.teacherId || "";
+        const rUid = (r as any).uid || "";
+        const rEmail = (r.email || "").toLowerCase().trim();
+        const rNip = (r.nip || "").trim();
+        const rName = (r.teacherName || "").toLowerCase().trim();
+
+        if (teacher.id && (rTeacherId === teacher.id || r.id === `TA_${teacher.id}_${targetDate}` || r.id.includes(teacher.id))) return true;
+        if (teacher.uid && (rTeacherId === teacher.uid || rUid === teacher.uid || r.id === `TA_${teacher.uid}_${targetDate}` || r.id.includes(teacher.uid))) return true;
+        if (teacher._firestoreId && (rTeacherId === teacher._firestoreId || r.id.includes(teacher._firestoreId))) return true;
+        if (teacher.email && rEmail && teacher.email.toLowerCase().trim() === rEmail) return true;
+        if (teacher.nip && teacher.nip !== "-" && rNip && teacher.nip.trim() === rNip) return true;
+        if (teacher.name && rName && teacher.name.toLowerCase().trim() === rName) return true;
+        return false;
+      });
+
+      if (rec) {
+        matchedRecordIds.add(rec.id);
+      }
+
       return {
         teacher,
         record: rec || null,
       };
-    }).filter(({ teacher, record }) => {
+    });
+
+    // Also include any standalone todayRecords that didn't match teachersList so NO attendance is hidden
+    todayRecords.forEach((r) => {
+      const rDate = (r.date || "").slice(0, 10);
+      if (rDate === targetDate && !matchedRecordIds.has(r.id)) {
+        rows.push({
+          teacher: {
+            id: r.teacherId || r.id,
+            uid: r.teacherId || r.id,
+            name: r.teacherName || "Guru Pengajar",
+            nip: r.nip || "-",
+            subject: r.subject || "Guru Pengajar",
+            email: r.email || "",
+            phone: r.phone || "",
+            status: "Aktif",
+          },
+          record: r,
+        });
+      }
+    });
+
+    return rows.filter(({ teacher, record }) => {
       // Search
       const matchSearch =
         (teacher.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -596,7 +721,27 @@ export default function TeacherAttendancePage() {
 
       return true;
     });
-  }, [teachersList, todayRecords, searchQuery, selectedSubjectFilter, selectedStatusFilter]);
+  }, [teachersList, todayRecords, selectedAdminDate, todayDateStr, searchQuery, selectedSubjectFilter, selectedStatusFilter]);
+
+  // Robust today teacher record resolver for Guru view
+  const activeTodayRecord = useMemo(() => {
+    if (todayTeacherRecord) return todayTeacherRecord;
+    if (!currentTeacherInfo) return null;
+    const targetId = currentTeacherInfo.id || currentTeacherInfo.uid || activeTeacherUid;
+    const targetEmail = (currentTeacherInfo.email || activeTeacherEmail || "").toLowerCase().trim();
+    const targetNip = (currentTeacherInfo.nip || "").trim();
+    const targetName = (currentTeacherInfo.name || "").toLowerCase().trim();
+
+    return (
+      todayRecords.find((r) => {
+        if (targetId && (r.teacherId === targetId || (r as any).uid === targetId || r.id === `TA_${targetId}_${todayDateStr}` || r.id.includes(targetId))) return true;
+        if (targetEmail && r.email && r.email.toLowerCase().trim() === targetEmail) return true;
+        if (targetNip && targetNip !== "-" && r.nip && r.nip.trim() === targetNip) return true;
+        if (targetName && r.teacherName && r.teacherName.toLowerCase().trim() === targetName) return true;
+        return false;
+      }) || null
+    );
+  }, [todayTeacherRecord, todayRecords, currentTeacherInfo, activeTeacherUid, activeTeacherEmail, todayDateStr]);
 
   // Perform Clock In
   const handleExecuteClockIn = async () => {
@@ -640,12 +785,16 @@ export default function TeacherAttendancePage() {
 
   // Perform Clock Out
   const handleExecuteClockOut = async () => {
-    if (!todayTeacherRecord) return;
+    const targetRecord = activeTodayRecord || todayTeacherRecord;
+    if (!targetRecord) {
+      showError("Data Clock In hari ini tidak ditemukan untuk akun ini.");
+      return;
+    }
     setSubmitting(true);
     try {
       await clockOut({
-        recordId: todayTeacherRecord.id,
-        photoUrl: photoPreview || undefined,
+        recordId: targetRecord.id,
+        photoUrl: photoPreview || "",
         location: {
           lat: locationData.lat,
           lng: locationData.lng,
@@ -656,12 +805,13 @@ export default function TeacherAttendancePage() {
         notes: actionNotes || "Presensi pulang harian",
       });
 
-      showSuccess("Clock Out Berhasil! Waktu pulang dan foto verifikasi telah tercatat.");
+      showSuccess("Clock Out Berhasil! Waktu pulang dan foto verifikasi telah tercatat ke sistem.");
       stopCamera();
       setIsClockOutModalOpen(false);
       setActionNotes("");
       setPhotoPreview(null);
     } catch (err: any) {
+      console.error("Execute clockOut error:", err);
       showError(err.message || "Gagal melakukan Clock Out.");
     } finally {
       setSubmitting(false);
@@ -913,16 +1063,16 @@ export default function TeacherAttendancePage() {
                     <div
                       className={cn(
                         "w-10 h-10 rounded-xl flex items-center justify-center font-bold shrink-0",
-                        todayTeacherRecord?.clockOut
+                        activeTodayRecord?.clockOut
                           ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                          : todayTeacherRecord?.clockIn
+                          : activeTodayRecord?.clockIn
                           ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
                           : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
                       )}
                     >
-                      {todayTeacherRecord?.clockOut ? (
+                      {activeTodayRecord?.clockOut ? (
                         <CheckCircle2 className="w-5 h-5" />
-                      ) : todayTeacherRecord?.clockIn ? (
+                      ) : activeTodayRecord?.clockIn ? (
                         <Clock className="w-5 h-5" />
                       ) : (
                         <LogIn className="w-5 h-5" />
@@ -931,18 +1081,18 @@ export default function TeacherAttendancePage() {
                     <div>
                       <span className="text-[10px] uppercase font-bold text-indigo-300 block">Status Presensi Hari Ini</span>
                       <span className="font-extrabold text-sm text-white">
-                        {todayTeacherRecord?.clockOut
-                          ? "Selesai (Sudah Clock Out)"
-                          : todayTeacherRecord?.clockIn
-                          ? `Sudah Masuk (${todayTeacherRecord.clockIn.time} WIB)`
-                          : todayTeacherRecord?.status === "Izin" || todayTeacherRecord?.status === "Sakit"
-                          ? `Pengajuan ${todayTeacherRecord.status} Disetujui`
+                        {activeTodayRecord?.clockOut
+                          ? `Selesai (Clock Out: ${activeTodayRecord.clockOut.time} WIB)`
+                          : activeTodayRecord?.clockIn
+                          ? `Sudah Masuk (${activeTodayRecord.clockIn.time} WIB)`
+                          : activeTodayRecord?.status === "Izin" || activeTodayRecord?.status === "Sakit"
+                          ? `Pengajuan ${activeTodayRecord.status} Disetujui`
                           : "Belum Melakukan Clock In"}
                       </span>
                     </div>
                   </div>
 
-                  {todayTeacherRecord?.clockIn && !todayTeacherRecord?.clockOut && (
+                  {activeTodayRecord?.clockIn && !activeTodayRecord?.clockOut && (
                     <div className="text-right">
                       <span className="text-[10px] uppercase font-bold text-indigo-300 block">Durasi Kerja Berjalan</span>
                       <span className="font-mono text-sm font-black text-emerald-400">
@@ -951,8 +1101,8 @@ export default function TeacherAttendancePage() {
                             0,
                             nowDate.getHours() * 60 +
                               nowDate.getMinutes() -
-                              (Number(todayTeacherRecord.clockIn.time.split(":")[0]) * 60 +
-                                Number(todayTeacherRecord.clockIn.time.split(":")[1]))
+                              (Number(activeTodayRecord.clockIn.time.split(":")[0]) * 60 +
+                                Number(activeTodayRecord.clockIn.time.split(":")[1]))
                           )
                         )}
                       </span>
@@ -963,7 +1113,7 @@ export default function TeacherAttendancePage() {
 
               {/* Action Buttons Row */}
               <div className="pt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10">
-                {!todayTeacherRecord?.clockIn ? (
+                {!activeTodayRecord?.clockIn ? (
                   <button
                     onClick={openClockInModal}
                     className="py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-sm shadow-lg shadow-emerald-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
@@ -971,7 +1121,7 @@ export default function TeacherAttendancePage() {
                     <LogIn className="w-5 h-5" />
                     <span>CLOCK IN (PRESENSI MASUK)</span>
                   </button>
-                ) : !todayTeacherRecord?.clockOut ? (
+                ) : !activeTodayRecord?.clockOut ? (
                   <button
                     onClick={openClockOutModal}
                     className="py-3.5 px-6 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-black text-sm shadow-lg shadow-indigo-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
@@ -982,7 +1132,7 @@ export default function TeacherAttendancePage() {
                 ) : (
                   <div className="py-3.5 px-4 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 font-bold text-xs flex items-center justify-center gap-2">
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Presensi Hari Ini Lengkap ({todayTeacherRecord.workDurationFormatted})</span>
+                    <span>Presensi Hari Ini Lengkap ({activeTodayRecord.workDurationFormatted})</span>
                   </div>
                 )}
 
@@ -1066,29 +1216,29 @@ export default function TeacherAttendancePage() {
                   <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
                     <span className="text-[10px] uppercase font-bold text-gray-400 block">Jam Masuk</span>
                     <span className="font-mono text-sm font-black text-gray-900 block mt-0.5">
-                      {todayTeacherRecord?.clockIn?.time || "--:--:--"}
+                      {(activeTodayRecord || todayTeacherRecord)?.clockIn?.time || "--:--:--"}
                     </span>
                     <span className="text-[10px] font-semibold text-emerald-600">
-                      {todayTeacherRecord?.clockIn?.status || "Belum Masuk"}
+                      {(activeTodayRecord || todayTeacherRecord)?.clockIn?.status || "Belum Masuk"}
                     </span>
                   </div>
 
                   <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
                     <span className="text-[10px] uppercase font-bold text-gray-400 block">Jam Pulang</span>
                     <span className="font-mono text-sm font-black text-gray-900 block mt-0.5">
-                      {todayTeacherRecord?.clockOut?.time || "--:--:--"}
+                      {(activeTodayRecord || todayTeacherRecord)?.clockOut?.time || "--:--:--"}
                     </span>
                     <span className="text-[10px] font-semibold text-indigo-600">
-                      {todayTeacherRecord?.clockOut?.status || "Belum Pulang"}
+                      {(activeTodayRecord || todayTeacherRecord)?.clockOut?.status || "Belum Pulang"}
                     </span>
                   </div>
                 </div>
 
-                {todayTeacherRecord?.workDurationFormatted && todayTeacherRecord.workDurationMinutes > 0 && (
+                {(activeTodayRecord || todayTeacherRecord)?.workDurationFormatted && (activeTodayRecord || todayTeacherRecord)!.workDurationMinutes > 0 && (
                   <div className="p-2.5 bg-purple-50 rounded-xl border border-purple-100 text-center">
                     <span className="text-[10px] uppercase font-bold text-purple-700 block">Total Jam Kerja Hari Ini</span>
                     <span className="font-mono text-base font-black text-[#531FFF]">
-                      {todayTeacherRecord.workDurationFormatted}
+                      {(activeTodayRecord || todayTeacherRecord)?.workDurationFormatted}
                     </span>
                   </div>
                 )}
@@ -1119,27 +1269,27 @@ export default function TeacherAttendancePage() {
               <span className="font-mono text-2xl font-black text-rose-700 mt-1 block">
                 {myMonthlyStats.lateCount} Hari
               </span>
-              <span className="text-[10px] text-rose-600 font-medium">Lewat {config.lateThreshold} WIB</span>
+              <span className="text-[10px] text-rose-600 font-medium">Melebihi toleransi</span>
             </div>
 
             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
-              <span className="text-[11px] font-bold text-purple-600 uppercase block">Akumulasi Jam Kerja</span>
-              <span className="font-mono text-2xl font-black text-[#531FFF] mt-1 block">
+              <span className="text-[11px] font-bold text-indigo-600 uppercase block">Total Jam Kerja</span>
+              <span className="font-mono text-2xl font-black text-indigo-700 mt-1 block">
                 {myMonthlyStats.totalDurationFormatted}
               </span>
-              <span className="text-[10px] text-purple-600 font-medium">Rata-rata: {Math.round(myMonthlyStats.avgDailyMinutes / 60)}j/hari</span>
+              <span className="text-[10px] text-indigo-500 font-medium">Akumulasi durasi</span>
             </div>
           </div>
 
-          {/* Personal History Table */}
+          {/* Teacher Personal Attendance Log Table */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-[#531FFF]" />
-                <h3 className="font-black text-sm text-gray-900">Riwayat Presensi Saya</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-black text-sm text-gray-900">Riwayat Presensi Guru Anda</h3>
+                <p className="text-xs text-gray-500">Daftar presensi, jam kerja, dan status kehadiran pribadi Anda.</p>
               </div>
-              <span className="text-xs text-gray-500 font-medium">
-                Menampilkan catatan presensi pribadi bulan ini
+              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100 self-start sm:self-auto">
+                Tercatat {myPersonalRecords.length} Hari Kerja
               </span>
             </div>
 
@@ -1153,12 +1303,13 @@ export default function TeacherAttendancePage() {
                     <th className="py-3 px-4">Durasi Kerja</th>
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4">Catatan</th>
+                    <th className="py-3 px-4 text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 font-medium text-gray-800">
                   {myPersonalRecords.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-gray-400 font-medium">
+                      <td colSpan={7} className="py-8 text-center text-gray-400 font-medium">
                         Belum ada riwayat presensi yang tercatat untuk akun Anda di database.
                       </td>
                     </tr>
@@ -1193,6 +1344,16 @@ export default function TeacherAttendancePage() {
                         </td>
                         <td className="py-3.5 px-4 text-gray-500 max-w-xs truncate">
                           {rec.clockIn?.notes || rec.permitReason || "-"}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <button
+                            onClick={() => setSelectedDetailRecord({ teacher: currentTeacherInfo, record: rec })}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 rounded-lg transition-colors cursor-pointer"
+                            title="Lihat Detail & Foto"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Detail</span>
+                          </button>
                         </td>
                       </tr>
                     ))
@@ -1325,17 +1486,51 @@ export default function TeacherAttendancePage() {
           {/* TAB 1: TODAY'S LIVE MONITORING TABLE */}
           {activeAdminTab === "today" && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden space-y-4 p-5">
-              {/* Table Search & Filters */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="relative flex-1 max-w-sm">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Cari nama guru, NIP, mapel..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 text-xs font-medium bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
-                  />
+              {/* Table Controls & Filters */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-black text-sm text-gray-900">Daftar Kehadiran Harian Guru</h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-[#531FFF]">
+                      {filteredTodayRecords.length} Guru
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Pantau waktu Clock In, Clock Out, dan foto verifikasi staf guru & tendik secara realtime.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* Date Picker Selector */}
+                  <div className="flex items-center gap-1.5 bg-gray-50 px-2.5 py-1.5 rounded-xl border border-gray-200">
+                    <CalendarDays className="w-3.5 h-3.5 text-gray-500" />
+                    <input
+                      type="date"
+                      value={selectedAdminDate}
+                      onChange={(e) => setSelectedAdminDate(e.target.value)}
+                      className="text-xs font-bold text-gray-800 bg-transparent border-none focus:outline-hidden cursor-pointer"
+                    />
+                  </div>
+                  {selectedAdminDate !== todayDateStr && (
+                    <button
+                      onClick={() => setSelectedAdminDate(todayDateStr)}
+                      className="px-2.5 py-1.5 text-xs font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 rounded-xl transition-colors cursor-pointer"
+                    >
+                      Hari Ini
+                    </button>
+                  )}
+
+                  {/* Search */}
+                  <div className="relative min-w-[200px]">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Cari guru, NIP, mapel..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 text-xs font-medium bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-[#531FFF]"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
@@ -1470,6 +1665,14 @@ export default function TeacherAttendancePage() {
                         </td>
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => setSelectedDetailRecord({ teacher, record })}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-[#531FFF] bg-[#531FFF]/10 hover:bg-[#531FFF]/20 rounded-xl transition-all cursor-pointer shadow-2xs"
+                              title="Lihat Detail & Foto Verifikasi"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Detail</span>
+                            </button>
                             {record && (
                               <button
                                 onClick={() => adminDeleteRecord(record.id)}
@@ -1532,11 +1735,13 @@ export default function TeacherAttendancePage() {
                       teachersList.map((teacher, idx) => {
                       const tRecs = records.filter(
                         (r) =>
-                          r.date.startsWith(monthlyMonth) &&
+                          (r.date || "").startsWith(monthlyMonth) &&
                           (r.teacherId === teacher.id ||
                             r.teacherId === teacher.uid ||
                             (teacher._firestoreId && r.teacherId === teacher._firestoreId) ||
-                            r.teacherName === teacher.name)
+                            (teacher.email && r.email && r.email.toLowerCase().trim() === teacher.email.toLowerCase().trim()) ||
+                            (teacher.nip && teacher.nip !== "-" && r.nip && r.nip.trim() === teacher.nip.trim()) ||
+                            (teacher.name && r.teacherName && teacher.name.toLowerCase().trim() === r.teacherName.toLowerCase().trim()))
                       );
                       const hadir = tRecs.filter((r) => r.status === "Hadir" || r.status === "Terlambat").length;
                       const tepatWaktu = tRecs.filter((r) => r.clockIn?.status === "Tepat Waktu").length;
@@ -1867,7 +2072,7 @@ export default function TeacherAttendancePage() {
               <div>
                 <span className="text-[10px] text-gray-400 uppercase font-bold block">Jam Masuk Tercatat</span>
                 <strong className="font-mono text-emerald-700 font-bold block">
-                  {todayTeacherRecord?.clockIn?.time || "--:--:--"} WIB
+                  {(activeTodayRecord || todayTeacherRecord)?.clockIn?.time || "--:--:--"} WIB
                 </strong>
                 <span className="text-[10px] text-gray-500">Guru: {currentTeacherInfo?.name}</span>
               </div>
@@ -2224,6 +2429,415 @@ export default function TeacherAttendancePage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 7. DRAWER: DETAIL PRESENSI GURU & VERIFIKASI FOTO CLOCK IN / OUT           */}
+      {/* ========================================================================= */}
+      {selectedDetailRecord && (
+        <div className="fixed inset-0 z-50 overflow-hidden animate-in fade-in duration-200">
+          {/* Backdrop */}
+          <div
+            onClick={() => setSelectedDetailRecord(null)}
+            className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity cursor-pointer"
+          />
+
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="w-screen max-w-xl md:max-w-2xl bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+              
+              {/* Drawer Header */}
+              <div className="p-5 md:p-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-white/10 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-md text-white flex items-center justify-center font-bold">
+                    <UserCheck className="w-5 h-5 text-indigo-300" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base md:text-lg font-black tracking-tight text-white">
+                        Detail Presensi Guru
+                      </h2>
+                      {selectedDetailRecord.record?.status ? (
+                        <span
+                          className={cn(
+                            "px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider",
+                            selectedDetailRecord.record.status === "Hadir"
+                              ? "bg-emerald-500/30 text-emerald-300 border border-emerald-500/40"
+                              : selectedDetailRecord.record.status === "Terlambat"
+                              ? "bg-rose-500/30 text-rose-300 border border-rose-500/40"
+                              : selectedDetailRecord.record.status === "Pulang Awal"
+                              ? "bg-amber-500/30 text-amber-300 border border-amber-500/40"
+                              : "bg-purple-500/30 text-purple-300 border border-purple-500/40"
+                          )}
+                        >
+                          {selectedDetailRecord.record.status}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white">
+                          Belum Presensi
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-indigo-200/80 font-medium">
+                      Verifikasi Foto Selfie Clock In & Clock Out, Lokasi GPS, serta Durasi Kerja
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedDetailRecord(null)}
+                  className="p-2 text-white/70 hover:text-white rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Drawer Scrollable Body */}
+              <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-6">
+                
+                {/* 1. Teacher Profile Card */}
+                <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#531FFF] to-[#7042FF] text-white flex items-center justify-center font-black text-lg shadow-sm">
+                      {(selectedDetailRecord.teacher?.name || "G")[0]}
+                    </div>
+                    <div>
+                      <h3 className="font-black text-sm md:text-base text-gray-900 leading-tight">
+                        {selectedDetailRecord.teacher?.name}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-gray-500">
+                        <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-gray-200">
+                          NIP: {selectedDetailRecord.teacher?.nip || "-"}
+                        </span>
+                        <span className="font-bold text-[#531FFF] bg-[#531FFF]/10 px-2 py-0.5 rounded">
+                          {selectedDetailRecord.teacher?.subject || "Tenaga Pendidik"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right hidden sm:block">
+                    <span className="text-[10px] text-gray-400 font-bold uppercase block">Tanggal Presensi</span>
+                    <span className="text-xs font-black text-gray-800 font-mono">
+                      {selectedDetailRecord.record?.date || todayDateStr}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2. Key Metrics Summary Grid */}
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div className="p-3 bg-emerald-50/70 border border-emerald-200/60 rounded-xl text-center">
+                    <span className="text-[10px] uppercase font-bold text-emerald-700 block">Jam Masuk</span>
+                    <span className="text-sm font-black font-mono text-emerald-800">
+                      {selectedDetailRecord.record?.clockIn?.time || "-"}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-indigo-50/70 border border-indigo-200/60 rounded-xl text-center">
+                    <span className="text-[10px] uppercase font-bold text-indigo-700 block">Jam Pulang</span>
+                    <span className="text-sm font-black font-mono text-indigo-800">
+                      {selectedDetailRecord.record?.clockOut?.time || "-"}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-purple-50/70 border border-purple-200/60 rounded-xl text-center">
+                    <span className="text-[10px] uppercase font-bold text-purple-700 block">Durasi Kerja</span>
+                    <span className="text-sm font-black font-mono text-purple-800">
+                      {selectedDetailRecord.record?.workDurationFormatted || (selectedDetailRecord.record?.clockIn && !selectedDetailRecord.record?.clockOut ? "Berjalan" : "-")}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Photos & Details Comparison: CLOCK IN vs CLOCK OUT */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-gray-400">
+                      Verifikasi Foto & Geolokasi Clock In / Clock Out
+                    </h4>
+                    <span className="text-[11px] text-gray-400 font-medium">Standar: {config.standardClockIn} - {config.standardClockOut} WIB</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    {/* === CLOCK IN CARD === */}
+                    <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-xs flex flex-col">
+                      <div className="px-4 py-3 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <LogIn className="w-4 h-4 text-emerald-600" />
+                          <span className="text-xs font-black text-emerald-900">CLOCK IN (MASUK)</span>
+                        </div>
+                        {selectedDetailRecord.record?.clockIn ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                            {selectedDetailRecord.record.clockIn.status || "Tercatat"}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                            Belum Masuk
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500">Waktu Tercatat:</span>
+                          <span className="font-mono font-black text-emerald-700">
+                            {selectedDetailRecord.record?.clockIn?.time ? `${selectedDetailRecord.record.clockIn.time} WIB` : "-"}
+                          </span>
+                        </div>
+
+                        {/* Photo Display */}
+                        <div className="relative aspect-4/3 w-full bg-slate-100 rounded-xl overflow-hidden border border-gray-200 flex items-center justify-center group">
+                          {selectedDetailRecord.record?.clockIn?.photoUrl ? (
+                            <>
+                              <img
+                                src={selectedDetailRecord.record.clockIn.photoUrl}
+                                alt="Foto Clock In"
+                                className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
+                                onClick={() => setZoomedPhoto({
+                                  url: selectedDetailRecord.record!.clockIn!.photoUrl!,
+                                  title: `Foto Clock In - ${selectedDetailRecord.teacher?.name} (${selectedDetailRecord.record?.clockIn?.time} WIB)`
+                                })}
+                              />
+                              <div
+                                onClick={() => setZoomedPhoto({
+                                  url: selectedDetailRecord.record!.clockIn!.photoUrl!,
+                                  title: `Foto Clock In - ${selectedDetailRecord.teacher?.name} (${selectedDetailRecord.record?.clockIn?.time} WIB)`
+                                })}
+                                className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1.5 cursor-pointer backdrop-blur-2xs"
+                              >
+                                <Maximize2 className="w-4 h-4" />
+                                <span>Perbesar Foto</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-center p-4 text-gray-400">
+                              <Camera className="w-8 h-8 mx-auto mb-1 opacity-40" />
+                              <span className="text-xs font-medium">Foto tidak tersedia</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Location Info */}
+                        <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 space-y-1.5 text-[11px]">
+                          <div className="flex items-start gap-1.5 text-gray-700">
+                            <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                            <span className="line-clamp-2 leading-relaxed">
+                              {selectedDetailRecord.record?.clockIn?.location?.address || config.geofenceCenter.address || "Area Utama Sekolah"}
+                            </span>
+                          </div>
+                          {selectedDetailRecord.record?.clockIn?.location && (
+                            <div className="flex items-center justify-between text-[10px] text-gray-500 pt-1 border-t border-gray-200/60">
+                              <span>GPS: {selectedDetailRecord.record.clockIn.location.lat?.toFixed(4)}, {selectedDetailRecord.record.clockIn.location.lng?.toFixed(4)}</span>
+                              <span className={cn(
+                                "px-1.5 py-0.5 rounded font-bold",
+                                selectedDetailRecord.record.clockIn.location.inRadius !== false
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-rose-100 text-rose-700"
+                              )}>
+                                {selectedDetailRecord.record.clockIn.location.inRadius !== false ? "Dalam Radius" : "Luar Radius"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Notes */}
+                        {selectedDetailRecord.record?.clockIn?.notes && (
+                          <div className="text-[11px] text-gray-600 bg-slate-50 px-3 py-1.5 rounded-lg">
+                            <span className="font-bold text-gray-500 block text-[10px]">Catatan:</span>
+                            "{selectedDetailRecord.record.clockIn.notes}"
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* === CLOCK OUT CARD === */}
+                    <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-xs flex flex-col">
+                      <div className="px-4 py-3 bg-indigo-500/10 border-b border-indigo-500/20 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <LogOut className="w-4 h-4 text-indigo-600" />
+                          <span className="text-xs font-black text-indigo-900">CLOCK OUT (PULANG)</span>
+                        </div>
+                        {selectedDetailRecord.record?.clockOut ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                            {selectedDetailRecord.record.clockOut.status || "Tercatat"}
+                          </span>
+                        ) : selectedDetailRecord.record?.clockIn ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 animate-pulse">
+                            Sedang Bertugas
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                            Belum Masuk
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500">Waktu Tercatat:</span>
+                          <span className="font-mono font-black text-indigo-700">
+                            {selectedDetailRecord.record?.clockOut?.time ? (
+                              `${selectedDetailRecord.record.clockOut.time} WIB`
+                            ) : selectedDetailRecord.record?.clockIn ? (
+                              <span className="text-blue-600">Sedang Bertugas</span>
+                            ) : (
+                              "-"
+                            )}
+                          </span>
+                        </div>
+
+                        {/* Photo Display */}
+                        <div className="relative aspect-4/3 w-full bg-slate-100 rounded-xl overflow-hidden border border-gray-200 flex items-center justify-center group">
+                          {selectedDetailRecord.record?.clockOut?.photoUrl ? (
+                            <>
+                              <img
+                                src={selectedDetailRecord.record.clockOut.photoUrl}
+                                alt="Foto Clock Out"
+                                className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-200"
+                                onClick={() => setZoomedPhoto({
+                                  url: selectedDetailRecord.record!.clockOut!.photoUrl!,
+                                  title: `Foto Clock Out - ${selectedDetailRecord.teacher?.name} (${selectedDetailRecord.record?.clockOut?.time} WIB)`
+                                })}
+                              />
+                              <div
+                                onClick={() => setZoomedPhoto({
+                                  url: selectedDetailRecord.record!.clockOut!.photoUrl!,
+                                  title: `Foto Clock Out - ${selectedDetailRecord.teacher?.name} (${selectedDetailRecord.record?.clockOut?.time} WIB)`
+                                })}
+                                className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1.5 cursor-pointer backdrop-blur-2xs"
+                              >
+                                <Maximize2 className="w-4 h-4" />
+                                <span>Perbesar Foto</span>
+                              </div>
+                            </>
+                          ) : selectedDetailRecord.record?.clockIn && !selectedDetailRecord.record?.clockOut ? (
+                            <div className="text-center p-4 text-blue-500 space-y-1">
+                              <Clock className="w-7 h-7 mx-auto text-blue-400" />
+                              <span className="text-xs font-bold block text-blue-800">Sedang Bertugas</span>
+                              <span className="text-[10px] text-gray-500">Guru belum melakukan presensi pulang</span>
+                            </div>
+                          ) : (
+                            <div className="text-center p-4 text-gray-400">
+                              <Camera className="w-8 h-8 mx-auto mb-1 opacity-40" />
+                              <span className="text-xs font-medium">Foto tidak tersedia</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Location Info */}
+                        <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 space-y-1.5 text-[11px]">
+                          <div className="flex items-start gap-1.5 text-gray-700">
+                            <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-0.5" />
+                            <span className="line-clamp-2 leading-relaxed">
+                              {selectedDetailRecord.record?.clockOut?.location?.address ||
+                                (selectedDetailRecord.record?.clockOut
+                                  ? config.geofenceCenter.address
+                                  : "Menunggu waktu pulang")}
+                            </span>
+                          </div>
+                          {selectedDetailRecord.record?.clockOut?.location && (
+                            <div className="flex items-center justify-between text-[10px] text-gray-500 pt-1 border-t border-gray-200/60">
+                              <span>GPS: {selectedDetailRecord.record.clockOut.location.lat?.toFixed(4)}, {selectedDetailRecord.record.clockOut.location.lng?.toFixed(4)}</span>
+                              <span className={cn(
+                                "px-1.5 py-0.5 rounded font-bold",
+                                selectedDetailRecord.record.clockOut.location.inRadius !== false
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-rose-100 text-rose-700"
+                              )}>
+                                {selectedDetailRecord.record.clockOut.location.inRadius !== false ? "Dalam Radius" : "Luar Radius"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Notes */}
+                        {selectedDetailRecord.record?.clockOut?.notes && (
+                          <div className="text-[11px] text-gray-600 bg-slate-50 px-3 py-1.5 rounded-lg">
+                            <span className="font-bold text-gray-500 block text-[10px]">Catatan:</span>
+                            "{selectedDetailRecord.record.clockOut.notes}"
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* 4. Permit Info (if Izin/Sakit/Cuti) */}
+                {(selectedDetailRecord.record?.status === "Izin" ||
+                  selectedDetailRecord.record?.status === "Sakit" ||
+                  selectedDetailRecord.record?.status === "Cuti" ||
+                  selectedDetailRecord.record?.permitReason) && (
+                  <div className="p-4 bg-purple-50/80 border border-purple-200 rounded-2xl space-y-2">
+                    <div className="flex items-center gap-2 text-purple-900 font-bold text-xs">
+                      <FileText className="w-4 h-4 text-purple-600" />
+                      <span>Pengajuan Keterangan: {selectedDetailRecord.record?.status}</span>
+                    </div>
+                    <p className="text-xs text-purple-800 leading-relaxed">
+                      {selectedDetailRecord.record?.permitReason || "Tidak ada alasan tertulis."}
+                    </p>
+                    {selectedDetailRecord.record?.permitDocUrl && (
+                      <a
+                        href={selectedDetailRecord.record.permitDocUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-[#531FFF] hover:underline pt-1"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Lihat Lampiran Dokumen Bukti</span>
+                      </a>
+                    )}
+                  </div>
+                )}
+
+              </div>
+
+              {/* Drawer Footer */}
+              <div className="p-4 md:p-5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3 shrink-0">
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 text-xs font-bold text-gray-700 bg-white hover:bg-gray-100 border border-gray-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Cetak Bukti</span>
+                </button>
+
+                <button
+                  onClick={() => setSelectedDetailRecord(null)}
+                  className="px-5 py-2 text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4315d6] rounded-xl shadow-md cursor-pointer transition-all"
+                >
+                  Tutup
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 8. LIGHTBOX MODAL: FULL PHOTO PREVIEW                                      */}
+      {/* ========================================================================= */}
+      {zoomedPhoto && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-white/15 max-w-3xl w-full rounded-2xl overflow-hidden shadow-2xl space-y-3 p-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between text-white border-b border-white/10 pb-2">
+              <h4 className="text-xs md:text-sm font-bold truncate pr-4">{zoomedPhoto.title}</h4>
+              <button
+                onClick={() => setZoomedPhoto(null)}
+                className="p-1 text-white/70 hover:text-white rounded-lg hover:bg-white/10 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="max-h-[75vh] overflow-hidden flex items-center justify-center rounded-xl bg-black">
+              <img src={zoomedPhoto.url} alt={zoomedPhoto.title} className="max-h-[70vh] w-auto object-contain rounded-lg" />
+            </div>
+            <div className="text-right">
+              <button
+                onClick={() => setZoomedPhoto(null)}
+                className="px-4 py-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-bold rounded-lg cursor-pointer transition-colors"
+              >
+                Tutup Preview
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

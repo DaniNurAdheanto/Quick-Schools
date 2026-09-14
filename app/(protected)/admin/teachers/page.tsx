@@ -28,6 +28,47 @@ import { onAuthStateChanged } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useToast } from "@/context/ToastContext";
 
+// Helper to compress uploaded photo into lightweight Base64 JPEG data URL (~15KB)
+async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0.7): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = document.createElement("img");
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            let width = img.width || maxWidth;
+            let height = img.height || maxWidth;
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const dataUrl = canvas.toDataURL("image/jpeg", quality);
+              resolve(dataUrl);
+              return;
+            }
+            resolve((e.target?.result as string) || "");
+          } catch {
+            resolve((e.target?.result as string) || "");
+          }
+        };
+        img.onerror = () => resolve((e.target?.result as string) || "");
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(file);
+    } catch {
+      resolve("");
+    }
+  });
+}
+
 export default function TeachersPage() {
   const toast = useToast();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -146,9 +187,27 @@ export default function TeachersPage() {
       let imageUrl = data.imageUrl || "";
 
       if (data.pasFoto instanceof File) {
-        const fileRef = ref(storage, `teachers/${Date.now()}_${data.pasFoto.name}`);
-        const snapshot = await uploadBytes(fileRef, data.pasFoto);
-        imageUrl = await getDownloadURL(snapshot.ref);
+        // 1. Immediately compress locally to ~15KB data URL
+        const compressedBase64 = await compressImageFileToBase64(data.pasFoto, 360, 0.7);
+        if (compressedBase64) {
+          imageUrl = compressedBase64;
+        }
+
+        // 2. Non-blocking Firebase Storage attempt with 2.5s race timeout
+        try {
+          const storagePromise = (async () => {
+            const fileRef = ref(storage, `teachers/${Date.now()}_${data.pasFoto.name}`);
+            const snapshot = await uploadBytes(fileRef, data.pasFoto);
+            return await getDownloadURL(snapshot.ref);
+          })();
+          const timeoutPromise = new Promise<string | null>((resolve) => setTimeout(() => resolve(null), 2500));
+          const storageUrl = await Promise.race([storagePromise, timeoutPromise]);
+          if (storageUrl) {
+            imageUrl = storageUrl;
+          }
+        } catch (storageErr) {
+          console.warn("Storage upload bypassed, using compressed image:", storageErr);
+        }
       }
 
       if (crudState.mode === "create") {

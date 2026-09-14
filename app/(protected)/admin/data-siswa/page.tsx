@@ -33,6 +33,67 @@ import { onAuthStateChanged } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 
+// Helper to clean undefined fields before saving to Firestore
+function cleanFirestoreData<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return null as any;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(cleanFirestoreData) as any;
+  }
+  if (typeof obj === "object" && !(obj instanceof Date)) {
+    const cleaned: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanFirestoreData(value);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
+// Helper to compress uploaded photo into lightweight Base64 JPEG data URL (~15KB)
+async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0.7): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = document.createElement("img");
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            let width = img.width || maxWidth;
+            let height = img.height || maxWidth;
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const dataUrl = canvas.toDataURL("image/jpeg", quality);
+              resolve(dataUrl);
+              return;
+            }
+            resolve((e.target?.result as string) || "");
+          } catch {
+            resolve((e.target?.result as string) || "");
+          }
+        };
+        img.onerror = () => resolve((e.target?.result as string) || "");
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(file);
+    } catch {
+      resolve("");
+    }
+  });
+}
+
 export default function DataSiswaPage() {
   const toast = useToast();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -478,13 +539,32 @@ export default function DataSiswaPage() {
       ][Math.floor(Math.random() * 4)]}?q=80&w=250&auto=format&fit=crop`;
 
       if (data.pasFoto instanceof File) {
-        const fileRef = ref(storage, `students/${Date.now()}_${data.pasFoto.name}`);
-        const snapshot = await uploadBytes(fileRef, data.pasFoto);
-        imageUrl = await getDownloadURL(snapshot.ref);
+        // 1. Immediately compress locally to ~15KB data URL (instant, no server dependency)
+        const compressedBase64 = await compressImageFileToBase64(data.pasFoto, 360, 0.7);
+        if (compressedBase64) {
+          imageUrl = compressedBase64;
+        }
+
+        // 2. Non-blocking Firebase Storage attempt with 2.5s race timeout
+        try {
+          const storagePromise = (async () => {
+            const fileRef = ref(storage, `students/${Date.now()}_${data.pasFoto.name}`);
+            const snapshot = await uploadBytes(fileRef, data.pasFoto);
+            return await getDownloadURL(snapshot.ref);
+          })();
+          const timeoutPromise = new Promise<string | null>((resolve) => setTimeout(() => resolve(null), 2500));
+          const storageUrl = await Promise.race([storagePromise, timeoutPromise]);
+          if (storageUrl) {
+            imageUrl = storageUrl;
+          }
+        } catch (storageErr) {
+          console.warn("Storage upload bypassed, using compressed image:", storageErr);
+        }
       }
 
       if (crudState.mode === "create") {
-        const newStudentData = {
+        const newUid = `siswa_${Date.now()}`;
+        const newStudentData = cleanFirestoreData({
           id: data.id || data.nisn || `SISWA-${Date.now().toString().slice(-6)}`,
           nis: data.id || data.nisn || "",
           nisn: data.nisn || data.id || "",
@@ -522,17 +602,19 @@ export default function DataSiswaPage() {
           photoUrl: imageUrl,
           role: "siswa",
           createdAt: new Date().toISOString()
-        };
+        });
 
-        const newUid = `siswa_${Date.now()}`;
         // 1. Save strictly 5 keys to students collection (complying with Firestore rules)
-        await setDoc(doc(db, "students", newUid), {
+        const compactStudentDoc = cleanFirestoreData({
           id: newUid,
           name: (data.name || "Siswa Baru").trim().slice(0, 100),
           classId: (data.classId || "10 IPA 1").trim().slice(0, 50),
           status: data.status || "Aktif",
-          imageUrl: (imageUrl || "").slice(0, 500)
+          imageUrl: imageUrl.startsWith("data:") 
+            ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=250&auto=format&fit=crop" 
+            : (imageUrl || "").slice(0, 500)
         });
+        await setDoc(doc(db, "students", newUid), compactStudentDoc);
 
         // 2. Save full rich profile to users collection
         await setDoc(doc(db, "users", newUid), {
@@ -552,26 +634,30 @@ export default function DataSiswaPage() {
         const targetStudentDocIds = new Set<string>();
         const targetUserDocIds = new Set<string>();
 
-        if (original._firestoreId) targetStudentDocIds.add(original._firestoreId);
-        if (data._firestoreId) targetStudentDocIds.add(data._firestoreId);
+        if (original._firestoreId) targetStudentDocIds.add(String(original._firestoreId));
+        if (data._firestoreId) targetStudentDocIds.add(String(data._firestoreId));
         if (original.uid) {
-          targetUserDocIds.add(original.uid);
-          targetStudentDocIds.add(original.uid);
+          targetUserDocIds.add(String(original.uid));
+          targetStudentDocIds.add(String(original.uid));
         }
         if (data.uid) {
-          targetUserDocIds.add(data.uid);
-          targetStudentDocIds.add(data.uid);
+          targetUserDocIds.add(String(data.uid));
+          targetStudentDocIds.add(String(data.uid));
         }
         if (Array.isArray(original._allDocIds)) {
           original._allDocIds.forEach((id: string) => {
-            targetStudentDocIds.add(id);
-            targetUserDocIds.add(id);
+            if (id) {
+              targetStudentDocIds.add(String(id));
+              targetUserDocIds.add(String(id));
+            }
           });
         }
         if (Array.isArray(data._allDocIds)) {
           data._allDocIds.forEach((id: string) => {
-            targetStudentDocIds.add(id);
-            targetUserDocIds.add(id);
+            if (id) {
+              targetStudentDocIds.add(String(id));
+              targetUserDocIds.add(String(id));
+            }
           });
         }
 
@@ -586,7 +672,7 @@ export default function DataSiswaPage() {
             (targetUid && (s.uid === targetUid || s._firestoreId === targetUid || s.id === targetUid)) ||
             (targetId && targetId !== "-" && (s.id === targetId || s.nis === targetId || s.nisn === targetId))
           ) {
-            if (s._firestoreId) targetStudentDocIds.add(s._firestoreId);
+            if (s._firestoreId) targetStudentDocIds.add(String(s._firestoreId));
           }
         });
 
@@ -597,25 +683,38 @@ export default function DataSiswaPage() {
             (targetUid && (u.uid === targetUid || u._firestoreId === targetUid || u.id === targetUid)) ||
             (targetId && targetId !== "-" && (u.id === targetId || u.nis === targetId || u.nisn === targetId))
           ) {
-            if (u._firestoreId) targetUserDocIds.add(u._firestoreId);
-            if (u.uid) targetUserDocIds.add(u.uid);
+            if (u._firestoreId) targetUserDocIds.add(String(u._firestoreId));
+            if (u.uid) targetUserDocIds.add(String(u.uid));
           }
         });
 
         // If no ID was resolved, fallback to a sensible key
         const fallbackId = targetUid || mergedData.id || mergedData.nisn || `siswa_${Date.now()}`;
-        if (targetStudentDocIds.size === 0) targetStudentDocIds.add(fallbackId);
-        if (targetUserDocIds.size === 0) targetUserDocIds.add(fallbackId);
+        if (targetStudentDocIds.size === 0) targetStudentDocIds.add(String(fallbackId));
+        if (targetUserDocIds.size === 0) targetUserDocIds.add(String(fallbackId));
+
+        const validStudentDocIds = Array.from(targetStudentDocIds).filter(
+          (id): id is string => typeof id === "string" && id.trim().length > 0
+        );
+        const validUserDocIds = Array.from(targetUserDocIds).filter(
+          (id): id is string => typeof id === "string" && id.trim().length > 0
+        );
 
         // 2. Write strictly compliant 5 keys to students collection using setDoc with merge: true
-        for (const sDocId of Array.from(targetStudentDocIds)) {
+        const compactStudentDoc = cleanFirestoreData({
+          name: studentName.slice(0, 100),
+          classId: selectedClass.slice(0, 50),
+          status: studentStatus,
+          imageUrl: imageUrl.startsWith("data:") 
+            ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=250&auto=format&fit=crop" 
+            : (imageUrl || "").slice(0, 500)
+        });
+
+        for (const sDocId of validStudentDocIds) {
           try {
             await setDoc(doc(db, "students", sDocId), {
               id: sDocId,
-              name: studentName.slice(0, 100),
-              classId: selectedClass.slice(0, 50),
-              status: studentStatus,
-              imageUrl: (imageUrl || "").slice(0, 500)
+              ...compactStudentDoc,
             }, { merge: true });
           } catch (err) {
             console.warn("Update students collection warning:", sDocId, err);
@@ -623,7 +722,7 @@ export default function DataSiswaPage() {
         }
 
         // 3. Write rich profile to users collection using setDoc with merge: true
-        const userPayload = {
+        const userPayload = cleanFirestoreData({
           id: targetId || fallbackId,
           uid: targetUid || fallbackId,
           nis: mergedData.nis || mergedData.id || mergedData.nisn || "",
@@ -664,9 +763,9 @@ export default function DataSiswaPage() {
           photoUrl: imageUrl,
           role: "siswa",
           updatedAt: new Date().toISOString()
-        };
+        });
 
-        for (const uDocId of Array.from(targetUserDocIds)) {
+        for (const uDocId of validUserDocIds) {
           try {
             await setDoc(doc(db, "users", uDocId), userPayload, { merge: true });
           } catch (err) {

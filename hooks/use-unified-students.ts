@@ -77,7 +77,10 @@ export function useUnifiedStudents() {
         : (!isDocId(item.id) && item.id && item.id !== "-") ? String(item.id)
         : "-";
 
-      studentMap.set(key, {
+        const rawPhoto = item.imageUrl || item.photoUrl || "";
+        const validPhoto = (typeof rawPhoto === "string" && !rawPhoto.startsWith("blob:")) ? rawPhoto : "";
+
+        studentMap.set(key, {
         ...item,
         _firestoreId: item._firestoreId,
         _allDocIds: [item._firestoreId],
@@ -115,8 +118,8 @@ export function useUnifiedStudents() {
         emergencyRelation: item.emergencyRelation || "",
         status: isUnboarded ? "Belum Onboarding" : (item.status || "Aktif"),
         onboardingCompleted: !isUnboarded,
-        imageUrl: item.imageUrl || item.photoUrl || "",
-        photoUrl: item.photoUrl || item.imageUrl || "",
+        imageUrl: validPhoto,
+        photoUrl: validPhoto,
         pendingOnboardingReminder: item.pendingOnboardingReminder || false,
         reminderSentAt: item.reminderSentAt || null,
       });
@@ -196,6 +199,13 @@ export function useUnifiedStudents() {
             existing.status = isUnboarded ? "Belum Onboarding" : u.status;
             existing.onboardingCompleted = !isUnboarded;
           }
+
+          // Prioritize non-empty, non-blob photo from users collection
+          const uPhoto = u.photoUrl || u.imageUrl;
+          if (uPhoto && typeof uPhoto === "string" && uPhoto.trim() !== "" && !uPhoto.startsWith("blob:")) {
+            existing.photoUrl = uPhoto;
+            existing.imageUrl = uPhoto;
+          }
         } else {
           const newKey = uUid || uEmail || u._firestoreId;
           const uNisn = (!isDocId(u.nisn) && u.nisn && u.nisn !== "-") ? String(u.nisn)
@@ -205,6 +215,9 @@ export function useUnifiedStudents() {
           const uNis = (!isDocId(u.nis) && u.nis && u.nis !== "-") ? String(u.nis)
             : (!isDocId(u.id) && u.id && u.id !== "-") ? String(u.id)
             : "-";
+
+          const rawUPhoto = u.photoUrl || u.imageUrl || "";
+          const validUPhoto = (typeof rawUPhoto === "string" && !rawUPhoto.startsWith("blob:")) ? rawUPhoto : "";
 
           studentMap.set(newKey, {
             ...u,
@@ -233,8 +246,8 @@ export function useUnifiedStudents() {
             studentStatus: u.studentStatus || "Siswa Baru",
             status: isUnboarded ? "Belum Onboarding" : (u.status || "Aktif"),
             onboardingCompleted: !isUnboarded,
-            imageUrl: u.imageUrl || u.photoUrl || "",
-            photoUrl: u.photoUrl || u.imageUrl || "",
+            imageUrl: validUPhoto,
+            photoUrl: validUPhoto,
             pendingOnboardingReminder: u.pendingOnboardingReminder || false,
             reminderSentAt: u.reminderSentAt || null,
           });
