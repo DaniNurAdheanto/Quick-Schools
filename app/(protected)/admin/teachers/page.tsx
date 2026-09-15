@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import Image from "next/image";
 import { 
   Users, 
   Plus, 
@@ -27,6 +26,7 @@ import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDo
 import { onAuthStateChanged } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useToast } from "@/context/ToastContext";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 
 // Helper to compress uploaded photo into lightweight Base64 JPEG data URL (~15KB)
 async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0.7): Promise<string> {
@@ -583,19 +583,18 @@ export default function TeachersPage() {
 
                     {/* Overlapping Avatar */}
                     <div className="px-4 flex items-end justify-between -mt-8 relative z-10 mb-3">
-                      <div className="w-16 h-16 rounded-lg ring-4 ring-white shadow-md relative overflow-hidden border border-gray-100 bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-extrabold text-xl shrink-0">
-                        {teacher.imageUrl ? (
-                          <Image 
-                            src={teacher.imageUrl} 
-                            alt={teacher.name || "Teacher"}
-                            fill
-                            className="object-cover transition-transform duration-500 group-hover:scale-110"
-                            unoptimized
-                          />
-                        ) : (
-                          <span>{teacher.name ? teacher.name.charAt(0).toUpperCase() : "G"}</span>
-                        )}
-                      </div>
+                      <ProfileAvatar
+                        name={teacher.name}
+                        imageUrl={teacher.imageUrl}
+                        photoUrl={teacher.photoUrl}
+                        avatar={teacher.avatar}
+                        gender={teacher.gender}
+                        role="teacher"
+                        size="xl"
+                        shape="rounded"
+                        ring="ring-4 ring-white shadow-md"
+                        className="group-hover:scale-105"
+                      />
 
                       {/* Subject Badge */}
                       <span className="px-3 py-1 rounded-lg bg-[#531FFF]/10 text-[#531FFF] font-extrabold text-xs border border-[#531FFF]/20 max-w-[130px] truncate" title={teacher.role || "Guru"}>
@@ -678,22 +677,24 @@ export default function TeachersPage() {
                       <tr key={teacher._firestoreId || i} className="hover:bg-purple-50/20 transition-colors group">
                         <td className="py-3.5 px-6">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full relative overflow-hidden bg-[#531FFF]/10 text-[#531FFF] font-extrabold text-sm flex items-center justify-center border border-gray-200 shrink-0">
-                              {teacher.imageUrl ? (
-                                <Image
-                                  src={teacher.imageUrl}
-                                  alt={teacher.name || "Teacher"}
-                                  fill
-                                  className="object-cover"
-                                  unoptimized
-                                />
-                              ) : (
-                                <span>{teacher.name ? teacher.name.charAt(0).toUpperCase() : "G"}</span>
-                              )}
+                            <ProfileAvatar
+                              name={teacher.name}
+                              imageUrl={teacher.imageUrl}
+                              photoUrl={teacher.photoUrl}
+                              avatar={teacher.avatar}
+                              gender={teacher.gender}
+                              role="teacher"
+                              size="md"
+                              shape="circle"
+                            />
+                            <div>
+                              <span className="font-bold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors block">
+                                {teacher.name}
+                              </span>
+                              <span className="text-[11px] text-gray-400 font-medium">
+                                NIP: {teacher.nip || teacher.id || "-"}
+                              </span>
                             </div>
-                            <span className="font-bold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors">
-                              {teacher.name}
-                            </span>
                           </div>
                         </td>
                         <td className="py-3.5 px-6 font-semibold text-sm text-gray-600">

@@ -43,6 +43,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useTeacherAttendance } from "@/lib/teacher-attendance";
 import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal";
@@ -71,13 +72,15 @@ export function TeacherDashboardView({
     homeroomClass: string;
     email: string;
     phone: string;
+    imageUrl: string;
   }>({
     name: userName || "Bapak/Ibu Guru",
     nip: "-",
     subject: "Mata Pelajaran",
     homeroomClass: "",
     email: "",
-    phone: ""
+    phone: "",
+    imageUrl: ""
   });
 
   // Auth & Teacher Attendance Hook
@@ -189,6 +192,7 @@ export function TeacherDashboardView({
           let profHomeroom = "";
           let profEmail = user.email || "";
           let profPhone = "";
+          let profImageUrl = user.photoURL || "";
 
           if (userSnap.exists()) {
             const uData = userSnap.data();
@@ -198,6 +202,7 @@ export function TeacherDashboardView({
             if (uData.homeroomClass || uData.homeroom) profHomeroom = uData.homeroomClass || uData.homeroom;
             if (uData.email) profEmail = uData.email;
             if (uData.phone) profPhone = uData.phone;
+            if (uData.imageUrl || uData.photoUrl) profImageUrl = uData.imageUrl || uData.photoUrl;
           }
 
           // Cross-reference with teachers collection
@@ -210,6 +215,7 @@ export function TeacherDashboardView({
               if (tData.subject || tData.role) profSubject = tData.subject || tData.role;
               if (tData.homeroomClass || tData.homeroom) profHomeroom = tData.homeroomClass || tData.homeroom;
               if (tData.phone) profPhone = tData.phone;
+              if (tData.imageUrl || tData.photoUrl) profImageUrl = tData.imageUrl || tData.photoUrl;
             }
           } catch {}
 
@@ -219,7 +225,8 @@ export function TeacherDashboardView({
             subject: profSubject || "Guru Mata Pelajaran",
             homeroomClass: profHomeroom,
             email: profEmail,
-            phone: profPhone
+            phone: profPhone,
+            imageUrl: profImageUrl
           });
         } catch (err) {
           console.warn("Teacher profile fetch error:", err);
@@ -607,14 +614,25 @@ export function TeacherDashboardView({
               </span>
             </div>
 
-            {/* Title & Greeting */}
-            <div>
-              <h1 className="text-2xl md:text-3xl lg:text-4xl font-black tracking-tight text-white flex items-center gap-2.5">
-                {greeting}, {teacherProfile.name}! <span className="inline-block animate-bounce">📚</span>
-              </h1>
-              <p className="text-white/80 text-sm md:text-base mt-1.5 leading-relaxed font-medium">
-                Siap mendampingi pembelajaran siswa hari ini dengan pantauan jadwal, absensi, dan penilaian terintegrasi.
-              </p>
+            {/* Title & Greeting with Teacher Avatar */}
+            <div className="flex items-start sm:items-center gap-4">
+              <ProfileAvatar
+                name={teacherProfile.name}
+                imageUrl={teacherProfile.imageUrl}
+                role="teacher"
+                size="xl"
+                shape="rounded-xl"
+                ring="ring-4 ring-white/30 shadow-xl"
+                className="shrink-0"
+              />
+              <div>
+                <h1 className="text-2xl md:text-3xl lg:text-4xl font-black tracking-tight text-white flex items-center gap-2.5">
+                  {greeting}, {teacherProfile.name}! <span className="inline-block animate-bounce">📚</span>
+                </h1>
+                <p className="text-white/80 text-sm md:text-base mt-1.5 leading-relaxed font-medium">
+                  Siap mendampingi pembelajaran siswa hari ini dengan pantauan jadwal, absensi, dan penilaian terintegrasi.
+                </p>
+              </div>
             </div>
 
             {/* Teacher Details Bar */}
@@ -1306,29 +1324,44 @@ export function TeacherDashboardView({
             </div>
 
             <div className="space-y-2.5">
-              {studentsNeedAttention.map((item, i) => (
-                <div
-                  key={i}
-                  className="p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-amber-200 transition-all flex items-center justify-between"
-                >
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <h5 className="text-xs font-bold text-gray-900">{item.name}</h5>
-                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-white text-gray-600 border border-gray-200">
-                        {item.className}
-                      </span>
+              {studentsNeedAttention.map((item, i) => {
+                const sMatch = students.find(s => (s.name || s.fullName || "").toLowerCase() === (item.name || "").toLowerCase());
+                return (
+                  <div
+                    key={i}
+                    className="p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-amber-200 transition-all flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ProfileAvatar
+                        name={item.name}
+                        imageUrl={sMatch?.imageUrl}
+                        photoUrl={sMatch?.photoUrl}
+                        avatar={sMatch?.avatar}
+                        gender={sMatch?.gender}
+                        role="student"
+                        size="sm"
+                        shape="rounded"
+                      />
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h5 className="text-xs font-bold text-gray-900 truncate">{item.name}</h5>
+                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-white text-gray-600 border border-gray-200">
+                            {item.className}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 truncate">{item.note}</p>
+                      </div>
                     </div>
-                    <p className="text-[11px] text-gray-500">{item.note}</p>
-                  </div>
 
-                  <span className={cn(
-                    "px-2 py-0.5 rounded text-[10px] font-extrabold uppercase shrink-0",
-                    item.type === "attendance" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-800"
-                  )}>
-                    {item.status}
-                  </span>
-                </div>
-              ))}
+                    <span className={cn(
+                      "px-2 py-0.5 rounded text-[10px] font-extrabold uppercase shrink-0",
+                      item.type === "attendance" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-800"
+                    )}>
+                      {item.status}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

@@ -30,6 +30,7 @@ import {
   Lock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
 import {
   collection,
@@ -2998,9 +2999,16 @@ export default function GradesPage() {
                         {/* Siswa */}
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-black text-xs shrink-0">
-                              {(studentDisplayName || "S").charAt(0).toUpperCase()}
-                            </div>
+                            <ProfileAvatar
+                              name={studentDisplayName}
+                              imageUrl={student?.imageUrl}
+                              photoUrl={student?.photoUrl}
+                              avatar={student?.avatar}
+                              gender={student?.gender}
+                              role="student"
+                              size="sm"
+                              shape="rounded"
+                            />
                             <div>
                               <div className="font-extrabold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors">
                                 {studentDisplayName}

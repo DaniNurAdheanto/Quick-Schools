@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -29,7 +31,7 @@ import { cn } from "@/lib/utils";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { DEFAULT_PERMISSIONS, isSuperAdminRole } from "@/lib/roles-config";
+import { DEFAULT_PERMISSIONS, isSuperAdminRole, isStudentRole } from "@/lib/roles-config";
 
 const NAV_MODULE_MAP: Record<string, string> = {
   "/admin/dashboard": "dashboard",
@@ -126,6 +128,15 @@ function NavGroup({
 
     // Pembayaran SPP is accessible to Admin, Guru (Wali Kelas), Siswa, and Orang Tua
     if (item.href === "/admin/payments") {
+      return true;
+    }
+
+    // Strict rule: Absensi Guru is strictly for Guru, Admin, Kepala Sekolah, Super Admin (HIDDEN from Siswa and Orang Tua)
+    if (item.href === "/admin/teacher-attendance") {
+      const r = (userRole || "").toLowerCase().trim();
+      if (isStudentRole(r) || r === "orang-tua" || r === "parent" || r === "wali") {
+        return false;
+      }
       return true;
     }
 
@@ -243,6 +254,7 @@ function NavGroup({
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { profile } = useSchoolProfile();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [userRole, setUserRole] = useState<string>("admin");
   const [rolePermissions, setRolePermissions] = useState<Record<string, { read: boolean; write: boolean; delete: boolean }>>(
@@ -304,19 +316,36 @@ export function Sidebar() {
       )}>
         {!isCollapsed ? (
           <>
-            <div className="flex items-center gap-3">
-              <div className="w-[42px] h-[42px] rounded-2xl bg-white border border-gray-100 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] flex items-center justify-center shrink-0">
-                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                   <path d="M14 6C17.3137 6 20 8.68629 20 12C20 15.3137 17.3137 18 14 18C10.6863 18 8 15.3137 8 12C8 8.68629 10.6863 6 14 6Z" stroke="#531FFF" strokeWidth="4"/>
-                   <circle cx="14" cy="12" r="2" fill="#531FFF"/>
-                 </svg>
+            <div className="flex items-center gap-3 min-w-0 pr-2">
+              <div className="w-[42px] h-[42px] rounded-2xl bg-white border border-gray-100 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] flex items-center justify-center shrink-0 overflow-hidden relative p-1.5">
+                {profile.logoUrl ? (
+                  <Image 
+                    src={profile.logoUrl} 
+                    alt={profile.schoolName || "Logo Sekolah"} 
+                    fill 
+                    className="object-contain p-1" 
+                    unoptimized 
+                  />
+                ) : (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M14 6C17.3137 6 20 8.68629 20 12C20 15.3137 17.3137 18 14 18C10.6863 18 8 15.3137 8 12C8 8.68629 10.6863 6 14 6Z" stroke="#531FFF" strokeWidth="4"/>
+                    <circle cx="14" cy="12" r="2" fill="#531FFF"/>
+                  </svg>
+                )}
               </div>
-              <span className="font-bold text-[19px] text-gray-900 tracking-tight">Quick Schools</span>
+              <div className="flex flex-col min-w-0">
+                <span className="font-bold text-[15px] text-gray-900 tracking-tight truncate leading-tight" title={profile.schoolName}>
+                  {profile.schoolName || "Quick Schools"}
+                </span>
+                <span className="text-[11px] text-gray-400 font-medium truncate mt-0.5">
+                  {profile.schoolType || "Smart School OS"}
+                </span>
+              </div>
             </div>
             
             <button 
               onClick={() => setIsCollapsed(true)}
-              className="text-gray-400 hover:text-gray-700 transition-colors bg-white border border-gray-100 hover:border-gray-200 shadow-xs rounded-xl p-2 cursor-pointer hover:bg-gray-50 active:scale-95"
+              className="text-gray-400 hover:text-gray-700 transition-colors bg-white border border-gray-100 hover:border-gray-200 shadow-xs rounded-xl p-2 cursor-pointer hover:bg-gray-50 active:scale-95 shrink-0"
               title="Sembunyikan Menu (⌘B)"
             >
               <PanelLeftClose className="w-4 h-4" />
@@ -327,18 +356,28 @@ export function Sidebar() {
           <div className="relative flex justify-center group my-1">
             <button
               onClick={() => setIsCollapsed(false)}
-              className="w-12 h-12 rounded-2xl bg-white border border-gray-100 hover:border-[#531FFF]/30 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] hover:shadow-md hover:shadow-[#531FFF]/10 flex items-center justify-center shrink-0 transition-all cursor-pointer active:scale-95 group"
-              title="Buka Sidebar"
+              className="w-12 h-12 rounded-2xl bg-white border border-gray-100 hover:border-[#531FFF]/30 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] hover:shadow-md hover:shadow-[#531FFF]/10 flex items-center justify-center shrink-0 transition-all cursor-pointer active:scale-95 group overflow-hidden p-1.5 relative"
+              title={`Buka Sidebar (${profile.schoolName || "Quick Schools"})`}
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-transform group-hover:scale-105">
-                <path d="M14 6C17.3137 6 20 8.68629 20 12C20 15.3137 17.3137 18 14 18C10.6863 18 8 15.3137 8 12C8 8.68629 10.6863 6 14 6Z" stroke="#531FFF" strokeWidth="4"/>
-                <circle cx="14" cy="12" r="2" fill="#531FFF"/>
-              </svg>
+              {profile.logoUrl ? (
+                <Image 
+                  src={profile.logoUrl} 
+                  alt={profile.schoolName || "Logo"} 
+                  fill 
+                  className="object-contain p-1.5 transition-transform group-hover:scale-105" 
+                  unoptimized 
+                />
+              ) : (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="transition-transform group-hover:scale-105">
+                  <path d="M14 6C17.3137 6 20 8.68629 20 12C20 15.3137 17.3137 18 14 18C10.6863 18 8 15.3137 8 12C8 8.68629 10.6863 6 14 6Z" stroke="#531FFF" strokeWidth="4"/>
+                  <circle cx="14" cy="12" r="2" fill="#531FFF"/>
+                </svg>
+              )}
             </button>
 
             {/* Instant Floating Tooltip */}
             <div className="absolute left-[calc(100%+14px)] top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white text-xs font-bold rounded-xl shadow-2xl z-50 whitespace-nowrap pointer-events-none transition-all duration-150 animate-in fade-in zoom-in-95">
-              <span>Quick Schools • Buka Menu (⌘B)</span>
+              <span>{profile.schoolName || "Quick Schools"} • Buka Menu (⌘B)</span>
               <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-900 rotate-45" />
             </div>
           </div>

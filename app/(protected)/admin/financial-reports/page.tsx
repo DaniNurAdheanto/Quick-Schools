@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { isSuperAdminRole } from "@/lib/roles-config";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import {
   SPPBill,
   PaymentTransaction,
@@ -947,7 +948,18 @@ export default function FinancialReportsPage() {
                     <tr key={t.id + i} className="border-b border-gray-50 hover:bg-[#531FFF]/[0.02] transition-colors">
                       <td className="px-4 py-3 text-xs text-gray-500 font-medium">{(paged.currentPage - 1) * rowsPerPage + i + 1}</td>
                       <td className="px-4 py-3 text-xs font-bold text-[#531FFF]">{t.receiptNo}</td>
-                      <td className="px-4 py-3 text-xs font-semibold text-gray-900">{t.bill.studentName}</td>
+                      <td className="px-4 py-3 text-xs font-semibold text-gray-900">
+                        <div className="flex items-center gap-2">
+                          <ProfileAvatar
+                            name={t.bill.studentName}
+                            imageUrl={(t.bill as any)?.imageUrl || (t.bill as any)?.photoUrl}
+                            role="student"
+                            size="xs"
+                            shape="circle"
+                          />
+                          <span>{t.bill.studentName}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-xs text-gray-600 font-medium">{t.bill.classId}</td>
                       <td className="px-4 py-3 text-xs text-gray-600 font-medium">{t.bill.periodMonth}</td>
                       <td className="px-4 py-3 text-xs font-bold text-emerald-700 text-right">{formatRupiah(t.amount)}</td>
@@ -1064,7 +1076,18 @@ export default function FinancialReportsPage() {
                     <tr key={b.id + i} className="border-b border-gray-50 hover:bg-[#531FFF]/[0.02] transition-colors">
                       <td className="px-4 py-3 text-xs text-gray-500 font-medium">{(paged.currentPage - 1) * rowsPerPage + i + 1}</td>
                       <td className="px-4 py-3 text-xs font-bold text-[#531FFF]">{b.invoiceNo}</td>
-                      <td className="px-4 py-3 text-xs font-semibold text-gray-900">{b.studentName}</td>
+                      <td className="px-4 py-3 text-xs font-semibold text-gray-900">
+                        <div className="flex items-center gap-2">
+                          <ProfileAvatar
+                            name={b.studentName}
+                            imageUrl={(b as any)?.imageUrl || (b as any)?.photoUrl}
+                            role="student"
+                            size="xs"
+                            shape="circle"
+                          />
+                          <span>{b.studentName}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-xs text-gray-600 font-medium">{b.classId}</td>
                       <td className="px-4 py-3 text-xs text-gray-600 font-medium">{b.periodMonth}</td>
                       <td className="px-4 py-3 text-xs font-bold text-gray-900 text-right">{formatRupiah(b.amount)}</td>
@@ -1203,7 +1226,18 @@ export default function FinancialReportsPage() {
                         <tr key={b.id + i} className="border-b border-gray-50 hover:bg-rose-50/30 transition-colors">
                           <td className="px-4 py-3 text-xs text-gray-500 font-medium">{(paged.currentPage - 1) * rowsPerPage + i + 1}</td>
                           <td className="px-4 py-3 text-xs font-bold text-[#531FFF]">{b.invoiceNo}</td>
-                          <td className="px-4 py-3 text-xs font-semibold text-gray-900">{b.studentName}</td>
+                          <td className="px-4 py-3 text-xs font-semibold text-gray-900">
+                            <div className="flex items-center gap-2">
+                              <ProfileAvatar
+                                name={b.studentName}
+                                imageUrl={(b as any)?.imageUrl || (b as any)?.photoUrl}
+                                role="student"
+                                size="xs"
+                                shape="circle"
+                              />
+                              <span>{b.studentName}</span>
+                            </div>
+                          </td>
                           <td className="px-4 py-3 text-xs text-gray-600 font-medium">{b.classId}</td>
                           <td className="px-4 py-3 text-xs text-gray-600 font-medium">{b.periodMonth}</td>
                           <td className="px-4 py-3 text-xs font-bold text-gray-900 text-right">{formatRupiah(b.amount)}</td>
@@ -1400,9 +1434,15 @@ export default function FinancialReportsPage() {
             {/* Drawer Body */}
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
               {/* Student Info */}
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Informasi Siswa</p>
-                <div className="grid grid-cols-2 gap-y-2">
+              <div className="bg-gray-50 rounded-xl p-4 flex items-center gap-3.5">
+                <ProfileAvatar
+                  name={drawerBill.studentName}
+                  imageUrl={(drawerBill as any)?.imageUrl || (drawerBill as any)?.photoUrl}
+                  role="student"
+                  size="lg"
+                  shape="rounded"
+                />
+                <div className="flex-1 grid grid-cols-2 gap-y-2">
                   <div>
                     <p className="text-[10px] text-gray-400 font-medium">Nama</p>
                     <p className="text-xs font-bold text-gray-900">{drawerBill.studentName}</p>

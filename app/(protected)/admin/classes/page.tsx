@@ -26,6 +26,7 @@ import {
   BadgeCheck
 } from "lucide-react";
 import Image from "next/image";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
 import { db, auth } from "@/lib/firebase";
 import { 
@@ -1490,12 +1491,26 @@ export default function ClassesPage() {
                   <div className="mt-4 pt-3.5 border-t border-gray-100 flex items-center justify-between text-xs">
                     <span className="font-bold text-gray-400">Wali Kelas:</span>
                     {item.homeroom ? (
-                      <div className="flex items-center gap-1.5 font-bold text-gray-800">
-                        <div className="w-5 h-5 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-[10px] font-black">
-                          {item.homeroom.charAt(0)}
-                        </div>
-                        <span className="truncate max-w-[160px]">{item.homeroom}</span>
-                      </div>
+                      (() => {
+                        const matchedTeacher = teachers.find(t => 
+                          (t.name && item.homeroom && t.name.toLowerCase().trim() === item.homeroom.toLowerCase().trim()) ||
+                          (t.id && item.homeroomNip && t.id === item.homeroomNip)
+                        );
+                        return (
+                          <div className="flex items-center gap-1.5 font-bold text-gray-800">
+                            <ProfileAvatar
+                              name={item.homeroom}
+                              imageUrl={matchedTeacher?.imageUrl}
+                              photoUrl={matchedTeacher?.photoUrl}
+                              avatar={matchedTeacher?.avatar}
+                              role="teacher"
+                              size="xs"
+                              shape="circle"
+                            />
+                            <span className="truncate max-w-[160px]">{item.homeroom}</span>
+                          </div>
+                        );
+                      })()
                     ) : (
                       <span className="font-semibold text-gray-400 italic">Belum ditentukan</span>
                     )}
@@ -1532,19 +1547,20 @@ export default function ClassesPage() {
                     <div className="flex items-center justify-between pt-1">
                       <div className="flex -space-x-2 overflow-hidden">
                         {enrolled.slice(0, 5).map((s, idx) => (
-                          <div 
+                          <ProfileAvatar
                             key={s._firestoreId || idx}
-                            className="inline-block h-6 w-6 rounded-full ring-2 ring-white overflow-hidden bg-gray-200"
-                            title={s.fullName || s.name}
-                          >
-                            {s.imageUrl ? (
-                              <img src={s.imageUrl} alt="" className="h-full w-full object-cover" />
-                            ) : (
-                              <div className="h-full w-full bg-[#531FFF] text-white text-[9px] font-bold flex items-center justify-center">
-                                {(s.fullName || s.name || "S").charAt(0)}
-                              </div>
-                            )}
-                          </div>
+                            name={s.fullName || s.name}
+                            imageUrl={s.imageUrl}
+                            photoUrl={s.photoUrl}
+                            avatar={s.avatar}
+                            gender={s.gender}
+                            role="student"
+                            size="xs"
+                            shape="circle"
+                            ring={true}
+                            border={false}
+                            className="inline-block"
+                          />
                         ))}
                         {enrolled.length > 5 && (
                           <div className="inline-flex h-6 w-6 rounded-full ring-2 ring-white bg-gray-100 text-[10px] font-bold text-gray-600 items-center justify-center">
@@ -1877,15 +1893,16 @@ export default function ClassesPage() {
                           className="bg-white border border-gray-100 hover:border-purple-200 rounded-lg p-3.5 sm:p-4 shadow-2xs hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 ring-2 ring-gray-100 shrink-0">
-                              {s.imageUrl ? (
-                                <img src={s.imageUrl} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full bg-[#531FFF] text-white font-black text-sm flex items-center justify-center">
-                                  {(s.fullName || s.name || "S").charAt(0)}
-                                </div>
-                              )}
-                            </div>
+                            <ProfileAvatar
+                              name={s.fullName || s.name}
+                              imageUrl={s.imageUrl}
+                              photoUrl={s.photoUrl}
+                              avatar={s.avatar}
+                              gender={s.gender}
+                              role="student"
+                              size="md"
+                              shape="rounded"
+                            />
 
                             <div>
                               <div className="flex items-center gap-2">
@@ -2048,15 +2065,16 @@ export default function ClassesPage() {
                                 className="w-4 h-4 rounded text-[#531FFF] focus:ring-[#531FFF] cursor-pointer"
                               />
 
-                              <div className="w-9 h-9 rounded-lg bg-gray-100 overflow-hidden ring-1 ring-gray-200 shrink-0">
-                                {s.imageUrl ? (
-                                  <img src={s.imageUrl} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full bg-[#531FFF] text-white font-bold text-xs flex items-center justify-center">
-                                    {(s.fullName || s.name || "S").charAt(0)}
-                                  </div>
-                                )}
-                              </div>
+                              <ProfileAvatar
+                                name={s.fullName || s.name}
+                                imageUrl={s.imageUrl}
+                                photoUrl={s.photoUrl}
+                                avatar={s.avatar}
+                                gender={s.gender}
+                                role="student"
+                                size="sm"
+                                shape="rounded"
+                              />
 
                               <div>
                                 <div className="flex items-center gap-2">

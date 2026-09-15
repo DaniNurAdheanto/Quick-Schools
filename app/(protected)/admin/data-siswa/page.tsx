@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import Image from "next/image";
 import { 
   User, 
   Download, 
@@ -32,6 +31,7 @@ import { collection, query, onSnapshot, setDoc, updateDoc, deleteDoc, doc, getDo
 import { onAuthStateChanged } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 
 // Helper to clean undefined fields before saving to Firestore
 function cleanFirestoreData<T>(obj: T): T {
@@ -531,12 +531,7 @@ export default function DataSiswaPage() {
 
   const handleCrudSubmit = async (data: any) => {
     try {
-      let imageUrl = data.imageUrl || `https://images.unsplash.com/photo-${[
-        "1539571696357-5a69c17a67c6",
-        "1517841905240-472988babdf9",
-        "1506794778202-cad84cf45f1d",
-        "1534528741775-53994a69daeb"
-      ][Math.floor(Math.random() * 4)]}?q=80&w=250&auto=format&fit=crop`;
+      let imageUrl = data.imageUrl || data.photoUrl || "";
 
       if (data.pasFoto instanceof File) {
         // 1. Immediately compress locally to ~15KB data URL (instant, no server dependency)
@@ -1221,15 +1216,17 @@ export default function DataSiswaPage() {
 
                     {/* Overlapping Avatar */}
                     <div className="px-4 flex items-end justify-between -mt-8 relative z-10 mb-3">
-                      <div className="w-16 h-16 rounded-lg ring-4 ring-white shadow-md relative overflow-hidden border border-gray-100 bg-gray-100 shrink-0">
-                        <Image 
-                          src={student.imageUrl || "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=250&auto=format&fit=crop"} 
-                          alt={student.name || "Student"}
-                          fill
-                          className="object-cover transition-transform duration-500 group-hover:scale-110"
-                          unoptimized
-                        />
-                      </div>
+                      <ProfileAvatar
+                        name={student.name || student.fullName}
+                        imageUrl={student.imageUrl}
+                        photoUrl={student.photoUrl}
+                        gender={student.gender}
+                        role="student"
+                        size="xl"
+                        shape="rounded"
+                        ring="ring-4 ring-white shadow-md"
+                        className="group-hover:scale-105"
+                      />
 
                       {/* Class Badge */}
                       <span className="px-3 py-1 rounded-lg bg-[#531FFF]/10 text-[#531FFF] font-extrabold text-xs border border-[#531FFF]/20">
@@ -1325,15 +1322,15 @@ export default function DataSiswaPage() {
                       <tr key={student._firestoreId || i} className="hover:bg-purple-50/20 transition-colors group">
                         <td className="py-3.5 px-6">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full relative overflow-hidden bg-gray-100 border border-gray-200 shrink-0">
-                              <Image
-                                src={student.imageUrl || "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=250&auto=format&fit=crop"}
-                                alt={student.name || "Student"}
-                                fill
-                                className="object-cover"
-                                unoptimized
-                              />
-                            </div>
+                            <ProfileAvatar
+                              name={student.name || student.fullName}
+                              imageUrl={student.imageUrl}
+                              photoUrl={student.photoUrl}
+                              gender={student.gender}
+                              role="student"
+                              size="md"
+                              shape="circle"
+                            />
                             <div>
                               <span className="font-bold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors block">
                                 {student.name}

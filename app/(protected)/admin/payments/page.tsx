@@ -54,6 +54,8 @@ import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { isStudentRole, isTeacherRole, isSuperAdminRole } from "@/lib/roles-config";
+import Image from "next/image";
+import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import {
   SPPBill,
   PaymentStatus,
@@ -92,6 +94,7 @@ export default function PaymentsPage() {
   } = useSPPPayments();
 
   const { students } = useUnifiedStudents();
+  const { profile: schoolProfile } = useSchoolProfile();
 
   // Auth & Role from central AuthContext
   const {
@@ -3859,13 +3862,29 @@ export default function PaymentsPage() {
               {/* Letterhead */}
               <div className="flex items-center justify-between border-b-2 border-gray-900 pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gray-900 text-white flex items-center justify-center font-black text-xl">
-                    QS
+                  <div className="w-12 h-12 rounded-xl bg-gray-900 text-white flex items-center justify-center font-black text-xl overflow-hidden relative p-1 border border-gray-200">
+                    {schoolProfile?.logoUrl ? (
+                      <Image 
+                        src={schoolProfile.logoUrl} 
+                        alt="Logo" 
+                        fill 
+                        className="object-contain p-1" 
+                        unoptimized 
+                      />
+                    ) : (
+                      <span>QS</span>
+                    )}
                   </div>
                   <div>
-                    <h2 className="text-lg font-black tracking-tight text-gray-900">SMART SCHOOL OS</h2>
-                    <p className="text-xs text-gray-500 font-medium">SMA NEGERI INDONESIA UNGGUL • JL. PENDIDIKAN NO. 45</p>
-                    <p className="text-[11px] text-gray-400">Telp: (021) 789-0123 • Email: finance@smartschool.sch.id</p>
+                    <h2 className="text-lg font-black tracking-tight text-gray-900">
+                      {schoolProfile?.schoolName || "SMART SCHOOL OS"}
+                    </h2>
+                    <p className="text-xs text-gray-500 font-medium">
+                      {schoolProfile?.address ? `${schoolProfile.address}, ${schoolProfile.city || ""}` : "SMA NEGERI INDONESIA UNGGUL • JL. PENDIDIKAN NO. 45"}
+                    </p>
+                    <p className="text-[11px] text-gray-400">
+                      Telp: {schoolProfile?.phone || "(021) 789-0123"} • Email: {schoolProfile?.email || "finance@smartschool.sch.id"}
+                    </p>
                   </div>
                 </div>
                 <div className="text-right">

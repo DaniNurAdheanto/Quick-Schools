@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Clock,
   UserCheck,
@@ -31,11 +32,13 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { db, auth } from "@/lib/firebase";
 import { collection, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
+import { isStudentRole } from "@/lib/roles-config";
 import { calculateDistanceMeters, formatDistance } from "@/lib/geofence-utils";
 import {
   useTeacherAttendance,
@@ -82,6 +85,15 @@ export default function TeacherAttendancePage() {
       setPreviewRole("guru");
     }
   }, [isUserGuru]);
+
+  const isStudent = isStudentRole(userRole) || isStudentRole(authRole);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isStudent) {
+      router.replace("/admin/attendance");
+    }
+  }, [isStudent, router]);
 
   // Hook for Teacher Attendance - directly connected to Firestore teacher_attendance
   const {
@@ -934,6 +946,26 @@ export default function TeacherAttendancePage() {
     showSuccess("Laporan presensi guru berhasil diekspor ke CSV!");
   };
 
+  if (isStudent) {
+    return (
+      <div className="p-8 text-center py-28 space-y-4 max-w-md mx-auto animate-in fade-in duration-200">
+        <div className="w-16 h-16 rounded-2xl bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto shadow-sm">
+          <ShieldCheck className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-black text-gray-900">Portal Khusus Tenaga Pendidik & Guru</h2>
+        <p className="text-xs font-medium text-gray-500 leading-relaxed">
+          Menu Presensi Guru dikhususkan untuk pendidik dan staf sekolah. Anda dialihkan ke halaman Presensi Siswa...
+        </p>
+        <Link
+          href="/admin/attendance"
+          className="inline-block px-5 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg font-bold text-xs shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer"
+        >
+          Buka Presensi Siswa ➔
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full space-y-6 pb-24 animate-in fade-in duration-200">
       {/* ========================================================================= */}
@@ -1590,9 +1622,16 @@ export default function TeacherAttendancePage() {
                         <td className="py-3.5 px-4 text-gray-400 font-bold">{idx + 1}</td>
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full bg-purple-100 text-[#531FFF] flex items-center justify-center text-xs font-black shrink-0">
-                              {(teacher.name || "G")[0]}
-                            </div>
+                            <ProfileAvatar
+                              name={teacher.name}
+                              imageUrl={teacher.imageUrl}
+                              photoUrl={teacher.photoUrl}
+                              avatar={teacher.avatar}
+                              gender={teacher.gender}
+                              role="teacher"
+                              size="sm"
+                              shape="circle"
+                            />
                             <div>
                               <span className="font-bold text-gray-900 block">{teacher.name}</span>
                               <span className="text-[11px] text-gray-400 font-mono">NIP: {teacher.nip || "-"}</span>
@@ -1752,7 +1791,21 @@ export default function TeacherAttendancePage() {
                       return (
                         <tr key={teacher.id || idx} className="hover:bg-gray-50/50 transition-colors">
                           <td className="py-3 px-4 text-gray-400 font-bold">{idx + 1}</td>
-                          <td className="py-3 px-4 font-bold text-gray-900">{teacher.name}</td>
+                          <td className="py-3 px-4 font-bold text-gray-900">
+                            <div className="flex items-center gap-2.5">
+                              <ProfileAvatar
+                                name={teacher.name}
+                                imageUrl={teacher.imageUrl}
+                                photoUrl={teacher.photoUrl}
+                                avatar={teacher.avatar}
+                                gender={teacher.gender}
+                                role="teacher"
+                                size="xs"
+                                shape="circle"
+                              />
+                              <span>{teacher.name}</span>
+                            </div>
+                          </td>
                           <td className="py-3 px-4 text-gray-500">
                             {teacher.subject || "Guru Pengajar"} • NIP: {teacher.nip || "-"}
                           </td>

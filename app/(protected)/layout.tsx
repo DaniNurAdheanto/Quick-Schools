@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layouts/sidebar";
 import { Header } from "@/components/layouts/header";
 import { AcademicYearProvider } from "@/context/AcademicYearContext";
-import { ToastProvider } from "@/context/ToastContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ShieldAlert, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -141,9 +140,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   return (
     <AuthProvider>
       <AcademicYearProvider>
-        <ToastProvider>
-          <ProtectedContentGuard>{children}</ProtectedContentGuard>
-        </ToastProvider>
+        <ProtectedContentGuard>{children}</ProtectedContentGuard>
       </AcademicYearProvider>
     </AuthProvider>
   );

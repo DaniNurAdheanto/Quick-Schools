@@ -16,8 +16,10 @@ import { collection, onSnapshot, doc, setDoc, addDoc, serverTimestamp, getDoc } 
 import { onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
 import { AlertBox, AlertType } from "@/components/ui/alert-box";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { useSchoolProfile } from "@/context/SchoolProfileContext";
 
 // Standard Indonesian Curriculum Subject Presets (Kurikulum Merdeka & Nasional)
 const STANDARD_SUBJECT_PRESETS = [
@@ -72,6 +74,7 @@ function getStudentNisn(student: any): string {
 }
 
 export default function ReportCardsPage() {
+  const { profile: schoolProfile } = useSchoolProfile();
   const [alertState, setAlertState] = useState<{
     type: AlertType;
     title?: string;
@@ -2026,10 +2029,17 @@ export default function ReportCardsPage() {
             <div className="pt-6 space-y-6">
 
               {/* KOP SEKOLAH */}
-              <div className="text-center border-b-2 border-gray-900 pb-4">
-                <h2 className="text-2xl font-extrabold tracking-widest text-gray-900 uppercase">SMA QUICK SCHOOLS INDONESIA</h2>
+              <div className="text-center border-b-2 border-gray-900 pb-4 relative">
+                {schoolProfile?.logoUrl && (
+                  <div className="w-16 h-16 absolute left-2 top-0 overflow-hidden hidden sm:flex items-center justify-center">
+                    <Image src={schoolProfile.logoUrl} alt="Logo Sekolah" width={64} height={64} className="object-contain" unoptimized />
+                  </div>
+                )}
+                <h2 className="text-2xl font-extrabold tracking-widest text-gray-900 uppercase">
+                  {schoolProfile?.schoolName || "SMA QUICK SCHOOLS INDONESIA"}
+                </h2>
                 <p className="text-xs font-medium text-gray-600 mt-1">
-                  Jl. Pendidikan Utama No. 45, Jakarta Selatan · Telp: (021) 7890123 · Website: www.quickschools.sch.id
+                  {schoolProfile?.address ? `${schoolProfile.address}, ${schoolProfile.city || ""}` : "Jl. Pendidikan No. 45, Jakarta Selatan"} · Telp: {schoolProfile?.phone || "(021) 7890123"} · Website: {schoolProfile?.website || "www.quickschools.sch.id"}
                 </p>
                 <p className="text-xs font-bold text-gray-800 uppercase mt-2 tracking-wider">
                   LAPORAN HASIL BELAJAR (RAPOR DIGITAL SISWA) · TAHUN AJARAN {academicYear}
@@ -2041,12 +2051,12 @@ export default function ReportCardsPage() {
                 <div className="space-y-1.5">
                   <p><span className="text-gray-500 font-normal">Nama Siswa:</span> <span className="font-extrabold text-gray-900">{currentStudent.name}</span></p>
                   <p><span className="text-gray-500 font-normal">NISN:</span> <span className="font-bold text-gray-800">{getStudentNisn(currentStudent)}</span></p>
-                  <p><span className="text-gray-500 font-normal">Sekolah:</span> SMA Quick Schools Indonesia</p>
+                  <p><span className="text-gray-500 font-normal">Sekolah:</span> {schoolProfile?.schoolName || "SMA Quick Schools Indonesia"}</p>
                 </div>
                 <div className="space-y-1.5">
                   <p><span className="text-gray-500 font-normal">Kelas / Fase:</span> <span className="font-bold text-gray-800">{currentStudent.classId || "-"}</span></p>
                   <p><span className="text-gray-500 font-normal">Semester:</span> <span className="font-bold text-gray-800">{semester}</span></p>
-                  <p><span className="text-gray-500 font-normal">Peringkat Kelas:</span> <span className="font-bold text-gray-900">#{studentRank.rank} dari {studentRank.totalInClass} Siswa</span></p>
+                  <p><span className="text-gray-500 font-normal">NPSN:</span> <span className="font-bold text-gray-800">{schoolProfile?.npsn || "-"}</span></p>
                 </div>
               </div>
 
@@ -2152,8 +2162,12 @@ export default function ReportCardsPage() {
                   <p>Mengetahui,</p>
                   <p>Kepala Sekolah</p>
                   <div className="h-14" />
-                  <p className="font-bold border-b border-gray-400 inline-block px-4">Dr. H. Rahmat Wijaya, M.Si.</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">NIP. 19750812 200003 1 002</p>
+                  <p className="font-bold border-b border-gray-400 inline-block px-4">
+                    {schoolProfile?.principalName || "Dr. Danur Adhi, M.Pd"}
+                  </p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">
+                    {schoolProfile?.principalNip ? `NIP. ${schoolProfile.principalNip}` : "NIP. 19750812 200003 1 002"}
+                  </p>
                 </div>
                 <div>
                   <p>Jakarta, {decisionDate}</p>

@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Image from "next/image";
 import { 
   User, 
   Mail, 
@@ -19,9 +18,11 @@ import {
   Check, 
   X, 
   Eye, 
-  EyeOff 
+  EyeOff,
+  Camera
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useToast } from "@/context/ToastContext";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, updatePassword, updateProfile } from "firebase/auth";
@@ -39,12 +40,48 @@ import { ROLES } from "@/lib/roles-config";
 
 type ProfileTab = "biodata" | "security";
 
+// Helper to compress uploaded photo into lightweight Base64 JPEG data URL (~15KB)
+async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0.75): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = document.createElement("img");
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve((e.target?.result as string) || "");
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL("image/jpeg", quality);
+          resolve(compressed);
+        };
+        img.onerror = () => resolve((e.target?.result as string) || "");
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(file);
+    } catch {
+      resolve("");
+    }
+  });
+}
+
 export default function ProfilePage() {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState<ProfileTab>("biodata");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = React.useRef<HTMLInputElement | null>(null);
   const [currentUid, setCurrentUid] = useState<string>("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -174,6 +211,87 @@ export default function ProfilePage() {
     setCopiedField(label);
     toast.showSuccess(`${label} berhasil disalin ke clipboard!`, "Tersalin");
     setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUid) return;
+
+    try {
+      setUploadingPhoto(true);
+      const compressed = await compressImageFileToBase64(file, 360, 0.75);
+      if (!compressed) throw new Error("Gagal memproses gambar");
+
+      // 1. Update users collection
+      await updateDoc(doc(db, "users", currentUid), {
+        imageUrl: compressed,
+        photoUrl: compressed,
+        updatedAt: serverTimestamp()
+      });
+
+      // 2. Update Firebase Auth profile
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, {
+          photoURL: compressed
+        });
+      }
+
+      // 3. If Guru, synchronize teachers collection
+      if (profileData.role === "guru") {
+        try {
+          const tDoc = await getDoc(doc(db, "teachers", currentUid));
+          if (tDoc.exists()) {
+            await updateDoc(doc(db, "teachers", currentUid), {
+              imageUrl: compressed,
+              photoUrl: compressed
+            });
+          } else {
+            const tSnap = await getDocs(query(collection(db, "teachers"), where("name", "==", profileData.name)));
+            for (const d of tSnap.docs) {
+              await updateDoc(doc(db, "teachers", d.id), {
+                imageUrl: compressed,
+                photoUrl: compressed
+              });
+            }
+          }
+        } catch (tErr) {
+          console.warn("Could not sync teacher photo:", tErr);
+        }
+      }
+
+      // 4. If Siswa, synchronize students collection
+      if (profileData.role === "siswa" || profileData.role === "student") {
+        try {
+          const sDoc = await getDoc(doc(db, "students", currentUid));
+          if (sDoc.exists()) {
+            await updateDoc(doc(db, "students", currentUid), {
+              imageUrl: compressed,
+              photoUrl: compressed
+            });
+          } else {
+            const sSnap = await getDocs(query(collection(db, "students"), where("name", "==", profileData.name)));
+            for (const d of sSnap.docs) {
+              await updateDoc(doc(db, "students", d.id), {
+                imageUrl: compressed,
+                photoUrl: compressed
+              });
+            }
+          }
+        } catch (sErr) {
+          console.warn("Could not sync student photo:", sErr);
+        }
+      }
+
+      setProfileData((prev: any) => ({ ...prev, imageUrl: compressed }));
+      setFormData((prev: any) => ({ ...prev, imageUrl: compressed }));
+      toast.showSuccess("Foto profil berhasil diperbarui dan diselaraskan ke semua menu!", "Foto Tersimpan");
+    } catch (err: any) {
+      console.error("Error uploading profile photo:", err);
+      toast.showError(err?.message || "Gagal mengunggah foto profil.", "Gagal");
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -321,21 +439,43 @@ export default function ProfilePage() {
             <div className="h-24 bg-gradient-to-r from-[#531FFF]/15 via-[#6E3BFF]/10 to-[#531FFF]/5 -mx-6 -mt-6 mb-4 relative" />
 
             {/* Avatar */}
-            <div className="relative mx-auto w-24 h-24 -mt-16 mb-3">
-              <div className="w-full h-full rounded-xl ring-4 ring-white shadow-xl bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white flex items-center justify-center font-black text-3xl overflow-hidden relative border border-gray-100">
-                {profileData.imageUrl ? (
-                  <Image 
-                    src={profileData.imageUrl} 
-                    alt={profileData.name} 
-                    fill 
-                    className="object-cover" 
-                    unoptimized 
-                  />
+            <div className="relative mx-auto w-24 h-24 -mt-16 mb-3 group">
+              <ProfileAvatar
+                name={profileData.name}
+                imageUrl={profileData.imageUrl}
+                role={profileData.role}
+                size="2xl"
+                shape="rounded-xl"
+                ring="ring-4 ring-white shadow-xl"
+                className="w-24 h-24"
+              />
+
+              {/* Photo Upload Trigger Button */}
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoSelect}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={uploadingPhoto}
+                title="Ubah Foto Profil"
+                className="absolute inset-0 bg-black/45 hover:bg-black/60 text-white rounded-xl flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-xs z-10"
+              >
+                {uploadingPhoto ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  <span>{profileData.name ? profileData.name.charAt(0).toUpperCase() : "U"}</span>
+                  <>
+                    <Camera className="w-5 h-5" />
+                    <span className="text-[10px] font-bold mt-0.5">Ubah Foto</span>
+                  </>
                 )}
-              </div>
-              <span className="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full ring-1 ring-emerald-200 shadow-xs" title="Akun Aktif" />
+              </button>
+
+              <span className="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full ring-1 ring-emerald-200 shadow-xs z-20" title="Akun Aktif" />
             </div>
 
             {/* Name & Role */}

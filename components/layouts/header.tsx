@@ -3,13 +3,13 @@
 import { Bell, ChevronDown, ChevronRight, Home, Calendar, User, LogOut, Loader2 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import React, { useEffect, useState, useRef } from 'react';
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { cn } from "@/lib/utils";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 
 export function Header() {
   const pathname = usePathname();
@@ -268,14 +268,16 @@ export function Header() {
               title="Menu Profil Pengguna"
             >
               <div className="relative">
-                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full overflow-hidden bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white border-2 border-white shadow-xs flex items-center justify-center font-extrabold text-xs shrink-0 relative">
-                  {userAvatar ? (
-                    <Image src={userAvatar} alt={userName} fill className="object-cover" unoptimized />
-                  ) : (
-                    <span>{userName.charAt(0).toUpperCase()}</span>
-                  )}
-                </div>
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-white" />
+                <ProfileAvatar
+                  name={userName}
+                  imageUrl={userAvatar}
+                  role={userRole}
+                  size="sm"
+                  shape="circle"
+                  ring="ring-2 ring-white shadow-xs"
+                  showBadge={true}
+                  badgeStatus="online"
+                />
               </div>
               <div className="flex flex-col text-left hidden sm:flex min-w-0">
                 <span className="text-[10px] text-[#531FFF] font-black uppercase tracking-wider">
@@ -296,13 +298,14 @@ export function Header() {
               <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-2xl border border-gray-100 p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
                 {/* Header with Avatar, Name, and Role */}
                 <div className="p-3 bg-gradient-to-r from-[#531FFF]/5 via-[#531FFF]/10 to-transparent rounded-lg flex items-center gap-3 border border-[#531FFF]/10 mb-1">
-                  <div className="w-11 h-11 rounded-full overflow-hidden bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs relative">
-                    {userAvatar ? (
-                      <Image src={userAvatar} alt={userName} fill className="object-cover" unoptimized />
-                    ) : (
-                      <span>{userName.charAt(0).toUpperCase()}</span>
-                    )}
-                  </div>
+                  <ProfileAvatar
+                    name={userName}
+                    imageUrl={userAvatar}
+                    role={userRole}
+                    size="lg"
+                    shape="circle"
+                    ring="ring-2 ring-white shadow-xs"
+                  />
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm font-extrabold text-gray-900 truncate leading-snug">
                       {userName}

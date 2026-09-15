@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/context/ToastContext";
 import { cn } from "@/lib/utils";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 
 export interface CrudField {
   name: string;
@@ -493,15 +494,14 @@ export function CrudSheet({
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left pr-8">
                 {/* Avatar with Status Indicator */}
                 <div className="relative shrink-0">
-                  {photoUrl ? (
-                    <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-lg overflow-hidden ring-4 ring-white shadow-md border border-gray-100 bg-gray-100">
-                      <img src={photoUrl} alt={primaryTitle} className="w-full h-full object-cover" />
-                    </div>
-                  ) : (
-                    <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-lg bg-gradient-to-tr from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-black text-2xl shadow-md shadow-[#531FFF]/20">
-                      {primaryTitle ? primaryTitle.charAt(0).toUpperCase() : <User className="w-8 h-8" />}
-                    </div>
-                  )}
+                  <ProfileAvatar
+                    name={primaryTitle}
+                    imageUrl={photoUrl}
+                    photoUrl={photoUrl}
+                    size="2xl"
+                    shape="rounded"
+                    ring="ring-4 ring-white shadow-md"
+                  />
                   <span className={cn(
                     "absolute -bottom-1.5 -right-1.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold border-2 border-white shadow-xs flex items-center gap-1",
                     isUnboarded

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { 
@@ -36,7 +36,12 @@ import {
   Edit2,
   AlertCircle,
   Check,
-  CreditCard
+  CreditCard,
+  Globe,
+  Phone,
+  Mail,
+  Navigation,
+  School as SchoolIcon
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -46,6 +51,7 @@ import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
 import { useTimePresets, TimePreset } from "@/lib/time-presets";
 import SPPPaymentSettings from "@/components/settings/spp-payment-settings";
+import { useSchoolProfile, DEFAULT_SCHOOL_PROFILE, SchoolProfile } from "@/context/SchoolProfileContext";
 
 type SettingCategory = 
   | "profile" 
@@ -176,25 +182,33 @@ export default function SettingsPage() {
   const [showPurgeModal, setShowPurgeModal] = useState(false);
   const [selectedAuditLog, setSelectedAuditLog] = useState<any | null>(null);
 
+  // School Profile Single Source of Truth
+  const { profile: globalSchoolProfile, saveProfile: saveGlobalSchoolProfile, resetToDefault: resetSchoolProfileDefault } = useSchoolProfile();
+  const logoFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showCustomLogoUrl, setShowCustomLogoUrl] = useState(false);
+  const [customLogoUrlInput, setCustomLogoUrlInput] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+
   // Form State Definitions
-  const [profile, setProfile] = useState({
-    schoolName: "SMA Garuda Nusantara Smart School",
-    schoolCode: "SCH-GNS-2026",
-    npsn: "20194820",
-    schoolType: "Swasta / Nasional Plus",
-    accreditation: "A (Sangat Baik / Unggul)",
-    address: "Jl. Pendidikan No. 45, Kompleks Akademika",
-    province: "DKI Jakarta",
-    city: "Jakarta Selatan",
-    postalCode: "12430",
-    phone: "+62 21 7890-1234",
-    email: "info@garudanusa.sch.id",
-    website: "https://garudanusa.sch.id",
-    principalName: "Dr. Danur Adhi, M.Pd",
-    operatingHours: "06:30 - 16:00 WIB",
-    description: "Pusat keunggulan pendidikan berbasis teknologi AI, biometrik, dan kepemimpinan berkarakter.",
-    logoUrl: "https://images.unsplash.com/photo-1592280771190-3e2e4d571952?w=400&auto=format&fit=crop&q=80"
+  const [profile, setProfile] = useState<SchoolProfile>(() => {
+    return {
+      ...DEFAULT_SCHOOL_PROFILE,
+      ...(globalSchoolProfile || {}),
+    };
   });
+
+  // Keep local profile state in sync when global profile loads or changes from Firestore
+  useEffect(() => {
+    if (globalSchoolProfile) {
+      setProfile((prev) => ({
+        ...prev,
+        ...globalSchoolProfile,
+        latitude: Number(globalSchoolProfile.latitude ?? prev.latitude ?? -6.200000),
+        longitude: Number(globalSchoolProfile.longitude ?? prev.longitude ?? 106.816666),
+        radiusMeters: Number(globalSchoolProfile.radiusMeters ?? prev.radiusMeters ?? 100),
+      }));
+    }
+  }, [globalSchoolProfile]);
 
   const [branding, setBranding] = useState({
     primaryColor: "#531FFF",
@@ -537,6 +551,32 @@ export default function SettingsPage() {
     }
   };
 
+  // Handle Logo Upload from Local Device
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      if (showError) showError("Format file harus berupa gambar (PNG, JPG, WebP, SVG)!", "Format Salah");
+      return;
+    }
+
+    if (file.size > 3 * 1024 * 1024) {
+      if (showError) showError("Ukuran gambar logo maksimal 3MB!", "File Terlalu Besar");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setProfile((prev) => ({ ...prev, logoUrl: dataUrl }));
+        if (showSuccess) showSuccess("Logo baru dipilih. Klik 'Simpan Profil Sekolah' untuk memperbarui ke database.", "Logo Diperbarui");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Detect current admin geolocation
   const handleDetectCurrentLocation = () => {
     if (navigator.geolocation) {
@@ -544,6 +584,11 @@ export default function SettingsPage() {
         (pos) => {
           const lat = Number(pos.coords.latitude.toFixed(6));
           const lng = Number(pos.coords.longitude.toFixed(6));
+          setProfile((prev) => ({
+            ...prev,
+            latitude: lat,
+            longitude: lng,
+          }));
           setAttendance((prev) => ({
             ...prev,
             schoolCenterLat: lat,
@@ -551,7 +596,7 @@ export default function SettingsPage() {
             schoolLat: lat,
             schoolLng: lng,
           }));
-          if (showSuccess) showSuccess("Koordinat GPS berhasil disinkronkan dengan lokasi Anda.", "Lokasi Terdeteksi");
+          if (showSuccess) showSuccess(`Titik sekolah disesuaikan dengan koordinat GPS Anda: ${lat}, ${lng}`, "Lokasi GPS Terdeteksi");
         },
         (err) => {
           if (showError) showError("Gagal mengambil lokasi GPS: " + err.message, "GPS Gagal");
@@ -563,6 +608,30 @@ export default function SettingsPage() {
     }
   };
 
+  // Dedicated Save Handler for School Profile as Single Source of Truth
+  const handleSaveProfileOnly = async () => {
+    setSavingProfile(true);
+    const profilePayload: SchoolProfile = {
+      ...profile,
+      latitude: Number(profile.latitude || attendance.schoolCenterLat || -6.200000),
+      longitude: Number(profile.longitude || attendance.schoolCenterLng || 106.816666),
+      radiusMeters: Number(profile.radiusMeters || attendance.geofenceRadiusMeters || 100),
+    };
+
+    try {
+      const res = await saveGlobalSchoolProfile(profilePayload);
+      if (res.success) {
+        if (showSuccess) showSuccess("Profil & identitas sekolah serta titik koordinat tersimpan ke database!", "Profil Berhasil Disimpan");
+      } else {
+        if (showError) showError(res.error || "Gagal menyimpan profil sekolah", "Error");
+      }
+    } catch (err: any) {
+      if (showError) showError(err.message || "Gagal menyimpan profil", "Error");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   // Dedicated Save Handler for Attendance & Geofencing Settings
   const handleSaveAttendanceConfig = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -570,9 +639,9 @@ export default function SettingsPage() {
 
     const payload = {
       ...attendance,
-      schoolCenterLat: Number(attendance.schoolCenterLat || attendance.schoolLat || -6.200000),
-      schoolCenterLng: Number(attendance.schoolCenterLng || attendance.schoolLng || 106.816666),
-      geofenceRadiusMeters: Number(attendance.geofenceRadiusMeters || attendance.gpsRadiusMeter || 100),
+      schoolCenterLat: Number(profile.latitude || attendance.schoolCenterLat || attendance.schoolLat || -6.200000),
+      schoolCenterLng: Number(profile.longitude || attendance.schoolCenterLng || attendance.schoolLng || 106.816666),
+      geofenceRadiusMeters: Number(profile.radiusMeters || attendance.geofenceRadiusMeters || attendance.gpsRadiusMeter || 100),
       schoolStartTime: attendance.schoolStartTime || attendance.checkInStart || "07:00",
       lateToleranceMinutes: Number(attendance.lateToleranceMinutes || attendance.lateToleranceMin || 15),
       absentThresholdTime: attendance.absentThresholdTime || attendance.autoAbsentTime || "09:00",
@@ -582,15 +651,22 @@ export default function SettingsPage() {
     };
 
     try {
-      // 1. Primary allowed store in Firestore
+      // 1. Also update profile location in global store
+      await saveGlobalSchoolProfile({
+        latitude: payload.schoolCenterLat,
+        longitude: payload.schoolCenterLng,
+        radiusMeters: payload.geofenceRadiusMeters,
+      });
+
+      // 2. Primary allowed store in Firestore
       await setDoc(doc(db, "roles", "attendance_config"), payload, { merge: true });
 
-      // 2. Client-side localStorage persistence
+      // 3. Client-side localStorage persistence
       try {
         localStorage.setItem("quick_schools_attendance_config", JSON.stringify(payload));
       } catch (e) {}
 
-      // 3. Background attempt to attendance_config/general
+      // 4. Background attempt to attendance_config/general
       try {
         await setDoc(doc(db, "attendance_config", "general"), payload, { merge: true });
       } catch (e) {}
@@ -598,7 +674,6 @@ export default function SettingsPage() {
       if (showSuccess) showSuccess("Pengaturan absensi & geofence GPS berhasil diperbarui!", "Pengaturan Tersimpan");
     } catch (err: any) {
       console.error("Save attendance error:", err);
-      // Fallback save to localStorage
       try {
         localStorage.setItem("quick_schools_attendance_config", JSON.stringify(payload));
         if (showSuccess) showSuccess("Pengaturan tersimpan di sesi lokal.", "Pengaturan Tersimpan");
@@ -610,14 +685,24 @@ export default function SettingsPage() {
     }
   };
 
-  // Save Settings Handler
+  // Save All Settings Handler
   const handleSaveSettings = async () => {
     setSaving(true);
+    const profilePayload: SchoolProfile = {
+      ...profile,
+      latitude: Number(profile.latitude || attendance.schoolCenterLat || -6.200000),
+      longitude: Number(profile.longitude || attendance.schoolCenterLng || 106.816666),
+      radiusMeters: Number(profile.radiusMeters || attendance.geofenceRadiusMeters || 100),
+    };
+
     const attendancePayload = {
       ...attendance,
-      schoolCenterLat: Number(attendance.schoolCenterLat || attendance.schoolLat || -6.200000),
-      schoolCenterLng: Number(attendance.schoolCenterLng || attendance.schoolLng || 106.816666),
-      geofenceRadiusMeters: Number(attendance.geofenceRadiusMeters || attendance.gpsRadiusMeter || 100),
+      schoolCenterLat: profilePayload.latitude,
+      schoolCenterLng: profilePayload.longitude,
+      geofenceRadiusMeters: profilePayload.radiusMeters,
+      schoolLat: profilePayload.latitude,
+      schoolLng: profilePayload.longitude,
+      gpsRadiusMeter: profilePayload.radiusMeters,
       schoolStartTime: attendance.schoolStartTime || attendance.checkInStart || "07:00",
       lateToleranceMinutes: Number(attendance.lateToleranceMinutes || attendance.lateToleranceMin || 15),
       absentThresholdTime: attendance.absentThresholdTime || attendance.autoAbsentTime || "09:00",
@@ -627,16 +712,19 @@ export default function SettingsPage() {
     };
 
     try {
-      // Always persist attendance config to allowed store
+      // 1. Save global school profile (syncs to roles/school_profile, settings/school_profile, attendance_config & localStorage)
+      await saveGlobalSchoolProfile(profilePayload);
+
+      // 2. Always persist attendance config to allowed store
       await setDoc(doc(db, "roles", "attendance_config"), attendancePayload, { merge: true });
       try {
         localStorage.setItem("quick_schools_attendance_config", JSON.stringify(attendancePayload));
       } catch (e) {}
 
-      // Try settings document in background
+      // 3. Try settings document in background
       try {
         await setDoc(doc(db, "settings", "school_configuration"), {
-          profile,
+          profile: profilePayload,
           branding,
           preferences,
           academic,
@@ -656,7 +744,7 @@ export default function SettingsPage() {
       } catch (e) {}
 
       setSaving(false);
-      if (showSuccess) showSuccess("Semua konfigurasi sekolah & absensi berhasil diperbarui!", "Pengaturan Tersimpan");
+      if (showSuccess) showSuccess("Semua konfigurasi sekolah, profil & absensi berhasil diperbarui!", "Pengaturan Tersimpan");
     } catch (err) {
       console.error("Save settings error:", err);
       setSaving(false);
@@ -787,133 +875,659 @@ export default function SettingsPage() {
         {/* Right Side Active Settings Content (8 Columns) */}
         <div className="lg:col-span-8 space-y-6">
           
-          {/* TAB 1: School Profile */}
+          {/* TAB 1: School Profile (Single Source of Truth) */}
           {activeTab === "profile" && (
-            <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
-              <div className="border-b border-gray-100 pb-4">
-                <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-[#531FFF]" />
-                  Profil & Identitas Sekolah
-                </h2>
-                <p className="text-xs text-gray-500 font-medium mt-1">
-                  Kelola data legalitas, logo resmi, alamat instansi, dan informasi kepala sekolah.
-                </p>
+            <div className="space-y-6 animate-in fade-in duration-200">
+              
+              {/* Header Card with Quick Action */}
+              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <div className="w-10 h-10 rounded-lg bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-bold">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                          Profil & Identitas Sekolah
+                        </h2>
+                        <span className="px-2.5 py-0.5 text-xs font-extrabold bg-indigo-50 text-[#531FFF] rounded-full border border-indigo-200 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Single Source of Truth
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 font-medium mt-0.5">
+                        Seluruh data identitas, kontak, logo, dan titik lokasi koordinat sekolah terhubung langsung ke database dan otomatis disinkronkan ke seluruh sistem.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (confirm("Kembalikan seluruh data profil sekolah ke nilai standar default?")) {
+                        await resetSchoolProfileDefault();
+                        if (showInfo) showInfo("Profil sekolah direset ke default sistem.", "Reset Selesai");
+                      }
+                    }}
+                    className="px-3.5 py-2.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-gray-500" />
+                    Reset
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveProfileOnly}
+                    disabled={savingProfile}
+                    className="px-5 py-2.5 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-xs disabled:opacity-50"
+                  >
+                    {savingProfile ? (
+                      <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                    ) : (
+                      <Save className="w-4 h-4 text-white" />
+                    )}
+                    <span>Simpan Profil & Lokasi</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Logo Upload Card */}
-              <div className="p-5 rounded-lg bg-gray-50/80 border border-gray-200/80 flex flex-col sm:flex-row items-center gap-5">
-                <div className="w-24 h-24 rounded-lg bg-white overflow-hidden relative shrink-0 border-2 border-gray-200 shadow-md">
-                  <Image src={profile.logoUrl} alt="Logo Sekolah" fill className="object-cover" unoptimized />
+              {/* CARD 1: Logo Resmi & Brand Identity */}
+              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-4">
+                <div className="border-b border-gray-100 pb-3">
+                  <h3 className="text-sm font-extrabold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[#531FFF]" />
+                    Logo Resmi Instansi
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Logo ini akan otomatis tampil pada kop rapor digital, nota pembayaran, halaman login, dan sidebar sistem.
+                  </p>
                 </div>
-                <div className="space-y-2 text-center sm:text-left">
-                  <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Logo Resmi Instansi</h4>
-                  <p className="text-xs text-gray-500">Format PNG, JPG, atau SVG (Maksimal 2MB, Rasio 1:1).</p>
-                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
-                    <button className="px-3 py-1.5 bg-[#531FFF] text-white rounded-lg text-xs font-bold hover:bg-[#4317CC] transition-all flex items-center gap-1.5 shadow-xs">
-                      <Upload className="w-3.5 h-3.5" /> Unggah Logo Baru
-                    </button>
-                    <button className="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-100 transition-all">
-                      Hapus
-                    </button>
+
+                <div className="p-5 rounded-xl bg-gray-50/80 border border-gray-200/80 flex flex-col sm:flex-row items-center gap-6">
+                  {/* Logo Display */}
+                  <div className="w-24 h-24 rounded-2xl bg-white overflow-hidden relative shrink-0 border-2 border-gray-200 shadow-md flex items-center justify-center p-2">
+                    {profile.logoUrl ? (
+                      <Image 
+                        src={profile.logoUrl} 
+                        alt="Logo Sekolah" 
+                        fill 
+                        className="object-contain p-2" 
+                        unoptimized 
+                      />
+                    ) : (
+                      <SchoolIcon className="w-10 h-10 text-gray-400" />
+                    )}
+                  </div>
+
+                  {/* Logo Actions */}
+                  <div className="space-y-2 text-center sm:text-left flex-1">
+                    <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-start">
+                      <span className="text-xs font-bold text-gray-900">Format yang didukung:</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-purple-100/80 text-[#531FFF] font-bold">PNG</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-purple-100/80 text-[#531FFF] font-bold">JPG / JPEG</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-purple-100/80 text-[#531FFF] font-bold">SVG</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-purple-100/80 text-[#531FFF] font-bold">WebP</span>
+                      <span className="text-[11px] text-gray-400 font-medium">(Maksimal 3MB)</span>
+                    </div>
+
+                    <p className="text-xs text-gray-500">
+                      Disarankan menggunakan gambar rasio 1:1 (bujur sangkar) dengan latar belakang transparan.
+                    </p>
+
+                    {/* Hidden input for local file upload */}
+                    <input 
+                      type="file" 
+                      ref={logoFileInputRef}
+                      accept="image/png, image/jpeg, image/webp, image/svg+xml"
+                      onChange={handleLogoUpload}
+                      className="hidden" 
+                    />
+
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 pt-1.5">
+                      <button 
+                        type="button"
+                        onClick={() => logoFileInputRef.current?.click()}
+                        className="px-3.5 py-2 bg-[#531FFF] text-white rounded-lg text-xs font-bold hover:bg-[#4317CC] transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+                      >
+                        <Upload className="w-3.5 h-3.5" /> 
+                        Unggah Logo Baru
+                      </button>
+
+                      <button 
+                        type="button"
+                        onClick={() => setShowCustomLogoUrl(!showCustomLogoUrl)}
+                        className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-100 transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Globe className="w-3.5 h-3.5 text-gray-500" />
+                        Gunakan URL Web
+                      </button>
+
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setProfile((prev) => ({ ...prev, logoUrl: DEFAULT_SCHOOL_PROFILE.logoUrl }));
+                          if (showInfo) showInfo("Logo dikembalikan ke logo default.", "Reset Logo");
+                        }}
+                        className="px-3 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-semibold hover:bg-gray-100 transition-all cursor-pointer"
+                      >
+                        Default
+                      </button>
+
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setProfile((prev) => ({ ...prev, logoUrl: "" }));
+                          if (showInfo) showInfo("Logo dihapus. Simpan untuk menerapkan.", "Hapus Logo");
+                        }}
+                        className="px-3 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg text-xs font-semibold transition-all cursor-pointer"
+                      >
+                        Hapus
+                      </button>
+                    </div>
+
+                    {/* URL Input Bar */}
+                    {showCustomLogoUrl && (
+                      <div className="mt-3 flex items-center gap-2 pt-2 border-t border-gray-200/80 animate-in fade-in duration-200">
+                        <input
+                          type="url"
+                          placeholder="https://domain-sekolah.sch.id/logo.png"
+                          value={customLogoUrlInput}
+                          onChange={(e) => setCustomLogoUrlInput(e.target.value)}
+                          className="flex-1 px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!customLogoUrlInput.trim()) return;
+                            setProfile((prev) => ({ ...prev, logoUrl: customLogoUrlInput.trim() }));
+                            setShowCustomLogoUrl(false);
+                            setCustomLogoUrlInput("");
+                            if (showSuccess) showSuccess("URL logo diterapkan.", "Logo Diperbarui");
+                          }}
+                          className="px-3 py-1.5 bg-[#531FFF] text-white text-xs font-bold rounded-lg hover:bg-[#4317CC] transition-all cursor-pointer"
+                        >
+                          Terapkan
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Form Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-medium">
-                <div>
-                  <label className="block text-gray-700 font-bold mb-1.5">Nama Sekolah Resmi</label>
-                  <input 
-                    type="text" 
-                    value={profile.schoolName}
-                    onChange={(e) => setProfile({ ...profile, schoolName: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-gray-900"
-                  />
+              {/* CARD 2: Identitas Legalitas, Kontak & Pimpinan */}
+              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6">
+                
+                {/* Subsection A: Legalitas Sekolah */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                    <SchoolIcon className="w-4 h-4 text-[#531FFF]" />
+                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                      Identitas Legalitas & Satuan Pendidikan
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs font-medium">
+                    <div className="lg:col-span-2">
+                      <label className="block text-gray-700 font-bold mb-1.5">
+                        Nama Sekolah Resmi <span className="text-rose-500">*</span>
+                      </label>
+                      <input 
+                        type="text" 
+                        value={profile.schoolName}
+                        onChange={(e) => setProfile({ ...profile, schoolName: e.target.value })}
+                        placeholder="Contoh: SMA Garuda Nusantara Smart School"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-gray-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1.5">Kode Instansi Sekolah</label>
+                      <input 
+                        type="text" 
+                        value={profile.schoolCode}
+                        onChange={(e) => setProfile({ ...profile, schoolCode: e.target.value })}
+                        placeholder="Contoh: SCH-GNS-2026"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-mono text-gray-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1.5">
+                        NPSN (Nomor Pokok Sekolah Nasional) <span className="text-rose-500">*</span>
+                      </label>
+                      <input 
+                        type="text" 
+                        value={profile.npsn}
+                        onChange={(e) => setProfile({ ...profile, npsn: e.target.value })}
+                        placeholder="Contoh: 20194820"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-mono font-bold text-gray-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1.5">Bentuk / Jenjang Satuan</label>
+                      <select 
+                        value={profile.schoolType}
+                        onChange={(e) => setProfile({ ...profile, schoolType: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-gray-900 cursor-pointer"
+                      >
+                        <option value="SMA / Nasional Plus">SMA / Nasional Plus</option>
+                        <option value="SMA (Sekolah Menengah Atas)">SMA (Sekolah Menengah Atas)</option>
+                        <option value="SMK (Sekolah Menengah Kejuruan)">SMK (Sekolah Menengah Kejuruan)</option>
+                        <option value="MA (Madrasah Aliyah)">MA (Madrasah Aliyah)</option>
+                        <option value="SMP (Sekolah Menengah Pertama)">SMP (Sekolah Menengah Pertama)</option>
+                        <option value="MTs (Madrasah Tsanawiyah)">MTs (Madrasah Tsanawiyah)</option>
+                        <option value="SD (Sekolah Dasar)">SD (Sekolah Dasar)</option>
+                        <option value="MI (Madrasah Ibtidaiyah)">MI (Madrasah Ibtidaiyah)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1.5">Status Akreditasi BAN-S/M</label>
+                      <select 
+                        value={profile.accreditation}
+                        onChange={(e) => setProfile({ ...profile, accreditation: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-gray-900 cursor-pointer"
+                      >
+                        <option value="A (Sangat Baik / Unggul)">A (Sangat Baik / Unggul)</option>
+                        <option value="B (Baik)">B (Baik)</option>
+                        <option value="C (Cukup)">C (Cukup)</option>
+                        <option value="Belum Terakreditasi">Belum Terakreditasi</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-gray-700 font-bold mb-1.5">Kode Instansi Sekolah</label>
-                  <input 
-                    type="text" 
-                    value={profile.schoolCode}
-                    onChange={(e) => setProfile({ ...profile, schoolCode: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-mono text-gray-900"
-                  />
+                {/* Subsection B: Kontak & Saluran Komunikasi */}
+                <div className="space-y-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                    <Phone className="w-4 h-4 text-[#531FFF]" />
+                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                      Kontak & Saluran Komunikasi Resmi
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-medium">
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1.5 flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-gray-400" />
+                        Nomor Telepon
+                      </label>
+                      <input 
+                        type="text" 
+                        value={profile.phone}
+                        onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                        placeholder="+62 21 7890-1234"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1.5 flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-gray-400" />
+                        Email Resmi
+                      </label>
+                      <input 
+                        type="email" 
+                        value={profile.email}
+                        onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                        placeholder="info@sekolah.sch.id"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1.5 flex items-center gap-1.5">
+                        <Globe className="w-3.5 h-3.5 text-gray-400" />
+                        Website Resmi
+                      </label>
+                      <input 
+                        type="url" 
+                        value={profile.website}
+                        onChange={(e) => setProfile({ ...profile, website: e.target.value })}
+                        placeholder="https://sekolah.sch.id"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1.5 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-gray-400" />
+                        Jam Operasional
+                      </label>
+                      <input 
+                        type="text" 
+                        value={profile.operatingHours}
+                        onChange={(e) => setProfile({ ...profile, operatingHours: e.target.value })}
+                        placeholder="06:30 - 16:00 WIB"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-gray-700 font-bold mb-1.5">NPSN (Nomor Pokok Sekolah Nasional)</label>
-                  <input 
-                    type="text" 
-                    value={profile.npsn}
-                    onChange={(e) => setProfile({ ...profile, npsn: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-mono text-gray-900"
-                  />
+                {/* Subsection C: Alamat Domisili Sekolah */}
+                <div className="space-y-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                    <MapPin className="w-4 h-4 text-[#531FFF]" />
+                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                      Alamat Domisili Sekolah
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-medium">
+                    <div className="md:col-span-2">
+                      <label className="block text-gray-700 font-bold mb-1.5">Alamat Lengkap Jalan / Kompleks</label>
+                      <input 
+                        type="text" 
+                        value={profile.address}
+                        onChange={(e) => setProfile({ ...profile, address: e.target.value })}
+                        placeholder="Jl. Pendidikan No. 45, Kompleks Akademika"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1.5">Kota / Kabupaten</label>
+                      <input 
+                        type="text" 
+                        value={profile.city}
+                        onChange={(e) => setProfile({ ...profile, city: e.target.value })}
+                        placeholder="Jakarta Selatan"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1.5">Provinsi</label>
+                      <input 
+                        type="text" 
+                        value={profile.province}
+                        onChange={(e) => setProfile({ ...profile, province: e.target.value })}
+                        placeholder="DKI Jakarta"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1.5">Kode Pos</label>
+                      <input 
+                        type="text" 
+                        value={profile.postalCode}
+                        onChange={(e) => setProfile({ ...profile, postalCode: e.target.value })}
+                        placeholder="12430"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-mono text-gray-900"
+                      />
+                    </div>
+
+                    <div className="md:col-span-3">
+                      <label className="block text-gray-700 font-bold mb-1.5">Keterangan Area / Kampus</label>
+                      <input 
+                        type="text" 
+                        value={profile.locationAddress}
+                        onChange={(e) => setProfile({ ...profile, locationAddress: e.target.value })}
+                        placeholder="Kampus Utama - Gerbang & Area Sekolah"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-gray-700 font-bold mb-1.5">Status Akreditasi</label>
-                  <select 
-                    value={profile.accreditation}
-                    onChange={(e) => setProfile({ ...profile, accreditation: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-gray-900"
-                  >
-                    <option value="A (Sangat Baik / Unggul)">A (Sangat Baik / Unggul)</option>
-                    <option value="B (Baik)">B (Baik)</option>
-                    <option value="C (Cukup)">C (Cukup)</option>
-                  </select>
+                {/* Subsection D: Pimpinan & Profil Singkat Lembaga */}
+                <div className="space-y-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                    <UserCog className="w-4 h-4 text-[#531FFF]" />
+                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                      Pimpinan Instansi & Profil Lembaga
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-medium">
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1.5">
+                        Nama Kepala Sekolah Lengkap & Gelar <span className="text-rose-500">*</span>
+                      </label>
+                      <input 
+                        type="text" 
+                        value={profile.principalName}
+                        onChange={(e) => setProfile({ ...profile, principalName: e.target.value })}
+                        placeholder="Dr. Danur Adhi, M.Pd"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-gray-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1.5">NIP Kepala Sekolah</label>
+                      <input 
+                        type="text" 
+                        value={profile.principalNip}
+                        onChange={(e) => setProfile({ ...profile, principalNip: e.target.value })}
+                        placeholder="19750812 200003 1 002"
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-mono text-gray-900"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-gray-700 font-bold mb-1.5">Deskripsi / Visi Misi / Slogan Sekolah</label>
+                      <textarea 
+                        rows={2}
+                        value={profile.description}
+                        onChange={(e) => setProfile({ ...profile, description: e.target.value })}
+                        placeholder="Pusat keunggulan pendidikan berbasis teknologi AI, biometrik, dan kepemimpinan berkarakter."
+                        className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900 text-xs"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="md:col-span-2">
-                  <label className="block text-gray-700 font-bold mb-1.5">Alamat Lengkap</label>
-                  <input 
-                    type="text" 
-                    value={profile.address}
-                    onChange={(e) => setProfile({ ...profile, address: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-gray-700 font-bold mb-1.5">Kota / Kabupaten</label>
-                  <input 
-                    type="text" 
-                    value={profile.city}
-                    onChange={(e) => setProfile({ ...profile, city: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-gray-700 font-bold mb-1.5">Provinsi</label>
-                  <input 
-                    type="text" 
-                    value={profile.province}
-                    onChange={(e) => setProfile({ ...profile, province: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-gray-700 font-bold mb-1.5">Nama Kepala Sekolah</label>
-                  <input 
-                    type="text" 
-                    value={profile.principalName}
-                    onChange={(e) => setProfile({ ...profile, principalName: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-gray-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-gray-700 font-bold mb-1.5">Jam Operasional Sekolah</label>
-                  <input 
-                    type="text" 
-                    value={profile.operatingHours}
-                    onChange={(e) => setProfile({ ...profile, operatingHours: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
-                  />
-                </div>
               </div>
+
+              {/* CARD 3: Titik Lokasi Sekolah & Geofence GPS (Peta Interaktif) */}
+              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
+                
+                {/* Header & Geolocation Detector */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
+                      <Compass className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-gray-900 text-base">
+                          Titik Koordinat & Area Lokasi Sekolah (Peta Interaktif)
+                        </h3>
+                        <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200">
+                          Geofence Aktif
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Klik pada peta atau geser marker sekolah (🏫) untuk mengatur titik koordinat pusat sekolah dan batas radius absensi siswa & guru.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleDetectCurrentLocation}
+                      className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 border border-emerald-200 shadow-2xs active:scale-95"
+                      title="Gunakan koordinat GPS perangkat saya saat ini"
+                    >
+                      <MapPin className="w-4 h-4 text-emerald-600" />
+                      Deteksi Lokasi Saya
+                    </button>
+                    
+                    <span className="font-mono text-gray-800 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold">
+                      {Number(profile.latitude).toFixed(5)}, {Number(profile.longitude).toFixed(5)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Leaflet Interactive Map View */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs font-medium">
+                    <span className="text-[11px] text-gray-500 flex items-center gap-1.5">
+                      <Navigation className="w-3.5 h-3.5 text-[#531FFF]" />
+                      Klik pada peta atau seret marker sekolah (🏫) untuk memindahkan titik lokasi.
+                    </span>
+                    <span className="text-[11px] font-extrabold text-[#531FFF]">
+                      Batas Radius Absensi: {profile.radiusMeters || 100} Meter
+                    </span>
+                  </div>
+
+                  <AttendanceGeofenceMap
+                    centerLat={Number(profile.latitude || -6.200000)}
+                    centerLng={Number(profile.longitude || 106.816666)}
+                    radius={Number(profile.radiusMeters || 100)}
+                    interactive={true}
+                    onLocationChange={(lat, lng) => {
+                      setProfile((prev) => ({
+                        ...prev,
+                        latitude: lat,
+                        longitude: lng,
+                      }));
+                      setAttendance((prev) => ({
+                        ...prev,
+                        schoolCenterLat: lat,
+                        schoolCenterLng: lng,
+                        schoolLat: lat,
+                        schoolLng: lng,
+                      }));
+                    }}
+                    height="420px"
+                  />
+                </div>
+
+                {/* Radius Slider & Quick Presets */}
+                <div className="space-y-4 pt-3 border-t border-gray-100">
+                  <div>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                      <label className="font-bold text-gray-700 text-xs">
+                        Batas Radius Geofence Presensi (Meter)
+                      </label>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] text-gray-400 font-medium mr-1">Preset Cepat:</span>
+                        {[50, 100, 250, 500, 1000].map((val) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => {
+                              setProfile((prev) => ({ ...prev, radiusMeters: val }));
+                              setAttendance((prev) => ({ ...prev, geofenceRadiusMeters: val, gpsRadiusMeter: val }));
+                            }}
+                            className={cn(
+                              "px-2.5 py-1 text-[11px] font-bold rounded-md transition-all border cursor-pointer",
+                              profile.radiusMeters === val
+                                ? "bg-[#531FFF] text-white border-[#531FFF] shadow-xs"
+                                : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                            )}
+                          >
+                            {val}m
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <input 
+                        type="range" 
+                        min="20" 
+                        max="2000" 
+                        step="10" 
+                        value={profile.radiusMeters || 100}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setProfile((prev) => ({ ...prev, radiusMeters: val }));
+                          setAttendance((prev) => ({ ...prev, geofenceRadiusMeters: val, gpsRadiusMeter: val }));
+                        }}
+                        className="w-full accent-[#531FFF] cursor-pointer" 
+                      />
+                      <span className="text-xs font-bold font-mono text-[#531FFF] bg-[#F3F0FF] px-2.5 py-1 rounded-md shrink-0 border border-[#531FFF]/20">
+                        {profile.radiusMeters || 100} Meter
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Manual Coordinates Form */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    <div>
+                      <label className="block text-gray-700 font-bold text-xs mb-1.5">
+                        Latitude (Garis Lintang)
+                      </label>
+                      <input 
+                        type="number" 
+                        step="any"
+                        value={profile.latitude}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setProfile((prev) => ({ ...prev, latitude: val }));
+                          setAttendance((prev) => ({ ...prev, schoolCenterLat: val, schoolLat: val }));
+                        }}
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-xs font-mono font-bold text-gray-900"
+                        placeholder="-6.200000"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold text-xs mb-1.5">
+                        Longitude (Garis Bujur)
+                      </label>
+                      <input 
+                        type="number" 
+                        step="any"
+                        value={profile.longitude}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setProfile((prev) => ({ ...prev, longitude: val }));
+                          setAttendance((prev) => ({ ...prev, schoolCenterLng: val, schoolLng: val }));
+                        }}
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-xs font-mono font-bold text-gray-900"
+                        placeholder="106.816666"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Automated Sync Callout Info */}
+                  <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200/70 flex items-start gap-3 text-xs">
+                    <AlertCircle className="w-4 h-4 text-[#531FFF] shrink-0 mt-0.5" />
+                    <div className="space-y-1 text-gray-700">
+                      <p className="font-bold text-[#531FFF]">
+                        Sinkronisasi Otomatis Antar Sistem Presensi:
+                      </p>
+                      <p className="leading-relaxed">
+                        Titik koordinat dan radius yang Anda ubah di sini disimpan ke database sebagai <strong>Single Source of Truth</strong> dan langsung digunakan oleh modul <strong>Presensi Siswa</strong>, <strong>Presensi Guru</strong>, serta modal pemindai Face ID tanpa perlu mengubah konfigurasi secara manual di setiap halaman.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card Action Footer */}
+                <div className="pt-4 border-t border-gray-100 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSaveProfileOnly}
+                    disabled={savingProfile}
+                    className="px-6 py-3 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-sm disabled:opacity-50"
+                  >
+                    {savingProfile ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Menyimpan ke Database...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Simpan Seluruh Data Profil & Lokasi Sekolah
+                      </>
+                    )}
+                  </button>
+                </div>
+
+              </div>
+
             </div>
           )}
 

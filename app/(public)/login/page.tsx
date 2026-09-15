@@ -2,15 +2,18 @@
 
 import { Mail, Lock, EyeOff, Eye, BarChart3, ShieldCheck, Zap, Building2, Loader2 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
+import { useSchoolProfile } from "@/context/SchoolProfileContext";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { profile } = useSchoolProfile();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -61,16 +64,30 @@ export default function LoginPage() {
       <div className="w-full lg:w-[45%] xl:w-[40%] bg-[#F8F9FE] p-10 lg:p-16 flex flex-col relative min-h-screen justify-center overflow-hidden border-r border-gray-100">
           {/* Logo */}
           <div className="flex items-center gap-3 mb-10">
-            <div className="w-10 h-10 rounded-xl bg-[#531FFF] flex items-center justify-center shadow-sm">
-               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                 <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="white"/>
-                 <path d="M2 17L12 22L22 17" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                 <path d="M2 12L12 17L22 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-               </svg>
+            <div className="w-11 h-11 rounded-xl bg-[#531FFF] flex items-center justify-center shadow-sm overflow-hidden relative p-1 border border-white/20">
+              {profile.logoUrl ? (
+                <Image 
+                  src={profile.logoUrl} 
+                  alt={profile.schoolName || "Logo"} 
+                  fill 
+                  className="object-contain p-1" 
+                  unoptimized 
+                />
+              ) : (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="white"/>
+                  <path d="M2 17L12 22L22 17" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M2 12L12 17L22 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
             </div>
-            <div className="flex flex-col">
-              <span className="font-bold text-lg text-gray-900 leading-none">Quick Schools</span>
-              <span className="text-xs text-gray-500 font-medium mt-0.5">Operating System</span>
+            <div className="flex flex-col min-w-0">
+              <span className="font-bold text-lg text-gray-900 leading-tight truncate max-w-[240px]" title={profile.schoolName}>
+                {profile.schoolName || "Quick Schools"}
+              </span>
+              <span className="text-xs text-gray-500 font-medium mt-0.5 truncate">
+                {profile.schoolType || "Smart School OS"} · {profile.npsn ? `NPSN ${profile.npsn}` : "Portal Terpadu"}
+              </span>
             </div>
           </div>
 
@@ -82,7 +99,7 @@ export default function LoginPage() {
           </h1>
           
           <p className="text-gray-500 text-sm mb-8 max-w-sm leading-relaxed">
-            Quick Schools Operating System membantu sekolah mengelola akademik, keuangan, kehadiran, dan komunikasi dengan mudah.
+            {profile.description || "Portal resmi manajemen akademik, presensi geofence, keuangan SPP, dan evaluasi terpadu sekolah."}
           </p>
 
           <div className="space-y-4 mb-20 bg-white p-5 rounded-2xl shadow-sm border border-gray-100 relative z-10 w-full max-w-md">

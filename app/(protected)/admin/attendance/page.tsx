@@ -54,6 +54,7 @@ import { useToast } from "@/context/ToastContext";
 import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal";
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
 import StudentPersonalAttendanceView from "@/components/attendance/student-personal-attendance-view";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 
 // -------------------------------------------------------------
 // Types & Defaults
@@ -1950,15 +1951,16 @@ export default function AttendancePage() {
                           {/* Student Profile */}
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
-                              <div className={cn(
-                                "w-9 h-9 rounded-lg font-bold flex items-center justify-center text-xs shrink-0 border",
-                                att.status === "Hadir" ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
-                                att.status === "Terlambat" ? "bg-amber-50 text-amber-700 border-amber-100" :
-                                att.status === "Belum Absen" ? "bg-gray-100 text-gray-600 border-gray-200" :
-                                "bg-purple-50 text-[#531FFF] border-purple-100"
-                              )}>
-                                {student.name?.charAt(0) || "S"}
-                              </div>
+                              <ProfileAvatar
+                                name={student.name}
+                                imageUrl={student.imageUrl}
+                                photoUrl={student.photoUrl}
+                                avatar={student.avatar}
+                                gender={student.gender}
+                                role="student"
+                                size="sm"
+                                shape="rounded"
+                              />
                               <div>
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <p className="font-bold text-gray-900 leading-tight">

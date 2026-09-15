@@ -39,6 +39,7 @@ import {
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { formatRupiah } from "@/lib/spp-payments";
+import { useSchoolProfile } from "@/context/SchoolProfileContext";
 
 interface AdminDashboardViewProps {
   userName: string;
@@ -101,6 +102,7 @@ export function AdminDashboardView({
   userRole,
   setPreviewRole
 }: AdminDashboardViewProps) {
+  const { profile: schoolProfile } = useSchoolProfile();
   // ─── Realtime Database States ─────────────────────────────────────────────
   const [students, setStudents] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
@@ -345,6 +347,17 @@ export function AdminDashboardView({
       <div className="relative rounded-xl overflow-hidden bg-gradient-to-r from-[#4E54C8] to-[#8F94FB] p-7 md:p-8 text-white shadow-md flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div className="z-10 relative space-y-5 flex-1">
           <div>
+            <div className="flex items-center gap-2 mb-2.5 flex-wrap">
+              <span className="px-3 py-1 rounded-full bg-white/20 text-white text-xs font-bold backdrop-blur-sm border border-white/20 flex items-center gap-1.5 shadow-2xs">
+                <span>🏫</span>
+                <span>{schoolProfile?.schoolName || "Smart School OS"}</span>
+              </span>
+              {schoolProfile?.npsn && (
+                <span className="px-2.5 py-1 rounded-full bg-white/15 text-white/90 text-[11px] font-mono font-bold backdrop-blur-sm">
+                  NPSN {schoolProfile.npsn}
+                </span>
+              )}
+            </div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2 flex items-center gap-2">
               {greeting}, {userName}! <span className="inline-block animate-bounce">👋</span>
             </h1>

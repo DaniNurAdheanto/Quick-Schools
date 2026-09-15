@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AttendanceRecord, AttendanceConfig } from "@/app/(protected)/admin/attendance/page";
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
 
 interface StudentInfo {
   id: string;
@@ -171,17 +172,16 @@ export default function StudentPersonalAttendanceView({
           {/* Student Profile Info */}
           <div className="flex items-start gap-4 sm:gap-5">
             <div className="relative shrink-0">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg bg-gradient-to-br from-[#531FFF] to-[#8C52FF] p-1 shadow-lg shadow-[#531FFF]/40 flex items-center justify-center text-white text-2xl font-black">
-                {student.avatar ? (
-                  <img
-                    src={student.avatar}
-                    alt={student.name}
-                    className="w-full h-full object-cover rounded-lg"
-                  />
-                ) : (
-                  <span>{student.name.charAt(0).toUpperCase()}</span>
-                )}
-              </div>
+              <ProfileAvatar
+                name={student.name}
+                avatar={student.avatar}
+                imageUrl={student.avatar}
+                photoUrl={student.avatar}
+                role="student"
+                size="2xl"
+                shape="rounded-xl"
+                ring="ring-4 ring-white/30 shadow-lg"
+              />
               <div className="absolute -bottom-1 -right-1 px-2 py-0.5 bg-emerald-500 text-gray-950 font-black text-[9px] rounded-full uppercase tracking-wider shadow">
                 Siswa
               </div>
