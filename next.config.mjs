@@ -1,5 +1,4 @@
-
-
+// Quick Schools Next.js Configuration
 const nextConfig = {
   reactStrictMode: true,
   eslint: {
