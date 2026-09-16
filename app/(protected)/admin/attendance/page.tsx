@@ -55,6 +55,8 @@ import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
 import StudentPersonalAttendanceView from "@/components/attendance/student-personal-attendance-view";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
+import { isParentRole } from "@/lib/roles-config";
+import { resolveParentStudent } from "@/lib/parent-child-resolver";
 
 // -------------------------------------------------------------
 // Types & Defaults
@@ -529,7 +531,13 @@ export default function AttendancePage() {
   }, []);
 
   const [previewAsStudent, setPreviewAsStudent] = useState(false);
-  const isStudentRole = (userRole === "siswa" || userRole === "student") || previewAsStudent;
+  const isParent = isParentRole(userRole) || userRole === "orang-tua" || isParentRole(currentUserData?.role);
+  const resolvedParentChild = useMemo(() => {
+    if (!isParent) return null;
+    return resolveParentStudent(currentUser, currentUserData, studentsList);
+  }, [isParent, currentUser, currentUserData, studentsList]);
+
+  const isStudentRole = (userRole === "siswa" || userRole === "student") || previewAsStudent || isParent;
   const isGuru = (userRole === "guru" || userRole === "teacher") || previewAsGuru;
 
   // Determine homeroom class(es) for the logged-in Guru (Wali Kelas)
@@ -1200,18 +1208,29 @@ export default function AttendancePage() {
           )}
           <StudentPersonalAttendanceView
             student={
-              studentInfo || {
-                id: "S103",
-                name: "Bintang Pratama",
-                email: currentUser?.email || "student@gmail.com",
-                nisn: "2023003",
-                className: selectedClass || "10 MIPA 1",
-                avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
-              }
+              isParent && resolvedParentChild?.student ? {
+                id: resolvedParentChild.student.id || resolvedParentChild.student._firestoreId || "child",
+                name: resolvedParentChild.student.name || "Anak",
+                email: resolvedParentChild.student.email || currentUser?.email,
+                nisn: resolvedParentChild.student.nisn || resolvedParentChild.student.nis || "NISN",
+                className: resolvedParentChild.className || "10 MIPA 1",
+                avatar: resolvedParentChild.student.avatar || resolvedParentChild.student.photoUrl,
+              } : (
+                studentInfo || {
+                  id: "S103",
+                  name: "Bintang Pratama",
+                  email: currentUser?.email || "student@gmail.com",
+                  nisn: "2023003",
+                  className: selectedClass || "10 MIPA 1",
+                  avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
+                }
+              )
             }
             attendanceRecords={attendanceRecords}
             config={config}
             onOpenScanModal={() => setShowScanModal(true)}
+            readOnly={isParent}
+            isParent={isParent}
           />
         </div>
       ) : (

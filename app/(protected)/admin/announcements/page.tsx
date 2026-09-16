@@ -12,6 +12,7 @@ import { CrudSheet } from "@/components/layouts/crud-sheet";
 import { collection, onSnapshot, doc, getDoc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
+import { isParentRole } from "@/lib/roles-config";
 
 const POPULAR_ANNOUNCEMENTS = [
   { title: "Libur Idul Fitri 1447 H", views: "1.245", date: "10 Apr 2026", color: "text-[#531FFF]", bgColor: "bg-[#531FFF]/10" },
@@ -33,6 +34,8 @@ export default function AnnouncementsPage() {
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>("admin");
   const isStudent = userRole === "siswa" || userRole === "student";
+  const isParent = isParentRole(userRole) || userRole === "orang-tua" || userRole === "parent";
+  const isReadOnly = isStudent || isParent;
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
@@ -86,7 +89,7 @@ export default function AnnouncementsPage() {
   };
 
   const handleCrudSubmit = async (data: any) => {
-    if (isStudent) return; // Read only safeguard
+    if (isReadOnly) return; // Read only safeguard
 
     try {
       if (crudState.mode === "create") {
@@ -174,7 +177,7 @@ export default function AnnouncementsPage() {
         fields={announcementFields}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
-        onEditRequested={!isStudent ? () => setCrudState(s => ({ ...s, mode: "edit" })) : undefined}
+        onEditRequested={!isReadOnly ? () => setCrudState(s => ({ ...s, mode: "edit" })) : undefined}
       />
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -189,7 +192,7 @@ export default function AnnouncementsPage() {
           <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 rounded-lg text-[13px] font-bold shadow-sm transition-colors">
             <Grid className="w-4 h-4" /> Kategori
           </button>
-          {!isStudent && (
+          {!isReadOnly && (
             <button 
               onClick={() => setCrudState({ open: true, mode: "create" })}
               className="flex items-center gap-2 px-4 py-2 bg-[#531FFF] text-white hover:bg-[#4314E5] rounded-lg text-[13px] font-bold shadow-sm transition-colors cursor-pointer"
@@ -300,7 +303,7 @@ export default function AnnouncementsPage() {
                                  className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded transition-colors cursor-pointer" title="Lihat Detail">
                                  <Eye className="w-4 h-4" />
                                </button>
-                               {!isStudent && (
+                               {!isReadOnly && (
                                  <>
                                    <button 
                                      onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
@@ -351,7 +354,7 @@ export default function AnnouncementsPage() {
             <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
                <div className="flex justify-between items-center mb-5">
                  <h3 className="text-[14px] font-bold text-gray-900">Kategori Pengumuman</h3>
-                 {!isStudent && (
+                 {!isReadOnly && (
                     <button className="text-[11px] font-bold text-[#531FFF] hover:underline">Kelola Kategori</button>
                  )}
                </div>
@@ -395,7 +398,7 @@ export default function AnnouncementsPage() {
             </div>
 
             {/* Quick Send & AI Assistant (Only for Staff / Admin) */}
-            {!isStudent && (
+            {!isReadOnly && (
               <>
                 <div className="bg-[#F8F9FE] border border-[#531FFF]/10 rounded-xl p-6 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-24 h-24 bg-[#531FFF]/5 rounded-bl-[100px] pointer-events-none"></div>

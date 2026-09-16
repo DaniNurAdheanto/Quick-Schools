@@ -85,6 +85,9 @@ export default function RolesAndPermissionsPage() {
       
       if (activeRole === "siswa") {
         nextPerms["student"] = updatedRole;
+      } else if (activeRole === "orang-tua") {
+        nextPerms["parent"] = updatedRole;
+        nextPerms["orangtua"] = updatedRole;
       }
 
       return nextPerms;
@@ -125,7 +128,8 @@ export default function RolesAndPermissionsPage() {
     setPermissions(prev => ({
       ...prev,
       [activeRole]: updatedModules,
-      ...(activeRole === "siswa" ? { student: updatedModules } : {})
+      ...(activeRole === "siswa" ? { student: updatedModules } : {}),
+      ...(activeRole === "orang-tua" ? { parent: updatedModules, orangtua: updatedModules } : {})
     }));
   };
 
@@ -157,6 +161,10 @@ export default function RolesAndPermissionsPage() {
 
       const nextPerms = { ...prev, [activeRole]: nextRolePerms };
       if (activeRole === "siswa") nextPerms["student"] = nextRolePerms;
+      if (activeRole === "orang-tua") {
+        nextPerms["parent"] = nextRolePerms;
+        nextPerms["orangtua"] = nextRolePerms;
+      }
       return nextPerms;
     });
   };
@@ -176,6 +184,19 @@ export default function RolesAndPermissionsPage() {
       if (activeRole === "siswa") {
         await setDoc(doc(db, "roles", "student"), {
           roleId: "student",
+          modules: roleModules,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+
+      if (activeRole === "orang-tua") {
+        await setDoc(doc(db, "roles", "parent"), {
+          roleId: "parent",
+          modules: roleModules,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        await setDoc(doc(db, "roles", "orangtua"), {
+          roleId: "orangtua",
           modules: roleModules,
           updatedAt: new Date().toISOString()
         }, { merge: true });

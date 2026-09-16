@@ -9,6 +9,7 @@ import {
   isSuperAdminRole, 
   isStudentRole, 
   isTeacherRole,
+  isParentRole,
   ModulePermission
 } from "@/lib/roles-config";
 
@@ -204,7 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isSuperAdmin = useMemo(() => isSuperAdminRole(rawRole) || role === "super-admin", [rawRole, role]);
   const isGuru = useMemo(() => isTeacherRole(rawRole) || role === "guru", [rawRole, role]);
   const isStudent = useMemo(() => isStudentRole(rawRole) || role === "siswa", [rawRole, role]);
-  const isParent = useMemo(() => role === "orang-tua", [role]);
+  const isParent = useMemo(() => isParentRole(rawRole) || role === "orang-tua", [rawRole, role]);
   const isKepalaSekolah = useMemo(() => role === "kepala-sekolah", [role]);
   const isAdmin = useMemo(() => role === "admin" && !isSuperAdmin, [role, isSuperAdmin]);
 

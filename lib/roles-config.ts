@@ -188,3 +188,22 @@ export function isTeacherRole(role?: string | null): boolean {
   const normalized = role.toLowerCase().trim();
   return normalized === "guru" || normalized === "teacher";
 }
+
+/**
+ * Normalizes and checks if a role string represents Parent/Orang Tua/Wali
+ */
+export function isParentRole(role?: string | null): boolean {
+  if (!role) return false;
+  const normalized = role.toLowerCase().trim().replace(/[-_ ]/g, "");
+  return (
+    normalized === "orangtua" ||
+    normalized === "parent" ||
+    normalized === "walimurid" ||
+    normalized === "wali"
+  );
+}
+
+// Alias parent roles to have consistent permissions lookup
+DEFAULT_PERMISSIONS["parent"] = DEFAULT_PERMISSIONS["orang-tua"];
+DEFAULT_PERMISSIONS["orangtua"] = DEFAULT_PERMISSIONS["orang-tua"];
+

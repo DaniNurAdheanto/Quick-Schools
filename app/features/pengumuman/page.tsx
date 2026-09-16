@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import {
-  Bell, ArrowRight, Check, ChevronRight, Megaphone,
-  Users, Eye, Clock, Send, FileText, CheckCircle2,
-  Sparkles, Tag, ShieldCheck, Filter
+  Bell, ArrowRight, Check, Megaphone,
+  Users, Clock, FileText, CheckCircle2,
+  Tag, ShieldCheck
 } from "lucide-react";
 
 const T = {

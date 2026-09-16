@@ -20,6 +20,8 @@ import Image from "next/image";
 import { AlertBox, AlertType } from "@/components/ui/alert-box";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { isParentRole } from "@/lib/roles-config";
+import { resolveParentStudent } from "@/lib/parent-child-resolver";
 
 // Standard Indonesian Curriculum Subject Presets (Kurikulum Merdeka & Nasional)
 const STANDARD_SUBJECT_PRESETS = [
@@ -163,7 +165,8 @@ export default function ReportCardsPage() {
     return () => unsubAuth();
   }, []);
 
-  const isStudentRole = userRole === "student" || userRole === "siswa";
+  const isParent = isParentRole(userRole) || userRole === "orang-tua" || isParentRole(currentUserData?.role);
+  const isStudentRole = userRole === "student" || userRole === "siswa" || isParent;
   const isGuru = (userRole === "guru" || userRole === "teacher") || previewAsGuru;
 
   // Determine homeroom class(es) for the logged-in Guru (Wali Kelas)
@@ -313,9 +316,14 @@ export default function ReportCardsPage() {
     }
   }, [students, selectedStudentId]);
 
-  // Auto-select student if student role
+  // Auto-select student if student role or parent role
   useEffect(() => {
-    if (isStudentRole && students.length > 0 && userEmail) {
+    if (isParent && students.length > 0) {
+      const resolved = resolveParentStudent(auth.currentUser, currentUserData, students);
+      if (resolved.student) {
+        setSelectedStudentId(resolved.student._firestoreId || resolved.student.uid || resolved.student.id);
+      }
+    } else if (isStudentRole && students.length > 0 && userEmail) {
       const matchingStudent = students.find(s =>
         (s.email && s.email.toLowerCase() === userEmail.toLowerCase()) ||
         (s.name && userEmail.toLowerCase().includes(s.name.toLowerCase().split(' ')[0]))
@@ -324,7 +332,7 @@ export default function ReportCardsPage() {
         setSelectedStudentId(matchingStudent._firestoreId || matchingStudent.uid || matchingStudent.id);
       }
     }
-  }, [isStudentRole, students, userEmail]);
+  }, [isParent, isStudentRole, students, userEmail, currentUserData]);
 
   // Filtered Students List
   const filteredStudents = useMemo(() => {
@@ -876,7 +884,7 @@ export default function ReportCardsPage() {
             )}
             {isStudentRole && (
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                Mode Siswa (Read-Only)
+                {isParent ? "Mode Orang Tua (Read-Only)" : "Mode Siswa (Read-Only)"}
               </span>
             )}
           </div>

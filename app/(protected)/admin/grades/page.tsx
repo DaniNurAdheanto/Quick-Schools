@@ -32,6 +32,8 @@ import {
 import { cn } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
+import { isParentRole } from "@/lib/roles-config";
+import { resolveParentStudent } from "@/lib/parent-child-resolver";
 import {
   collection,
   onSnapshot,
@@ -115,7 +117,13 @@ export default function GradesPage() {
   const [detailModalGrade, setDetailModalGrade] = useState<any | null>(null);
   const [currentUserData, setCurrentUserData] = useState<any>(null);
 
-  const isStudentRole = userRole === "siswa" || userRole === "student";
+  const isParent = isParentRole(userRole) || userRole === "orang-tua" || isParentRole(currentUserData?.role);
+  const resolvedParentChild = useMemo(() => {
+    if (!isParent) return null;
+    return resolveParentStudent(currentUser, currentUserData, students);
+  }, [isParent, currentUser, currentUserData, students]);
+
+  const isStudentRole = userRole === "siswa" || userRole === "student" || isParent;
 
   // Auth & Role Listener
   useEffect(() => {
@@ -1279,6 +1287,9 @@ export default function GradesPage() {
   // LOGIKA RESOLUSI DATA SISWA UNTUK PORTAL SISWA
   // =========================================================================
   const matchedStudent = useMemo(() => {
+    if (isParent && resolvedParentChild?.student) {
+      return resolvedParentChild.student;
+    }
     if (!currentUser) return null;
     const uid = currentUser.uid;
     const email = currentUser.email?.toLowerCase();
@@ -1293,7 +1304,7 @@ export default function GradesPage() {
       (uName && s.name && s.name.toLowerCase().trim() === uName) ||
       (uName && s.fullName && s.fullName.toLowerCase().trim() === uName)
     ) || null;
-  }, [students, currentUser, currentUserData, studentDoc]);
+  }, [isParent, resolvedParentChild, students, currentUser, currentUserData, studentDoc]);
 
   const studentClassId = useMemo(() => {
     return matchedStudent?.classId || matchedStudent?.className || matchedStudent?.class ||
@@ -1514,14 +1525,16 @@ export default function GradesPage() {
                     Capaian & Penilaian Belajar
                   </h1>
                   <span className="px-2.5 py-0.5 text-xs font-bold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20 flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5" /> Portal Siswa
+                    <ShieldCheck className="w-3.5 h-3.5" /> {isParent ? `Portal Orang Tua • Siswa: ${studentDisplayName}` : "Portal Siswa"}
                   </span>
                   <span className="px-2.5 py-0.5 text-xs font-bold bg-purple-50 text-purple-700 rounded-full border border-purple-200 flex items-center gap-1">
                     <GraduationCap className="w-3.5 h-3.5" /> Kelas {studentMyClass?.name || studentClassId}
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 font-medium mt-1">
-                  Transparansi hasil evaluasi belajar, tugas harian, PTS, dan PAS milik <strong className="text-gray-800">{studentDisplayName}</strong> (NISN: {studentNisn}).
+                  {isParent
+                    ? `Transparansi hasil evaluasi belajar, tugas harian, PTS, dan PAS putra/putri Anda: ${studentDisplayName} (NISN: ${studentNisn}).`
+                    : `Transparansi hasil evaluasi belajar, tugas harian, PTS, dan PAS milik ${studentDisplayName} (NISN: ${studentNisn}).`}
                 </p>
               </div>
             </div>

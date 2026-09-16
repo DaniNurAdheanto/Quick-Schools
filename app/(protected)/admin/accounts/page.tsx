@@ -62,6 +62,10 @@ interface AccountUser {
   phone?: string;
   pendingOnboardingReminder?: boolean;
   reminderSentAt?: string | null;
+  studentId?: string;
+  studentName?: string;
+  studentIds?: string[];
+  nisn?: string;
 }
 
 const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; border: string; icon: any }> = {
@@ -104,7 +108,19 @@ export default function AccountManagementPage() {
   const [formSubject, setFormSubject] = useState("");
   const [formStudentName, setFormStudentName] = useState("");
   const [formStudentId, setFormStudentId] = useState("");
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [studentSearchQuery, setStudentSearchQuery] = useState("");
+  const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false);
+  const [studentsList, setStudentsList] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Subscribe to students collection for interactive linking
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "students"), (snap) => {
+      setStudentsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.warn("Students listener error:", err));
+    return () => unsub();
+  }, []);
 
   // Live password strength calculation
   const passwordStrength = useMemo(() => {
@@ -211,7 +227,11 @@ export default function AccountManagementPage() {
           updatedAt: data.updatedAt || null,
           phone: data.phone || "-",
           pendingOnboardingReminder: data.pendingOnboardingReminder || false,
-          reminderSentAt: data.reminderSentAt || null
+          reminderSentAt: data.reminderSentAt || null,
+          studentId: data.studentId || null,
+          studentName: data.studentName || null,
+          studentIds: data.studentIds || (data.studentId ? [data.studentId] : []),
+          nisn: data.nisn || null
         });
       });
 
@@ -438,6 +458,18 @@ export default function AccountManagementPage() {
             await updateDoc(doc(db, "teachers", tDoc.id), { name: formName, status: formStatus });
           }
         } catch (e) {}
+      } else if (formRole === "orang-tua") {
+        try {
+          const pSnap = await getDocs(query(collection(db, "parents"), where("userUid", "==", editModal.data.uid)));
+          for (const pDoc of pSnap.docs) {
+            await updateDoc(doc(db, "parents", pDoc.id), {
+              name: formName,
+              status: formStatus,
+              email: formEmail,
+              updatedAt: new Date().toISOString()
+            });
+          }
+        } catch (e) {}
       }
 
       toast.showEdit(`Data akun ${formName} berhasil diperbarui.`, "Perubahan Disimpan");
@@ -495,7 +527,14 @@ export default function AccountManagementPage() {
         if (formSubject.trim()) userPayload.subject = formSubject.trim();
       } else if (formRole === "orang-tua") {
         if (formStudentName.trim()) userPayload.studentName = formStudentName.trim();
-        if (formStudentId.trim()) userPayload.studentId = formStudentId.trim();
+        if (formStudentId.trim()) {
+          userPayload.studentId = formStudentId.trim();
+          userPayload.nisn = formStudentId.trim();
+        }
+        if (selectedStudentIds.length > 0) {
+          userPayload.studentIds = selectedStudentIds;
+          userPayload.linkedStudentIds = selectedStudentIds;
+        }
       }
 
       // 3. Save to Firestore users collection
@@ -524,6 +563,46 @@ export default function AccountManagementPage() {
             status: formStatus === "Nonaktif" ? "Nonaktif" : "Aktif"
           });
         } catch (e) {}
+      } else if (formRole === "orang-tua") {
+        // Automatically create synchronized companion document in parents collection
+        try {
+          await setDoc(doc(db, "parents", authResult.uid), {
+            id: authResult.uid,
+            userUid: authResult.uid,
+            parentId: `PRT-${authResult.uid.slice(0, 4).toUpperCase()}`,
+            name: formName.trim(),
+            email: formEmail.trim().toLowerCase(),
+            phone: "-",
+            relationship: "Wali Murid",
+            studentIds: selectedStudentIds,
+            status: formStatus,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        } catch (e) {
+          console.warn("Could not sync to parents collection:", e);
+        }
+
+        // Bi-directional link: update selected student docs with parent info
+        if (selectedStudentIds.length > 0) {
+          for (const sId of selectedStudentIds) {
+            const matchStd = studentsList.find(s => (s.id || s._firestoreId) === sId);
+            if (matchStd) {
+              const docId = matchStd.id || matchStd._firestoreId;
+              try {
+                await updateDoc(doc(db, "students", docId), {
+                  parentUid: authResult.uid,
+                  parentUserId: authResult.uid,
+                  parentName: formName.trim(),
+                  parentEmail: formEmail.trim().toLowerCase(),
+                  hasLinkedParent: true
+                });
+              } catch (err) {
+                console.warn("Could not sync student with parent info:", err);
+              }
+            }
+          }
+        }
       }
 
       toast.showSuccess(
@@ -541,6 +620,8 @@ export default function AccountManagementPage() {
       setFormSubject("");
       setFormStudentName("");
       setFormStudentId("");
+      setSelectedStudentIds([]);
+      setStudentSearchQuery("");
       setFormRole("guru");
       setFormStatus("Aktif");
     } catch (err: any) {
@@ -618,6 +699,25 @@ export default function AccountManagementPage() {
         } catch (e) {}
       }
 
+      // Query `parents` collection by email or userUid
+      const parentDocsToDelete = new Set<string>();
+      if (targetId) parentDocsToDelete.add(targetId);
+      if (targetUid) parentDocsToDelete.add(targetUid);
+      if (targetEmail) {
+        try {
+          const qPrEmail = query(collection(db, "parents"), where("email", "==", targetEmail));
+          const snap = await getDocs(qPrEmail);
+          snap.forEach(d => parentDocsToDelete.add(d.id));
+        } catch (e) {}
+      }
+      if (targetUid) {
+        try {
+          const qPrUid = query(collection(db, "parents"), where("userUid", "==", targetUid));
+          const snap = await getDocs(qPrUid);
+          snap.forEach(d => parentDocsToDelete.add(d.id));
+        } catch (e) {}
+      }
+
       // 1. Delete from `students` collection
       for (const id of Array.from(studentDocsToDelete)) {
         try {
@@ -629,6 +729,13 @@ export default function AccountManagementPage() {
       for (const id of Array.from(teacherDocsToDelete)) {
         try {
           await deleteDoc(doc(db, "teachers", id));
+        } catch (e) {}
+      }
+
+      // 3. Delete from `parents` collection
+      for (const id of Array.from(parentDocsToDelete)) {
+        try {
+          await deleteDoc(doc(db, "parents", id));
         } catch (e) {}
       }
 
@@ -1004,6 +1111,11 @@ export default function AccountManagementPage() {
                           <RoleIcon className="w-3.5 h-3.5" />
                           {roleObj.label}
                         </span>
+                        {user.role === "orang-tua" && (user.studentName || user.studentId) && (
+                          <span className="block mt-1 text-[10px] text-amber-800 font-bold truncate max-w-[170px] bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            Anak: {user.studentName || user.studentId}
+                          </span>
+                        )}
                       </td>
 
                       {/* Interactive Status Toggle Badge */}
@@ -1378,26 +1490,172 @@ export default function AccountManagementPage() {
               )}
 
               {formRole === "orang-tua" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-3.5 bg-amber-50/40 rounded-lg border border-amber-100 animate-in fade-in duration-150">
-                  <div>
-                    <label className="font-bold text-gray-700 block mb-1">Nama Siswa / Anak</label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: Bintang Pratama"
-                      value={formStudentName}
-                      onChange={(e) => setFormStudentName(e.target.value)}
-                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-medium bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none text-xs"
-                    />
+                <div className="space-y-3 p-4 bg-amber-50/50 rounded-xl border border-amber-200/80 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black text-amber-950 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Pilih Siswa / Anak yang Terhubung</span>
+                    </label>
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-100/70 px-2 py-0.5 rounded-full border border-amber-200">
+                      Mendukung Multi-Anak (Kakak-Beradik)
+                    </span>
                   </div>
-                  <div>
-                    <label className="font-bold text-gray-700 block mb-1">NISN / ID Siswa</label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: 0081234567"
-                      value={formStudentId}
-                      onChange={(e) => setFormStudentId(e.target.value)}
-                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-medium bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none text-xs"
-                    />
+
+                  {/* Selected Children Badges / Pills */}
+                  {selectedStudentIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedStudentIds.map((sId) => {
+                        const std = studentsList.find((s) => (s.id || s._firestoreId) === sId);
+                        if (!std) return null;
+                        return (
+                          <span
+                            key={sId}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-xs font-bold text-gray-800 shadow-2xs"
+                          >
+                            <User className="w-3.5 h-3.5 text-amber-600" />
+                            <span>{std.name || std.fullName} ({std.className || std.classId || "Kelas"})</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = selectedStudentIds.filter((id) => id !== sId);
+                                setSelectedStudentIds(updated);
+                                if (updated.length > 0) {
+                                  const first = studentsList.find((s) => (s.id || s._firestoreId) === updated[0]);
+                                  setFormStudentName(first?.name || first?.fullName || "");
+                                  setFormStudentId(first?.nisn || first?.nis || first?.id || "");
+                                } else {
+                                  setFormStudentName("");
+                                  setFormStudentId("");
+                                }
+                              }}
+                              className="hover:text-rose-500 rounded p-0.5 transition-colors cursor-pointer"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Search & Select Student Dropdown */}
+                  <div className="relative">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Ketik nama siswa, NISN, atau kelas anak..."
+                        value={studentSearchQuery}
+                        onChange={(e) => {
+                          setStudentSearchQuery(e.target.value);
+                          setIsStudentDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsStudentDropdownOpen(true)}
+                        className="w-full pl-9 pr-8 py-2.5 bg-white border border-gray-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none"
+                      />
+                      <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      {studentSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setStudentSearchQuery("")}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {isStudentDropdownOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setIsStudentDropdownOpen(false)}
+                        />
+                        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-gray-50">
+                          {studentsList
+                            .filter((s) => {
+                              const q = studentSearchQuery.toLowerCase();
+                              const name = (s.name || s.fullName || "").toLowerCase();
+                              const nisn = String(s.nisn || s.nis || "");
+                              const cls = (s.className || s.classId || "").toLowerCase();
+                              return !q || name.includes(q) || nisn.includes(q) || cls.includes(q);
+                            })
+                            .slice(0, 15)
+                            .map((s) => {
+                              const sId = s.id || s._firestoreId;
+                              const isSelected = selectedStudentIds.includes(sId);
+                              return (
+                                <button
+                                  key={sId}
+                                  type="button"
+                                  onClick={() => {
+                                    let updated: string[];
+                                    if (isSelected) {
+                                      updated = selectedStudentIds.filter((id) => id !== sId);
+                                    } else {
+                                      updated = [...selectedStudentIds, sId];
+                                      // Auto-fill suggested parent info if empty!
+                                      if (!formName && (s.fatherName || s.motherName || s.guardianName || s.parentName)) {
+                                        setFormName(s.fatherName || s.motherName || s.guardianName || s.parentName);
+                                      }
+                                    }
+                                    setSelectedStudentIds(updated);
+                                    if (updated.length > 0) {
+                                      const first = studentsList.find((st) => (st.id || st._firestoreId) === updated[0]);
+                                      setFormStudentName(first?.name || first?.fullName || "");
+                                      setFormStudentId(first?.nisn || first?.nis || first?.id || "");
+                                    }
+                                    setStudentSearchQuery("");
+                                    setIsStudentDropdownOpen(false);
+                                  }}
+                                  className={cn(
+                                    "w-full text-left px-3.5 py-2.5 flex items-center justify-between hover:bg-amber-50/60 transition-colors cursor-pointer text-xs",
+                                    isSelected && "bg-amber-50 text-amber-900 font-bold"
+                                  )}
+                                >
+                                  <div>
+                                    <p className="font-bold text-gray-900">{s.name || s.fullName}</p>
+                                    <p className="text-[11px] text-gray-500">
+                                      Kelas {s.className || s.classId || "-"} • NISN: {s.nisn || s.nis || "-"}
+                                      {s.parentPhone ? ` • No. Ortu: ${s.parentPhone}` : ""}
+                                    </p>
+                                  </div>
+                                  {isSelected ? (
+                                    <span className="text-[11px] font-black text-emerald-600 flex items-center gap-1">
+                                      <CheckCircle2 className="w-3.5 h-3.5" /> Terpilih
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] font-bold text-[#531FFF]">+ Pilih</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Fallback Manual Inputs if student not yet in system */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 border-t border-amber-200/50">
+                    <div>
+                      <label className="text-[11px] font-bold text-gray-600 block mb-0.5">Nama Anak (Ringkasan)</label>
+                      <input
+                        type="text"
+                        placeholder="Nama siswa anak..."
+                        value={formStudentName}
+                        onChange={(e) => setFormStudentName(e.target.value)}
+                        className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-medium bg-white text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-gray-600 block mb-0.5">NISN / ID Siswa</label>
+                      <input
+                        type="text"
+                        placeholder="NISN anak..."
+                        value={formStudentId}
+                        onChange={(e) => setFormStudentId(e.target.value)}
+                        className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-medium bg-white text-xs"
+                      />
+                    </div>
                   </div>
                 </div>
               )}

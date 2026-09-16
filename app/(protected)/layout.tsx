@@ -10,7 +10,7 @@ import { ShieldAlert, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
-  const { user, isAuthLoading, role, isSuperAdmin, isStudent } = useAuth();
+  const { user, isAuthLoading, role, isSuperAdmin, isStudent, isParent } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -26,6 +26,28 @@ function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
   const isRolesRoute = pathname?.startsWith("/admin/roles");
   const isTeachersRoute = pathname?.startsWith("/admin/teachers");
   const isStudentsManagementRoute = pathname === "/admin/data-siswa" || pathname?.startsWith("/admin/data-siswa/");
+  const isSettingsRoute = pathname?.startsWith("/admin/settings");
+  const isClassesRoute = pathname?.startsWith("/admin/classes");
+  const isHomeroomRoute = pathname?.startsWith("/admin/homeroom");
+  const isSubjectsRoute = pathname?.startsWith("/admin/subjects");
+  const isTeacherAttendanceRoute = pathname?.startsWith("/admin/teacher-attendance");
+  const isFinancialReportsRoute = pathname?.startsWith("/admin/financial-reports");
+  const isAcademicYearsRoute = pathname?.startsWith("/admin/academic-years");
+  const isParentsRoute = pathname === "/admin/parents" || pathname?.startsWith("/admin/parents");
+
+  const isSchoolAdminRoute = 
+    isAccountsRoute ||
+    isRolesRoute ||
+    isTeachersRoute ||
+    isStudentsManagementRoute ||
+    isSettingsRoute ||
+    isClassesRoute ||
+    isHomeroomRoute ||
+    isSubjectsRoute ||
+    isTeacherAttendanceRoute ||
+    isFinancialReportsRoute ||
+    isAcademicYearsRoute ||
+    isParentsRoute;
 
   // 1. Loading screen: NEVER render Super Admin layout while verifying
   if (isAuthLoading) {
@@ -116,7 +138,33 @@ function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // 5. Authorized state: Render full layout with isolated components
+  // 5. Strict Route Guard for Parents accessing school administration & master data
+  if (isParent && isSchoolAdminRoute) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center p-6 text-center">
+        <div className="bg-white p-8 rounded-xl border border-gray-100 shadow-xl max-w-md space-y-5 animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto shadow-sm border border-purple-100">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-lg font-extrabold text-gray-900">Akses Dibatasi: Khusus Manajemen Sekolah</h3>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Sebagai <strong>Orang Tua / Wali Murid</strong>, akun Anda hanya memiliki kewenangan memantau informasi perkembangan akademik putra/putri Anda. Menu administrasi dan master data sekolah tidak dapat diakses.
+            </p>
+          </div>
+          <Link
+            href="/admin/dashboard"
+            className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-bold rounded-lg shadow-md transition-all active:scale-95 cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Kembali ke Dashboard Orang Tua</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // 6. Authorized state: Render full layout with isolated components
   return (
     <div className="min-h-screen bg-[#F8F9FC] flex text-gray-900 font-sans selection:bg-[#531FFF]/20">
       <Sidebar />

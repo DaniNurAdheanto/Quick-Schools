@@ -25,23 +25,64 @@ import {
   DollarSign,
   HeartHandshake,
   Loader2,
-  Check
+  Check,
+  Copy,
+  Lock,
+  UserCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { auth, db, storage } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, query, collection, where, getDocs, arrayUnion } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useToast } from "@/context/ToastContext";
+import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { createAuthAccount } from "@/lib/create-user-auth";
 
 export default function StudentOnboardingPage() {
   const router = useRouter();
   const toast = useToast();
+  const { profile } = useSchoolProfile();
+  const currentSchoolName = profile?.schoolName || "SMA Garuda Nusantara";
 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // Auto Parent Account State
+  const [createdParentAccount, setCreatedParentAccount] = useState<{
+    email: string;
+    passwordDefault: string;
+    name: string;
+    isExisting: boolean;
+  } | null>(null);
+  const [copiedField, setCopiedField] = useState<string>("");
+
+  const handleCopy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(label);
+    toast.showSuccess(`${label} berhasil disalin ke clipboard!`, "Tersalin");
+    setTimeout(() => setCopiedField(""), 2500);
+  };
+
+  const getSchoolSlug = (schoolNameStr?: string) => {
+    if (!schoolNameStr) return "smagaruda";
+    const simplified = schoolNameStr
+      .toLowerCase()
+      .replace(/smart school/g, "")
+      .replace(/operating system/g, "")
+      .replace(/[^a-z0-9]/g, "")
+      .trim();
+    return simplified.slice(0, 10) || "sekolah";
+  };
+
+  const generateParentDefaultPassword = (parentFullName: string, schoolNameStr?: string) => {
+    const cleanFirstName = (parentFullName.trim().split(" ")[0] || "ortu").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const schoolSlug = getSchoolSlug(schoolNameStr);
+    const base = `${cleanFirstName}-${schoolSlug}`;
+    return base.length >= 6 ? base : `${base}123`;
+  };
 
   // Step State: 0 (Welcome), 1 (Pribadi), 2 (Akademik), 3 (OrangTua), 4 (Darurat), 5 (Review), 6 (Selesai)
   const [step, setStep] = useState<number>(0);
@@ -208,7 +249,7 @@ export default function StudentOnboardingPage() {
       };
 
       // 2. Comprehensive rich profile payload for /users/{userId}
-      const userDocPayload = {
+      const userDocPayload: Record<string, any> = {
         uid: targetStudentUid,
         id: targetStudentUid,
         name: finalFullName,
@@ -263,7 +304,120 @@ export default function StudentOnboardingPage() {
         createdAt: new Date().toISOString()
       };
 
-      // 3. Save to LocalStorage immediately for instant local availability
+      // 3. AUTOMATIC PARENT ACCOUNT CREATION (Role: orang-tua)
+      // Automatically creates a dedicated parent login account registered directly in Manajemen Akun System
+      const parentEmailInput = (orangTua.parentEmail || "").trim().toLowerCase();
+      const bestParentName = (
+        orangTua.fatherName ||
+        orangTua.motherName ||
+        orangTua.guardianName ||
+        `${finalFullName} (Orang Tua)`
+      ).trim();
+
+      let linkedParentUid: string | null = null;
+
+      if (parentEmailInput && bestParentName) {
+        const defaultPassword = generateParentDefaultPassword(bestParentName, currentSchoolName);
+        let parentAuthUid = "";
+        let isExisting = false;
+
+        try {
+          // Create Firebase Authentication Account in background using isolated secondary app
+          const authRes = await createAuthAccount(parentEmailInput, defaultPassword, bestParentName);
+          parentAuthUid = authRes.uid;
+        } catch (authErr: any) {
+          console.warn("createAuthAccount in onboarding notice:", authErr);
+          // Check if parent account already exists (e.g. sibling registered previously)
+          if (
+            authErr?.code === "auth/email-already-in-use" ||
+            (authErr?.message && authErr.message.includes("sudah terdaftar"))
+          ) {
+            isExisting = true;
+            try {
+              const userQuery = query(collection(db, "users"), where("email", "==", parentEmailInput));
+              const snap = await getDocs(userQuery);
+              if (!snap.empty) {
+                parentAuthUid = snap.docs[0].id;
+              }
+            } catch (qErr) {
+              console.warn("Could not query existing parent user:", qErr);
+            }
+          }
+        }
+
+        // If parent account was created or found in system
+        if (parentAuthUid) {
+          linkedParentUid = parentAuthUid;
+          const parentRelationFormatted =
+            orangTua.relation === "Ibu"
+              ? "Ibu Kandung"
+              : orangTua.relation === "Wali"
+              ? "Wali Murid"
+              : "Ayah Kandung";
+
+          const parentUserDocPayload: Record<string, any> = {
+            uid: parentAuthUid,
+            id: parentAuthUid,
+            name: bestParentName,
+            email: parentEmailInput,
+            role: "orang-tua",
+            phone: (orangTua.parentPhone || "").trim(),
+            status: "Aktif",
+            studentIds: arrayUnion(targetStudentUid),
+            linkedStudentIds: arrayUnion(targetStudentUid),
+            studentId: targetStudentUid,
+            fatherName: (orangTua.fatherName || "").trim(),
+            motherName: (orangTua.motherName || "").trim(),
+            guardianName: (orangTua.guardianName || "").trim(),
+            relationship: parentRelationFormatted,
+            relation: parentRelationFormatted,
+            job: (orangTua.parentJob || "").trim(),
+            income: orangTua.parentIncome || "< 2 Juta",
+            address: (orangTua.parentAddress || "").trim(),
+            emergencyName: (darurat.contactName || "").trim(),
+            emergencyRelation: darurat.relation || "",
+            emergencyPhone: (darurat.contactPhone || "").trim(),
+            passwordHint: defaultPassword,
+            updatedAt: new Date().toISOString(),
+            ...(!isExisting ? { createdAt: new Date().toISOString() } : {})
+          };
+
+          // Save directly to 'users' collection (Instantly registered in Manajemen Akun System)
+          try {
+            await setDoc(doc(db, "users", parentAuthUid), parentUserDocPayload, { merge: true });
+          } catch (uErr) {
+            console.warn("Could not save parent to users doc:", uErr);
+          }
+
+          // Save to 'parents' collection
+          try {
+            await setDoc(doc(db, "parents", parentAuthUid), {
+              ...parentUserDocPayload,
+              parentId: `PRT-${parentAuthUid.slice(0, 4).toUpperCase()}`,
+              userUid: parentAuthUid
+            }, { merge: true });
+          } catch (pErr) {
+            console.warn("Could not save parent to parents doc:", pErr);
+          }
+
+          setCreatedParentAccount({
+            email: parentEmailInput,
+            passwordDefault: defaultPassword,
+            name: bestParentName,
+            isExisting: isExisting
+          });
+        }
+      }
+
+      // Link parent to student user profile
+      if (linkedParentUid) {
+        userDocPayload.parentUid = linkedParentUid;
+        userDocPayload.linkedParentUid = linkedParentUid;
+        userDocPayload.hasLinkedParent = true;
+        userDocPayload.parentName = bestParentName;
+      }
+
+      // 4. Save to LocalStorage immediately for instant local availability
       try {
         localStorage.setItem("quick_schools_student_profile", JSON.stringify(userDocPayload));
         localStorage.setItem("onboarding_completed", "true");
@@ -271,7 +425,7 @@ export default function StudentOnboardingPage() {
         console.warn("LocalStorage save warning:", errLocal);
       }
 
-      // 4. Save to Cloud Firestore
+      // 5. Save to Cloud Firestore
       // A. Save to students collection (5 keys strictly matching rule)
       await setDoc(doc(db, "students", targetStudentUid), studentDocPayload, { merge: true });
 
@@ -997,16 +1151,26 @@ export default function StudentOnboardingPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5">
-                      <Mail className="w-3.5 h-3.5 text-slate-400" /> Email Orang Tua/Wali
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-slate-400" /> Email Orang Tua / Wali *
+                      </label>
+                      <span className="text-[10px] font-bold text-[#531FFF] bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" /> Auto Akun Login
+                      </span>
+                    </div>
                     <input
                       type="email"
                       value={orangTua.parentEmail}
                       onChange={(e) => setOrangTua({ ...orangTua, parentEmail: e.target.value })}
                       placeholder="email.orangtua@gmail.com"
                       className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      required
                     />
+                    <p className="text-[10px] text-slate-500 flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-slate-400 shrink-0" />
+                      Akun login ortu otomatis dibuat di Manajemen Akun. Password: <span className="font-mono font-bold text-[#531FFF]">[nama depan]-[nama sekolah]</span>
+                    </p>
                   </div>
 
                   <div className="space-y-1.5">
@@ -1250,6 +1414,72 @@ export default function StudentOnboardingPage() {
             <div className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-100 max-w-md mx-auto text-xs text-emerald-800 font-semibold">
               Siswa: <span className="font-extrabold">{pribadi.fullName}</span> ({akademik.className})
             </div>
+
+            {/* AUTOMATIC PARENT ACCOUNT DETAILS CARD */}
+            {createdParentAccount && (
+              <div className="p-5 bg-gradient-to-br from-purple-50/80 via-white to-purple-50/40 rounded-2xl border border-purple-200 text-left space-y-3.5 max-w-lg mx-auto shadow-sm">
+                <div className="flex items-center justify-between pb-2 border-b border-purple-100">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shrink-0">
+                      <UserCheck className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-xs text-slate-900">
+                        {createdParentAccount.isExisting
+                          ? "Akun Portal Orang Tua Telah Ditautkan!"
+                          : "Akun Portal Orang Tua Berhasil Dibuat!"}
+                      </h4>
+                      <p className="text-[10px] text-purple-700 font-medium">
+                        Terdaftar di Manajemen Akun System (Role: Orang Tua)
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    Langsung Aktif
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Orang tua / wali murid (<strong>{createdParentAccount.name}</strong>) dapat langsung masuk ke portal wali murid menggunakan kredensial berikut:
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-bold uppercase">Email Login</span>
+                      <span className="font-bold text-slate-800 break-all text-[11px]">{createdParentAccount.email}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(createdParentAccount.email, "Email Login")}
+                      className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-[#531FFF] transition-colors cursor-pointer shrink-0 ml-1"
+                      title="Salin Email"
+                    >
+                      {copiedField === "Email Login" ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-bold uppercase">Password Default</span>
+                      <span className="font-mono font-bold text-[#531FFF] text-[11px]">{createdParentAccount.passwordDefault}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(createdParentAccount.passwordDefault, "Password Default")}
+                      className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-[#531FFF] transition-colors cursor-pointer shrink-0 ml-1"
+                      title="Salin Password"
+                    >
+                      {copiedField === "Password Default" ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-400 italic leading-relaxed">
+                  * Format kata sandi: [nama depan ortu]-[nama sekolah]. Orang tua dapat mengganti kata sandi kapan saja di menu profil setelah berhasil masuk.
+                </p>
+              </div>
+            )}
 
             <div className="pt-4">
               <button

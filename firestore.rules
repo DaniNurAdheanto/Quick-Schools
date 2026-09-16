@@ -30,6 +30,10 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
+    match /parents/{parentId} {
+      allow read, write: if isSignedIn();
+    }
+
     match /settings/{settingId} {
       allow read: if true;
       allow write: if isSignedIn();

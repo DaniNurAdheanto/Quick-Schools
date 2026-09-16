@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import {
-  GraduationCap, ArrowRight, CheckCircle2, BookOpen, Calendar, Award,
-  BarChart2, Users, ClipboardList, Check, ChevronRight, BookMarked,
+  ArrowRight, CheckCircle2, BookOpen, Calendar,
+  BarChart2, Users, Check,
   CalendarDays, Layers
 } from "lucide-react";
 

@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
 import { useTimePresets, DEFAULT_TIME_PRESETS } from "@/lib/time-presets";
 import TimePresetManagerModal from "@/components/schedule/TimePresetManagerModal";
+import { isParentRole } from "@/lib/roles-config";
+import { resolveParentStudent } from "@/lib/parent-child-resolver";
 
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
@@ -287,11 +289,21 @@ export default function SchedulePage() {
   };
 
   // =========================================================================
-  // LOGIKA KHUSUS ROLE SISWA: RESOLUSI KELAS & JADWAL KELAS SISWA
+  // LOGIKA KHUSUS ROLE SISWA & ORANG TUA (READ-ONLY SCHEDULE VIEW)
   // =========================================================================
   const isStudent = userRole === "siswa" || userRole === "student" || currentUserData?.role === "siswa" || currentUserData?.role === "student";
+  const isParent = isParentRole(userRole) || userRole === "orang-tua" || isParentRole(currentUserData?.role);
+  const isReadOnly = isStudent || isParent;
+
+  const resolvedParentChild = useMemo(() => {
+    if (!isParent) return null;
+    return resolveParentStudent(auth.currentUser, currentUserData, students);
+  }, [isParent, students, currentUserData]);
 
   const studentClassId = useMemo(() => {
+    if (isParent) {
+      return resolvedParentChild?.classId || resolvedParentChild?.className || null;
+    }
     if (!auth.currentUser) return null;
     const user = auth.currentUser;
     const matched = students.find(s => 
@@ -304,7 +316,7 @@ export default function SchedulePage() {
       return matched.classId || matched.className;
     }
     return currentUserData?.classId || currentUserData?.className || null;
-  }, [students, currentUserData]);
+  }, [isParent, resolvedParentChild, students, currentUserData]);
 
   const studentMyClass = useMemo(() => {
     if (!studentClassId) return null;
@@ -338,29 +350,35 @@ export default function SchedulePage() {
     if (!searchQuery.trim()) return studentClassSchedules;
     const q = searchQuery.toLowerCase();
     return studentClassSchedules.filter(s => 
-      (s.subject && s.subject.toLowerCase().includes(q)) ||
-      (s.teacher && s.teacher.toLowerCase().includes(q))
+      (s.subject || "").toLowerCase().includes(q) || 
+      (s.teacher || "").toLowerCase().includes(q)
     );
   }, [studentClassSchedules, searchQuery]);
 
-  // Insights for student
+  // Today's specific schedules
   const todaySchedules = useMemo(() => {
-    return studentClassSchedules
-      .filter(s => s.day === currentDayString)
-      .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
+    return studentClassSchedules.filter(s => s.day === currentDayString);
   }, [studentClassSchedules, currentDayString]);
 
-  const currentActiveSchedule = useMemo(() => {
-    return todaySchedules.find(s => isActive(s)) || null;
-  }, [todaySchedules, isActive]);
+  // Currently ongoing subject right now
+  const activeClassSchedule = useMemo(() => {
+    if (!mounted) return null;
+    return todaySchedules.find(s => {
+      return s.startTime <= currentTimeString && s.endTime >= currentTimeString;
+    }) || null;
+  }, [todaySchedules, mounted, currentTimeString]);
 
-  const nextUpcomingSchedule = useMemo(() => {
+  // Next upcoming class schedule
+  const nextClassSchedule = useMemo(() => {
     if (!mounted) return null;
     return todaySchedules.find(s => s.startTime > currentTimeString) || null;
   }, [todaySchedules, mounted, currentTimeString]);
 
-  // JIKA ROLE ADALAH SISWA: TAMPILKAN PORTAL JADWAL KHUSUS KELASNYA SAJA
-  if (isStudent && !loading) {
+  const currentActiveSchedule = activeClassSchedule;
+  const nextUpcomingSchedule = nextClassSchedule;
+
+  // JIKA ROLE ADALAH SISWA ATAU ORANG TUA: TAMPILKAN PORTAL JADWAL KHUSUS KELASNYA SAJA (READ-ONLY)
+  if (isReadOnly && !loading) {
     if (!studentMyClass && !studentClassId) {
       return (
         <div className="p-4 sm:p-8 max-w-[1200px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
@@ -373,7 +391,9 @@ export default function SchedulePage() {
             </span>
             <h2 className="text-xl font-black text-gray-900 mt-3 tracking-tight">Belum Terdaftar di Kelas</h2>
             <p className="text-xs text-gray-500 mt-2 font-medium leading-relaxed">
-              Akun Anda belum terdaftar dalam rombongan belajar/kelas manapun. Silakan hubungi wali kelas atau bagian Tata Usaha sekolah untuk penempatan kelas Anda agar jadwal pelajaran dapat dimuat.
+              {isParent
+                ? "Data anak Anda belum terhubung dengan rombongan belajar/kelas manapun. Silakan hubungi wali kelas atau pihak Tata Usaha sekolah."
+                : "Akun Anda belum terdaftar dalam rombongan belajar/kelas manapun. Silakan hubungi wali kelas atau bagian Tata Usaha sekolah untuk penempatan kelas Anda agar jadwal pelajaran dapat dimuat."}
             </p>
           </div>
         </div>
@@ -394,7 +414,7 @@ export default function SchedulePage() {
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
-                  Portal Siswa
+                  {isParent ? `Portal Orang Tua • Siswa: ${resolvedParentChild?.student?.name || "Anak"}` : "Portal Siswa"}
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -410,7 +430,9 @@ export default function SchedulePage() {
                 Jadwal Pelajaran: Kelas {studentMyClass?.name || studentClassId}
               </h1>
               <p className="text-gray-500 text-xs sm:text-sm font-medium mt-1">
-                Jadwal kegiatan belajar mengajar mingguan dan alokasi jam pelajaran aktif untuk rombongan belajar Anda.
+                {isParent 
+                  ? "Jadwal kegiatan belajar mengajar mingguan dan alokasi jam pelajaran aktif putra/putri Anda (Mode Pratinjau Read-Only)."
+                  : "Jadwal kegiatan belajar mengajar mingguan dan alokasi jam pelajaran aktif untuk rombongan belajar Anda."}
               </p>
             </div>
           </div>

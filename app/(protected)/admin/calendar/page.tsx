@@ -22,6 +22,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { AlertBox, AlertType } from "@/components/ui/alert-box";
+import { isParentRole } from "@/lib/roles-config";
 
 const CATEGORIES = [
   { id: "ALL", label: "Semua Agenda", color: "bg-gray-100 text-gray-800 border-gray-200" },
@@ -96,6 +97,8 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [userRole, setUserRole] = useState<string>("admin");
   const isStudent = userRole === "siswa" || userRole === "student";
+  const isParent = isParentRole(userRole) || userRole === "orang-tua" || userRole === "parent";
+  const isReadOnly = isStudent || isParent;
   
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -210,7 +213,7 @@ export default function CalendarPage() {
 
   // Handle Open Create Modal
   const handleOpenAdd = (defaultDateStr?: string) => {
-    if (isStudent) return;
+    if (isReadOnly) return;
     setEditingEventId(null);
     const dateVal = defaultDateStr || format(new Date(), 'yyyy-MM-dd');
     setFormData({
@@ -230,7 +233,7 @@ export default function CalendarPage() {
 
   // Handle Edit Modal
   const handleEdit = (event: any) => {
-    if (isStudent) return;
+    if (isReadOnly) return;
     setEditingEventId(event.id);
     setFormData({
       title: event.title || "",
@@ -295,7 +298,7 @@ export default function CalendarPage() {
 
   // Delete Handler
   const handleDelete = async (id: string) => {
-    if (isStudent) return;
+    if (isReadOnly) return;
     if (id.startsWith("sample_")) {
       triggerAlert("warning", "Contoh sampel agenda tidak perlu dihapus.", "Informasi");
       return;
@@ -341,11 +344,11 @@ export default function CalendarPage() {
           <div
             key={day.toString()}
             onClick={() => {
-              if (userRole !== "siswa") handleOpenAdd(dateStr);
+              if (!isReadOnly) handleOpenAdd(dateStr);
             }}
             className={cn(
               "min-h-[110px] p-2 border-b border-r border-gray-100 transition-all group flex flex-col justify-between relative",
-              userRole !== "siswa" && "cursor-pointer hover:bg-purple-50/30",
+              !isReadOnly && "cursor-pointer hover:bg-purple-50/30",
               !isCurrentMonth ? "bg-gray-50/40 text-gray-400" : isToday ? "bg-purple-50/20" : "bg-white"
             )}
           >
@@ -460,7 +463,7 @@ export default function CalendarPage() {
             <span>Cetak Kalender (PDF)</span>
           </button>
 
-          {!isStudent && (
+          {!isReadOnly && (
             <button
               onClick={() => handleOpenAdd()}
               className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
@@ -811,7 +814,7 @@ export default function CalendarPage() {
               )}
             </div>
 
-            {!isStudent && (
+            {!isReadOnly && (
               <button
                 onClick={() => handleOpenAdd()}
                 className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-[#531FFF] font-bold text-xs rounded-lg transition-colors border border-gray-200 flex items-center justify-center gap-1.5 cursor-pointer"

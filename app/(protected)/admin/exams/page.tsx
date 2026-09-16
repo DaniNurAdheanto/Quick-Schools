@@ -20,6 +20,8 @@ import { cn } from "@/lib/utils";
 import { AlertBox, AlertType } from "@/components/ui/alert-box";
 import { useTimePresets } from "@/lib/time-presets";
 import TimePresetManagerModal from "@/components/schedule/TimePresetManagerModal";
+import { isParentRole } from "@/lib/roles-config";
+import { resolveParentStudent } from "@/lib/parent-child-resolver";
 
 // ==========================================
 // TYPES & INTERFACES
@@ -211,8 +213,10 @@ export default function ExamSchedulePage() {
 
   const { presets: timePresets } = useTimePresets();
   const [showTimePresetModal, setShowTimePresetModal] = useState(false);
+  const [currentUserData, setCurrentUserData] = useState<any>(null);
 
-  const isStudentRole = userRole === "student" || userRole === "siswa";
+  const isParent = isParentRole(userRole) || userRole === "orang-tua" || isParentRole(currentUserData?.role);
+  const isStudentRole = userRole === "student" || userRole === "siswa" || isParent;
 
   // Load initial local groups
   useEffect(() => {
@@ -229,6 +233,7 @@ export default function ExamSchedulePage() {
           let sClass = "";
           if (userSnap.exists()) {
             const data = userSnap.data();
+            setCurrentUserData(data);
             r = (data.role || "admin").toLowerCase();
             sClass = data.className || data.classId || data.kelas || "";
           }
@@ -306,7 +311,12 @@ export default function ExamSchedulePage() {
 
   // Match student class fallback
   useEffect(() => {
-    if (isStudentRole && !studentClass && students.length > 0 && auth.currentUser) {
+    if (isParent && students.length > 0) {
+      const resolved = resolveParentStudent(auth.currentUser, currentUserData, students);
+      if (resolved.classId || resolved.className) {
+        setStudentClass(resolved.className || resolved.classId || "");
+      }
+    } else if (isStudentRole && !studentClass && students.length > 0 && auth.currentUser) {
       const uid = auth.currentUser.uid;
       const email = auth.currentUser.email?.toLowerCase();
       const match = students.find(s => s.id === uid || s.uid === uid || (s.email && s.email.toLowerCase() === email));
@@ -314,7 +324,7 @@ export default function ExamSchedulePage() {
         setStudentClass(match.classId || match.className);
       }
     }
-  }, [isStudentRole, studentClass, students]);
+  }, [isParent, isStudentRole, studentClass, students, currentUserData]);
 
   // Pure Database Exam Groups (Combined Firestore + local reactive cache, deduplicated)
   const allGroups = useMemo<ExamGroup[]>(() => {
@@ -895,7 +905,7 @@ export default function ExamSchedulePage() {
             {isStudentRole && (
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/20 flex items-center gap-1">
                 <School className="w-3.5 h-3.5" />
-                <span>Kelas {studentClass || "10 MIPA 1"}</span>
+                <span>{isParent ? "Portal Orang Tua • " : ""}Kelas {studentClass || "10 MIPA 1"}</span>
               </span>
             )}
           </div>

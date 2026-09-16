@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { DEFAULT_PERMISSIONS, isSuperAdminRole, isStudentRole } from "@/lib/roles-config";
+import { DEFAULT_PERMISSIONS, isSuperAdminRole, isStudentRole, isParentRole } from "@/lib/roles-config";
 
 const NAV_MODULE_MAP: Record<string, string> = {
   "/admin/dashboard": "dashboard",
@@ -39,6 +39,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/admin/schedule": "academic",
   "/admin/announcements": "announcements",
   "/admin/data-siswa": "users",
+  "/admin/parents": "users",
   "/admin/classes": "academic",
   "/admin/teachers": "users",
   "/admin/homeroom": "users",
@@ -65,6 +66,7 @@ const OVERVIEW_NAV = [
 
 const MASTER_DATA_NAV = [
   { href: "/admin/data-siswa", label: "Data Siswa", icon: User },
+  { href: "/admin/parents", label: "Data Orang Tua", icon: Users },
   { href: "/admin/classes", label: "Kelas", icon: Users },
   { href: "/admin/teachers", label: "Staff Guru", icon: GraduationCap },
   { href: "/admin/homeroom", label: "Wali Kelas", icon: GraduationCap },
@@ -111,6 +113,13 @@ function NavGroup({
   isFooter?: boolean 
 }) {
   const isSuperAdmin = isSuperAdminRole(userRole) || (userRole || "").toLowerCase() === "admin";
+  const isParent = isParentRole(userRole) || (userRole || "").toLowerCase() === "orang-tua";
+  const isStudent = isStudentRole(userRole) || (userRole || "").toLowerCase() === "siswa";
+
+  // Hide entire MASTER DATA group for parents and students
+  if ((isParent || isStudent) && title === "MASTER DATA") {
+    return null;
+  }
 
   // Filter items based on permissions
   const visibleItems = items.filter(item => {
@@ -126,6 +135,16 @@ function NavGroup({
       return isSuperAdmin;
     }
 
+    // Strict rule: Pengaturan Sekolah & Role & Permission are exclusively for Super Admin / Admin
+    if (item.href === "/admin/settings" || item.href === "/admin/roles") {
+      if (isParent || isStudent) return false;
+    }
+
+    // Strict rule: Tahun Ajaran & Kenaikan is for school staff only
+    if (item.href === "/admin/academic-years") {
+      if (isParent || isStudent) return false;
+    }
+
     // Pembayaran SPP is accessible to Admin, Guru (Wali Kelas), Siswa, and Orang Tua
     if (item.href === "/admin/payments") {
       return true;
@@ -133,8 +152,7 @@ function NavGroup({
 
     // Strict rule: Absensi Guru is strictly for Guru, Admin, Kepala Sekolah, Super Admin (HIDDEN from Siswa and Orang Tua)
     if (item.href === "/admin/teacher-attendance") {
-      const r = (userRole || "").toLowerCase().trim();
-      if (isStudentRole(r) || r === "orang-tua" || r === "parent" || r === "wali") {
+      if (isStudent || isParent) {
         return false;
       }
       return true;
@@ -279,7 +297,11 @@ export function Sidebar() {
         try {
           const userSnap = await getDoc(doc(db, "users", user.uid));
           const rawRole = userSnap.exists() ? (userSnap.data().role || "admin") : "admin";
-          const role = (rawRole === "student" || rawRole === "siswa") ? "siswa" : rawRole;
+          const role = (rawRole === "student" || rawRole === "siswa") 
+            ? "siswa" 
+            : isParentRole(rawRole) 
+              ? "orang-tua" 
+              : rawRole;
           setUserRole(role);
 
           // Get permissions for this role

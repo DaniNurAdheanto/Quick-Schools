@@ -44,6 +44,8 @@ import { cn } from "@/lib/utils";
 import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal";
 import { TeacherDashboardView } from "@/components/dashboard/teacher-dashboard-view";
 import { AdminDashboardView } from "@/components/dashboard/admin-dashboard-view";
+import { ParentDashboardView } from "@/components/dashboard/parent-dashboard-view";
+import { isParentRole } from "@/lib/roles-config";
 
 function StudentDashboardView({ userName, greeting, academicYear, currentDate, currentDay }: {
   userName: string;
@@ -1115,7 +1117,9 @@ export default function DashboardPage() {
               ? "siswa" 
               : (rawRole === "teacher" || rawRole === "guru")
                 ? "guru"
-                : rawRole;
+                : isParentRole(rawRole)
+                  ? "orang-tua"
+                  : rawRole;
             setUserRole(role);
           } else {
             setUserName(user.displayName || user.email?.split('@')[0] || "User");
@@ -1162,6 +1166,34 @@ export default function DashboardPage() {
           </div>
         )}
         <TeacherDashboardView 
+          userName={userName}
+          greeting={greeting}
+          academicYear={academicYear}
+          currentDate={currentDate}
+          currentDay={currentDay}
+        />
+      </div>
+    );
+  }
+
+  if (activeRole === "orang-tua" || isParentRole(activeRole)) {
+    return (
+      <div className="relative">
+        {previewRole && (
+          <div className="bg-[#531FFF] text-white px-6 py-2.5 text-xs font-bold flex items-center justify-between shadow-sm sticky top-0 z-30">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>Pratinjau Orang Tua: Anda sedang melihat Dashboard sebagai <strong>Orang Tua / Wali Murid</strong>.</span>
+            </div>
+            <button
+              onClick={() => setPreviewRole(null)}
+              className="px-3 py-1 bg-white text-[#531FFF] rounded-md text-xs font-black hover:bg-purple-50 transition-colors cursor-pointer"
+            >
+              Kembali ke Mode Asli ({userRole})
+            </button>
+          </div>
+        )}
+        <ParentDashboardView 
           userName={userName}
           greeting={greeting}
           academicYear={academicYear}

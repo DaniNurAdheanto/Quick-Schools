@@ -1246,6 +1246,16 @@ export default function DataSiswaPage() {
                         )}
                       </div>
 
+                      {/* Parent linkage badge */}
+                      {(student.parentName || student.parentUid || student.hasLinkedParent) && (
+                        <div className="pt-0.5">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            <Users className="w-3 h-3 text-emerald-600" />
+                            <span>Ortu: {student.parentName || "Terhubung"}</span>
+                          </span>
+                        </div>
+                      )}
+
                       {/* Reminder status badge if unboarded */}
                       {(student.status === "Belum Onboarding" || student.onboardingCompleted === false) && (
                         <div className="pt-1">
@@ -1335,9 +1345,17 @@ export default function DataSiswaPage() {
                               <span className="font-bold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors block">
                                 {student.name}
                               </span>
-                              {student.major && (
-                                <span className="text-[11px] text-gray-400 font-medium">{student.major}</span>
-                              )}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {student.major && (
+                                  <span className="text-[11px] text-gray-400 font-medium">{student.major}</span>
+                                )}
+                                {(student.parentName || student.parentUid || student.hasLinkedParent) && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                    <Users className="w-2.5 h-2.5 text-emerald-600" />
+                                    <span>Ortu: {student.parentName || "Terhubung"}</span>
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </td>

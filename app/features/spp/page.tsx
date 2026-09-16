@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import {
-  CreditCard, ArrowRight, Check, ChevronRight, Receipt,
-  CheckCircle2, Bell, BarChart3, RefreshCw, SmartphoneNfc,
-  Wallet, Sparkles, AlertCircle
+  CreditCard, ArrowRight, Check, Receipt,
+  CheckCircle2, Bell, BarChart3, RefreshCw,
+  Wallet
 } from "lucide-react";
 
 const T = {

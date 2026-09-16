@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import {
-  Award, ArrowRight, Check, ChevronRight, BarChart3,
-  TrendingUp, FileText, Download, PieChart, Star,
-  CheckCircle2, Printer, PenLine, Sparkles
+  Award, ArrowRight, Check,
+  TrendingUp, Download, PieChart,
+  CheckCircle2, PenLine
 } from "lucide-react";
 
 const T = {

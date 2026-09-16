@@ -7,8 +7,8 @@ import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   Zap, ChevronDown, Menu, X, ArrowRight,
-  LayoutDashboard, UserCheck, Calendar, Users, PenLine,
-  CreditCard, FileText, Bell, BookOpen, Settings
+  LayoutDashboard, UserCheck, PenLine,
+  CreditCard, FileText, Bell, BookOpen
 } from "lucide-react";
 
 /* Real features in the system — linking to dedicated showcase pages and modules */

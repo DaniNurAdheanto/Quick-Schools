@@ -37,6 +37,8 @@ interface StudentPersonalAttendanceViewProps {
   attendanceRecords: AttendanceRecord[];
   config: AttendanceConfig;
   onOpenScanModal: () => void;
+  readOnly?: boolean;
+  isParent?: boolean;
 }
 
 const STATUS_OPTIONS = [
@@ -53,6 +55,8 @@ export default function StudentPersonalAttendanceView({
   attendanceRecords,
   config,
   onOpenScanModal,
+  readOnly = false,
+  isParent = false,
 }: StudentPersonalAttendanceViewProps) {
   const [statusFilter, setStatusFilter] = useState<string>("Semua");
   const [searchQuery, setSearchQuery] = useState("");
@@ -197,11 +201,15 @@ export default function StudentPersonalAttendanceView({
                 </span>
               </div>
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-                {student.name}
+                {isParent ? `Monitoring Presensi: ${student.name}` : student.name}
               </h1>
               <p className="text-xs sm:text-sm text-purple-200/80 font-medium flex items-center gap-1.5">
                 <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Portal Presensi Pribadi & Rekap Kehadiran Siswa</span>
+                <span>
+                  {isParent 
+                    ? "Portal Pemantauan Presensi Putra/Putri Anda (Read-Only)" 
+                    : "Portal Presensi Pribadi & Rekap Kehadiran Siswa"}
+                </span>
               </p>
             </div>
           </div>
@@ -246,14 +254,21 @@ export default function StudentPersonalAttendanceView({
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={onOpenScanModal}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-gradient-to-r from-[#531FFF] to-[#7E42EA] hover:from-[#4516db] hover:to-[#6f33db] text-white font-extrabold text-xs sm:text-sm rounded-lg shadow-lg shadow-[#531FFF]/40 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-            >
-              <Camera className="w-4 h-4" />
-              <span>{todayAttendance ? "Presensi Ulang" : "Ambil Presensi Sekarang"}</span>
-            </button>
+            {!readOnly ? (
+              <button
+                type="button"
+                onClick={onOpenScanModal}
+                className="inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-gradient-to-r from-[#531FFF] to-[#7E42EA] hover:from-[#4516db] hover:to-[#6f33db] text-white font-extrabold text-xs sm:text-sm rounded-lg shadow-lg shadow-[#531FFF]/40 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              >
+                <Camera className="w-4 h-4" />
+                <span>{todayAttendance ? "Presensi Ulang" : "Ambil Presensi Sekarang"}</span>
+              </button>
+            ) : (
+              <div className="inline-flex items-center justify-center gap-2 px-4 py-3.5 bg-white/10 backdrop-blur-md border border-white/20 text-white font-bold text-xs rounded-lg">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>{isParent ? "Mode Pantau Orang Tua" : "Read-Only"}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>

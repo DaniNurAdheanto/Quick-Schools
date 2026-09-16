@@ -412,13 +412,22 @@ export function AdminDashboardView({
         {/* Action Buttons */}
         <div className="z-10 relative flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end gap-2.5 w-full lg:w-auto min-w-[200px]">
           {(userRole === "admin" || userRole === "super-admin" || userRole === "superadmin") && (
-            <button
-              onClick={() => setPreviewRole("guru")}
-              className="flex items-center justify-center gap-2 bg-amber-400/95 hover:bg-amber-400 text-amber-950 px-4 py-2.5 rounded-lg text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer"
-            >
-              <GraduationCap className="w-4 h-4" />
-              Pratinjau Dashboard Guru
-            </button>
+            <>
+              <button
+                onClick={() => setPreviewRole("orang-tua")}
+                className="flex items-center justify-center gap-2 bg-emerald-400 hover:bg-emerald-300 text-emerald-950 px-4 py-2.5 rounded-lg text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer"
+              >
+                <Users className="w-4 h-4" />
+                Pratinjau Dashboard Orang Tua
+              </button>
+              <button
+                onClick={() => setPreviewRole("guru")}
+                className="flex items-center justify-center gap-2 bg-amber-400/95 hover:bg-amber-400 text-amber-950 px-4 py-2.5 rounded-lg text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer"
+              >
+                <GraduationCap className="w-4 h-4" />
+                Pratinjau Dashboard Guru
+              </button>
+            </>
           )}
           
           <Link

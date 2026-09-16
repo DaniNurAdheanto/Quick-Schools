@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import {
-  FileText, ArrowRight, Check, ChevronRight, TrendingUp,
-  PieChart, DollarSign, BarChart3, ShieldCheck, Wallet,
+  FileText, ArrowRight, Check,
+  PieChart, BarChart3, ShieldCheck,
   CheckCircle2, ArrowDownLeft, ArrowUpRight
 } from "lucide-react";
 

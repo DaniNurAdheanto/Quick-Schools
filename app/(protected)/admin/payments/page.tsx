@@ -53,7 +53,8 @@ import Link from "next/link";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
-import { isStudentRole, isTeacherRole, isSuperAdminRole } from "@/lib/roles-config";
+import { isStudentRole, isTeacherRole, isSuperAdminRole, isParentRole } from "@/lib/roles-config";
+import { resolveParentStudent } from "@/lib/parent-child-resolver";
 import Image from "next/image";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import {
@@ -109,7 +110,8 @@ export default function PaymentsPage() {
 
   const currentUser: any = userData || authUser;
   const userRole = authRole || userData?.role || "admin";
-  const isStudent = isAuthStudent || isStudentRole(userRole) || userRole === "orang-tua";
+  const isParent = isParentRole(userRole) || userRole === "orang-tua" || isParentRole(userData?.role);
+  const isStudent = isAuthStudent || isStudentRole(userRole) || isParent;
   const isGuru = isAuthGuru || isTeacherRole(userRole);
   const isSuperAdmin = isAuthSuperAdmin || isSuperAdminRole(userRole);
   const isAdmin = (isAuthAdmin || isSuperAdmin || userRole === "admin") && !isGuru && !isStudent;
@@ -299,8 +301,15 @@ export default function PaymentsPage() {
     return Array.from(matched);
   }, [currentUser, classesList, teachersList, isGuru]);
 
-  // When students or currentUser load, match student if role is student
+  // When students or currentUser load, match student if role is student or parent
   useEffect(() => {
+    if (isParent && students.length > 0) {
+      const resolved = resolveParentStudent(currentUser, userData, students);
+      if (resolved.student) {
+        setMatchedStudent(resolved.student);
+        return;
+      }
+    }
     if (isStudent) {
       if (students.length > 0) {
         const email = currentUser?.email?.toLowerCase();
@@ -329,7 +338,7 @@ export default function PaymentsPage() {
         });
       }
     }
-  }, [isStudent, currentUser, students]);
+  }, [isParent, isStudent, currentUser, userData, students]);
 
   // Auto-set selectedClass for Wali Kelas
   useEffect(() => {
@@ -708,7 +717,9 @@ export default function PaymentsPage() {
       paymentDate: new Date().toISOString().split("T")[0],
       paymentMethod: "BCA Virtual Account",
       referenceNo: `TRX-${Date.now().toString().slice(-6)}`,
-      cashierName: isStudent
+      cashierName: isParent
+        ? `Pembayaran Mandiri Orang Tua (${currentUser?.name || 'Wali'})`
+        : isStudent
         ? `Mandiri Siswa (${currentUser?.name || bill.studentName})`
         : currentUser?.name || currentUser?.displayName || "Kasir Tata Usaha",
       notes: bill.remainingAmount === bill.amount ? "Pelunasan SPP" : "Pembayaran Cicilan SPP",
@@ -1302,14 +1313,16 @@ export default function PaymentsPage() {
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-extrabold text-xs uppercase tracking-wider bg-emerald-200/70 text-emerald-900 px-2 py-0.5 rounded-md">
-                Portal Siswa
+                {isParent ? "Portal Orang Tua" : "Portal Siswa"}
               </span>
               <span className="text-xs font-bold text-emerald-900">
-                {matchedStudent ? `${matchedStudent.name} (${matchedStudent.className || "12 MIPA 1"} - NISN: ${matchedStudent.nisn || "-"})` : "Data Pribadi Siswa"}
+                {matchedStudent ? `${matchedStudent.name} (${matchedStudent.className || "12 MIPA 1"} - NISN: ${matchedStudent.nisn || "-"})` : "Data Siswa"}
               </span>
             </div>
             <p className="text-xs text-emerald-800 leading-relaxed font-medium">
-              Berikut adalah rincian tagihan SPP, status cicilan, sisa pembayaran, dan riwayat transaksi resmi Anda. Untuk pembayaran, silakan hubungi bendahara sekolah atau loket kasir resmi.
+              {isParent
+                ? "Berikut adalah rincian tagihan SPP, status pembayaran, dan riwayat transaksi resmi untuk putra/putri Anda. Anda dapat melakukan pembayaran SPP secara langsung melalui sistem."
+                : "Berikut adalah rincian tagihan SPP, status cicilan, sisa pembayaran, dan riwayat transaksi resmi Anda. Untuk pembayaran, silakan hubungi bendahara sekolah atau loket kasir resmi."}
             </p>
           </div>
         </div>
