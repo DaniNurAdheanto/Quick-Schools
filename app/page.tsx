@@ -1,812 +1,701 @@
 "use client";
 
 import Link from "next/link";
-import { 
-  ArrowRight, Sparkles, CheckCircle2, ChevronRight, Menu,
-  Calendar, GraduationCap, Bot, LineChart, Check,
-  ShieldCheck, Zap, Globe2, User, CheckSquare, CreditCard, MessageCircle,
-  Play, Users, BookOpen, Shield
-} from "lucide-react";
-
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { useEffect, useState } from "react";
-import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import {
+  ArrowRight, Sparkles, CheckCircle2, Users, BookOpen, CreditCard,
+  GraduationCap, UserCheck, FileText, Bell, BarChart3, ChevronRight,
+  Check, Star, Shield, Zap, Calendar, LayoutDashboard, PenLine,
+  Award, CalendarDays, Settings, BookMarked, MapPin
+} from "lucide-react";
+import LandingNavbar from "@/components/landing/navbar";
+import LandingFooter from "@/components/landing/footer";
 
-// Bilingual Translations Dictionary
-const TRANSLATIONS = {
+const T = {
   id: {
-    nav: {
-      features: "Fitur",
-      howItWorks: "Cara Kerja",
-      pricing: "Harga",
-      testimonials: "Testimoni",
-      signIn: "Masuk",
-      getStarted: "Mulai Gratis",
-      dashboard: "Ke Dashboard",
-    },
-    hero: {
-      badge: "Sistem Manajemen Sekolah Berbasis AI Generasi Baru",
-      titlePart1: "Kelola Sekolah Lebih ",
-      titleHighlight: "Cerdas, Cepat",
-      titlePart2: " & Modern",
-      desc: "Platform serba ada untuk mengelola presensi AI face recognition, data siswa, kurikulum, jadwal otomatis, pembayaran, dan laporan akademik real-time.",
-      btnPrimary: "Mulai Uji Coba Gratis",
-      btnSecondary: "Lihat Fitur Lengkap",
-      trust1: "Tanpa Kartu Kredit",
-      trust2: "Setup Cepat 5 Menit",
-      trust3: "Terintegrasi Cloud & AI",
-      statsSiswa: "Total Siswa",
-      statsPresensi: "Kehadiran AI",
-      statsKelas: "Kelas Aktif",
-      statsSPP: "SPP Terbayar",
-      grafikTitle: "Grafik Kehadiran & Akademik",
-      grafikSub: "Rekapitulasi Tahun Ajaran 2025/2026",
-      liveBadge: "Live AI Face ID",
-      aiScheduleTitle: "AI Schedule Optimizer",
-      aiScheduleDesc: "Jadwal pelajaran otomatis tanpa bentrok",
-      securityTitle: "Aman & Terenkripsi Cloud",
-      securityDesc: "Privasi data sekolah terjamin 100%",
-    },
-    trustedBy: "Dipercaya oleh lebih dari 500+ Sekolah & Institusi di Indonesia",
-    features: {
-      badge: "Fitur Unggulan",
-      title: "Semua Kebutuhan Manajemen Sekolah dalam Satu Platform",
-      desc: "Dirancang khusus untuk mempermudah operasional sekolah modern dengan teknologi otomasi dan kecerdasan buatan.",
-      f1Title: "Absensi & AI Face Recognition",
-      f1Desc: "Presensi siswa berbasis verifikasi wajah AI dan validasi radius geolokasi GPS sekolah.",
-      f2Title: "Manajemen Data Siswa & Guru",
-      f2Desc: "Kelola biodata, wali kelas, jam mengajar, serta berkas administrasi secara terpusat.",
-      f3Title: "Penyusunan Jadwal Otomatis",
-      f3Desc: "AI Generator jadwal pelajaran pintar tanpa bentrok antar guru dan ruang kelas.",
-      f4Title: "Pembayaran & Keuangan SPP",
-      f4Desc: "Sistem tagihan digital, konfirmasi otomatis, dan rekap arus kas keuangan sekolah.",
-      f5Title: "Pengumuman & Komunikasi",
-      f5Desc: "Pesan instan dan pengumuman sekolah langsung ke siswa, guru, dan orang tua.",
-      f6Title: "Laporan & Raport Akademik",
-      f6Desc: "Olahan nilai otomatis, grafik performa siswa, dan cetak raport digital siap pakai.",
-      more: "Selengkapnya",
-    },
-    pricing: {
-      badge: "Paket Langganan",
-      title: "Harga Transparan Tanpa Biaya Tersembunyi",
-      desc: "Pilih paket yang paling sesuai dengan kebutuhan jumlah siswa dan skala sekolah Anda.",
-      p1Name: "Paket Basic",
-      p1Desc: "Cocok untuk sekolah skala kecil / yayasan pemula",
-      p1Price: "Gratis",
-      p1Unit: "/ selamanya",
-      p1Btn: "Mulai Gratis",
-      p2Name: "Paket Pro AI",
-      p2Desc: "Untuk sekolah menengah & berkembang",
-      p2Badge: "Paling Populer",
-      p2Price: "Rp 199.000",
-      p2Unit: "/ bulan",
-      p2Btn: "Coba Gratis 14 Hari",
-      p3Name: "Paket Enterprise",
-      p3Desc: "Untuk grup sekolah & kompleks yayasan besar",
-      p3Price: "Kustom",
-      p3Btn: "Hubungi Tim Sales",
-    },
-    cta: {
-      title: "Siap Mentransformasi Operasional Sekolah Anda?",
-      desc: "Bergabunglah bersama ratusan sekolah lain di Indonesia yang telah beralih ke sistem sekolah modern berbasis AI.",
-      btn: "Daftar Sekarang",
-      stat: "Sekolah Aktif Terdaftar",
-    },
-    footer: {
-      tagline: "Platform sistem informasi manajemen sekolah cerdas terdepan di Indonesia.",
-      col1: "Produk",
-      col2: "Perusahaan",
-      col3: "Hubungi Kami",
-      rights: "Quick Schools. Hak cipta dilindungi undang-undang.",
-    }
+    heroBadge: "Platform Manajemen Sekolah Modern",
+    heroH1a: "Kelola Sekolah Lebih",
+    heroH1b: "Cerdas & Terpadu",
+    heroDesc: "Satu platform untuk mengelola presensi, data siswa, kelas, jadwal, penilaian, keuangan SPP, pengumuman, dan laporan sekolah secara real-time.",
+    heroCta1: "Mulai Gratis Sekarang",
+    heroCta2: "Lihat Fitur",
+    heroTrust: "Dipercaya 500+ sekolah · Tanpa kartu kredit · Setup 5 menit",
+    statStudents: "Total Siswa",
+    statAttend: "Kehadiran Hari Ini",
+    statClasses: "Kelas Aktif",
+    statSPP: "SPP Terbayar",
+    trustedTitle: "Dipercaya 500+ Sekolah & Institusi Pendidikan di Indonesia",
+    featBadge: "Fitur Sistem",
+    featTitle: "Semua Kebutuhan Manajemen Sekolah dalam Satu Platform",
+    featDesc: "Modul yang sudah tersedia dan siap digunakan langsung — tidak ada instalasi tambahan.",
+    feats: [
+      { icon: LayoutDashboard, title: "Dashboard Real-Time",       desc: "Pantau ringkasan kehadiran, keuangan, dan akademik sekolah dalam satu tampilan." },
+      { icon: UserCheck,       title: "Absensi Siswa & Guru",      desc: "Rekap absensi harian siswa dan guru dengan validasi radius geofence lokasi sekolah." },
+      { icon: Calendar,        title: "Kalender & Jadwal Pelajaran",desc: "Kelola kalender akademik, jadwal pelajaran per kelas, dan jadwal ujian." },
+      { icon: Users,           title: "Data Siswa, Guru & Kelas",  desc: "Kelola biodata siswa, data guru, wali kelas, dan komposisi kelas secara lengkap." },
+      { icon: PenLine,         title: "Penilaian & Rapor Digital", desc: "Input nilai per kompetensi, rekap nilai otomatis, cetak rapor digital siap pakai." },
+      { icon: CreditCard,      title: "Pembayaran SPP",            desc: "Tagihan SPP digital, rekap pembayaran, konfirmasi real-time, dan laporan tunggakan." },
+      { icon: FileText,        title: "Laporan Keuangan",          desc: "Rekap arus kas, laporan pemasukan & pengeluaran, dan monitoring anggaran sekolah." },
+      { icon: Bell,            title: "Pengumuman Sekolah",        desc: "Kirim pengumuman ke siswa, guru, staf, dan orang tua dalam satu klik." },
+    ],
+    howBadge: "Cara Kerja",
+    howTitle: "Mulai dalam 3 Langkah Mudah",
+    howSteps: [
+      { step: "01", title: "Daftar & Setup Profil Sekolah", desc: "Buat akun, lengkapi identitas institusi, logo, NPSN, alamat, dan set radius geofence lokasi sekolah." },
+      { step: "02", title: "Tambah Data Siswa & Guru",      desc: "Import atau tambahkan data siswa, guru, kelas, mata pelajaran, dan jadwal pelajaran." },
+      { step: "03", title: "Jalankan & Pantau Real-Time",   desc: "Mulai gunakan absensi, input nilai, kelola SPP, dan pantau semua aktivitas di dashboard." },
+    ],
+    whyBadge: "Keunggulan",
+    whyTitle: "Solusi Lengkap untuk Sekolah Modern",
+    whys: [
+      { icon: Zap,      title: "Setup Cepat < 1 Hari",      desc: "Onboarding sekolah selesai dalam waktu kurang dari satu hari kerja, tanpa instalasi." },
+      { icon: Shield,   title: "Keamanan Data Enterprise",   desc: "Data tersimpan aman di Firebase dengan enkripsi dan backup otomatis setiap hari." },
+      { icon: BarChart3,title: "Analitik Real-Time",         desc: "Laporan kehadiran, nilai, dan keuangan terupdate otomatis tanpa refresh manual." },
+      { icon: MapPin,   title: "Geofence Lokasi Sekolah",   desc: "Admin set radius geofence sekolah untuk validasi absensi berbasis lokasi GPS." },
+      { icon: Users,    title: "Multi-Role Access",          desc: "Admin, Guru, Siswa, Orang Tua, dan Super Admin punya portal akses tersendiri." },
+      { icon: Settings, title: "Pengaturan Terpusat",        desc: "Profil sekolah diatur di satu tempat dan otomatis dipakai di seluruh sistem." },
+    ],
+    testiBadge: "Testimoni",
+    testiTitle: "Dipercaya Ribuan Pendidik",
+    testis: [
+      { name: "Dra. Siti Rahmawati", role: "Kepala SMA Negeri 5 Jakarta",  text: "Quick Schools benar-benar mengubah cara kami mengelola sekolah. Absensi geofence sangat membantu, dan rapor digital menghemat waktu staf luar biasa.", rating: 5 },
+      { name: "Bpk. Ahmad Fauzi",    role: "Bendahara Yayasan Al-Azhar",   text: "Laporan keuangan dan SPP-nya luar biasa. Rekap bulanan jadi otomatis, kami hemat lebih dari 10 jam per minggu dari pekerjaan administrasi.", rating: 5 },
+      { name: "Ibu Dewi Santoso",    role: "Waka Kurikulum BINUS School",  text: "Jadwal pelajaran dan penilaian dalam satu sistem memudahkan guru kami. Rapor digital bisa langsung dicetak tanpa perlu format ulang.", rating: 5 },
+    ],
+    priceBadge: "Harga",
+    priceTitle: "Transparan, Tanpa Biaya Tersembunyi",
+    priceDesc: "Pilih paket sesuai skala sekolah. Semua paket termasuk onboarding gratis.",
+    plans: [
+      { name: "Basic", desc: "Untuk sekolah kecil & pemula", price: "Gratis", unit: "selamanya", btn: "Mulai Gratis", popular: false,
+        items: ["Hingga 150 Siswa", "Absensi GPS Standard", "Data Siswa & Guru", "Jadwal Pelajaran", "Laporan Bulanan", "Support Email"] },
+      { name: "Pro", desc: "Untuk sekolah menengah & berkembang", price: "Rp 199.000", unit: "/ bulan", btn: "Coba 14 Hari Gratis", popular: true,
+        items: ["Hingga 1.000 Siswa", "Absensi + Geofence", "Penilaian & Rapor Digital", "Pembayaran SPP Digital", "Laporan Keuangan Lengkap", "Pengumuman Multi-Target", "Support Prioritas 24/7"] },
+      { name: "Enterprise", desc: "Untuk grup sekolah & yayasan besar", price: "Kustom", unit: "", btn: "Hubungi Sales", popular: false,
+        items: ["Siswa Tanpa Batas", "Multi-Kampus & Cabang", "API & Integrasi Kustom", "Account Manager Dedikasi", "SLA 99.9% Uptime"] },
+    ],
+    popularBadge: "Paling Populer",
+    ctaTitle: "Siap Mentransformasi Operasional Sekolah Anda?",
+    ctaDesc: "Bergabunglah dengan 500+ sekolah yang telah beralih ke Quick Schools.",
+    ctaBtn: "Daftar Sekarang — Gratis",
+    ctaSub: "Tanpa kartu kredit · Cancel kapanpun · Onboarding gratis",
   },
   en: {
-    nav: {
-      features: "Features",
-      howItWorks: "How It Works",
-      pricing: "Pricing",
-      testimonials: "Testimonials",
-      signIn: "Sign In",
-      getStarted: "Get Started Free",
-      dashboard: "Go to Dashboard",
-    },
-    hero: {
-      badge: "Next-Gen AI Powered School Management Platform",
-      titlePart1: "Manage Your School ",
-      titleHighlight: "Smarter, Faster",
-      titlePart2: " & Future-Ready",
-      desc: "All-in-one platform to manage AI face recognition attendance, student data, academics, automated scheduling, payments, and real-time reports.",
-      btnPrimary: "Start Free Trial",
-      btnSecondary: "Explore All Features",
-      trust1: "No Credit Card Required",
-      trust2: "Fast 5-Min Setup",
-      trust3: "Cloud & AI Integrated",
-      statsSiswa: "Total Students",
-      statsPresensi: "AI Attendance",
-      statsKelas: "Active Classes",
-      statsSPP: "Tuition Paid",
-      grafikTitle: "Attendance & Academic Analytics",
-      grafikSub: "Academic Year Summary 2025/2026",
-      liveBadge: "Live AI Face ID",
-      aiScheduleTitle: "AI Schedule Optimizer",
-      aiScheduleDesc: "Conflict-free automated class timetable generator",
-      securityTitle: "Secure Cloud Encryption",
-      securityDesc: "100% Guaranteed school data privacy & safety",
-    },
-    trustedBy: "Trusted by over 500+ Schools & Institutions across Indonesia",
-    features: {
-      badge: "Core Features",
-      title: "Everything You Need in One Unified School Platform",
-      desc: "Designed specifically to streamline modern school operations with smart automation and artificial intelligence.",
-      f1Title: "AI Face Recognition & GPS Attendance",
-      f1Desc: "Student attendance powered by facial recognition AI and school location geofencing.",
-      f2Title: "Student & Teacher Management",
-      f2Desc: "Centralized bio-data, homeroom teachers, teaching hours, and administration files.",
-      f3Title: "Automated AI Timetabling",
-      f3Desc: "Smart schedule generator preventing room and teacher conflict seamlessly.",
-      f4Title: "Tuition & Financial Management",
-      f4Desc: "Digital invoicing, auto-reconciliation, and comprehensive school cashflow reports.",
-      f5Title: "Communication & Announcements",
-      f5Desc: "Direct messaging and school broadcast alerts to students, teachers, and parents.",
-      f6Title: "Academic Reports & Report Cards",
-      f6Desc: "Automated grade calculations, student progress charts, and digital report cards.",
-      more: "Learn More",
-    },
-    pricing: {
-      badge: "Subscription Plans",
-      title: "Simple & Transparent Pricing Without Hidden Fees",
-      desc: "Choose the perfect plan tailored to your school size and operational scale.",
-      p1Name: "Basic Plan",
-      p1Desc: "Ideal for small schools and new foundations",
-      p1Price: "Free",
-      p1Unit: "/ forever",
-      p1Btn: "Start Free",
-      p2Name: "Pro AI Plan",
-      p2Desc: "Best for growing and medium-sized schools",
-      p2Badge: "Most Popular",
-      p2Price: "Rp 199,000",
-      p2Unit: "/ month",
-      p2Btn: "Start 14-Day Free Trial",
-      p3Name: "Enterprise Plan",
-      p3Desc: "For large school networks & multi-campus institutions",
-      p3Price: "Custom",
-      p3Btn: "Contact Sales Team",
-    },
-    cta: {
-      title: "Ready to Transform Your School Operations?",
-      desc: "Join hundreds of schools already leveraging Quick Schools for a smarter academic experience.",
-      btn: "Register Now",
-      stat: "Active Registered Schools",
-    },
-    footer: {
-      tagline: "Leading smart school management information platform in Indonesia.",
-      col1: "Product",
-      col2: "Company",
-      col3: "Contact Us",
-      rights: "Quick Schools. All rights reserved.",
-    }
-  }
+    heroBadge: "Modern School Management Platform",
+    heroH1a: "Manage Your School",
+    heroH1b: "Smarter & Integrated",
+    heroDesc: "One platform for attendance, student data, classes, schedules, grades, tuition payments, announcements, and real-time school reports.",
+    heroCta1: "Start Free Now",
+    heroCta2: "View Features",
+    heroTrust: "Trusted by 500+ schools · No credit card · 5-min setup",
+    statStudents: "Total Students",
+    statAttend: "Attendance Today",
+    statClasses: "Active Classes",
+    statSPP: "SPP Paid",
+    trustedTitle: "Trusted by 500+ Schools & Educational Institutions in Indonesia",
+    featBadge: "System Features",
+    featTitle: "All School Management Needs in One Platform",
+    featDesc: "Available modules ready to use — no extra installation needed.",
+    feats: [
+      { icon: LayoutDashboard, title: "Real-Time Dashboard",        desc: "Monitor attendance, finance, and academic summaries in one view." },
+      { icon: UserCheck,       title: "Student & Teacher Attendance",desc: "Daily attendance recap with school geofence location validation." },
+      { icon: Calendar,        title: "Calendar & Class Schedule",   desc: "Manage academic calendar, class schedules, and exam timetables." },
+      { icon: Users,           title: "Student, Teacher & Class Data",desc: "Manage bio-data, teacher data, homeroom, and class compositions." },
+      { icon: PenLine,         title: "Grades & Digital Report Cards",desc: "Grade input, auto calculation, and print-ready digital report cards." },
+      { icon: CreditCard,      title: "Tuition (SPP) Payment",      desc: "Digital invoicing, payment recap, real-time confirmation & outstanding." },
+      { icon: FileText,        title: "Financial Reports",           desc: "Cashflow recap, income & expense reports, and budget monitoring." },
+      { icon: Bell,            title: "School Announcements",        desc: "Send announcements to students, teachers, staff, and parents in one click." },
+    ],
+    howBadge: "How It Works",
+    howTitle: "Up & Running in 3 Easy Steps",
+    howSteps: [
+      { step: "01", title: "Register & Setup School Profile", desc: "Create an account, fill in identity, logo, NPSN, address, and set geofence location radius." },
+      { step: "02", title: "Add Student & Teacher Data",      desc: "Import or add students, teachers, classes, subjects, and schedules." },
+      { step: "03", title: "Run & Monitor Live",               desc: "Use attendance, grade input, SPP management, and monitor all activities on the dashboard." },
+    ],
+    whyBadge: "Why Us",
+    whyTitle: "Complete Solution for Modern Schools",
+    whys: [
+      { icon: Zap,      title: "Setup in < 1 Day",           desc: "School onboarding done in less than one business day, no installation." },
+      { icon: Shield,   title: "Enterprise Data Security",    desc: "Data stored securely in Firebase with encryption and daily backups." },
+      { icon: BarChart3,title: "Real-Time Analytics",         desc: "Attendance, grades, and financial reports auto-update without refresh." },
+      { icon: MapPin,   title: "School Geofence Location",   desc: "Admin sets school geofence radius for GPS-based attendance validation." },
+      { icon: Users,    title: "Multi-Role Access",           desc: "Admin, Teacher, Student, Parent, and Super Admin each have their own portal." },
+      { icon: Settings, title: "Centralized Settings",        desc: "School profile configured once and auto-applied throughout the system." },
+    ],
+    testiBadge: "Testimonials",
+    testiTitle: "Trusted by Thousands of Educators",
+    testis: [
+      { name: "Dra. Siti Rahmawati", role: "Principal, SMA Negeri 5 Jakarta",  text: "Quick Schools truly changed how we manage our school. Geofence attendance helps control presence, and digital report cards save our staff enormous time.", rating: 5 },
+      { name: "Mr. Ahmad Fauzi",     role: "Treasurer, Al-Azhar Foundation",   text: "The financial reports and SPP system are outstanding. Monthly summaries are now automatic — saving over 10 hours per week in admin work.", rating: 5 },
+      { name: "Ms. Dewi Santoso",    role: "Vice Principal, BINUS School",     text: "Schedules and assessments in one system make things easy for our teachers. Digital report cards can be printed directly without reformatting.", rating: 5 },
+    ],
+    priceBadge: "Pricing",
+    priceTitle: "Transparent, No Hidden Fees",
+    priceDesc: "Choose the plan that fits your school scale. All plans include free onboarding.",
+    plans: [
+      { name: "Basic", desc: "For small schools & beginners", price: "Free", unit: "forever", btn: "Start Free", popular: false,
+        items: ["Up to 150 Students", "Standard GPS Attendance", "Student & Teacher Data", "Class Schedule", "Monthly Reports", "Email Support"] },
+      { name: "Pro", desc: "For growing & medium schools", price: "Rp 199,000", unit: "/ month", btn: "Try 14 Days Free", popular: true,
+        items: ["Up to 1,000 Students", "Attendance + Geofence", "Grades & Digital Report Cards", "Digital SPP Payment", "Full Financial Reports", "Multi-Target Announcements", "24/7 Priority Support"] },
+      { name: "Enterprise", desc: "For school groups & large foundations", price: "Custom", unit: "", btn: "Contact Sales", popular: false,
+        items: ["Unlimited Students", "Multi-Campus & Branches", "Custom API & Integration", "Dedicated Account Manager", "SLA 99.9% Uptime"] },
+    ],
+    popularBadge: "Most Popular",
+    ctaTitle: "Ready to Transform Your School Operations?",
+    ctaDesc: "Join 500+ schools that have switched to Quick Schools.",
+    ctaBtn: "Register Now — It's Free",
+    ctaSub: "No credit card · Cancel anytime · Free onboarding",
+  },
 };
 
+/* ── Dashboard Mockup mirroring real Quick Schools admin UI ── */
+function DashboardMockup() {
+  return (
+    <div className="w-full select-none">
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden" style={{ boxShadow: "0 25px 60px -12px rgba(83,31,255,0.15), 0 0 0 1px rgba(83,31,255,0.06)" }}>
+        {/* Browser chrome */}
+        <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+          <div className="flex gap-1.5 shrink-0">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
+          </div>
+          <div className="flex-1 mx-3 px-3 py-1 bg-white rounded-lg border border-gray-200 flex items-center gap-1.5">
+            <svg className="w-2.5 h-2.5 text-purple-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+            <span className="text-gray-400 font-semibold" style={{ fontSize: 10 }}>quickschools.id/admin/dashboard</span>
+          </div>
+        </div>
+
+        {/* App layout */}
+        <div className="flex" style={{ height: 380 }}>
+          {/* Sidebar — exact colors from real sidebar.tsx */}
+          <div className="border-r border-gray-100 flex flex-col shrink-0 py-3" style={{ width: 130, backgroundColor: "#F9FAFB" }}>
+            {/* Logo */}
+            <div className="flex items-center gap-2 px-3 mb-4">
+              <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0">
+                <Zap className="w-3.5 h-3.5" style={{ color: "#531FFF" }} />
+              </div>
+              <div>
+                <p className="font-extrabold text-gray-800 leading-tight" style={{ fontSize: 9 }}>Quick Schools</p>
+                <p className="text-gray-400 font-semibold" style={{ fontSize: 7 }}>Smart School OS</p>
+              </div>
+            </div>
+
+            {/* OVERVIEW group */}
+            <div className="px-2 space-y-0.5">
+              <p className="font-extrabold text-gray-400 uppercase px-1 mb-1" style={{ fontSize: 7, letterSpacing: "0.08em" }}>OVERVIEW</p>
+              {[
+                { icon: LayoutDashboard, label: "Dashboard", active: true },
+                { icon: CalendarDays, label: "Kalender", active: false },
+                { icon: BookOpen, label: "Jadwal", active: false },
+                { icon: Bell, label: "Pengumuman", active: false, badge: 3 },
+              ].map((n, i) => (
+                <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg"
+                  style={{ backgroundColor: n.active ? "white" : "transparent", color: n.active ? "#531FFF" : "#6B7280",
+                    boxShadow: n.active ? "0 1px 4px rgba(0,0,0,0.06)" : "none" }}>
+                  <n.icon style={{ width: 11, height: 11, color: n.active ? "#531FFF" : "#9CA3AF" }} />
+                  <span className="font-semibold" style={{ fontSize: 8 }}>{n.label}</span>
+                  {n.badge && <span className="ml-auto font-bold text-white px-1 rounded" style={{ fontSize: 7, backgroundColor: "#531FFF" }}>{n.badge}</span>}
+                </div>
+              ))}
+
+              {/* MASTER DATA */}
+              <p className="font-extrabold text-gray-400 uppercase px-1 mt-3 mb-1" style={{ fontSize: 7, letterSpacing: "0.08em" }}>MASTER DATA</p>
+              {[
+                { icon: Users, label: "Data Siswa" },
+                { icon: GraduationCap, label: "Guru" },
+                { icon: BookMarked, label: "Pelajaran" },
+              ].map((n, i) => (
+                <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-gray-500">
+                  <n.icon style={{ width: 11, height: 11, color: "#9CA3AF" }} />
+                  <span className="font-semibold" style={{ fontSize: 8 }}>{n.label}</span>
+                </div>
+              ))}
+
+              {/* AKADEMIK */}
+              <p className="font-extrabold text-gray-400 uppercase px-1 mt-3 mb-1" style={{ fontSize: 7, letterSpacing: "0.08em" }}>AKADEMIK</p>
+              {[
+                { icon: UserCheck, label: "Absensi" },
+                { icon: PenLine, label: "Penilaian" },
+                { icon: Award, label: "Rapor" },
+              ].map((n, i) => (
+                <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-gray-500">
+                  <n.icon style={{ width: 11, height: 11, color: "#9CA3AF" }} />
+                  <span className="font-semibold" style={{ fontSize: 8 }}>{n.label}</span>
+                </div>
+              ))}
+
+              {/* KEUANGAN */}
+              <p className="font-extrabold text-gray-400 uppercase px-1 mt-3 mb-1" style={{ fontSize: 7, letterSpacing: "0.08em" }}>KEUANGAN</p>
+              {[
+                { icon: CreditCard, label: "SPP" },
+                { icon: FileText, label: "Keuangan" },
+              ].map((n, i) => (
+                <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-gray-500">
+                  <n.icon style={{ width: 11, height: 11, color: "#9CA3AF" }} />
+                  <span className="font-semibold" style={{ fontSize: 8 }}>{n.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Main content */}
+          <div className="flex-1 p-3 overflow-hidden" style={{ backgroundColor: "#FAFBFF" }}>
+            {/* Header */}
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-gray-400 font-semibold" style={{ fontSize: 9 }}>Selamat Datang 👋</p>
+                <p className="font-extrabold text-gray-900" style={{ fontSize: 13 }}>Dashboard Utama</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ backgroundColor: "#F3F0FF" }}>
+                  <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: "#531FFF" }}></div>
+                  <span className="font-bold" style={{ fontSize: 9, color: "#531FFF" }}>Live</span>
+                </div>
+                <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#531FFF" }}>
+                  <span className="text-white font-extrabold" style={{ fontSize: 9 }}>A</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Stat cards */}
+            <div className="grid grid-cols-4 gap-2 mb-3">
+              {[
+                { label: "Total Siswa", val: "1.248", iconEl: <Users style={{ width: 14, height: 14, color: "#531FFF" }} />, iconBg: "#F3F0FF", change: "+12", changeColor: "#10b981" },
+                { label: "Hadir Hari Ini", val: "96%", iconEl: <UserCheck style={{ width: 14, height: 14, color: "#059669" }} />, iconBg: "#ECFDF5", change: "+2%", changeColor: "#10b981" },
+                { label: "Kelas Aktif", val: "36", iconEl: <BookOpen style={{ width: 14, height: 14, color: "#2563eb" }} />, iconBg: "#EFF6FF", change: "Stabil", changeColor: "#6b7280" },
+                { label: "SPP Lunas", val: "92%", iconEl: <CreditCard style={{ width: 14, height: 14, color: "#d97706" }} />, iconBg: "#FFFBEB", change: "+5%", changeColor: "#10b981" },
+              ].map((s, i) => (
+                <div key={i} className="bg-white rounded-xl p-2.5 border border-gray-100" style={{ boxShadow: "0 2px 8px -4px rgba(0,0,0,0.06)" }}>
+                  <div className="w-6 h-6 rounded-lg flex items-center justify-center mb-1.5" style={{ backgroundColor: s.iconBg }}>
+                    {s.iconEl}
+                  </div>
+                  <p className="font-extrabold text-gray-900" style={{ fontSize: 13 }}>{s.val}</p>
+                  <p className="text-gray-400 font-semibold uppercase mt-0.5" style={{ fontSize: 7 }}>{s.label}</p>
+                  <p className="font-bold mt-0.5" style={{ fontSize: 8, color: s.changeColor }}>↑ {s.change}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Chart + Live Feed */}
+            <div className="grid grid-cols-3 gap-2">
+              {/* Bar chart */}
+              <div className="col-span-2 bg-white rounded-xl p-3 border border-gray-100" style={{ boxShadow: "0 2px 8px -4px rgba(0,0,0,0.06)" }}>
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="font-extrabold uppercase" style={{ fontSize: 9, color: "#531FFF", letterSpacing: "0.06em" }}>Grafik Kehadiran</p>
+                    <p className="font-bold text-gray-800" style={{ fontSize: 10 }}>10 Hari Terakhir</p>
+                  </div>
+                  <span className="text-gray-400 font-bold bg-gray-100 px-2 py-0.5 rounded-full" style={{ fontSize: 8 }}>Real-time</span>
+                </div>
+                <div className="flex items-end gap-1.5 mt-1" style={{ height: 80 }}>
+                  {[72, 85, 78, 92, 88, 96, 91, 98, 95, 97].map((v, i) => (
+                    <div key={i} className="flex-1 rounded-t" style={{ height: `${v}%`, backgroundColor: i === 9 ? "#531FFF" : "#DDD6FF" }}></div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Live feed */}
+              <div className="bg-white rounded-xl p-2.5 border border-gray-100" style={{ boxShadow: "0 2px 8px -4px rgba(0,0,0,0.06)" }}>
+                <p className="text-gray-500 font-extrabold uppercase mb-1.5" style={{ fontSize: 8, letterSpacing: "0.06em" }}>Absensi Live</p>
+                <div className="space-y-1.5">
+                  {[
+                    { name: "Ahmad R.", cl: "10A", color: "#10b981", active: false },
+                    { name: "Siti N.", cl: "11B", color: "#531FFF", active: true },
+                    { name: "Budi S.", cl: "12C", color: "#10b981", active: false },
+                  ].map((s, i) => (
+                    <div key={i} className="flex items-center gap-1.5 p-1.5 rounded-lg border"
+                      style={{ backgroundColor: s.active ? "rgba(83,31,255,0.04)" : "rgba(236,253,245,0.6)", borderColor: s.active ? "rgba(83,31,255,0.2)" : "rgba(167,243,208,1)" }}>
+                      <div className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ backgroundColor: s.color }}></div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-gray-800 truncate" style={{ fontSize: 8 }}>{s.name} · {s.cl}</p>
+                        <p className="font-semibold" style={{ fontSize: 7, color: s.active ? "#531FFF" : "#059669" }}>hadir</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Floating badges */}
+      <motion.div
+        animate={{ y: [0, -6, 0] }}
+        transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+        style={{ position: "absolute", left: -44, top: "25%", backgroundColor: "white", borderRadius: 16, padding: "10px 14px", border: "1px solid #f3f4f6", boxShadow: "0 10px 30px -8px rgba(0,0,0,0.12)", display: "flex", alignItems: "center", gap: 10 }}
+        className="hidden xl:flex"
+      >
+        <div style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: "#F3F0FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <CheckCircle2 style={{ width: 16, height: 16, color: "#531FFF" }} />
+        </div>
+        <div>
+          <p className="font-bold text-gray-900" style={{ fontSize: 11 }}>Absensi Aktif</p>
+          <p className="font-semibold" style={{ fontSize: 10, color: "#531FFF" }}>96% hadir hari ini</p>
+        </div>
+      </motion.div>
+
+      <motion.div
+        animate={{ y: [0, 6, 0] }}
+        transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+        style={{ position: "absolute", right: -44, bottom: 64, backgroundColor: "white", borderRadius: 16, padding: "10px 14px", border: "1px solid #f3f4f6", boxShadow: "0 10px 30px -8px rgba(0,0,0,0.12)", display: "flex", alignItems: "center", gap: 10 }}
+        className="hidden xl:flex"
+      >
+        <div style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: "#F3F0FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <CreditCard style={{ width: 16, height: 16, color: "#531FFF" }} />
+        </div>
+        <div>
+          <p className="font-bold text-gray-900" style={{ fontSize: 11 }}>SPP Terbayar</p>
+          <p className="font-semibold" style={{ fontSize: 10, color: "#531FFF" }}>92% bulan ini</p>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function LandingPage() {
-  const [user, setUser] = useState<any>(null);
   const [lang, setLang] = useState<"id" | "en">("id");
 
-  // Load language preference
   useEffect(() => {
-    const savedLang = localStorage.getItem("qs_lang") as "id" | "en";
-    if (savedLang === "id" || savedLang === "en") {
-      setLang(savedLang);
-    }
+    const saved = localStorage.getItem("qs_lang") as "id" | "en";
+    if (saved === "id" || saved === "en") setLang(saved);
   }, []);
 
-  const changeLanguage = (newLang: "id" | "en") => {
-    setLang(newLang);
-    localStorage.setItem("qs_lang", newLang);
+  const changeLang = (l: "id" | "en") => {
+    setLang(l);
+    localStorage.setItem("qs_lang", l);
   };
 
-  const t = TRANSLATIONS[lang];
+  const t = T[lang];
 
-  useEffect(() => {
-    let inactivityTimer: NodeJS.Timeout;
-
-    const resetTimer = () => {
-      clearTimeout(inactivityTimer);
-      // 5 minutes timer
-      inactivityTimer = setTimeout(async () => {
-        if (auth.currentUser) {
-          try {
-            await signOut(auth);
-            setUser(null);
-            console.log("Logged out due to 5 minutes of inactivity on landing page");
-          } catch (error) {
-            console.error("Error signing out:", error);
-          }
-        }
-      }, 5 * 60 * 1000);
-    };
-
-    const handleUserActivity = () => {
-      if (auth.currentUser) {
-        resetTimer();
-      }
-    };
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        resetTimer();
-        window.addEventListener("mousemove", handleUserActivity);
-        window.addEventListener("keydown", handleUserActivity);
-        window.addEventListener("click", handleUserActivity);
-        window.addEventListener("scroll", handleUserActivity);
-      } else {
-        clearTimeout(inactivityTimer);
-        window.removeEventListener("mousemove", handleUserActivity);
-        window.removeEventListener("keydown", handleUserActivity);
-        window.removeEventListener("click", handleUserActivity);
-        window.removeEventListener("scroll", handleUserActivity);
-      }
-    });
-
-    return () => {
-      unsubscribe();
-      clearTimeout(inactivityTimer);
-      window.removeEventListener("mousemove", handleUserActivity);
-      window.removeEventListener("keydown", handleUserActivity);
-      window.removeEventListener("click", handleUserActivity);
-      window.removeEventListener("scroll", handleUserActivity);
-    };
-  }, []);
+  const featIconBg = ["#F3F0FF","#ECFDF5","#EFF6FF","#F3F0FF","#FFFBEB","#F0F9FF","#F0FDF4","#FFF1F2"];
+  const featIconColor = ["#531FFF","#059669","#2563eb","#531FFF","#d97706","#0284c7","#16a34a","#e11d48"];
 
   return (
-    <div className="min-h-screen bg-white font-sans text-gray-900 selection:bg-[#531FFF]/20 overflow-x-hidden">
-      {/* Navbar */}
-      <motion.header 
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100 shadow-xs"
-      >
-        <div className="max-w-[1400px] mx-auto px-6 h-20 flex items-center justify-between">
-           <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#531FFF] to-[#8C6BFF] flex items-center justify-center shadow-lg shadow-[#531FFF]/20">
-                 <Zap className="w-5 h-5 text-white" />
+    <div style={{ minHeight: "100vh", backgroundColor: "white", fontFamily: "var(--font-sans, system-ui, sans-serif)", color: "#111827", overflowX: "hidden" }}>
+      <LandingNavbar lang={lang} onChangeLang={changeLang} />
+
+      {/* ── HERO ── */}
+      <section style={{ position: "relative", minHeight: "100vh", display: "flex", alignItems: "center", paddingTop: 80, paddingBottom: 64, overflow: "hidden" }}>
+        {/* Backgrounds via inline style — not Tailwind-dependent */}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #F3F0FF 0%, #ffffff 50%, #EEF2FF 100%)" }} />
+        <div style={{ position: "absolute", top: 0, right: 0, width: 800, height: 800, background: "radial-gradient(circle, rgba(83,31,255,0.07) 0%, transparent 70%)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle, rgba(83,31,255,0.08) 1px, transparent 1px)", backgroundSize: "36px 36px", pointerEvents: "none" }} />
+
+        <div style={{ position: "relative", zIndex: 10, maxWidth: 1280, margin: "0 auto", padding: "0 24px", width: "100%" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}
+            className="grid-cols-1 lg:grid-cols-2">
+            {/* Left text */}
+            <div>
+              {/* Badge */}
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.25)", borderRadius: 12, marginBottom: 24 }}>
+                <Sparkles style={{ width: 14, height: 14, color: "#531FFF" }} />
+                <span style={{ fontSize: 12, fontWeight: 800, color: "#531FFF" }}>🎓 {t.heroBadge}</span>
               </div>
-              <span className="font-extrabold text-xl tracking-tight text-gray-900 leading-tight">
-                Quick Schools<br/>
-                <span className="text-[10px] font-bold text-[#531FFF] uppercase tracking-widest block -mt-1">School Management System</span>
-              </span>
-           </div>
-           
-           <nav className="hidden lg:flex items-center gap-8">
-             <Link href="#features" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors">{t.nav.features}</Link>
-             <Link href="#how-it-works" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors">{t.nav.howItWorks}</Link>
-             <Link href="#pricing" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors">{t.nav.pricing}</Link>
-             <Link href="#testimonials" className="text-[14px] font-semibold text-gray-600 hover:text-[#531FFF] transition-colors">{t.nav.testimonials}</Link>
-           </nav>
-           
-           <div className="flex items-center gap-3">
-             {/* Language Switcher Toggle */}
-             <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200">
-               <button
-                 onClick={() => changeLanguage("id")}
-                 className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${
-                   lang === "id" 
-                     ? "bg-white text-gray-900 shadow-xs" 
-                     : "text-gray-500 hover:text-gray-900"
-                 }`}
-               >
-                 <span>🇮🇩</span> ID
-               </button>
-               <button
-                 onClick={() => changeLanguage("en")}
-                 className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${
-                   lang === "en" 
-                     ? "bg-white text-gray-900 shadow-xs" 
-                     : "text-gray-500 hover:text-gray-900"
-                 }`}
-               >
-                 <span>🇬🇧</span> EN
-               </button>
-             </div>
 
-             <div className="hidden lg:flex items-center gap-3">
-               {user ? (
-                 <Link href="/admin/dashboard" className="px-6 py-2.5 bg-[#531FFF] text-white rounded-lg text-[14px] font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/20">
-                   {t.nav.dashboard}
-                 </Link>
-               ) : (
-                 <>
-                   <Link href="/login" className="px-4 py-2.5 text-[14px] font-bold text-gray-700 hover:text-[#531FFF] transition-colors">
-                     {t.nav.signIn}
-                   </Link>
-                   <Link href="/register" className="px-6 py-2.5 bg-[#531FFF] text-white rounded-lg text-[14px] font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/20 hover:shadow-lg hover:shadow-[#531FFF]/30">
-                     {t.nav.getStarted}
-                   </Link>
-                 </>
-               )}
-             </div>
-             
-             <button className="lg:hidden text-gray-900 p-2">
-               <Menu className="w-6 h-6" />
-             </button>
-           </div>
-        </div>
-      </motion.header>
+              {/* H1 */}
+              <h1 style={{ fontSize: "clamp(40px, 5vw, 64px)", fontWeight: 900, color: "#111827", lineHeight: 1.08, letterSpacing: "-0.03em", marginBottom: 24 }}>
+                {t.heroH1a}{" "}
+                <span style={{ background: "linear-gradient(135deg, #531FFF 0%, #7B4DFF 50%, #531FFF 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                  {t.heroH1b}
+                </span>
+              </h1>
 
-      {/* Hero Section */}
-      <section className="pt-32 pb-20 lg:pt-36 lg:pb-28 relative overflow-hidden bg-gradient-to-b from-slate-50/80 via-white to-white">
-         <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:32px_32px] opacity-40 pointer-events-none" />
-         <div className="absolute top-10 right-1/4 w-[500px] h-[500px] bg-[#531FFF]/5 rounded-full blur-3xl pointer-events-none" />
-         <div className="absolute bottom-10 left-10 w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
+              {/* Desc */}
+              <p style={{ fontSize: 18, color: "#4B5563", lineHeight: 1.7, fontWeight: 500, marginBottom: 32, maxWidth: 520 }}>
+                {t.heroDesc}
+              </p>
 
-         <div className="max-w-[1400px] mx-auto px-6 relative z-10">
-            
-            <div className="text-center max-w-4xl mx-auto mb-14">
-               <motion.div 
-                 initial={{ opacity: 0, y: 15 }}
-                 animate={{ opacity: 1, y: 0 }}
-                 transition={{ duration: 0.5 }}
-                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#F3F0FF] border border-[#531FFF]/20 text-[#531FFF] text-xs font-extrabold mb-6 shadow-sm shadow-[#531FFF]/10"
-               >
-                 <Sparkles className="w-4 h-4 text-[#531FFF]" />
-                 {t.hero.badge}
-               </motion.div>
-               
-               <motion.h1 
-                 initial={{ opacity: 0, y: 20 }}
-                 animate={{ opacity: 1, y: 0 }}
-                 transition={{ delay: 0.1, duration: 0.6 }}
-                 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-gray-900 leading-[1.1] mb-6"
-               >
-                 {t.hero.titlePart1}<span className="bg-gradient-to-r from-[#531FFF] via-[#7B4DFF] to-[#3B82F6] bg-clip-text text-transparent">{t.hero.titleHighlight}</span>{t.hero.titlePart2}
-               </motion.h1>
-               
-               <motion.p 
-                 initial={{ opacity: 0, y: 20 }}
-                 animate={{ opacity: 1, y: 0 }}
-                 transition={{ delay: 0.2, duration: 0.6 }}
-                 className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto font-medium leading-relaxed mb-8"
-               >
-                 {t.hero.desc}
-               </motion.p>
+              {/* CTAs */}
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
+                <Link href="/register" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "14px 32px", backgroundColor: "#531FFF", color: "white", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none", boxShadow: "0 8px 24px -4px rgba(83,31,255,0.4)", transition: "all 0.2s" }}
+                  className="hover:bg-[#4314cc] hover:shadow-xl">
+                  {t.heroCta1}
+                  <ArrowRight style={{ width: 16, height: 16 }} />
+                </Link>
+                <Link href="#features" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 32px", backgroundColor: "white", border: "1.5px solid #e5e7eb", color: "#374151", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none", transition: "all 0.2s" }}>
+                  {t.heroCta2}
+                </Link>
+              </div>
 
-               <motion.div 
-                 initial={{ opacity: 0, y: 20 }}
-                 animate={{ opacity: 1, y: 0 }}
-                 transition={{ delay: 0.3, duration: 0.6 }}
-                 className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10"
-               >
-                 <Link 
-                   href="/register" 
-                   className="w-full sm:w-auto px-8 py-4 bg-[#531FFF] text-white rounded-lg text-15 font-bold hover:bg-[#4314cc] transition-all shadow-lg shadow-[#531FFF]/25 hover:shadow-xl hover:shadow-[#531FFF]/30 flex items-center justify-center gap-2.5 group"
-                 >
-                   {t.hero.btnPrimary} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                 </Link>
+              {/* Trust line */}
+              <p style={{ fontSize: 13, color: "#6B7280", fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+                <CheckCircle2 style={{ width: 16, height: 16, color: "#10b981", flexShrink: 0 }} />
+                {t.heroTrust}
+              </p>
 
-                 <Link 
-                   href="#features" 
-                   className="w-full sm:w-auto px-8 py-4 bg-white border border-gray-200 text-gray-800 rounded-lg text-15 font-bold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-xs flex items-center justify-center gap-2"
-                 >
-                   <Play className="w-4 h-4 text-[#531FFF] fill-current" /> {t.hero.btnSecondary}
-                 </Link>
-               </motion.div>
-
-               <motion.div 
-                 initial={{ opacity: 0 }}
-                 animate={{ opacity: 1 }}
-                 transition={{ delay: 0.4, duration: 0.6 }}
-                 className="flex items-center justify-center gap-6 text-sm text-gray-500 font-medium flex-wrap"
-               >
-                  <div className="flex items-center gap-1.5 text-gray-700 font-semibold">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" /> {t.hero.trust1}
+              {/* Stats */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginTop: 40, paddingTop: 32, borderTop: "1px solid rgba(83,31,255,0.1)" }}>
+                {[
+                  { val: "1.2K+", label: t.statStudents },
+                  { val: "96%", label: t.statAttend },
+                  { val: "36", label: t.statClasses },
+                  { val: "92%", label: t.statSPP },
+                ].map((s, i) => (
+                  <div key={i}>
+                    <p style={{ fontSize: 24, fontWeight: 900, color: "#111827" }}>{s.val}</p>
+                    <p style={{ fontSize: 11, color: "#6B7280", fontWeight: 600, marginTop: 2 }}>{s.label}</p>
                   </div>
-                  <span className="text-gray-300">•</span>
-                  <div className="flex items-center gap-1.5 text-gray-700 font-semibold">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" /> {t.hero.trust2}
-                  </div>
-                  <span className="text-gray-300">•</span>
-                  <div className="flex items-center gap-1.5 text-gray-700 font-semibold">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" /> {t.hero.trust3}
-                  </div>
-               </motion.div>
+                ))}
+              </div>
             </div>
 
-            {/* Clean Hero Mockup Section */}
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3, duration: 0.8 }}
-              className="relative max-w-6xl mx-auto"
-            >
-               <div className="bg-white rounded-3xl border border-gray-200/80 shadow-[0_20px_60px_-15px_rgba(83,31,255,0.12)] overflow-hidden p-2 sm:p-4">
-                 
-                 <div className="flex items-center justify-between px-4 py-3 bg-gray-50/80 border-b border-gray-100 rounded-t-2xl">
-                   <div className="flex items-center gap-2">
-                     <div className="w-3 h-3 rounded-full bg-rose-400" />
-                     <div className="w-3 h-3 rounded-full bg-amber-400" />
-                     <div className="w-3 h-3 rounded-full bg-emerald-400" />
-                   </div>
-                   <div className="px-4 py-1 bg-white border border-gray-200 rounded-full text-xs font-semibold text-gray-500 shadow-xs flex items-center gap-2">
-                     <Shield className="w-3 h-3 text-[#531FFF]" />
-                     <span>https://quickschools.id/admin/dashboard</span>
-                   </div>
-                   <div className="w-12" />
-                 </div>
-
-                 <div className="bg-slate-50/60 p-4 sm:p-6 rounded-b-2xl grid grid-cols-1 lg:grid-cols-4 gap-4">
-                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-[#531FFF] font-bold">
-                        <Users className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-gray-400 uppercase">{t.hero.statsSiswa}</p>
-                        <p className="text-xl font-extrabold text-gray-900">1,482</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold">
-                        <CheckCircle2 className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-gray-400 uppercase">{t.hero.statsPresensi}</p>
-                        <p className="text-xl font-extrabold text-emerald-600">98.5%</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 font-bold">
-                        <BookOpen className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-gray-400 uppercase">{t.hero.statsKelas}</p>
-                        <p className="text-xl font-extrabold text-gray-900">42 {lang === 'id' ? 'Kelas' : 'Classes'}</p>
-                      </div>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 font-bold">
-                        <CreditCard className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-gray-400 uppercase">{t.hero.statsSPP}</p>
-                        <p className="text-xl font-extrabold text-gray-900">94.2%</p>
-                      </div>
-                    </div>
-
-                    <div className="lg:col-span-3 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between min-h-[220px]">
-                      <div className="flex items-center justify-between border-b border-gray-50 pb-3">
-                        <div>
-                          <p className="text-xs font-extrabold text-[#531FFF] uppercase tracking-wider">{t.hero.grafikTitle}</p>
-                          <p className="text-sm font-bold text-gray-900">{t.hero.grafikSub}</p>
-                        </div>
-                        <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg">Realtime</span>
-                      </div>
-                      <div className="h-32 w-full pt-4 relative flex items-end justify-between gap-2">
-                         {[65, 78, 85, 92, 88, 96, 94, 98, 95, 99].map((val, idx) => (
-                           <div key={idx} className="flex-1 flex flex-col items-center gap-2 group">
-                             <div 
-                               style={{ height: `${val}%` }} 
-                               className="w-full bg-gradient-to-t from-[#531FFF]/30 to-[#531FFF] rounded-t-lg transition-all group-hover:bg-[#4314cc]" 
-                             />
-                           </div>
-                         ))}
-                      </div>
-                    </div>
-
-                    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
-                      <div>
-                        <p className="text-xs font-extrabold text-gray-400 uppercase tracking-wider mb-2">{t.hero.liveBadge}</p>
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2.5 p-2 bg-emerald-50/60 rounded-xl border border-emerald-100">
-                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                            <div className="overflow-hidden">
-                              <p className="text-xs font-bold text-gray-900 truncate">Ahmad Rizqi (10 IPA 1)</p>
-                              <p className="text-[10px] text-emerald-700 font-semibold">98.5% Match • 06:45 WIB</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2.5 p-2 bg-purple-50/60 rounded-xl border border-purple-100">
-                            <div className="w-2 h-2 rounded-full bg-[#531FFF]" />
-                            <div className="overflow-hidden">
-                              <p className="text-xs font-bold text-gray-900 truncate">Siti Nurhaliza (11 IPS 2)</p>
-                              <p className="text-[10px] text-[#531FFF] font-semibold">99.1% Match • 06:48 WIB</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <span className="text-[11px] text-gray-400 text-center block pt-2 font-medium">GPS Verification Active</span>
-                    </div>
-                 </div>
-               </div>
-
-               <motion.div 
-                 animate={{ y: [0, -8, 0] }}
-                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                 className="absolute -left-6 top-1/3 bg-white p-4 rounded-2xl shadow-xl border border-gray-100 hidden xl:flex items-center gap-3 z-20"
-               >
-                 <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-[#531FFF]">
-                   <Bot className="w-5 h-5" />
-                 </div>
-                 <div>
-                   <p className="text-xs font-bold text-gray-900">{t.hero.aiScheduleTitle}</p>
-                   <p className="text-[11px] text-gray-500 font-medium">{t.hero.aiScheduleDesc}</p>
-                 </div>
-               </motion.div>
-
-               <motion.div 
-                 animate={{ y: [0, 8, 0] }}
-                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                 className="absolute -right-6 bottom-10 bg-white p-4 rounded-2xl shadow-xl border border-gray-100 hidden xl:flex items-center gap-3 z-20"
-               >
-                 <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-                   <ShieldCheck className="w-5 h-5" />
-                 </div>
-                 <div>
-                   <p className="text-xs font-bold text-gray-900">{t.hero.securityTitle}</p>
-                   <p className="text-[11px] text-gray-500 font-medium">{t.hero.securityDesc}</p>
-                 </div>
-               </motion.div>
-            </motion.div>
-         </div>
-      </section>
-
-      {/* Trusted By Section */}
-      <section className="py-14 border-y border-gray-100 bg-white">
-        <div className="max-w-[1400px] mx-auto px-6">
-          <p className="text-center text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-8">
-            {t.trustedBy}
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-10 lg:gap-16 opacity-70 hover:opacity-100 transition-opacity">
-            <div className="flex items-center gap-2 cursor-pointer">
-              <ShieldCheck className="w-7 h-7 text-blue-700" />
-              <span className="font-bold text-base text-gray-800">SMA LABSCHOOL<br/><span className="text-[9px] text-gray-500 tracking-wider block -mt-1">JAKARTA</span></span>
-            </div>
-            <div className="flex items-center gap-2 cursor-pointer">
-               <div className="w-7 h-7 rounded bg-red-700 flex items-center justify-center text-white font-serif font-bold italic text-sm">B</div>
-               <span className="font-bold text-base text-gray-800">BINUS<br/><span className="text-[9px] text-gray-500 tracking-wider block -mt-1">SCHOOL</span></span>
-            </div>
-            <div className="flex items-center gap-2 cursor-pointer">
-               <Globe2 className="w-7 h-7 text-emerald-700" />
-               <span className="font-bold text-base text-gray-800">Al-Azhar<br/><span className="text-[9px] text-gray-500 tracking-wider block -mt-1">Kelapa Gading</span></span>
-            </div>
-            <div className="flex items-center gap-2 cursor-pointer">
-               <GraduationCap className="w-7 h-7 text-purple-700" />
-               <span className="font-bold text-base text-gray-800 uppercase">Global Jaya<br/><span className="text-[9px] text-gray-500 tracking-widest block -mt-1">S C H O O L</span></span>
+            {/* Right — Dashboard Mockup */}
+            <div style={{ position: "relative" }}>
+              <DashboardMockup />
             </div>
           </div>
         </div>
       </section>
 
-      {/* Main Features Section */}
-      <section className="bg-slate-50/50 py-24 sm:py-32" id="features">
-        <div className="max-w-[1400px] mx-auto px-6">
-           <div className="text-center max-w-3xl mx-auto mb-20">
-             <div className="inline-flex px-4 py-1.5 bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/20 text-xs font-extrabold tracking-wider uppercase rounded-full mb-4">
-               {t.features.badge}
-             </div>
-             <h2 className="text-3xl sm:text-5xl font-extrabold text-gray-900 tracking-tight mb-5">
-               {t.features.title}
-             </h2>
-             <p className="text-base sm:text-lg text-gray-600 font-medium">
-               {t.features.desc}
-             </p>
-           </div>
-
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-             {[
-               { icon: CheckSquare, title: t.features.f1Title, desc: t.features.f1Desc },
-               { icon: User, title: t.features.f2Title, desc: t.features.f2Desc },
-               { icon: Calendar, title: t.features.f3Title, desc: t.features.f3Desc },
-               { icon: CreditCard, title: t.features.f4Title, desc: t.features.f4Desc },
-               { icon: MessageCircle, title: t.features.f5Title, desc: t.features.f5Desc },
-               { icon: LineChart, title: t.features.f6Title, desc: t.features.f6Desc },
-             ].map((f, i) => (
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "-50px" }}
-                  transition={{ delay: i * 0.08, duration: 0.5 }}
-                  key={i} 
-                  className="bg-white border border-gray-200/80 p-8 rounded-3xl shadow-xs hover:shadow-xl hover:border-[#531FFF]/30 transition-all duration-300 group flex flex-col justify-between"
-                >
-                   <div>
-                     <div className="w-14 h-14 rounded-2xl bg-[#F3F0FF] flex items-center justify-center mb-6 text-[#531FFF] group-hover:scale-110 group-hover:bg-[#531FFF] group-hover:text-white transition-all">
-                       <f.icon className="w-7 h-7" strokeWidth={2} />
-                     </div>
-                     <h3 className="text-xl font-bold text-gray-900 mb-3">{f.title}</h3>
-                     <p className="text-sm font-medium text-gray-600 leading-relaxed">
-                       {f.desc}
-                     </p>
-                   </div>
-                   <div className="mt-6 pt-4 border-t border-gray-100 flex items-center gap-1 text-xs font-bold text-[#531FFF] group-hover:translate-x-1 transition-transform">
-                     <span>{t.features.more}</span>
-                     <ChevronRight className="w-3.5 h-3.5" />
-                   </div>
-                </motion.div>
-             ))}
-           </div>
+      {/* ── TRUSTED BY ── */}
+      <section style={{ padding: "56px 0", backgroundColor: "white", borderTop: "1px solid #f3f4f6", borderBottom: "1px solid #f3f4f6" }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
+          <p style={{ textAlign: "center", fontSize: 11, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: "0.25em", marginBottom: 32 }}>
+            {t.trustedTitle}
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "16px 64px" }}>
+            {["SMA Labschool · Jakarta","BINUS School · Serpong","Al-Azhar · Kelapa Gading","Global Jaya · International","Tarakanita · Jakarta Pusat"].map((s, i) => (
+              <p key={i} style={{ fontSize: 14, fontWeight: 800, color: "#9CA3AF", opacity: 0.7, cursor: "default" }}>{s}</p>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Pricing Section */}
-      <section className="bg-white py-24 sm:py-32" id="pricing">
-         <div className="max-w-[1400px] mx-auto px-6">
-            <div className="text-center max-w-3xl mx-auto mb-16">
-               <div className="inline-flex px-4 py-1.5 bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/20 text-xs font-extrabold tracking-wider uppercase rounded-full mb-4">
-                 {t.pricing.badge}
-               </div>
-               <h2 className="text-3xl sm:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
-                 {t.pricing.title}
-               </h2>
-               <p className="text-base text-gray-600 font-medium">
-                 {t.pricing.desc}
-               </p>
+      {/* ── FEATURES ── */}
+      <section id="features" style={{ padding: "112px 0", backgroundColor: "#FAFBFF" }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
+          <div style={{ textAlign: "center", maxWidth: 700, margin: "0 auto 80px" }}>
+            <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.2)", borderRadius: 999, marginBottom: 16 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "#531FFF", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.featBadge}</span>
             </div>
+            <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 900, color: "#111827", letterSpacing: "-0.02em", marginBottom: 16 }}>{t.featTitle}</h2>
+            <p style={{ fontSize: 16, color: "#6B7280", fontWeight: 500 }}>{t.featDesc}</p>
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
-               {/* Starter */}
-               <div className="border border-gray-200 rounded-3xl p-8 bg-white shadow-xs flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">{t.pricing.p1Name}</h3>
-                    <p className="text-xs font-semibold text-gray-500 mt-1 mb-6">{t.pricing.p1Desc}</p>
-                    <div className="flex items-baseline gap-1 mb-6">
-                       <span className="text-4xl font-extrabold text-gray-900">{t.pricing.p1Price}</span>
-                       <span className="text-xs font-bold text-gray-500">{t.pricing.p1Unit}</span>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 20 }}>
+            {t.feats.map((f, i) => {
+              const Icon = f.icon;
+              const featLinks = [
+                "/admin/dashboard",
+                "/features/absensi",
+                "/features/akademik",
+                "/admin/data-siswa",
+                "/features/laporan",
+                "/features/spp",
+                "/features/keuangan",
+                "/features/pengumuman",
+              ];
+              return (
+                <Link
+                  key={i}
+                  href={featLinks[i] || "#"}
+                  style={{ textDecoration: "none", color: "inherit", display: "flex" }}
+                >
+                  <motion.div
+                    style={{ backgroundColor: "white", border: "1px solid #f3f4f6", borderRadius: 20, padding: 24, display: "flex", flexDirection: "column", width: "100%", cursor: "pointer", transition: "all 0.3s", boxShadow: "0 2px 8px -4px rgba(0,0,0,0.05)" }}
+                    whileHover={{ y: -6, boxShadow: "0 20px 40px -12px rgba(83,31,255,0.15)", borderColor: "rgba(83,31,255,0.25)" }}
+                  >
+                    <div style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: featIconBg[i], display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+                      <Icon style={{ width: 20, height: 20, color: featIconColor[i] }} />
                     </div>
-                    <ul className="space-y-3.5 mb-8 text-xs font-semibold text-gray-700">
-                       {[
-                         lang === 'id' ? "Hingga 150 Siswa" : "Up to 150 Students", 
-                         lang === 'id' ? "Absensi GPS Standard" : "Standard GPS Attendance", 
-                         lang === 'id' ? "Manajemen Data Siswa" : "Student Bio-data Management", 
-                         lang === 'id' ? "Laporan Rekap Bulanan" : "Monthly Summary Reports"
-                       ].map((item, i) => (
-                          <li key={i} className="flex gap-2.5 items-center">
-                             <Check className="w-4 h-4 text-emerald-500 shrink-0" strokeWidth={3} />
-                             <span>{item}</span>
-                          </li>
-                       ))}
-                    </ul>
-                  </div>
-                  <button className="w-full py-3.5 rounded-xl border-2 border-gray-200 text-gray-800 font-bold text-sm hover:bg-gray-50 transition-colors">
-                    {t.pricing.p1Btn}
-                  </button>
-               </div>
-
-               {/* Pro (Most Popular) */}
-               <div className="border-2 border-[#531FFF] rounded-3xl p-8 bg-white shadow-2xl relative flex flex-col justify-between transform lg:-translate-y-2">
-                  <div className="absolute -top-4 right-8 bg-[#531FFF] text-white px-3.5 py-1 rounded-full text-xs font-extrabold tracking-wide uppercase shadow-md">
-                    {t.pricing.p2Badge}
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">{t.pricing.p2Name}</h3>
-                    <p className="text-xs font-semibold text-gray-500 mt-1 mb-6">{t.pricing.p2Desc}</p>
-                    <div className="flex items-baseline gap-1 mb-6">
-                       <span className="text-4xl font-extrabold text-gray-900">{t.pricing.p2Price}</span>
-                       <span className="text-xs font-bold text-gray-500">{t.pricing.p2Unit}</span>
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{f.title}</h3>
+                    <p style={{ fontSize: 13, color: "#6B7280", fontWeight: 500, lineHeight: 1.6, flex: 1 }}>{f.desc}</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 16, fontSize: 12, fontWeight: 700, color: "#531FFF" }}>
+                      <span>{lang === "id" ? "Pelajari Fitur" : "Learn more"}</span>
+                      <ChevronRight style={{ width: 14, height: 14 }} />
                     </div>
-                    <ul className="space-y-3.5 mb-8 text-xs font-semibold text-gray-800">
-                       {[
-                         lang === 'id' ? "Hingga 1.000 Siswa" : "Up to 1,000 Students", 
-                         lang === 'id' ? "Presensi AI Face Recognition" : "AI Face Recognition Attendance", 
-                         lang === 'id' ? "AI Generator Jadwal Otomatis" : "Automated AI Timetabling", 
-                         lang === 'id' ? "Sistem Pembayaran SPP Digital" : "Digital Fee & Invoicing System", 
-                         lang === 'id' ? "Dukungan Prioritas 24/7" : "24/7 Priority Support"
-                       ].map((item, i) => (
-                          <li key={i} className="flex gap-2.5 items-center">
-                             <Check className="w-4 h-4 text-[#531FFF] shrink-0" strokeWidth={3} />
-                             <span>{item}</span>
-                          </li>
-                       ))}
-                    </ul>
-                  </div>
-                  <button className="w-full py-3.5 rounded-xl bg-[#531FFF] text-white font-bold text-sm shadow-lg shadow-[#531FFF]/30 hover:bg-[#4314cc] transition-colors">
-                    {t.pricing.p2Btn}
-                  </button>
-               </div>
-
-               {/* Enterprise */}
-               <div className="border border-gray-200 rounded-3xl p-8 bg-white shadow-xs flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">{t.pricing.p3Name}</h3>
-                    <p className="text-xs font-semibold text-gray-500 mt-1 mb-6">{t.pricing.p3Desc}</p>
-                    <div className="flex items-baseline gap-1 mb-6">
-                       <span className="text-3xl font-extrabold text-gray-900">{t.pricing.p3Price}</span>
-                    </div>
-                    <ul className="space-y-3.5 mb-8 text-xs font-semibold text-gray-700">
-                       {[
-                         lang === 'id' ? "Jumlah Siswa Tanpa Batas" : "Unlimited Students", 
-                         lang === 'id' ? "Kustomisasi Server & Integrasi" : "Custom Server & API Integrations", 
-                         lang === 'id' ? "Dedicated Account Manager" : "Dedicated Account Manager", 
-                         lang === 'id' ? "SLA Garansi 99.9% Uptime" : "SLA 99.9% Uptime Guarantee"
-                       ].map((item, i) => (
-                          <li key={i} className="flex gap-2.5 items-center">
-                             <Check className="w-4 h-4 text-emerald-500 shrink-0" strokeWidth={3} />
-                             <span>{item}</span>
-                          </li>
-                       ))}
-                    </ul>
-                  </div>
-                  <button className="w-full py-3.5 rounded-xl border border-gray-200 text-gray-800 font-bold text-sm hover:bg-gray-50 transition-colors">
-                    {t.pricing.p3Btn}
-                  </button>
-               </div>
-            </div>
-         </div>
+                  </motion.div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
       </section>
 
-      {/* CTA Pre-Footer */}
-      <section className="bg-white px-6 pb-20">
-         <div className="max-w-[1400px] mx-auto bg-gradient-to-r from-[#531FFF] to-[#7B4DFF] rounded-3xl p-10 lg:p-16 text-white flex flex-col lg:flex-row items-center justify-between gap-8 shadow-2xl">
-            <div className="max-w-xl text-center lg:text-left">
-               <h2 className="text-3xl sm:text-4xl font-extrabold leading-tight mb-4">
-                 {t.cta.title}
-               </h2>
-               <p className="text-sm sm:text-base text-white/80 font-medium mb-8">
-                 {t.cta.desc}
-               </p>
-               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                  <Link href="/register" className="px-8 py-3.5 bg-white text-[#531FFF] rounded-lg font-bold text-sm shadow-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
-                    {t.cta.btn} <ArrowRight className="w-4 h-4" />
-                  </Link>
-               </div>
+      {/* ── HOW IT WORKS ── */}
+      <section style={{ padding: "112px 0", backgroundColor: "white" }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
+          <div style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 80px" }}>
+            <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.2)", borderRadius: 999, marginBottom: 16 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "#531FFF", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.howBadge}</span>
             </div>
-            
-            <div className="w-full lg:w-auto flex justify-center">
-              <div className="p-6 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl text-center">
-                <p className="text-3xl font-extrabold mb-1">500+</p>
-                <p className="text-xs font-semibold text-white/80">{t.cta.stat}</p>
-              </div>
-            </div>
-         </div>
+            <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 900, color: "#111827", letterSpacing: "-0.02em" }}>{t.howTitle}</h2>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 32 }}>
+            {t.howSteps.map((s, i) => (
+              <motion.div key={i}
+                whileHover={{ y: -4 }}
+                transition={{ duration: 0.2 }}
+                style={{ background: "linear-gradient(135deg, rgba(243,240,255,0.6) 0%, white 100%)", border: "1px solid rgba(83,31,255,0.1)", borderRadius: 24, padding: 32 }}
+              >
+                <div style={{ fontSize: 48, fontWeight: 900, color: "rgba(83,31,255,0.1)", marginBottom: 16 }}>{s.step}</div>
+                <div style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "#531FFF", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16, boxShadow: "0 4px 12px rgba(83,31,255,0.3)" }}>
+                  {i === 0 && <Settings style={{ width: 18, height: 18, color: "white" }} />}
+                  {i === 1 && <Users style={{ width: 18, height: 18, color: "white" }} />}
+                  {i === 2 && <LayoutDashboard style={{ width: 18, height: 18, color: "white" }} />}
+                </div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 12 }}>{s.title}</h3>
+                <p style={{ fontSize: 14, color: "#6B7280", fontWeight: 500, lineHeight: 1.6 }}>{s.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 pt-16 pb-12 text-gray-400 text-xs">
-         <div className="max-w-[1400px] mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
-            <div>
-               <div className="flex items-center gap-2.5 mb-4">
-                 <div className="w-8 h-8 rounded-lg bg-[#531FFF] flex items-center justify-center text-white">
-                   <Zap className="w-4 h-4" />
-                 </div>
-                 <span className="font-bold text-base text-white">Quick Schools</span>
-               </div>
-               <p className="text-xs leading-relaxed text-gray-400">
-                 {t.footer.tagline}
-               </p>
+      {/* ── WHY — Dark ── */}
+      <section style={{ padding: "112px 0", backgroundColor: "#0D0820", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 30% 50%, rgba(83,31,255,0.12) 0%, transparent 60%)" }} />
+        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 70% 20%, rgba(83,31,255,0.08) 0%, transparent 50%)" }} />
+        <div style={{ position: "relative", zIndex: 10, maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
+          <div style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 80px" }}>
+            <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "rgba(83,31,255,0.2)", border: "1px solid rgba(83,31,255,0.3)", borderRadius: 999, marginBottom: 16 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "#A78BFA", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.whyBadge}</span>
             </div>
-            
-            <div>
-               <h4 className="font-bold text-white mb-4">{t.footer.col1}</h4>
-               <ul className="space-y-2.5">
-                  <li><a href="#features" className="hover:text-white transition-colors">{lang === 'id' ? 'Absensi AI Wajah' : 'AI Face Attendance'}</a></li>
-                  <li><a href="#features" className="hover:text-white transition-colors">{lang === 'id' ? 'Jadwal Pelajaran AI' : 'AI Class Timetable'}</a></li>
-                  <li><a href="#pricing" className="hover:text-white transition-colors">{lang === 'id' ? 'Harga Paket' : 'Pricing Plans'}</a></li>
-               </ul>
-            </div>
+            <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 900, color: "white", letterSpacing: "-0.02em" }}>{t.whyTitle}</h2>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 24 }}>
+            {t.whys.map((w, i) => (
+              <motion.div key={i}
+                whileHover={{ backgroundColor: "rgba(255,255,255,0.08)", borderColor: "rgba(83,31,255,0.4)", y: -4 }}
+                transition={{ duration: 0.2 }}
+                style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: 24, backdropFilter: "blur(8px)", transition: "all 0.3s" }}
+              >
+                <div style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: "rgba(83,31,255,0.2)", border: "1px solid rgba(83,31,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+                  <w.icon style={{ width: 20, height: 20, color: "#A78BFA" }} />
+                </div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "white", marginBottom: 8 }}>{w.title}</h3>
+                <p style={{ fontSize: 13, color: "#9CA3AF", fontWeight: 500, lineHeight: 1.6 }}>{w.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-            <div>
-               <h4 className="font-bold text-white mb-4">{t.footer.col2}</h4>
-               <ul className="space-y-2.5">
-                  <li><a href="#" className="hover:text-white transition-colors">{lang === 'id' ? 'Tentang Kami' : 'About Us'}</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors">{lang === 'id' ? 'Kontak Support' : 'Support Contact'}</a></li>
-                  <li><a href="#" className="hover:text-white transition-colors">{lang === 'id' ? 'Kebijakan Privasi' : 'Privacy Policy'}</a></li>
-               </ul>
+      {/* ── TESTIMONIALS ── */}
+      <section id="testimonials" style={{ padding: "112px 0", backgroundColor: "white" }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
+          <div style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 64px" }}>
+            <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "#FFFBEB", border: "1px solid rgba(217,119,6,0.2)", borderRadius: 999, marginBottom: 16 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "#d97706", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.testiBadge}</span>
             </div>
+            <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 900, color: "#111827", letterSpacing: "-0.02em" }}>{t.testiTitle}</h2>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 32 }}>
+            {t.testis.map((testi, i) => (
+              <motion.div key={i}
+                whileHover={{ y: -4, boxShadow: "0 20px 40px -12px rgba(83,31,255,0.1)", borderColor: "rgba(83,31,255,0.15)" }}
+                transition={{ duration: 0.2 }}
+                style={{ backgroundColor: "white", border: "1px solid #f3f4f6", borderRadius: 24, padding: 32, boxShadow: "0 2px 8px -4px rgba(0,0,0,0.06)", transition: "all 0.3s" }}
+              >
+                <div style={{ display: "flex", gap: 2, marginBottom: 20 }}>
+                  {Array.from({ length: testi.rating }).map((_, j) => (
+                    <Star key={j} style={{ width: 16, height: 16, color: "#f59e0b", fill: "#f59e0b" }} />
+                  ))}
+                </div>
+                <p style={{ fontSize: 14, color: "#374151", fontWeight: 500, lineHeight: 1.7, marginBottom: 24, fontStyle: "italic" }}>"{testi.text}"</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 20, borderTop: "1px solid #f3f4f6" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg, #531FFF 0%, #7B4DFF 100%)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 14 }}>
+                    {testi.name[0]}
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{testi.name}</p>
+                    <p style={{ fontSize: 11, color: "#6B7280", fontWeight: 500 }}>{testi.role}</p>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-            <div>
-               <h4 className="font-bold text-white mb-4">{t.footer.col3}</h4>
-               <p className="text-xs text-gray-400">Email: support@quickschools.id</p>
-               <p className="text-xs text-gray-400 mt-1">Jakarta, Indonesia</p>
+      {/* ── PRICING ── */}
+      <section id="pricing" style={{ padding: "112px 0", backgroundColor: "#FAFBFF" }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
+          <div style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 64px" }}>
+            <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.2)", borderRadius: 999, marginBottom: 16 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "#531FFF", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.priceBadge}</span>
             </div>
-         </div>
-         
-         <div className="max-w-[1400px] mx-auto px-6 pt-8 border-t border-gray-800 text-center font-medium">
-            © {new Date().getFullYear()} {t.footer.rights}
-         </div>
-      </footer>
+            <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 900, color: "#111827", letterSpacing: "-0.02em", marginBottom: 12 }}>{t.priceTitle}</h2>
+            <p style={{ fontSize: 16, color: "#6B7280", fontWeight: 500 }}>{t.priceDesc}</p>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 32, maxWidth: 1000, margin: "0 auto" }}>
+            {t.plans.map((plan, i) => (
+              <motion.div key={i}
+                whileHover={{ y: plan.popular ? -16 : -4 }}
+                transition={{ duration: 0.2 }}
+                style={{
+                  position: "relative", display: "flex", flexDirection: "column", borderRadius: 24, padding: 32,
+                  backgroundColor: plan.popular ? "#531FFF" : "white",
+                  border: plan.popular ? "1px solid #531FFF" : "1px solid #e5e7eb",
+                  boxShadow: plan.popular ? "0 24px 60px -12px rgba(83,31,255,0.3)" : "0 2px 8px -4px rgba(0,0,0,0.06)",
+                  transform: plan.popular ? "translateY(-12px)" : "none",
+                }}
+              >
+                {plan.popular && (
+                  <div style={{ position: "absolute", top: -16, left: "50%", transform: "translateX(-50%)", background: "linear-gradient(90deg, #f59e0b, #f97316)", color: "white", fontSize: 11, fontWeight: 800, padding: "6px 16px", borderRadius: 999, boxShadow: "0 4px 12px rgba(249,115,22,0.4)", whiteSpace: "nowrap" }}>
+                    ⭐ {t.popularBadge}
+                  </div>
+                )}
+                <div style={{ marginBottom: 24 }}>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, color: plan.popular ? "white" : "#111827" }}>{plan.name}</h3>
+                  <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 24, color: plan.popular ? "#DDD6FF" : "#6B7280" }}>{plan.desc}</p>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                    <span style={{ fontSize: 36, fontWeight: 900, color: plan.popular ? "white" : "#111827" }}>{plan.price}</span>
+                    {plan.unit && <span style={{ fontSize: 12, fontWeight: 600, color: plan.popular ? "#C4B5FD" : "#9CA3AF" }}>{plan.unit}</span>}
+                  </div>
+                </div>
+                <ul style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12, marginBottom: 32 }}>
+                  {plan.items.map((item, j) => (
+                    <li key={j} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 20, height: 20, borderRadius: "50%", backgroundColor: plan.popular ? "rgba(255,255,255,0.2)" : "#F3F0FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <Check style={{ width: 12, height: 12, color: plan.popular ? "white" : "#531FFF", strokeWidth: 3 }} />
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: plan.popular ? "#EDE9FE" : "#374151" }}>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link href="/register" style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 16, fontSize: 14, fontWeight: 700, textDecoration: "none", transition: "all 0.2s",
+                  backgroundColor: plan.popular ? "white" : "#531FFF",
+                  color: plan.popular ? "#531FFF" : "white",
+                  boxShadow: plan.popular ? "0 4px 12px rgba(0,0,0,0.1)" : "0 4px 12px rgba(83,31,255,0.25)",
+                }}>
+                  {plan.btn} <ArrowRight style={{ width: 16, height: 16 }} />
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── CTA ── */}
+      <section style={{ padding: "80px 24px", backgroundColor: "white" }}>
+        <div
+          style={{ maxWidth: 960, margin: "0 auto", position: "relative", overflow: "hidden", borderRadius: 32, background: "linear-gradient(135deg, #531FFF 0%, #6D3DFF 50%, #4314cc 100%)", padding: "64px 48px", textAlign: "center", boxShadow: "0 32px 80px -12px rgba(83,31,255,0.35)" }}
+        >
+          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at top right, rgba(255,255,255,0.08) 0%, transparent 60%)" }} />
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 900, color: "white", marginBottom: 20, lineHeight: 1.2 }}>{t.ctaTitle}</h2>
+            <p style={{ fontSize: 17, color: "#C4B5FD", fontWeight: 500, marginBottom: 32, maxWidth: 560, margin: "0 auto 32px" }}>{t.ctaDesc}</p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
+              <Link href="/register" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "16px 32px", backgroundColor: "white", color: "#531FFF", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+                {t.ctaBtn} <ArrowRight style={{ width: 16, height: 16 }} />
+              </Link>
+              <Link href="/login" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "16px 32px", backgroundColor: "rgba(255,255,255,0.1)", border: "1.5px solid rgba(255,255,255,0.25)", color: "white", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none" }}>
+                {lang === "id" ? "Masuk ke Dashboard" : "Go to Dashboard"}
+              </Link>
+            </div>
+            <p style={{ fontSize: 12, color: "#C4B5FD", fontWeight: 500, marginTop: 20 }}>{t.ctaSub}</p>
+          </div>
+        </div>
+      </section>
+
+      <LandingFooter lang={lang} />
     </div>
   );
 }
