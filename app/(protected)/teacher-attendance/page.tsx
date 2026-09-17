@@ -33,13 +33,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
-import { db, auth } from "@/lib/firebase";
-import { collection, onSnapshot, doc, getDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { isStudentRole } from "@/lib/roles-config";
 import { calculateDistanceMeters, formatDistance } from "@/lib/geofence-utils";
+import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import {
   useTeacherAttendance,
   TeacherAttendanceRecord,
@@ -55,21 +55,23 @@ export default function TeacherAttendancePage() {
     userData: authUserData,
     isGuru: authIsGuru,
     role: authRole,
+    rawRole: authRawRole,
     userName: authUserName,
     userEmail: authUserEmail,
+    isAuthLoading,
+    isRoleReady,
   } = useAuth();
 
   // Auth & Role
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [userRole, setUserRole] = useState<string>("admin");
+  const currentUser = authUserData;
+  const resolvedRole = (authRawRole || authRole || "").toLowerCase();
   const [teachersList, setTeachersList] = useState<any[]>([]);
 
   // Determine whether current authenticated user is a teacher
   const isUserGuru = Boolean(
     authIsGuru ||
-    authRole === "guru" ||
-    userRole === "guru" ||
-    userRole === "teacher"
+    resolvedRole === "guru" ||
+    resolvedRole === "teacher"
   );
 
   // Active teacher UID & Email from auth / database
@@ -77,16 +79,16 @@ export default function TeacherAttendancePage() {
   const activeTeacherEmail = authUserEmail || authUser?.email || currentUser?.email || "";
 
   // Simulation / View switcher for testing (Only accessible to Admins)
-  const [previewRole, setPreviewRole] = useState<"admin" | "guru">("admin");
+  const [previewRole, setPreviewRole] = useState<"admin" | "guru">(isUserGuru ? "guru" : "admin");
 
-  // If user is actually guru, force previewRole to guru
+  // If user is actually guru, keep previewRole to guru
   useEffect(() => {
     if (isUserGuru) {
       setPreviewRole("guru");
     }
   }, [isUserGuru]);
 
-  const isStudent = isStudentRole(userRole) || isStudentRole(authRole);
+  const isStudent = isStudentRole(resolvedRole) || isStudentRole(authRole);
   const router = useRouter();
 
   useEffect(() => {
@@ -100,6 +102,7 @@ export default function TeacherAttendancePage() {
     records,
     config,
     todayTeacherRecord,
+    loading: isAttendanceLoading,
     clockIn,
     clockOut,
     submitPermit,
@@ -410,28 +413,8 @@ export default function TeacherAttendancePage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Listen to Auth
+  // Subscribe to real teachers from database (both teachers collection and users with role guru)
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setCurrentUser(user);
-        try {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            const r = (userDoc.data().role || "admin").toLowerCase();
-            const normRole = (r === "teacher" || r === "guru") ? "guru" : r;
-            setUserRole(normRole);
-            if (normRole === "guru") {
-              setPreviewRole("guru");
-            }
-          }
-        } catch (e) {
-          console.warn("User role fetch error:", e);
-        }
-      }
-    });
-
-    // 1. Subscribe to real teachers from database (both teachers collection and users with role guru)
     let rawTeachers: any[] = [];
     let rawUsers: any[] = [];
 
@@ -527,7 +510,6 @@ export default function TeacherAttendancePage() {
     );
 
     return () => {
-      unsubAuth();
       unsubTeachers();
       unsubUsers();
     };
@@ -945,6 +927,10 @@ export default function TeacherAttendancePage() {
     document.body.removeChild(a);
     showSuccess("Laporan presensi guru berhasil diekspor ke CSV!");
   };
+
+  if (isAuthLoading || !isRoleReady || isAttendanceLoading) {
+    return <PageContentSkeleton />;
+  }
 
   if (isStudent) {
     return (

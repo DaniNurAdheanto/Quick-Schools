@@ -26,12 +26,13 @@ import {
 import { cn } from "@/lib/utils";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
 import { useToast } from "@/context/ToastContext";
-import { db, storage, auth } from "@/lib/firebase";
-import { collection, query, onSnapshot, setDoc, updateDoc, deleteDoc, doc, getDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { db, storage } from "@/lib/firebase";
+import { collection, query, onSnapshot, setDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
+import { useAuth } from "@/context/AuthContext";
+import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
 // Helper to clean undefined fields before saving to Firestore
 function cleanFirestoreData<T>(obj: T): T {
@@ -102,33 +103,13 @@ export default function DataSiswaPage() {
   const [teachers, setTeachers] = useState<any[]>([]);
   const [cleaning, setCleaning] = useState(false);
 
-  // User auth & role detection
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [userRole, setUserRole] = useState<string>("admin");
+  // User auth & role detection from centralized useAuth
+  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
+  const currentUser = userData;
+  const rawR = (authRawRole || authRole || "").toLowerCase();
+  const userRole = rawR === "teacher" ? "guru" : rawR;
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, async (u) => {
-      if (u) {
-        try {
-          const userDocSnap = await getDoc(doc(db, "users", u.uid));
-          if (userDocSnap.exists()) {
-            const uData = userDocSnap.data();
-            setCurrentUser({ uid: u.uid, email: u.email, ...uData });
-            const r = (uData.role || "admin").toLowerCase();
-            setUserRole(r === "teacher" ? "guru" : r);
-          } else {
-            setCurrentUser({ uid: u.uid, email: u.email, role: "admin" });
-            setUserRole("admin");
-          }
-        } catch (err) {
-          console.error("Fetch current user error:", err);
-        }
-      } else {
-        setCurrentUser(null);
-        setUserRole("admin");
-      }
-    });
-
     const unsubTeachers = onSnapshot(collection(db, "teachers"), (snap) => {
       setTeachers(snap.docs.map(d => ({ _firestoreId: d.id, ...d.data() })));
     }, (err) => {
@@ -136,7 +117,6 @@ export default function DataSiswaPage() {
     });
 
     return () => {
-      unsubAuth();
       unsubTeachers();
     };
   }, []);
@@ -932,6 +912,10 @@ export default function DataSiswaPage() {
     setSelectedClass(isTeacherWaliKelas && teacherClasses && teacherClasses.length > 0 ? teacherClasses[0] : "All");
     setSelectedStatus("All");
   };
+
+  if (isAuthLoading || !isRoleReady || loading) {
+    return <PageContentSkeleton />;
+  }
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full h-full space-y-6 animate-in fade-in duration-300">

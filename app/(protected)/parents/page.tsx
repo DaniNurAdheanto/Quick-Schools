@@ -43,6 +43,8 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useUnifiedStudents, UnifiedStudent } from "@/hooks/use-unified-students";
+import { useAuth } from "@/context/AuthContext";
+import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
 export interface ParentData {
   id: string; // Firestore Doc ID or synthesized ID
@@ -94,9 +96,10 @@ export default function ParentsManagementPage() {
   const [rawParentsList, setRawParentsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // User Auth, Role & Homeroom State
+  // User Auth, Role & Homeroom State from useAuth single source of truth
+  const { role: authRole, rawRole: authRawRole, isAuthLoading: isUserAuthLoading, isRoleReady } = useAuth();
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [userRole, setUserRole] = useState<string>("admin");
+  const [userRole, setUserRole] = useState<string>("");
   const [previewAsGuru, setPreviewAsGuru] = useState<boolean>(false);
   const [classesList, setClassesList] = useState<any[]>([]);
   const [teachersList, setTeachersList] = useState<any[]>([]);
@@ -472,7 +475,8 @@ export default function ParentsManagementPage() {
   }, [unifiedStudents]);
 
   // Determine if active view is Guru (either actual guru or admin in preview mode)
-  const isActualGuru = userRole === "guru" || userRole === "teacher";
+  const resolvedRole = (authRawRole || authRole || userRole || "").toLowerCase();
+  const isActualGuru = resolvedRole === "guru" || resolvedRole === "teacher";
   const isGuru = isActualGuru || previewAsGuru;
 
   // Determine homeroom class(es) for the logged-in Guru (Wali Kelas)
@@ -983,6 +987,11 @@ export default function ParentsManagementPage() {
       setIsSubmitting(false);
     }
   };
+
+  // Role-Based Loading Guard: Prevent flashing unauthorized content
+  if (isUserAuthLoading || !isRoleReady) {
+    return <PageContentSkeleton />;
+  }
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full h-full space-y-6 animate-in fade-in duration-300">

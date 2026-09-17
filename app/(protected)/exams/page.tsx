@@ -12,9 +12,8 @@ import {
 } from "lucide-react";
 import { 
   collection, onSnapshot, doc, setDoc, addDoc, deleteDoc, 
-  serverTimestamp, getDoc 
+  serverTimestamp 
 } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { AlertBox, AlertType } from "@/components/ui/alert-box";
@@ -22,6 +21,8 @@ import { useTimePresets } from "@/lib/time-presets";
 import TimePresetManagerModal from "@/components/schedule/TimePresetManagerModal";
 import { isParentRole } from "@/lib/roles-config";
 import { resolveParentStudent } from "@/lib/parent-child-resolver";
+import { useAuth } from "@/context/AuthContext";
+import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
 // ==========================================
 // TYPES & INTERFACES
@@ -98,9 +99,11 @@ export default function ExamSchedulePage() {
   // Local cache groups to guarantee zero flicker and immediate UI update
   const [localGroups, setLocalGroups] = useState<ExamGroup[]>([]);
 
-  // App & User Role State
+  // Centralized useAuth
+  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
+  const rawR = (authRawRole || authRole || "").toLowerCase();
+  const userRole = (rawR === "student" || rawR === "siswa") ? "siswa" : rawR;
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState<string>("admin");
   const [studentClass, setStudentClass] = useState<string>("");
 
   // Filters for Daftar Kelompok (Main Page)
@@ -213,7 +216,7 @@ export default function ExamSchedulePage() {
 
   const { presets: timePresets } = useTimePresets();
   const [showTimePresetModal, setShowTimePresetModal] = useState(false);
-  const [currentUserData, setCurrentUserData] = useState<any>(null);
+  const currentUserData = userData;
 
   const isParent = isParentRole(userRole) || userRole === "orang-tua" || isParentRole(currentUserData?.role);
   const isStudentRole = userRole === "student" || userRole === "siswa" || isParent;
@@ -223,43 +226,15 @@ export default function ExamSchedulePage() {
     setLocalGroups(getLocalGroups());
   }, []);
 
-  // Check user auth & role & student class
+  // Sync studentClass when userData updates
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, async (u) => {
-      if (u) {
-        try {
-          const userSnap = await getDoc(doc(db, "users", u.uid));
-          let r = "admin";
-          let sClass = "";
-          if (userSnap.exists()) {
-            const data = userSnap.data();
-            setCurrentUserData(data);
-            r = (data.role || "admin").toLowerCase();
-            sClass = data.className || data.classId || data.kelas || "";
-          }
-
-          try {
-            const studentSnap = await getDoc(doc(db, "students", u.uid));
-            if (studentSnap.exists()) {
-              const sData = studentSnap.data();
-              if (sData.classId || sData.className) {
-                sClass = sData.classId || sData.className;
-              }
-            }
-          } catch (e) {}
-
-          const roleNormalized = (r === "student" || r === "siswa") ? "siswa" : r;
-          setUserRole(roleNormalized);
-          if (sClass) {
-            setStudentClass(sClass);
-          }
-        } catch (e) {
-          console.error("User role fetch error:", e);
-        }
+    if (userData) {
+      const sClass = userData.className || userData.classId || userData.kelas || "";
+      if (sClass) {
+        setStudentClass(sClass);
       }
-    });
-    return () => unsubAuth();
-  }, []);
+    }
+  }, [userData]);
 
   // Realtime Subscriptions directly from Firestore Database
   useEffect(() => {
@@ -827,6 +802,10 @@ export default function ExamSchedulePage() {
       return dateStr;
     }
   };
+
+  if (isAuthLoading || !isRoleReady || loading) {
+    return <PageContentSkeleton />;
+  }
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-full mx-auto w-full flex-1 flex flex-col min-h-screen bg-gray-50/50 animate-in fade-in duration-300 relative">

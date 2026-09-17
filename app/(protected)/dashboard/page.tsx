@@ -45,7 +45,9 @@ import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal
 import { TeacherDashboardView } from "@/components/dashboard/teacher-dashboard-view";
 import { AdminDashboardView } from "@/components/dashboard/admin-dashboard-view";
 import { ParentDashboardView } from "@/components/dashboard/parent-dashboard-view";
-import { isParentRole } from "@/lib/roles-config";
+import { isParentRole, isTeacherRole, isStudentRole } from "@/lib/roles-config";
+import { useAuth } from "@/context/AuthContext";
+import { DashboardSkeleton } from "@/components/ui/role-loading-skeleton";
 
 function StudentDashboardView({ userName, greeting, academicYear, currentDate, currentDay }: {
   userName: string;
@@ -1060,8 +1062,14 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
 }
 
 export default function DashboardPage() {
-  const [userName, setUserName] = useState("Adiratna");
-  const [userRole, setUserRole] = useState<string>("admin");
+  const {
+    userName: authUserName,
+    role,
+    rawRole,
+    isAuthLoading,
+    isRoleReady,
+  } = useAuth();
+
   const [previewRole, setPreviewRole] = useState<string | null>(null);
   const [greeting, setGreeting] = useState("Selamat pagi");
   const [academicYear, setAcademicYear] = useState("2026 / 2027");
@@ -1102,41 +1110,18 @@ export default function DashboardPage() {
     };
     
     updateGreeting();
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            if (data.name || data.fullName) setUserName(data.fullName || data.name);
-            else setUserName(user.displayName || user.email?.split('@')[0] || "User");
-
-            const rawRole = (data.role || "admin").toLowerCase();
-            const role = (rawRole === "student" || rawRole === "siswa") 
-              ? "siswa" 
-              : (rawRole === "teacher" || rawRole === "guru")
-                ? "guru"
-                : isParentRole(rawRole)
-                  ? "orang-tua"
-                  : rawRole;
-            setUserRole(role);
-          } else {
-            setUserName(user.displayName || user.email?.split('@')[0] || "User");
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          setUserName(user.displayName || user.email?.split('@')[0] || "User");
-        }
-      }
-    });
-
-    return () => unsubscribe();
   }, []);
 
-  const activeRole = previewRole || userRole;
+  // 1. Role-Based Loading Guard: NEVER render Admin dashboard before user role is verified
+  if (isAuthLoading || !isRoleReady) {
+    return <DashboardSkeleton />;
+  }
 
-  if (activeRole === "siswa") {
+  const effectiveRole = (previewRole || rawRole || role || "admin").toLowerCase();
+  const userName = authUserName || "User";
+
+  // 2. Student Dashboard
+  if (effectiveRole === "siswa" || effectiveRole === "student" || isStudentRole(effectiveRole)) {
     return (
       <StudentDashboardView 
         userName={userName}
@@ -1148,7 +1133,8 @@ export default function DashboardPage() {
     );
   }
 
-  if (activeRole === "guru" || activeRole === "teacher") {
+  // 3. Teacher Dashboard
+  if (effectiveRole === "guru" || effectiveRole === "teacher" || isTeacherRole(effectiveRole)) {
     return (
       <div className="relative">
         {previewRole && (
@@ -1161,7 +1147,7 @@ export default function DashboardPage() {
               onClick={() => setPreviewRole(null)}
               className="px-3 py-1 bg-white text-amber-900 rounded-md text-xs font-black hover:bg-amber-100 transition-colors cursor-pointer"
             >
-              Kembali ke Mode Asli ({userRole})
+              Kembali ke Mode Asli ({rawRole || role})
             </button>
           </div>
         )}
@@ -1176,7 +1162,8 @@ export default function DashboardPage() {
     );
   }
 
-  if (activeRole === "orang-tua" || isParentRole(activeRole)) {
+  // 4. Parent Dashboard
+  if (effectiveRole === "orang-tua" || effectiveRole === "parent" || isParentRole(effectiveRole)) {
     return (
       <div className="relative">
         {previewRole && (
@@ -1189,7 +1176,7 @@ export default function DashboardPage() {
               onClick={() => setPreviewRole(null)}
               className="px-3 py-1 bg-white text-[#531FFF] rounded-md text-xs font-black hover:bg-purple-50 transition-colors cursor-pointer"
             >
-              Kembali ke Mode Asli ({userRole})
+              Kembali ke Mode Asli ({rawRole || role})
             </button>
           </div>
         )}
@@ -1204,6 +1191,7 @@ export default function DashboardPage() {
     );
   }
 
+  // 5. Admin / Super Admin Dashboard
   return (
     <AdminDashboardView
       userName={userName}
@@ -1211,7 +1199,7 @@ export default function DashboardPage() {
       academicYear={academicYear}
       currentDate={currentDate}
       currentDay={currentDay}
-      userRole={userRole}
+      userRole={rawRole || role || "admin"}
       setPreviewRole={setPreviewRole}
     />
   );

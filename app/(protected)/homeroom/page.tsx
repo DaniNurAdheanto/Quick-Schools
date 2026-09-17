@@ -37,6 +37,8 @@ import {
   getDoc 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import { useAuth } from "@/context/AuthContext";
+import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
 export default function HomeroomPage() {
   const toast = useToast();
@@ -46,9 +48,11 @@ export default function HomeroomPage() {
   const [classes, setClasses] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState<string>("admin");
+  const { role: authRole, rawRole: authRawRole, isAuthLoading: isUserAuthLoading, isRoleReady } = useAuth();
+  const [userRole, setUserRole] = useState<string>("");
 
-  const isGuru = userRole === "guru" || userRole === "teacher";
+  const resolvedRole = (authRawRole || authRole || userRole || "").toLowerCase();
+  const isGuru = resolvedRole === "guru" || resolvedRole === "teacher";
 
   // Filters state for Classes Tab
   const [searchQuery, setSearchQuery] = useState("");
@@ -415,6 +419,10 @@ export default function HomeroomPage() {
       return matchSearch;
     });
   }, [teachers, modalSearch, modalFilter, teacherHomeroomMap, assignModal.targetClass]);
+
+  if (isUserAuthLoading || !isRoleReady || loading) {
+    return <PageContentSkeleton />;
+  }
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full h-full space-y-6 animate-in fade-in duration-300">

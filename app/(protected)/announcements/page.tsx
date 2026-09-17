@@ -9,10 +9,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
-import { collection, onSnapshot, doc, getDoc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
-import { db, auth } from "@/lib/firebase";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { isParentRole } from "@/lib/roles-config";
+import { useAuth } from "@/context/AuthContext";
+import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
 const POPULAR_ANNOUNCEMENTS = [
   { title: "Libur Idul Fitri 1447 H", views: "1.245", date: "10 Apr 2026", color: "text-[#531FFF]", bgColor: "bg-[#531FFF]/10" },
@@ -30,27 +31,16 @@ export default function AnnouncementsPage() {
     mode: "create"
   });
   
+  // Centralized useAuth
+  const { role: authRole, rawRole: authRawRole, isAuthLoading, isRoleReady } = useAuth();
+  const userRole = (authRawRole || authRole || "").toLowerCase();
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState<string>("admin");
   const isStudent = userRole === "siswa" || userRole === "student";
   const isParent = isParentRole(userRole) || userRole === "orang-tua" || userRole === "parent";
   const isReadOnly = isStudent || isParent;
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          const userSnap = await getDoc(doc(db, "users", user.uid));
-          if (userSnap.exists()) {
-            setUserRole(userSnap.data().role || "admin");
-          }
-        } catch (e) {
-          console.warn("User role fetch error", e);
-        }
-      }
-    });
-
     const unsub = onSnapshot(collection(db, "announcements"), (snap) => {
       const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setAnnouncements(data);
@@ -61,7 +51,6 @@ export default function AnnouncementsPage() {
     });
 
     return () => {
-      unsubAuth();
       unsub();
     };
   }, []);
@@ -166,6 +155,10 @@ export default function AnnouncementsPage() {
     { label: "Kegiatan", count: announcements.filter(a => a.tag === 'KEGIATAN').length, icon: Activity, color: "text-amber-500", bgColor: "bg-amber-50" },
     { label: "Informasi", count: announcements.filter(a => a.tag === 'INFORMASI').length, icon: Info, color: "text-blue-400", bgColor: "bg-blue-50" },
   ];
+
+  if (isAuthLoading || !isRoleReady || loading) {
+    return <PageContentSkeleton />;
+  }
 
   return (
     <div className="p-8 pb-12 max-w-[1600px] mx-auto w-full h-full flex flex-col space-y-6">

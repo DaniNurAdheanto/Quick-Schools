@@ -12,8 +12,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart,
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Cell, Legend
 } from "recharts";
-import { collection, onSnapshot, doc, setDoc, addDoc, serverTimestamp, getDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { collection, onSnapshot, doc, setDoc, addDoc, serverTimestamp } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
@@ -22,6 +21,8 @@ import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { isParentRole } from "@/lib/roles-config";
 import { resolveParentStudent } from "@/lib/parent-child-resolver";
+import { useAuth } from "@/context/AuthContext";
+import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
 // Standard Indonesian Curriculum Subject Presets (Kurikulum Merdeka & Nasional)
 const STANDARD_SUBJECT_PRESETS = [
@@ -101,9 +102,11 @@ export default function ReportCardsPage() {
   const [reportCardsData, setReportCardsData] = useState<Record<string, any>>({});
   const [isSyncingSubjects, setIsSyncingSubjects] = useState(false);
 
-  const [currentUserData, setCurrentUserData] = useState<any>(null);
-  const [userRole, setUserRole] = useState<string>("admin");
-  const [userEmail, setUserEmail] = useState<string>("");
+  // Centralized useAuth
+  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
+  const currentUserData = userData;
+  const userRole = (authRawRole || authRole || "").toLowerCase();
+  const userEmail = userData?.email || auth.currentUser?.email || "";
   const [previewAsGuru, setPreviewAsGuru] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -143,27 +146,6 @@ export default function ReportCardsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
-
-  // Check auth & user role
-  useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, async (u) => {
-      if (u) {
-        setUserEmail(u.email || "");
-        try {
-          const userSnap = await getDoc(doc(db, "users", u.uid));
-          if (userSnap.exists()) {
-            const data = userSnap.data();
-            setCurrentUserData({ ...data, uid: u.uid, email: u.email });
-            const r = (data.role || "admin").toLowerCase();
-            setUserRole(r);
-          }
-        } catch (e) {
-          console.error("User role fetch error:", e);
-        }
-      }
-    });
-    return () => unsubAuth();
-  }, []);
 
   const isParent = isParentRole(userRole) || userRole === "orang-tua" || isParentRole(currentUserData?.role);
   const isStudentRole = userRole === "student" || userRole === "siswa" || isParent;
@@ -838,6 +820,10 @@ export default function ReportCardsPage() {
   const applyPresetNote = (noteText: string) => {
     setTeacherNotes(noteText);
   };
+
+  if (isAuthLoading || !isRoleReady || loading) {
+    return <PageContentSkeleton />;
+  }
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-full mx-auto w-full flex-1 flex flex-col min-h-screen bg-gray-50/50 animate-in fade-in duration-300 relative">

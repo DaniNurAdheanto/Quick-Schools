@@ -4,22 +4,24 @@ import { Bell, ChevronDown, ChevronRight, Home, Calendar, User, LogOut, Loader2 
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import React, { useEffect, useState, useRef } from 'react';
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { cn } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
+import { useAuth } from "@/context/AuthContext";
 
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const [userName, setUserName] = useState("Loading...");
-  const [userRole, setUserRole] = useState("");
-  const [userEmail, setUserEmail] = useState("");
-  const [userAvatar, setUserAvatar] = useState("");
-  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
-  const [hasPendingReminder, setHasPendingReminder] = useState(false);
+  const {
+    userName,
+    userRole,
+    userEmail,
+    userAvatar,
+    userData,
+    isAuthLoading,
+    logout,
+  } = useAuth();
+
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -29,43 +31,8 @@ export function Header() {
 
   const { activeAcademicYear, activeSemester, availableYears, setActiveAcademicYear, setActiveSemester } = useAcademicYear();
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setUserEmail(user.email || "");
-        try {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            setUserName(data.name || user.displayName || "User");
-            setUserRole(data.role || "admin");
-            setUserEmail(data.email || user.email || "");
-            setUserAvatar(data.imageUrl || data.photoUrl || user.photoURL || "");
-            const isCompleted = data.onboardingCompleted ?? (data.status !== "Belum Onboarding");
-            setOnboardingCompleted(isCompleted);
-            setHasPendingReminder(Boolean(data.pendingOnboardingReminder) || !isCompleted);
-          } else {
-            setUserName(user.displayName || user.email?.split('@')[0] || "User");
-            setUserAvatar(user.photoURL || "");
-            setOnboardingCompleted(true);
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          setUserName(user.displayName || user.email?.split('@')[0] || "User");
-          setUserAvatar(user.photoURL || "");
-          setOnboardingCompleted(true);
-        }
-      } else {
-        setUserName("Guest");
-        setUserRole("");
-        setUserEmail("");
-        setUserAvatar("");
-        setOnboardingCompleted(true);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
+  const onboardingCompleted = userData?.onboardingCompleted ?? (userData?.status !== "Belum Onboarding");
+  const hasPendingReminder = Boolean(userData?.pendingOnboardingReminder) || (onboardingCompleted === false);
 
   // Handle outside click to close dropdowns
   useEffect(() => {
@@ -81,7 +48,7 @@ export function Header() {
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
-      await signOut(auth);
+      await logout();
       setShowLogoutConfirm(false);
       router.push("/login");
     } catch (error) {
@@ -253,45 +220,55 @@ export function Header() {
 
           {/* Profile Dropdown Container */}
           <div className="relative" ref={profileDropdownRef}>
-            <button
-              type="button"
-              onClick={() => {
-                setShowProfileDropdown(prev => !prev);
-                setShowNotifDropdown(false);
-              }}
-              className={cn(
-                "flex items-center gap-2.5 sm:gap-3 cursor-pointer p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg transition-all border text-left",
-                showProfileDropdown 
-                  ? "bg-[#531FFF]/10 border-[#531FFF]/30 ring-2 ring-[#531FFF]/20" 
-                  : "hover:bg-gray-100/80 border-transparent"
-              )}
-              title="Menu Profil Pengguna"
-            >
-              <div className="relative">
-                <ProfileAvatar
-                  name={userName}
-                  imageUrl={userAvatar}
-                  role={userRole}
-                  size="sm"
-                  shape="circle"
-                  ring="ring-2 ring-white shadow-xs"
-                  showBadge={true}
-                  badgeStatus="online"
-                />
+            {isAuthLoading ? (
+              <div className="flex items-center gap-2.5 p-1.5 sm:px-2.5 sm:py-1.5 animate-pulse select-none">
+                <div className="w-8 h-8 rounded-full bg-gray-200 shrink-0" />
+                <div className="hidden sm:flex flex-col gap-1 min-w-[70px]">
+                  <div className="w-12 h-2.5 bg-gray-200 rounded" />
+                  <div className="w-20 h-3 bg-gray-200 rounded" />
+                </div>
               </div>
-              <div className="flex flex-col text-left hidden sm:flex min-w-0">
-                <span className="text-[10px] text-[#531FFF] font-black uppercase tracking-wider">
-                  {userRole || "Admin"}
-                </span>
-                <span className="text-xs font-bold text-gray-900 leading-tight truncate max-w-[120px]">
-                  {userName}
-                </span>
-              </div>
-              <ChevronDown className={cn(
-                "w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ml-0.5",
-                showProfileDropdown && "rotate-180 text-[#531FFF]"
-              )} />
-            </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProfileDropdown(prev => !prev);
+                  setShowNotifDropdown(false);
+                }}
+                className={cn(
+                  "flex items-center gap-2.5 sm:gap-3 cursor-pointer p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg transition-all border text-left",
+                  showProfileDropdown 
+                    ? "bg-[#531FFF]/10 border-[#531FFF]/30 ring-2 ring-[#531FFF]/20" 
+                    : "hover:bg-gray-100/80 border-transparent"
+                )}
+                title="Menu Profil Pengguna"
+              >
+                <div className="relative">
+                  <ProfileAvatar
+                    name={userName}
+                    imageUrl={userAvatar}
+                    role={userRole}
+                    size="sm"
+                    shape="circle"
+                    ring="ring-2 ring-white shadow-xs"
+                    showBadge={true}
+                    badgeStatus="online"
+                  />
+                </div>
+                <div className="flex flex-col text-left hidden sm:flex min-w-0">
+                  <span className="text-[10px] text-[#531FFF] font-black uppercase tracking-wider">
+                    {userRole || "User"}
+                  </span>
+                  <span className="text-xs font-bold text-gray-900 leading-tight truncate max-w-[120px]">
+                    {userName}
+                  </span>
+                </div>
+                <ChevronDown className={cn(
+                  "w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ml-0.5",
+                  showProfileDropdown && "rotate-180 text-[#531FFF]"
+                )} />
+              </button>
+            )}
 
             {/* Profile Dropdown Menu */}
             {showProfileDropdown && (

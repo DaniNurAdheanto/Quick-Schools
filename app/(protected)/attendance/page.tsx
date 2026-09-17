@@ -44,12 +44,10 @@ import {
   collection,
   onSnapshot,
   doc,
-  getDoc,
   setDoc,
   query,
   where
 } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
 import { useToast } from "@/context/ToastContext";
 import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal";
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
@@ -57,6 +55,8 @@ import StudentPersonalAttendanceView from "@/components/attendance/student-perso
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { isParentRole } from "@/lib/roles-config";
 import { resolveParentStudent } from "@/lib/parent-child-resolver";
+import { useAuth } from "@/context/AuthContext";
+import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
 // -------------------------------------------------------------
 // Types & Defaults
@@ -165,11 +165,31 @@ export default function AttendancePage() {
   // Tab State: "daily" | "biometric" | "monthly"
   const [activeTab, setActiveTab] = useState<"daily" | "biometric" | "monthly">("daily");
 
-  // User Authentication State
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [currentUserData, setCurrentUserData] = useState<any>(null);
-  const [userRole, setUserRole] = useState<string>("admin");
-  const [studentInfo, setStudentInfo] = useState<any>(null);
+  // Centralized useAuth
+  const { user: authUser, role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
+  const rawRole = (authRawRole || authRole || "").toLowerCase();
+  const userRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : rawRole;
+  const currentUser = authUser;
+  const currentUserData = userData;
+  const [dbStudentInfo, setDbStudentInfo] = useState<any>(null);
+  const studentInfo = useMemo(() => {
+    const base = {
+      id: authUser?.uid || userData?.uid || "S103",
+      name: userData?.name || userData?.fullName || authUser?.displayName || "Siswa",
+      email: userData?.email || authUser?.email || undefined,
+      nisn: userData?.nisn || userData?.studentId || "NISN-2023001",
+      className: userData?.className || userData?.kelas || "10 MIPA 1",
+      avatar: undefined as string | undefined,
+    };
+    if (dbStudentInfo) {
+      return {
+        ...base,
+        ...dbStudentInfo,
+        email: dbStudentInfo.email || base.email || undefined,
+      };
+    }
+    return base;
+  }, [userData, authUser, dbStudentInfo]);
   const [teachersList, setTeachersList] = useState<any[]>([]);
   const [previewAsGuru, setPreviewAsGuru] = useState(false);
 
@@ -186,7 +206,7 @@ export default function AttendancePage() {
 
   // Tab 1: Daily Class Attendance State
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
-  const [selectedClass, setSelectedClass] = useState<string>("Semua Kelas");
+  const [selectedClass, setSelectedClass] = useState<string>(userData?.className || userData?.kelas || "Semua Kelas");
   const [classAttendanceMap, setClassAttendanceMap] = useState<Record<string, StudentDailyAttendance>>({});
   const [dailySubFilter, setDailySubFilter] = useState<"all" | "sudah" | "belum" | "hadir" | "terlambat" | "izin_sakit" | "alpa">("all");
   const [isSavingBatch, setIsSavingBatch] = useState(false);
@@ -203,36 +223,9 @@ export default function AttendancePage() {
   const [monthlyClassFilter, setMonthlyClassFilter] = useState<string>("Semua");
 
   // -------------------------------------------------------------
-  // 1. Initial Listeners (Auth, Classes, Students, Attendance, Config)
+  // 1. Initial Listeners (Classes, Students, Attendance, Config)
   // -------------------------------------------------------------
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setCurrentUser(user);
-        try {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            setCurrentUserData(data);
-            const rawRole = (data.role || "admin").toLowerCase();
-            const role = (rawRole === "student" || rawRole === "siswa") ? "siswa" : rawRole;
-            setUserRole(role);
-            setStudentInfo({
-              id: user.uid,
-              name: data.name || data.fullName || user.displayName || user.email?.split("@")[0] || "Siswa",
-              email: user.email,
-              nisn: data.nisn || data.studentId || "NISN-2023001",
-              className: data.className || data.kelas || "10 MIPA 1"
-            });
-            if (role === "siswa") {
-              setSelectedClass(data.className || data.kelas || "10 MIPA 1");
-            }
-          }
-        } catch (err) {
-          console.error("Attendance user role fetch error:", err);
-        }
-      }
-    });
 
     // 2. Fetch Classes from Firestore
     const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
@@ -282,7 +275,7 @@ export default function AttendancePage() {
           (s.name && cUser.displayName && s.name.toLowerCase() === cUser.displayName.toLowerCase())
         );
         if (matched) {
-          setStudentInfo((prev: any) => ({
+          setDbStudentInfo((prev: any) => ({
             ...prev,
             id: matched.id || cUser.uid,
             name: matched.name || prev?.name,
@@ -432,7 +425,6 @@ export default function AttendancePage() {
     });
 
     return () => {
-      unsubAuth();
       unsubClasses();
       unsubStudents();
       unsubTeachers();
@@ -1084,6 +1076,10 @@ export default function AttendancePage() {
     window.print();
   };
 
+  if (isAuthLoading || !isRoleReady || loading) {
+    return <PageContentSkeleton />;
+  }
+
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full space-y-6 animate-in fade-in duration-300">
       
@@ -1123,20 +1119,18 @@ export default function AttendancePage() {
               isParent && resolvedParentChild?.student ? {
                 id: resolvedParentChild.student.id || resolvedParentChild.student._firestoreId || "child",
                 name: resolvedParentChild.student.name || "Anak",
-                email: resolvedParentChild.student.email || currentUser?.email,
+                email: resolvedParentChild.student.email || currentUser?.email || undefined,
                 nisn: resolvedParentChild.student.nisn || resolvedParentChild.student.nis || "NISN",
                 className: resolvedParentChild.className || "10 MIPA 1",
-                avatar: resolvedParentChild.student.avatar || resolvedParentChild.student.photoUrl,
-              } : (
-                studentInfo || {
-                  id: "S103",
-                  name: "Bintang Pratama",
-                  email: currentUser?.email || "student@gmail.com",
-                  nisn: "2023003",
-                  className: selectedClass || "10 MIPA 1",
-                  avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
-                }
-              )
+                avatar: resolvedParentChild.student.avatar || resolvedParentChild.student.photoUrl || undefined,
+              } : {
+                id: studentInfo?.id || "S103",
+                name: studentInfo?.name || "Bintang Pratama",
+                email: studentInfo?.email || currentUser?.email || undefined,
+                nisn: studentInfo?.nisn || "2023003",
+                className: studentInfo?.className || selectedClass || "10 MIPA 1",
+                avatar: studentInfo?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
+              }
             }
             attendanceRecords={attendanceRecords}
             config={config}

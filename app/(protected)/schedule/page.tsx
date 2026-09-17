@@ -7,14 +7,15 @@ import {
   BadgeCheck, AlertCircle, Settings
 } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
 import { useTimePresets, DEFAULT_TIME_PRESETS } from "@/lib/time-presets";
 import TimePresetManagerModal from "@/components/schedule/TimePresetManagerModal";
 import { isParentRole } from "@/lib/roles-config";
 import { resolveParentStudent } from "@/lib/parent-child-resolver";
+import { useAuth } from "@/context/AuthContext";
+import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
@@ -45,7 +46,6 @@ export default function SchedulePage() {
   const [classes, setClasses] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
-  const [currentUserData, setCurrentUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
   const [mounted, setMounted] = useState(false);
@@ -87,7 +87,11 @@ export default function SchedulePage() {
   const currentDayString = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"][now.getDay()];
   const currentTimeString = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }).replace('.', ':');
 
-  const [userRole, setUserRole] = useState<string>("admin");
+  // Centralized useAuth
+  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
+  const rawR = (authRawRole || authRole || "").toLowerCase();
+  const userRole = (rawR === "student" || rawR === "siswa") ? "siswa" : rawR;
+  const currentUserData = userData;
 
   const isActive = (schedule: any) => {
     if (!mounted) return false;
@@ -96,68 +100,43 @@ export default function SchedulePage() {
   };
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          const userSnap = await getDoc(doc(db, "users", user.uid));
-          if (userSnap.exists()) {
-            const uData = userSnap.data();
-            setUserRole(uData.role || "admin");
-            setCurrentUserData(uData);
-          }
-        } catch (e) {
-          console.warn("User role fetch error", e);
-        }
-
-        const q = query(collection(db, "schedules"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-          const schedulesData = snapshot.docs.map(doc => ({
-            _firestoreId: doc.id,
-            ...doc.data()
-          }));
-          setSchedules(schedulesData);
-          setLoading(false);
-        }, (error) => {
-          console.error("Error fetching schedules:", error);
-          setLoading(false);
-        });
-
-        const unsubSubjects = onSnapshot(query(collection(db, "subjects")), (snapshot) => {
-          setSubjects(snapshot.docs.map(d => ({ _firestoreId: d.id, ...d.data() })));
-        });
-
-        const unsubClasses = onSnapshot(query(collection(db, "classes")), (snapshot) => {
-          const classData = snapshot.docs.map(d => ({ _firestoreId: d.id, ...d.data() } as any));
-          setClasses(classData);
-        });
-
-        const unsubTeachers = onSnapshot(query(collection(db, "teachers")), (snapshot) => {
-          setTeachers(snapshot.docs.map(d => ({ _firestoreId: d.id, ...d.data() })));
-        });
-
-        const unsubStudents = onSnapshot(query(collection(db, "students")), (snapshot) => {
-          setStudents(snapshot.docs.map(d => ({ _firestoreId: d.id, ...d.data() })));
-        });
-
-        return () => {
-          unsubscribe();
-          unsubSubjects();
-          unsubClasses();
-          unsubTeachers();
-          unsubStudents();
-        };
-      } else {
-        setSchedules([]);
-        setSubjects([]);
-        setClasses([]);
-        setTeachers([]);
-        setStudents([]);
-        setCurrentUserData(null);
-        setLoading(false);
-      }
+    const q = query(collection(db, "schedules"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const schedulesData = snapshot.docs.map(doc => ({
+        _firestoreId: doc.id,
+        ...doc.data()
+      }));
+      setSchedules(schedulesData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching schedules:", error);
+      setLoading(false);
     });
 
-    return () => unsubscribeAuth();
+    const unsubSubjects = onSnapshot(query(collection(db, "subjects")), (snapshot) => {
+      setSubjects(snapshot.docs.map(d => ({ _firestoreId: d.id, ...d.data() })));
+    });
+
+    const unsubClasses = onSnapshot(query(collection(db, "classes")), (snapshot) => {
+      const classData = snapshot.docs.map(d => ({ _firestoreId: d.id, ...d.data() } as any));
+      setClasses(classData);
+    });
+
+    const unsubTeachers = onSnapshot(query(collection(db, "teachers")), (snapshot) => {
+      setTeachers(snapshot.docs.map(d => ({ _firestoreId: d.id, ...d.data() })));
+    });
+
+    const unsubStudents = onSnapshot(query(collection(db, "students")), (snapshot) => {
+      setStudents(snapshot.docs.map(d => ({ _firestoreId: d.id, ...d.data() })));
+    });
+
+    return () => {
+      unsubscribe();
+      unsubSubjects();
+      unsubClasses();
+      unsubTeachers();
+      unsubStudents();
+    };
   }, []);
 
   // Helper to open modal pre-filled
@@ -377,8 +356,13 @@ export default function SchedulePage() {
   const currentActiveSchedule = activeClassSchedule;
   const nextUpcomingSchedule = nextClassSchedule;
 
+  // Guard loading to prevent flash of admin schedule controls
+  if (isAuthLoading || !isRoleReady || loading) {
+    return <PageContentSkeleton />;
+  }
+
   // JIKA ROLE ADALAH SISWA ATAU ORANG TUA: TAMPILKAN PORTAL JADWAL KHUSUS KELASNYA SAJA (READ-ONLY)
-  if (isReadOnly && !loading) {
+  if (isReadOnly) {
     if (!studentMyClass && !studentClassId) {
       return (
         <div className="p-4 sm:p-8 max-w-[1200px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
@@ -1612,7 +1596,7 @@ export default function SchedulePage() {
       <TimePresetManagerModal
         isOpen={showTimePresetModal}
         onClose={() => setShowTimePresetModal(false)}
-        onSelectPreset={(p) => {
+        onSelectPreset={(p: any) => {
           setFormStartTime(p.startTime);
           setFormEndTime(p.endTime);
         }}

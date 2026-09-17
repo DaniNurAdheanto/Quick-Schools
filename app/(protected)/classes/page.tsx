@@ -38,12 +38,12 @@ import {
   updateDoc, 
   deleteDoc, 
   doc, 
-  getDoc,
   writeBatch 
 } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
 import { useToast } from "@/context/ToastContext";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
+import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
 // Standard Class Presets for Quick Creation
 const STANDARD_CLASS_PRESETS = [
@@ -71,10 +71,12 @@ export default function ClassesPage() {
   const [selectedMajor, setSelectedMajor] = useState("All");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
-  // Student specific role states
-  const [currentUserRole, setCurrentUserRole] = useState<string>("admin");
-  const [currentUserData, setCurrentUserData] = useState<any>(null);
-  const [currentStudentClass, setCurrentStudentClass] = useState<string>("");
+  // Centralized useAuth
+  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
+  const rawRole = (authRawRole || authRole || "").toLowerCase();
+  const currentUserRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : (rawRole === "teacher" || rawRole === "guru") ? "guru" : rawRole;
+  const currentUserData = userData;
+  const currentStudentClass = userData?.classId || userData?.className || userData?.class || "";
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
   const [studentGenderFilter, setStudentGenderFilter] = useState("All");
   const [studentViewMode, setStudentViewMode] = useState<"grid" | "table">("grid");
@@ -109,73 +111,45 @@ export default function ClassesPage() {
 
   // Real-time synchronization for classes, students, and teachers
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // 0. Fetch User Role & Class
-        try {
-          const uSnap = await getDoc(doc(db, "users", user.uid));
-          if (uSnap.exists()) {
-            const uData = uSnap.data();
-            setCurrentUserData(uData);
-            const rawRole = (uData.role || "admin").toLowerCase();
-            const normRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : (rawRole === "teacher" || rawRole === "guru") ? "guru" : rawRole;
-            setCurrentUserRole(normRole);
-            if (uData.classId || uData.className || uData.class) {
-              setCurrentStudentClass(uData.classId || uData.className || uData.class);
-            }
-          }
-        } catch (err) {
-          console.warn("Could not fetch user role in classes:", err);
-        }
-
-        // 1. Classes
-        const qClasses = query(collection(db, "classes"));
-        const unsubClasses = onSnapshot(qClasses, (snapshot) => {
-          const classesData = snapshot.docs.map(doc => ({
-            _firestoreId: doc.id,
-            ...doc.data()
-          }));
-          setClasses(classesData);
-          setLoading(false);
-        }, (error) => {
-          console.error("Error fetching classes:", error);
-          setLoading(false);
-        });
-
-        // 2. Students
-        const qStudents = query(collection(db, "students"));
-        const unsubStudents = onSnapshot(qStudents, (snapshot) => {
-          const studentsData = snapshot.docs.map(doc => ({
-            _firestoreId: doc.id,
-            id: doc.id,
-            ...doc.data()
-          }));
-          setStudents(studentsData);
-        });
-
-        // 3. Teachers
-        const qTeachers = query(collection(db, "teachers"));
-        const unsubTeachers = onSnapshot(qTeachers, (snapshot) => {
-          setTeachers(snapshot.docs.map(doc => ({
-            _firestoreId: doc.id,
-            ...doc.data()
-          })));
-        });
-        
-        return () => {
-          unsubClasses();
-          unsubStudents();
-          unsubTeachers();
-        };
-      } else {
-        setClasses([]);
-        setStudents([]);
-        setTeachers([]);
-        setLoading(false);
-      }
+    // 1. Classes
+    const qClasses = query(collection(db, "classes"));
+    const unsubClasses = onSnapshot(qClasses, (snapshot) => {
+      const classesData = snapshot.docs.map(doc => ({
+        _firestoreId: doc.id,
+        ...doc.data()
+      }));
+      setClasses(classesData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching classes:", error);
+      setLoading(false);
     });
 
-    return () => unsubscribeAuth();
+    // 2. Students
+    const qStudents = query(collection(db, "students"));
+    const unsubStudents = onSnapshot(qStudents, (snapshot) => {
+      const studentsData = snapshot.docs.map(doc => ({
+        _firestoreId: doc.id,
+        id: doc.id,
+        ...doc.data()
+      }));
+      setStudents(studentsData);
+    });
+
+    // 3. Teachers
+    const qTeachers = query(collection(db, "teachers"));
+    const unsubTeachers = onSnapshot(qTeachers, (snapshot) => {
+      setTeachers(snapshot.docs.map(doc => ({
+        _firestoreId: doc.id,
+        ...doc.data()
+      })));
+    });
+    
+    return () => {
+      unsubClasses();
+      unsubStudents();
+      unsubTeachers();
+    };
   }, []);
 
   // Map real-time students count to each class
@@ -726,10 +700,15 @@ export default function ClassesPage() {
     };
   }, [studentMyClass, teachers]);
 
+  // Loading check before any role-specific view or admin view is rendered
+  if (isAuthLoading || !isRoleReady || loading) {
+    return <PageContentSkeleton />;
+  }
+
   // =========================================================================
   // VIEW KHUSUS ROLE SISWA: HANYA MENAMPILKAN DATA KELAS DIA SENDIRI
   // =========================================================================
-  if (isStudent && !loading) {
+  if (isStudent) {
     if (!studentMyClass && !studentClassId) {
       return (
         <div className="p-4 sm:p-8 max-w-[1200px] mx-auto w-full space-y-6 animate-in fade-in duration-300">

@@ -16,13 +16,14 @@ import {
 } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 import { 
-  collection, onSnapshot, doc, getDoc, addDoc, deleteDoc, updateDoc, serverTimestamp 
+  collection, onSnapshot, doc, addDoc, deleteDoc, updateDoc, serverTimestamp 
 } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
-import { db, auth } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { AlertBox, AlertType } from "@/components/ui/alert-box";
 import { isParentRole } from "@/lib/roles-config";
+import { useAuth } from "@/context/AuthContext";
+import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
 const CATEGORIES = [
   { id: "ALL", label: "Semua Agenda", color: "bg-gray-100 text-gray-800 border-gray-200" },
@@ -93,9 +94,10 @@ const SAMPLE_CALENDAR_EVENTS = [
 ];
 
 export default function CalendarPage() {
+  const { role: authRole, rawRole: authRawRole, isAuthLoading, isRoleReady } = useAuth();
+  const userRole = (authRawRole || authRole || "").toLowerCase();
   const [events, setEvents] = useState<any[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [userRole, setUserRole] = useState<string>("admin");
   const isStudent = userRole === "siswa" || userRole === "student";
   const isParent = isParentRole(userRole) || userRole === "orang-tua" || userRole === "parent";
   const isReadOnly = isStudent || isParent;
@@ -150,21 +152,8 @@ export default function CalendarPage() {
   const currentSemester = today.getMonth() < 6 ? "Semester Genap" : "Semester Ganjil";
   const academicYearText = today.getMonth() < 6 ? `${currentYear - 1}/${currentYear}` : `${currentYear}/${currentYear + 1}`;
 
-  // Firestore Realtime Subscription & Auto Sample Fallback + Auth Role fetch
+  // Firestore Realtime Subscription & Auto Sample Fallback
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          const userSnap = await getDoc(doc(db, "users", user.uid));
-          if (userSnap.exists()) {
-            setUserRole(userSnap.data().role || "admin");
-          }
-        } catch (e) {
-          console.warn("User role fetch error", e);
-        }
-      }
-    });
-
     const unsub = onSnapshot(collection(db, "calendar_events"), (snap) => {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setEvents(docs.length > 0 ? docs : SAMPLE_CALENDAR_EVENTS);
@@ -174,7 +163,6 @@ export default function CalendarPage() {
     });
 
     return () => {
-      unsubAuth();
       unsub();
     };
   }, []);
@@ -423,6 +411,10 @@ export default function CalendarPage() {
     }
     return rows;
   };
+
+  if (isAuthLoading || !isRoleReady) {
+    return <PageContentSkeleton />;
+  }
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-full mx-auto w-full flex-1 flex flex-col min-h-screen bg-gray-50/50 animate-in fade-in duration-300 relative">

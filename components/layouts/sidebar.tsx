@@ -28,10 +28,9 @@ import {
   UserCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
-import { DEFAULT_PERMISSIONS, isSuperAdminRole, isStudentRole, isParentRole } from "@/lib/roles-config";
+import { isSuperAdminRole, isStudentRole, isParentRole } from "@/lib/roles-config";
+import { useAuth } from "@/context/AuthContext";
+import { SidebarSkeleton } from "@/components/ui/role-loading-skeleton";
 
 const NAV_MODULE_MAP: Record<string, string> = {
   "/dashboard": "dashboard",
@@ -273,11 +272,11 @@ function NavGroup({
 export function Sidebar() {
   const pathname = usePathname();
   const { profile } = useSchoolProfile();
+  const { role, rawRole, rolePermissions, isAuthLoading, isRoleReady } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [userRole, setUserRole] = useState<string>("admin");
-  const [rolePermissions, setRolePermissions] = useState<Record<string, { read: boolean; write: boolean; delete: boolean }>>(
-    DEFAULT_PERMISSIONS["admin"]
-  );
+
+  // Derive active normalized role for navigation filtering
+  const effectiveUserRole = (rawRole || role || "").toLowerCase();
 
   // Keyboard shortcut ⌘B or Ctrl+B to toggle sidebar
   useEffect(() => {
@@ -289,40 +288,6 @@ export function Sidebar() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          const userSnap = await getDoc(doc(db, "users", user.uid));
-          const rawRole = userSnap.exists() ? (userSnap.data().role || "admin") : "admin";
-          const role = (rawRole === "student" || rawRole === "siswa") 
-            ? "siswa" 
-            : isParentRole(rawRole) 
-              ? "orang-tua" 
-              : rawRole;
-          setUserRole(role);
-
-          // Get permissions for this role
-          try {
-            const roleSnap = await getDoc(doc(db, "roles", role));
-            if (roleSnap.exists() && roleSnap.data().modules) {
-              setRolePermissions(roleSnap.data().modules);
-              return;
-            }
-          } catch (e) {
-            // fallback to DEFAULT_PERMISSIONS
-          }
-
-          setRolePermissions(DEFAULT_PERMISSIONS[role] || DEFAULT_PERMISSIONS["siswa"] || DEFAULT_PERMISSIONS["admin"]);
-        } catch (err) {
-          console.error("Sidebar role fetch error:", err);
-        }
-      }
-    });
-
-    return () => unsubAuth();
   }, []);
 
   return (
@@ -406,28 +371,37 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* Nav Content Filtered by Permissions */}
-      <div className={cn(
-        "flex-1 pt-3 pb-2 scrollbar-none",
-        isCollapsed ? "overflow-y-auto overflow-x-visible" : "overflow-y-auto overflow-x-hidden"
-      )}>
-        <NavGroup title="OVERVIEW" items={OVERVIEW_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={userRole} />
-        <NavGroup title="MASTER DATA" items={MASTER_DATA_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={userRole} />
-        <NavGroup title="AKADEMIK" items={AKADEMIK_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={userRole} />
-        <NavGroup title="KEUANGAN" items={KEUANGAN_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={userRole} />
-      </div>
+      {/* Nav Content Filtered by Permissions or Loading Skeleton */}
+      {isAuthLoading || !isRoleReady ? (
+        <div className="flex-1 overflow-hidden">
+          <SidebarSkeleton isCollapsed={isCollapsed} />
+        </div>
+      ) : (
+        <>
+          <div className={cn(
+            "flex-1 pt-3 pb-2 scrollbar-none",
+            isCollapsed ? "overflow-y-auto overflow-x-visible" : "overflow-y-auto overflow-x-hidden"
+          )}>
+            <NavGroup title="OVERVIEW" items={OVERVIEW_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={effectiveUserRole} />
+            <NavGroup title="MASTER DATA" items={MASTER_DATA_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={effectiveUserRole} />
+            <NavGroup title="AKADEMIK" items={AKADEMIK_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={effectiveUserRole} />
+            <NavGroup title="KEUANGAN" items={KEUANGAN_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={effectiveUserRole} />
+          </div>
 
-      {/* Pinned Bottom Section: SYSTEM & SETTINGS + Expand/Collapse Control Bar */}
-      <div className="shrink-0 border-t border-gray-100/90 bg-[#F9FAFB] pt-2.5 pb-3">
-        <NavGroup 
-          title="SYSTEM & SETTINGS" 
-          items={SYSTEM_NAV} 
-          currentPath={pathname} 
-          isCollapsed={isCollapsed} 
-          userPermissions={rolePermissions} 
-          userRole={userRole} 
-          isFooter={true} 
-        />
+          {/* Pinned Bottom Section: SYSTEM & SETTINGS */}
+          <div className="shrink-0 border-t border-gray-100/90 bg-[#F9FAFB] pt-2.5 pb-3">
+            <NavGroup 
+              title="SYSTEM & SETTINGS" 
+              items={SYSTEM_NAV} 
+              currentPath={pathname} 
+              isCollapsed={isCollapsed} 
+              userPermissions={rolePermissions} 
+              userRole={effectiveUserRole} 
+              isFooter={true} 
+            />
+          </div>
+        </>
+      )}
 
         {/* Expand & Collapse Control Bar */}
         <div className={cn(
@@ -463,7 +437,6 @@ export function Sidebar() {
             </button>
           )}
         </div>
-      </div>
 
     </aside>
   );

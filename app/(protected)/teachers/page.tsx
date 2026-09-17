@@ -21,12 +21,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
-import { db, auth, storage } from "@/lib/firebase";
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { db, storage } from "@/lib/firebase";
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useToast } from "@/context/ToastContext";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
+import { useAuth } from "@/context/AuthContext";
+import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
 // Helper to compress uploaded photo into lightweight Base64 JPEG data URL (~15KB)
 async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0.7): Promise<string> {
@@ -75,9 +76,11 @@ export default function TeachersPage() {
   const [teachers, setTeachers] = useState<any[]>([]);
   const [subjectsList, setSubjectsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState<string>("admin");
 
-  const isGuru = userRole === "guru" || userRole === "teacher";
+  // Centralized useAuth
+  const { role: authRole, rawRole: authRawRole, isAuthLoading, isRoleReady } = useAuth();
+  const rawR = (authRawRole || authRole || "").toLowerCase();
+  const isGuru = rawR === "guru" || rawR === "teacher";
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState("");
@@ -90,63 +93,41 @@ export default function TeachersPage() {
   });
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          const userDocSnap = await getDoc(doc(db, "users", user.uid));
-          if (userDocSnap.exists()) {
-            const data = userDocSnap.data();
-            const r = (data.role || "admin").toLowerCase();
-            setUserRole(r === "teacher" || r === "guru" ? "guru" : r);
-          }
-        } catch (err) {
-          console.warn("Error fetching user role:", err);
-        }
-
-        const qTeachers = query(collection(db, "teachers"));
-        const unsubscribeTeachers = onSnapshot(qTeachers, (snapshot) => {
-          const teachersData = snapshot.docs.map(doc => {
-            const raw = doc.data();
-            const nip = raw.id || raw.nip || "";
-            const role = raw.role || raw.subject || "";
-            const contact = raw.contact || raw.phone || "";
-            return {
-              _firestoreId: doc.id,
-              ...raw,
-              id: nip,
-              nip: nip,
-              role: role,
-              subject: role,
-              contact: contact,
-              phone: contact,
-              status: raw.status || "Aktif",
-            };
-          });
-          setTeachers(teachersData);
-          setLoading(false);
-        }, (error) => {
-          console.error("Error fetching teachers:", error);
-          setLoading(false);
-        });
-
-        const qSubjects = query(collection(db, "subjects"));
-        const unsubSubjects = onSnapshot(qSubjects, (snapshot) => {
-          setSubjectsList(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
-        });
-        
-        return () => {
-          unsubscribeTeachers();
-          unsubSubjects();
+    const qTeachers = query(collection(db, "teachers"));
+    const unsubscribeTeachers = onSnapshot(qTeachers, (snapshot) => {
+      const teachersData = snapshot.docs.map(doc => {
+        const raw = doc.data();
+        const nip = raw.id || raw.nip || "";
+        const role = raw.role || raw.subject || "";
+        const contact = raw.contact || raw.phone || "";
+        return {
+          _firestoreId: doc.id,
+          ...raw,
+          id: nip,
+          nip: nip,
+          role: role,
+          subject: role,
+          contact: contact,
+          phone: contact,
+          status: raw.status || "Aktif",
         };
-      } else {
-        setTeachers([]);
-        setSubjectsList([]);
-        setUserRole("admin");
-        setLoading(false);
-      }
+      });
+      setTeachers(teachersData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching teachers:", error);
+      setLoading(false);
     });
 
-    return () => unsubscribeAuth();
+    const qSubjects = query(collection(db, "subjects"));
+    const unsubscribeSubjects = onSnapshot(qSubjects, (snapshot) => {
+      setSubjectsList(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
+    });
+
+    return () => {
+      unsubscribeTeachers();
+      unsubscribeSubjects();
+    };
   }, []);
 
   const teacherFields = [
@@ -368,6 +349,10 @@ export default function TeachersPage() {
     setSelectedSubject("All");
     setSelectedStatus("All");
   };
+
+  if (isAuthLoading || !isRoleReady || loading) {
+    return <PageContentSkeleton />;
+  }
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full h-full space-y-6 animate-in fade-in duration-300">

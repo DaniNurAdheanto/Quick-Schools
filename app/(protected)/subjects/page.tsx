@@ -25,10 +25,11 @@ import {
 } from "lucide-react";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
 import { db, auth } from "@/lib/firebase";
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, writeBatch } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, writeBatch } from "firebase/firestore";
 import { useToast } from "@/context/ToastContext";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
+import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
 // Standard Curriculum Presets (Kurikulum Merdeka & Nasional)
 interface SubjectPreset {
@@ -79,10 +80,12 @@ export default function SubjectsPage() {
   const [isBatchAdding, setIsBatchAdding] = useState(false);
   const toast = useToast();
 
-  // User role & student class state
-  const [currentUserRole, setCurrentUserRole] = useState<string>("admin");
-  const [currentUserData, setCurrentUserData] = useState<any>(null);
-  const [currentStudentClass, setCurrentStudentClass] = useState<string>("");
+  // Centralized useAuth
+  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
+  const rawRole = (authRawRole || authRole || "").toLowerCase();
+  const currentUserRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : (rawRole === "teacher" || rawRole === "guru") ? "guru" : rawRole;
+  const currentUserData = userData;
+  const currentStudentClass = userData?.classId || userData?.className || userData?.class || "";
   const [classes, setClasses] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
@@ -101,86 +104,56 @@ export default function SubjectsPage() {
 
   // Real-time subjects, teachers, classes, schedules & students listener
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // 0. User role & class
-        try {
-          const uSnap = await getDoc(doc(db, "users", user.uid));
-          if (uSnap.exists()) {
-            const uData = uSnap.data();
-            setCurrentUserData(uData);
-            const rawRole = (uData.role || "admin").toLowerCase();
-            const normRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : (rawRole === "teacher" || rawRole === "guru") ? "guru" : rawRole;
-            setCurrentUserRole(normRole);
-            if (uData.classId || uData.className || uData.class) {
-              setCurrentStudentClass(uData.classId || uData.className || uData.class);
-            }
-          }
-        } catch (err) {
-          console.warn("Could not fetch user role in subjects:", err);
-        }
-
-        // 1. Subjects
-        const qSubjects = query(collection(db, "subjects"));
-        const unsubSubjects = onSnapshot(qSubjects, (snapshot) => {
-          const data = snapshot.docs.map(doc => ({
-            _firestoreId: doc.id,
-            ...doc.data()
-          }));
-          setSubjects(data);
-          setLoading(false);
-        }, (error) => {
-          console.error("Error fetching subjects:", error);
-          setLoading(false);
-        });
-
-        // 2. Teachers
-        const qTeachers = query(collection(db, "teachers"));
-        const unsubTeachers = onSnapshot(qTeachers, (snapshot) => {
-          const tList = snapshot.docs.map(doc => ({
-            id: doc.id,
-            name: doc.data().name || "Guru",
-            subject: doc.data().subject || doc.data().role || ""
-          }));
-          setTeachers(tList);
-        });
-
-        // 3. Classes
-        const qClasses = query(collection(db, "classes"));
-        const unsubClasses = onSnapshot(qClasses, (snapshot) => {
-          setClasses(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
-        });
-
-        // 4. Schedules
-        const qSchedules = query(collection(db, "schedules"));
-        const unsubSchedules = onSnapshot(qSchedules, (snapshot) => {
-          setSchedules(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
-        });
-
-        // 5. Students
-        const qStudents = query(collection(db, "students"));
-        const unsubStudents = onSnapshot(qStudents, (snapshot) => {
-          setStudents(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
-        });
-        
-        return () => {
-          unsubSubjects();
-          unsubTeachers();
-          unsubClasses();
-          unsubSchedules();
-          unsubStudents();
-        };
-      } else {
-        setSubjects([]);
-        setTeachers([]);
-        setClasses([]);
-        setSchedules([]);
-        setStudents([]);
-        setLoading(false);
-      }
+    // 1. Subjects
+    const qSubjects = query(collection(db, "subjects"));
+    const unsubSubjects = onSnapshot(qSubjects, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        _firestoreId: doc.id,
+        ...doc.data()
+      }));
+      setSubjects(data);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching subjects:", error);
+      setLoading(false);
     });
 
-    return () => unsubscribeAuth();
+    // 2. Teachers
+    const qTeachers = query(collection(db, "teachers"));
+    const unsubTeachers = onSnapshot(qTeachers, (snapshot) => {
+      const tList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name || "Guru",
+        subject: doc.data().subject || doc.data().role || ""
+      }));
+      setTeachers(tList);
+    });
+
+    // 3. Classes
+    const qClasses = query(collection(db, "classes"));
+    const unsubClasses = onSnapshot(qClasses, (snapshot) => {
+      setClasses(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
+    });
+
+    // 4. Schedules
+    const qSchedules = query(collection(db, "schedules"));
+    const unsubSchedules = onSnapshot(qSchedules, (snapshot) => {
+      setSchedules(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
+    });
+
+    // 5. Students
+    const qStudents = query(collection(db, "students"));
+    const unsubStudents = onSnapshot(qStudents, (snapshot) => {
+      setStudents(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
+    });
+    
+    return () => {
+      unsubSubjects();
+      unsubTeachers();
+      unsubClasses();
+      unsubSchedules();
+      unsubStudents();
+    };
   }, []);
 
   // Form Fields Configuration for CrudSheet
@@ -533,10 +506,15 @@ export default function SubjectsPage() {
     });
   }, [classSubjects, studentSearchQuery, studentCategoryFilter]);
 
+  // Role & Data Loading Guard to prevent flash of admin subjects
+  if (isAuthLoading || !isRoleReady || loading) {
+    return <PageContentSkeleton />;
+  }
+
   // =========================================================================
   // VIEW KHUSUS ROLE SISWA: HANYA MENAMPILKAN MATA PELAJARAN KELAS DIA SENDIRI
   // =========================================================================
-  if (isStudent && !loading) {
+  if (isStudent) {
     if (!studentMyClass && !studentClassId) {
       return (
         <div className="p-4 sm:p-8 max-w-[1200px] mx-auto w-full space-y-6 animate-in fade-in duration-300">

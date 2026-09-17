@@ -42,13 +42,13 @@ import {
   deleteDoc,
   updateDoc,
   serverTimestamp,
-  getDoc,
   writeBatch
 } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
-import { db, auth } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import { useToast } from "@/context/ToastContext";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { useAuth } from "@/context/AuthContext";
+import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
 // 6 Core Assessment Types requested by user
 const ASSESSMENT_TYPES = [
@@ -72,10 +72,13 @@ export default function GradesPage() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // User Auth & Role State
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [userRole, setUserRole] = useState<string>("admin");
-  const [studentDoc, setStudentDoc] = useState<any>(null);
+  // Centralized useAuth
+  const { user: authUser, role: authRole, rawRole: authRawRole, userData: authUserData, isAuthLoading, isRoleReady } = useAuth();
+  const rawRole = (authRawRole || authRole || "").toLowerCase();
+  const userRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : (rawRole === "teacher" || rawRole === "guru") ? "guru" : rawRole;
+  const currentUser = authUser;
+  const currentUserData = authUserData;
+  const studentDoc = authUserData;
 
   // View Mode: 'matrix' (Spreadsheet multi-input), 'table' (Log view), 'gradebook' (Rekap Rapor)
   const [viewMode, setViewMode] = useState<"matrix" | "table" | "gradebook">("matrix");
@@ -115,7 +118,6 @@ export default function GradesPage() {
   const [studentSearch, setStudentSearch] = useState<string>("");
   const [expandedSubjectCard, setExpandedSubjectCard] = useState<string | null>(null);
   const [detailModalGrade, setDetailModalGrade] = useState<any | null>(null);
-  const [currentUserData, setCurrentUserData] = useState<any>(null);
 
   const isParent = isParentRole(userRole) || userRole === "orang-tua" || isParentRole(currentUserData?.role);
   const resolvedParentChild = useMemo(() => {
@@ -125,32 +127,11 @@ export default function GradesPage() {
 
   const isStudentRole = userRole === "siswa" || userRole === "student" || isParent;
 
-  // Auth & Role Listener
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setCurrentUser(user);
-        try {
-          const userSnap = await getDoc(doc(db, "users", user.uid));
-          if (userSnap.exists()) {
-            const uData = userSnap.data();
-            setCurrentUserData(uData);
-            const role = (uData.role || "admin").toLowerCase();
-            const normRole = (role === "student" || role === "siswa") ? "siswa" : (role === "teacher" || role === "guru") ? "guru" : role;
-            setUserRole(normRole);
-            setStudentDoc(uData);
-            if (normRole === "siswa") {
-              setViewMode("table"); // Students see table of their own grades
-            }
-          }
-        } catch (err) {
-          console.warn("User role fetch error:", err);
-        }
-      }
-    });
-
-    return () => unsubAuth();
-  }, []);
+    if (userRole === "siswa") {
+      setViewMode("table");
+    }
+  }, [userRole]);
 
   // Determine if logged in user is Guru and their assigned Homeroom Class (Wali Kelas) or Subject Teaching Responsibilities
   const isGuru = userRole === "guru" || userRole === "teacher";
@@ -158,7 +139,7 @@ export default function GradesPage() {
   // Resolve Teacher Profile and Identifiers
   const teacherInfo = useMemo(() => {
     if (!isGuru) return null;
-    const userObj = currentUserData || currentUser || {};
+    const userObj: any = currentUserData || currentUser || {};
     const tName = (userObj.fullName || userObj.name || currentUser?.displayName || "").trim();
     const tNip = (userObj.nip || userObj.id || "").trim();
     const tEmail = (userObj.email || currentUser?.email || "").trim().toLowerCase();
@@ -1486,10 +1467,15 @@ export default function GradesPage() {
     });
   }, [myStudentGrades, studentSubjectFilter, studentTypeFilter, studentStatusFilter, studentSemesterFilter, studentSearch]);
 
+  // Loading guard to prevent flash of admin grade controls
+  if (isAuthLoading || !isRoleReady || loading) {
+    return <PageContentSkeleton />;
+  }
+
   // =========================================================================
   // VIEW KHUSUS ROLE SISWA: PORTAL CAPAIAN & PENILAIAN DIRI SENDIRI
   // =========================================================================
-  if (isStudentRole && !loading) {
+  if (isStudentRole) {
     if (!studentMyClass && !studentClassId) {
       return (
         <div className="p-4 sm:p-8 max-w-[1200px] mx-auto w-full space-y-6 animate-in fade-in duration-300">

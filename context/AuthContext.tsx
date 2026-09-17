@@ -43,6 +43,8 @@ interface AuthContextType {
   userEmail: string;
   userAvatar: string;
   isAuthLoading: boolean;
+  isRoleReady: boolean;
+  userRole: UserRole | string;
   rolePermissions: Record<string, ModulePermission>;
   isSuperAdmin: boolean;
   isAdmin: boolean;
@@ -76,6 +78,8 @@ const AuthContext = createContext<AuthContextType>({
   userEmail: "",
   userAvatar: "",
   isAuthLoading: true,
+  isRoleReady: false,
+  userRole: "",
   rolePermissions: {},
   isSuperAdmin: false,
   isAdmin: false,
@@ -225,6 +229,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return userData?.imageUrl || userData?.photoUrl || user?.photoURL || "";
   }, [userData, user]);
 
+  const isRoleReady = useMemo(() => !isAuthLoading && Boolean(role), [isAuthLoading, role]);
+  const userRole = useMemo(() => role || "", [role]);
+
   const value = useMemo(
     () => ({
       user,
@@ -235,6 +242,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userEmail,
       userAvatar,
       isAuthLoading,
+      isRoleReady,
+      userRole,
       rolePermissions,
       isSuperAdmin,
       isAdmin,
@@ -254,6 +263,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userEmail,
       userAvatar,
       isAuthLoading,
+      isRoleReady,
+      userRole,
       rolePermissions,
       isSuperAdmin,
       isAdmin,
