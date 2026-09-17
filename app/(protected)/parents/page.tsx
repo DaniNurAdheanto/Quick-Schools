@@ -23,11 +23,13 @@ import {
   UserCheck,
   HeartHandshake,
   Mail,
+  ShieldCheck,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { isParentRole } from "@/lib/roles-config";
 import {
   collection,
@@ -35,8 +37,10 @@ import {
   doc,
   setDoc,
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  getDoc
 } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useUnifiedStudents, UnifiedStudent } from "@/hooks/use-unified-students";
 
@@ -90,6 +94,13 @@ export default function ParentsManagementPage() {
   const [rawParentsList, setRawParentsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // User Auth, Role & Homeroom State
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string>("admin");
+  const [previewAsGuru, setPreviewAsGuru] = useState<boolean>(false);
+  const [classesList, setClassesList] = useState<any[]>([]);
+  const [teachersList, setTeachersList] = useState<any[]>([]);
+
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRelationshipFilter, setSelectedRelationshipFilter] = useState("Semua");
@@ -126,8 +137,38 @@ export default function ParentsManagementPage() {
   const [studentPickerSearch, setStudentPickerSearch] = useState("");
   const [isStudentPickerOpen, setIsStudentPickerOpen] = useState(false);
 
-  // 1. Real-time Subscription: Listen to users (role orang-tua) and parents collection
+  // 1. Real-time Subscriptions: Auth, Classes, Teachers, Users (role orang-tua), and Parents
   useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        try {
+          const userDocSnap = await getDoc(doc(db, "users", u.uid));
+          if (userDocSnap.exists()) {
+            const uData = userDocSnap.data();
+            setCurrentUser({ uid: u.uid, email: u.email, ...uData });
+            const r = (uData.role || "admin").toLowerCase();
+            setUserRole(r === "teacher" ? "guru" : r);
+          } else {
+            setCurrentUser({ uid: u.uid, email: u.email, role: "admin" });
+            setUserRole("admin");
+          }
+        } catch (err) {
+          console.error("Fetch current user error in parents page:", err);
+        }
+      } else {
+        setCurrentUser(null);
+        setUserRole("admin");
+      }
+    });
+
+    const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
+      setClassesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.warn("Classes listener in parents page error:", err));
+
+    const unsubTeachers = onSnapshot(collection(db, "teachers"), (snap) => {
+      setTeachersList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.warn("Teachers listener in parents page error:", err));
+
     const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
       const filtered = snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
@@ -141,6 +182,9 @@ export default function ParentsManagementPage() {
     }, (err) => console.warn("Parents listener in parents page error:", err));
 
     return () => {
+      unsubAuth();
+      unsubClasses();
+      unsubTeachers();
       unsubUsers();
       unsubParents();
     };
@@ -427,19 +471,143 @@ export default function ParentsManagementPage() {
     );
   }, [unifiedStudents]);
 
-  // Unique Classes derived from students
+  // Determine if active view is Guru (either actual guru or admin in preview mode)
+  const isActualGuru = userRole === "guru" || userRole === "teacher";
+  const isGuru = isActualGuru || previewAsGuru;
+
+  // Determine homeroom class(es) for the logged-in Guru (Wali Kelas)
+  // Chain: Wali Kelas -> Kelas
+  const teacherHomeroomClasses = useMemo(() => {
+    if (!isGuru) return [];
+
+    const teacherName = (currentUser?.fullName || currentUser?.name || currentUser?.displayName || "").trim().toLowerCase();
+    const teacherNip = (currentUser?.nip || currentUser?.id || "").trim().toLowerCase();
+    const teacherEmail = (currentUser?.email || "").trim().toLowerCase();
+    const teacherUid = currentUser?.uid;
+
+    const matched = new Set<string>();
+
+    // 1. Match from classes collection
+    classesList.forEach((c) => {
+      const cName = c.name || c.id;
+      const cHomeroom = (c.homeroom || c.homeroomTeacher || c.waliKelas || "").trim().toLowerCase();
+      const cNip = (c.homeroomNip || "").trim().toLowerCase();
+      const cId = (c.homeroomId || "").trim();
+
+      const matchName = teacherName && cHomeroom && (
+        cHomeroom === teacherName ||
+        (teacherName.length > 5 && cHomeroom.includes(teacherName)) ||
+        (cHomeroom.length > 5 && teacherName.includes(cHomeroom))
+      );
+      const matchNip = teacherNip && cNip && cNip === teacherNip;
+      const matchId = (teacherUid && cId && cId === teacherUid) || (currentUser?.id && cId === currentUser.id);
+
+      if (matchName || matchNip || matchId) {
+        if (cName) matched.add(cName);
+      }
+    });
+
+    // 2. Direct field in user document
+    const directClass = currentUser?.homeroomClass || currentUser?.homeroom || currentUser?.className || currentUser?.classId;
+    if (directClass && directClass !== "-" && directClass !== "Semua Kelas") {
+      matched.add(directClass);
+    }
+
+    // 3. Match from teachers collection
+    const tDoc = teachersList.find((t) =>
+      (teacherEmail && t.email?.toLowerCase() === teacherEmail) ||
+      (teacherNip && (t.nip === teacherNip || t.id === teacherNip)) ||
+      (teacherUid && (t.uid === teacherUid || t._firestoreId === teacherUid || t.id === teacherUid)) ||
+      (teacherName && (t.name?.toLowerCase() === teacherName || (teacherName.length > 5 && t.name?.toLowerCase().includes(teacherName))))
+    );
+    if (tDoc) {
+      const tClass = tDoc.homeroomClass || tDoc.homeroom || tDoc.class || tDoc.className || tDoc.waliKelas;
+      if (tClass && tClass !== "-" && tClass !== "Semua Kelas") {
+        matched.add(tClass);
+      }
+    }
+
+    // Fallback for preview mode so admin preview displays sample homeroom data (12 MIPA 1)
+    if (matched.size === 0 && previewAsGuru) {
+      const defaultHomeroom = classesList.find(c => c.homeroom || c.name === "12 MIPA 1")?.name || classesList[0]?.name || "12 MIPA 1";
+      if (defaultHomeroom) matched.add(defaultHomeroom);
+    }
+
+    return Array.from(matched);
+  }, [isGuru, currentUser, classesList, teachersList, previewAsGuru]);
+
+  const isTeacherWaliKelas = Boolean(isGuru && teacherHomeroomClasses.length > 0);
+
+  // Set of all unique student identifiers belonging to the Wali Kelas's assigned classes
+  // Chain: Kelas -> Siswa
+  const homeroomStudentIdSet = useMemo(() => {
+    if (!isGuru || teacherHomeroomClasses.length === 0) return new Set<string>();
+
+    const targetClassesLower = teacherHomeroomClasses.map((c) => c.trim().toLowerCase());
+    const idSet = new Set<string>();
+
+    unifiedStudents.forEach((s) => {
+      const sc = (s.className || s.classId || s.kelas || s.class || "").trim().toLowerCase();
+      const belongsToHomeroom = targetClassesLower.some((tc) => tc === sc || (tc && sc && (tc.includes(sc) || sc.includes(tc))));
+      if (belongsToHomeroom) {
+        if (s.id) idSet.add(String(s.id));
+        if (s._firestoreId) idSet.add(String(s._firestoreId));
+        if (s.uid) idSet.add(String(s.uid));
+        if (s.nisn) idSet.add(String(s.nisn));
+        if (s.nis) idSet.add(String(s.nis));
+      }
+    });
+
+    return idSet;
+  }, [isGuru, teacherHomeroomClasses, unifiedStudents]);
+
+  // Base parents list scoped to Wali Kelas's assigned classes if logged in as Guru
+  // Chain: Siswa -> Orang Tua (Guru cannot see parents from other classes)
+  const baseParentsList = useMemo(() => {
+    if (!isGuru) return parentsList; // Non-guru users (admin, super-admin, etc.) see all parents
+    if (!isTeacherWaliKelas || homeroomStudentIdSet.size === 0) return []; // Guru not assigned as wali kelas sees 0 parents
+
+    return parentsList.filter((parent) => {
+      // 1. Direct studentIds match with homeroom students
+      const hasHomeroomChild = (parent.studentIds || []).some((sId) => homeroomStudentIdSet.has(String(sId)));
+      if (hasHomeroomChild) return true;
+
+      // 2. Direct student.parentUid link with any homeroom student
+      const hasUidMatch = unifiedStudents.some((s) => {
+        if (!homeroomStudentIdSet.has(String(s.id || s._firestoreId || s.uid))) return false;
+        const pUid = s.parentUid || s.linkedParentUid;
+        return pUid && (pUid === parent.userUid || pUid === parent.id);
+      });
+
+      return hasUidMatch;
+    });
+  }, [isGuru, isTeacherWaliKelas, parentsList, homeroomStudentIdSet, unifiedStudents]);
+
+  // Auto-synchronize selectedClassFilter for Guru
+  useEffect(() => {
+    if (isGuru && teacherHomeroomClasses.length > 0) {
+      if (selectedClassFilter !== "Semua" && !teacherHomeroomClasses.includes(selectedClassFilter)) {
+        setSelectedClassFilter("Semua");
+      }
+    }
+  }, [isGuru, teacherHomeroomClasses, selectedClassFilter]);
+
+  // Unique Classes derived from students (restricted to homeroom classes for Guru)
   const availableClasses = useMemo(() => {
+    if (isGuru) {
+      return teacherHomeroomClasses.slice().sort();
+    }
     const setCls = new Set<string>();
     unifiedStudents.forEach((s) => {
       if (s.className && s.className !== "-") setCls.add(s.className);
       if (s.classId && s.classId !== "-") setCls.add(s.classId);
     });
     return Array.from(setCls).sort();
-  }, [unifiedStudents]);
+  }, [isGuru, teacherHomeroomClasses, unifiedStudents]);
 
-  // Filtered Parents List
+  // Filtered Parents List (derived from baseParentsList)
   const filteredParents = useMemo(() => {
-    return parentsList.filter((p) => {
+    return baseParentsList.filter((p) => {
       // 1. Relationship filter
       if (selectedRelationshipFilter !== "Semua" && p.relationship !== selectedRelationshipFilter) {
         return false;
@@ -452,7 +620,9 @@ export default function ParentsManagementPage() {
       if (selectedClassFilter !== "Semua") {
         const hasChildInClass = p.studentIds.some((sId) => {
           const std = getStudentById(sId);
-          return std && (std.className === selectedClassFilter || std.classId === selectedClassFilter);
+          if (!std) return false;
+          const stdClass = (std.className || std.classId || "").trim().toLowerCase();
+          return stdClass === selectedClassFilter.trim().toLowerCase();
         });
         if (!hasChildInClass) return false;
       }
@@ -484,15 +654,23 @@ export default function ParentsManagementPage() {
       }
       return true;
     });
-  }, [parentsList, selectedRelationshipFilter, selectedStatusFilter, selectedClassFilter, searchQuery, getStudentById]);
+  }, [baseParentsList, selectedRelationshipFilter, selectedStatusFilter, selectedClassFilter, searchQuery, getStudentById]);
 
-  // Statistics KPI
+  // Statistics KPI (calculated from baseParentsList)
   const stats = useMemo(() => {
-    const totalParents = parentsList.length;
-    const activeParents = parentsList.filter((p) => p.status === "Aktif").length;
+    const totalParents = baseParentsList.length;
+    const activeParents = baseParentsList.filter((p) => p.status === "Aktif").length;
     const linkedStudentSet = new Set<string>();
-    parentsList.forEach((p) => {
-      p.studentIds.forEach((sid) => linkedStudentSet.add(sid));
+    baseParentsList.forEach((p) => {
+      p.studentIds.forEach((sid) => {
+        if (isGuru) {
+          if (homeroomStudentIdSet.has(String(sid))) {
+            linkedStudentSet.add(sid);
+          }
+        } else {
+          linkedStudentSet.add(sid);
+        }
+      });
     });
     const totalLinkedStudents = linkedStudentSet.size;
     const avgRatio = totalParents > 0 ? (totalLinkedStudents / totalParents).toFixed(1) : "0";
@@ -503,7 +681,7 @@ export default function ParentsManagementPage() {
       totalLinkedStudents,
       avgRatio,
     };
-  }, [parentsList]);
+  }, [baseParentsList, isGuru, homeroomStudentIdSet]);
 
   // Reset Form
   const resetForm = () => {
@@ -811,32 +989,135 @@ export default function ParentsManagementPage() {
       {/* ========================================================================= */}
       {/* 1. HEADER SECTION                                                         */}
       {/* ========================================================================= */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">
               Data Orang Tua & Wali Siswa
             </h1>
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
-              Tersinkronisasi Otomatis
+              {isGuru ? "Khusus Wali Kelas" : "Tersinkronisasi Otomatis"}
             </span>
+            {isGuru && (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                {teacherHomeroomClasses.length > 0
+                  ? `Kelas ${teacherHomeroomClasses.join(", ")}`
+                  : "Belum Ditugaskan"}
+              </span>
+            )}
           </div>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">
-            Data orang tua terhubung otomatis dengan Data Siswa dan Onboarding tanpa duplikasi data. Pembuatan akun login baru dilakukan melalui Manajemen Akun.
+            {isGuru
+              ? `Menampilkan data orang tua dari siswa kelas binaan (${teacherHomeroomClasses.join(", ") || "-"}). Data orang tua dari kelas lain dibatasi.`
+              : "Data orang tua terhubung otomatis dengan Data Siswa dan Onboarding tanpa duplikasi data. Pembuatan akun login baru dilakukan melalui Manajemen Akun."}
           </p>
         </div>
 
-        {/* Action Button: Ke Manajemen Akun */}
-        <div className="flex items-center gap-2.5">
-          <Link
-            href="/admin/accounts"
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#531FFF] hover:bg-[#4215cb] text-white text-xs sm:text-sm font-bold rounded-xl shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer"
-          >
-            <UserCheck className="w-4 h-4" />
-            <span>Manajemen Akun Ortu</span>
-          </Link>
+        {/* Action Buttons: Preview Mode & Manajemen Akun */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Admin Role: Preview Toggle for Teacher / Wali Kelas scope */}
+          {!isActualGuru && (
+            <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 text-xs font-bold shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setPreviewAsGuru(false)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg transition-all cursor-pointer",
+                  !previewAsGuru
+                    ? "bg-white text-gray-900 shadow-xs"
+                    : "text-gray-500 hover:text-gray-900"
+                )}
+                title="Tampilan Admin Penuh (Semua Kelas)"
+              >
+                Semua Kelas (Admin)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewAsGuru(true)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5",
+                  previewAsGuru
+                    ? "bg-[#531FFF] text-white shadow-xs"
+                    : "text-gray-500 hover:text-gray-900"
+                )}
+                title="Simulasikan hak akses Guru / Wali Kelas"
+              >
+                <GraduationCap className="w-3.5 h-3.5" />
+                <span>Pratinjau Guru (Wali Kelas)</span>
+              </button>
+            </div>
+          )}
+
+          {/* Action Button: Ke Manajemen Akun (Khusus Non-Guru) */}
+          {!isGuru && (
+            <Link
+              href="/admin/accounts"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#531FFF] hover:bg-[#4215cb] text-white text-xs sm:text-sm font-bold rounded-xl shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer"
+            >
+              <UserCheck className="w-4 h-4" />
+              <span>Manajemen Akun Ortu</span>
+            </Link>
+          )}
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* 1.5 SCOPE BANNER: WALI KELAS INFORMATION                                  */}
+      {/* ========================================================================= */}
+      {isGuru && (
+        isTeacherWaliKelas ? (
+          <div className="bg-gradient-to-r from-[#190C36] via-[#2E125B] to-[#531FFF] text-white p-4 sm:p-5 rounded-2xl shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-purple-400/20">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/20">
+                <ShieldCheck className="w-5 h-5 text-purple-200" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black uppercase tracking-wider text-purple-200">
+                    Akses Dibatasi — Wali Kelas
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-white text-[#531FFF] shadow-xs">
+                    Kelas {teacherHomeroomClasses.join(", ")}
+                  </span>
+                  {previewAsGuru && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-amber-950">
+                      Simulasi Mode Guru
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs sm:text-sm text-purple-100 mt-1 leading-relaxed max-w-3xl">
+                  Sesuai relasi <strong>Wali Kelas → Kelas → Siswa → Orang Tua</strong>, Anda hanya dapat mengakses dan melihat kontak orang tua dari siswa yang berada di kelas binaan Anda (<strong>{teacherHomeroomClasses.join(", ")}</strong>). Data orang tua dari kelas lain tidak ditampilkan.
+                </p>
+              </div>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm border border-white/20 px-4 py-2 rounded-xl text-center shrink-0 self-stretch md:self-auto flex items-center justify-between md:flex-col gap-1">
+              <span className="text-[10px] uppercase font-bold text-purple-200">Siswa Kelas Binaan</span>
+              <span className="text-lg font-black text-white">{homeroomStudentIdSet.size} Siswa</span>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-amber-50 border border-amber-200 p-4 sm:p-5 rounded-2xl shadow-xs flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-black text-amber-900">
+                  Akses Menu Dibatasi Khusus Wali Kelas
+                </h3>
+                {previewAsGuru && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 text-amber-900">
+                    Simulasi Guru
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                Akun Guru Anda saat ini belum tercatat sebagai Wali Kelas pada kelas aktif manapun. Guru hanya dapat melihat data orang tua siswa dari kelas yang menjadi tanggung jawabnya sebagai Wali Kelas. Silakan hubungi Administrator atau Tata Usaha jika Anda ditugaskan sebagai Wali Kelas.
+              </p>
+            </div>
+          </div>
+        )
+      )}
 
       {/* ========================================================================= */}
       {/* 2. STATISTIC KPI CARDS                                                    */}
@@ -1008,10 +1289,20 @@ export default function ParentsManagementPage() {
           <div className="w-16 h-16 rounded-2xl bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto mb-4">
             <Users className="w-8 h-8" />
           </div>
-          <h3 className="text-base font-black text-gray-900">Tidak ada data orang tua</h3>
+          <h3 className="text-base font-black text-gray-900">
+            {isGuru && !isTeacherWaliKelas
+              ? "Akses Menu Dibatasi Khusus Wali Kelas"
+              : isGuru
+              ? `Tidak Ada Data Orang Tua di Kelas ${teacherHomeroomClasses.join(", ")}`
+              : "Tidak ada data orang tua"}
+          </h3>
           <p className="text-xs text-gray-500 max-w-md mx-auto mt-1.5 leading-relaxed">
-            {searchQuery || selectedRelationshipFilter !== "Semua" || selectedStatusFilter !== "Semua" || selectedClassFilter !== "Semua"
-              ? `Tidak ditemukan data orang tua yang cocok dengan kriteria filter pencarian.`
+            {isGuru && !isTeacherWaliKelas
+              ? "Akun Anda saat ini belum tercatat sebagai Wali Kelas pada kelas aktif manapun. Menu ini hanya menampilkan data orang tua untuk kelas yang menjadi tanggung jawab Anda sebagai Wali Kelas."
+              : searchQuery || selectedRelationshipFilter !== "Semua" || selectedStatusFilter !== "Semua" || selectedClassFilter !== "Semua"
+              ? "Tidak ditemukan data orang tua yang cocok dengan kriteria filter pencarian."
+              : isGuru
+              ? `Belum ada data orang tua yang terhubung dengan siswa di kelas binaan Anda (${teacherHomeroomClasses.join(", ")}). Data akan otomatis tersinkronisasi saat siswa mengisi profil orang tua.`
               : "Belum ada data orang tua yang diinput siswa atau terdaftar di sistem. Data orang tua akan otomatis muncul saat siswa mengisi formulir Onboarding Siswa atau akun dibuat melalui Manajemen Akun."}
           </p>
           <div className="mt-5 flex items-center justify-center gap-3">
@@ -1028,13 +1319,15 @@ export default function ParentsManagementPage() {
                 Reset Filter
               </button>
             )}
-            <Link
-              href="/admin/accounts"
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#531FFF] hover:bg-[#4215cb] text-white text-xs font-bold rounded-xl shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer"
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>Buka Manajemen Akun</span>
-            </Link>
+            {!isGuru && (
+              <Link
+                href="/admin/accounts"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#531FFF] hover:bg-[#4215cb] text-white text-xs font-bold rounded-xl shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer"
+              >
+                <UserCheck className="w-4 h-4" />
+                <span>Buka Manajemen Akun</span>
+              </Link>
+            )}
           </div>
         </div>
       ) : viewMode === "table" ? (
@@ -1114,36 +1407,49 @@ export default function ParentsManagementPage() {
                       </td>
 
                       {/* Connected Children (Referenced via studentId) */}
+                      {/* Connected Children (Referenced via studentId) */}
                       <td className="py-4 px-5">
-                        {parent.studentIds.length === 0 ? (
-                          <span className="text-gray-400 italic text-[11px]">Belum ada anak terhubung</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1.5 max-w-md">
-                            {parent.studentIds.map((sId) => {
-                              const std = getStudentById(sId);
-                              if (!std) {
+                        {(() => {
+                          const visibleStudentIds = isGuru
+                            ? parent.studentIds.filter((sId) => homeroomStudentIdSet.has(String(sId)))
+                            : parent.studentIds;
+
+                          if (visibleStudentIds.length === 0) {
+                            return (
+                              <span className="text-gray-400 italic text-[11px]">
+                                {isGuru ? "Tidak ada anak di kelas ini" : "Belum ada anak terhubung"}
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <div className="flex flex-wrap gap-1.5 max-w-md">
+                              {visibleStudentIds.map((sId) => {
+                                const std = getStudentById(sId);
+                                if (!std) {
+                                  return (
+                                    <span key={sId} className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-500 text-[10px] font-mono">
+                                      ID: {sId}
+                                    </span>
+                                  );
+                                }
                                 return (
-                                  <span key={sId} className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-500 text-[10px] font-mono">
-                                    ID: {sId}
-                                  </span>
+                                  <div
+                                    key={sId}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 hover:bg-purple-50/70 border border-gray-200/80 transition-colors shadow-2xs"
+                                    title={`Anak: ${std.name || std.fullName} | Kelas: ${std.className || std.classId || "-"} | NISN: ${std.nisn || std.nis || "-"}`}
+                                  >
+                                    <GraduationCap className="w-3 h-3 text-[#531FFF]" />
+                                    <span className="font-bold text-gray-800 text-[11px]">{std.name || std.fullName}</span>
+                                    <span className="text-[10px] text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded font-semibold">
+                                      {std.className || std.classId || "Kelas"}
+                                    </span>
+                                  </div>
                                 );
-                              }
-                              return (
-                                <div
-                                  key={sId}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 hover:bg-purple-50/70 border border-gray-200/80 transition-colors shadow-2xs"
-                                  title={`Anak: ${std.name || std.fullName} | Kelas: ${std.className || std.classId || "-"} | NISN: ${std.nisn || std.nis || "-"}`}
-                                >
-                                  <GraduationCap className="w-3 h-3 text-[#531FFF]" />
-                                  <span className="font-bold text-gray-800 text-[11px]">{std.name || std.fullName}</span>
-                                  <span className="text-[10px] text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded font-semibold">
-                                    {std.className || std.classId || "Kelas"}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                              })}
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Job & Address */}
@@ -1162,27 +1468,49 @@ export default function ParentsManagementPage() {
 
                       {/* Status Toggle Badge */}
                       <td className="py-4 px-4 text-center whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStatus(parent)}
-                          title="Klik untuk mengubah status aktif"
-                          className={cn(
-                            "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border transition-all active:scale-95 cursor-pointer shadow-2xs",
-                            parent.status === "Aktif"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                              : parent.status === "Belum Aktivasi"
-                              ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
-                              : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
-                          )}
-                        >
+                        {isGuru ? (
                           <span
                             className={cn(
-                              "w-1.5 h-1.5 rounded-full",
-                              parent.status === "Aktif" ? "bg-emerald-500 animate-pulse" : parent.status === "Belum Aktivasi" ? "bg-amber-500" : "bg-rose-500"
+                              "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border shadow-2xs select-none",
+                              parent.status === "Aktif"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : parent.status === "Belum Aktivasi"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-rose-50 text-rose-700 border-rose-200"
                             )}
-                          />
-                          <span>{parent.status}</span>
-                        </button>
+                            title={`Status Akun: ${parent.status}`}
+                          >
+                            <span
+                              className={cn(
+                                "w-1.5 h-1.5 rounded-full",
+                                parent.status === "Aktif" ? "bg-emerald-500" : parent.status === "Belum Aktivasi" ? "bg-amber-500" : "bg-rose-500"
+                              )}
+                            />
+                            <span>{parent.status}</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(parent)}
+                            title="Klik untuk mengubah status aktif"
+                            className={cn(
+                              "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border transition-all active:scale-95 cursor-pointer shadow-2xs",
+                              parent.status === "Aktif"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                : parent.status === "Belum Aktivasi"
+                                ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                                : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "w-1.5 h-1.5 rounded-full",
+                                parent.status === "Aktif" ? "bg-emerald-500 animate-pulse" : parent.status === "Belum Aktivasi" ? "bg-amber-500" : "bg-rose-500"
+                              )}
+                            />
+                            <span>{parent.status}</span>
+                          </button>
+                        )}
                       </td>
 
                       {/* Actions */}
@@ -1204,14 +1532,16 @@ export default function ParentsManagementPage() {
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteParent(parent)}
-                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                            title="Hapus Profil Orang Tua"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {!isGuru && (
+                            <button
+                              type="button"
+                              onClick={() => setDeleteParent(parent)}
+                              className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Hapus Profil Orang Tua"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1256,20 +1586,35 @@ export default function ParentsManagementPage() {
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleToggleStatus(parent)}
-                      className={cn(
-                        "px-2.5 py-0.5 rounded-full text-[10px] font-bold border cursor-pointer",
-                        parent.status === "Aktif"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : parent.status === "Belum Aktivasi"
-                          ? "bg-amber-50 text-amber-700 border-amber-200"
-                          : "bg-rose-50 text-rose-700 border-rose-200"
-                      )}
-                    >
-                      {parent.status}
-                    </button>
+                    {isGuru ? (
+                      <span
+                        className={cn(
+                          "px-2.5 py-0.5 rounded-full text-[10px] font-bold border select-none",
+                          parent.status === "Aktif"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : parent.status === "Belum Aktivasi"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : "bg-rose-50 text-rose-700 border-rose-200"
+                        )}
+                      >
+                        {parent.status}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleStatus(parent)}
+                        className={cn(
+                          "px-2.5 py-0.5 rounded-full text-[10px] font-bold border cursor-pointer",
+                          parent.status === "Aktif"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : parent.status === "Belum Aktivasi"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : "bg-rose-50 text-rose-700 border-rose-200"
+                        )}
+                      >
+                        {parent.status}
+                      </button>
+                    )}
                   </div>
 
                   {/* Body Info */}
@@ -1302,35 +1647,45 @@ export default function ParentsManagementPage() {
                     </div>
 
                     {/* Connected Children Cards */}
-                    <div className="pt-2">
-                      <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block mb-1.5">
-                        Anak Terhubung ({parent.studentIds.length}):
-                      </span>
-                      {parent.studentIds.length === 0 ? (
-                        <p className="text-[11px] text-gray-400 italic">Belum ada anak terhubung</p>
-                      ) : (
-                        <div className="space-y-1.5">
-                          {parent.studentIds.map((sId) => {
-                            const std = getStudentById(sId);
-                            if (!std) return null;
-                            return (
-                              <div
-                                key={sId}
-                                className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100 text-xs"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <GraduationCap className="w-3.5 h-3.5 text-[#531FFF]" />
-                                  <span className="font-bold text-gray-800 text-[11px]">{std.name || std.fullName}</span>
-                                </div>
-                                <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded">
-                                  {std.className || std.classId || "Kelas"}
-                                </span>
-                              </div>
-                            );
-                          })}
+                    {(() => {
+                      const visibleStudentIds = isGuru
+                        ? parent.studentIds.filter((sId) => homeroomStudentIdSet.has(String(sId)))
+                        : parent.studentIds;
+
+                      return (
+                        <div className="pt-2">
+                          <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider block mb-1.5">
+                            Anak Terhubung ({visibleStudentIds.length}):
+                          </span>
+                          {visibleStudentIds.length === 0 ? (
+                            <p className="text-[11px] text-gray-400 italic">
+                              {isGuru ? "Tidak ada anak di kelas binaan" : "Belum ada anak terhubung"}
+                            </p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {visibleStudentIds.map((sId) => {
+                                const std = getStudentById(sId);
+                                if (!std) return null;
+                                return (
+                                  <div
+                                    key={sId}
+                                    className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100 text-xs"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <GraduationCap className="w-3.5 h-3.5 text-[#531FFF]" />
+                                      <span className="font-bold text-gray-800 text-[11px]">{std.name || std.fullName}</span>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded">
+                                      {std.className || std.classId || "Kelas"}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -1351,12 +1706,14 @@ export default function ParentsManagementPage() {
                     >
                       Edit
                     </button>
-                    <button
-                      onClick={() => setDeleteParent(parent)}
-                      className="px-2 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                    >
-                      Hapus
-                    </button>
+                    {!isGuru && (
+                      <button
+                        onClick={() => setDeleteParent(parent)}
+                        className="px-2 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      >
+                        Hapus
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1702,7 +2059,11 @@ export default function ParentsManagementPage() {
                   <div className="relative">
                     <input
                       type="text"
-                      placeholder="Ketik nama siswa, NISN, atau kelas untuk mencari anak..."
+                      placeholder={
+                        isGuru
+                          ? `Cari siswa di kelas ${teacherHomeroomClasses.join(", ")}...`
+                          : "Ketik nama siswa, NISN, atau kelas untuk mencari anak..."
+                      }
                       value={studentPickerSearch}
                       onChange={(e) => {
                         setStudentPickerSearch(e.target.value);
@@ -1728,6 +2089,9 @@ export default function ParentsManagementPage() {
                     <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl border border-purple-200 shadow-xl z-20 max-h-48 overflow-y-auto divide-y divide-gray-100">
                       {unifiedStudents
                         .filter((s) => {
+                          if (isGuru && !homeroomStudentIdSet.has(String(s.id || s._firestoreId || s.uid || s.nisn))) {
+                            return false;
+                          }
                           const q = studentPickerSearch.toLowerCase().trim();
                           if (!q) return true;
                           const nameMatch = (s.name || s.fullName || "").toLowerCase().includes(q);
@@ -1946,73 +2310,86 @@ export default function ParentsManagementPage() {
               )}
 
               {/* Connected Children Detailed Cards */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-extrabold text-xs text-gray-900 flex items-center gap-1.5">
-                    <GraduationCap className="w-4 h-4 text-[#531FFF]" />
-                    <span>Daftar Anak yang Terhubung ({detailParent.studentIds.length})</span>
-                  </h4>
-                  <span className="text-[10px] text-gray-400 font-semibold">Tersinkronisasi Real-Time</span>
-                </div>
+              {(() => {
+                const visibleStudentIds = isGuru
+                  ? detailParent.studentIds.filter((sId) => homeroomStudentIdSet.has(String(sId)))
+                  : detailParent.studentIds;
 
-                {detailParent.studentIds.length === 0 ? (
-                  <div className="p-4 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center text-gray-400 text-xs">
-                    Belum ada siswa yang ditautkan ke akun orang tua ini.
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {detailParent.studentIds.map((sId) => {
-                      const std = getStudentById(sId);
-                      if (!std) {
-                        return (
-                          <div key={sId} className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs">
-                            Siswa ID: {sId} (Data master tidak ditemukan)
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <div
-                          key={sId}
-                          className="p-3.5 bg-gradient-to-r from-purple-50/50 to-white rounded-xl border border-purple-100 flex items-center justify-between"
-                        >
-                          <div className="flex items-center gap-3">
-                            <ProfileAvatar
-                              name={std.name || std.fullName}
-                              imageUrl={std.imageUrl}
-                              photoUrl={std.photoUrl}
-                              role="student"
-                              size="md"
-                              shape="rounded"
-                            />
-                            <div>
-                              <h5 className="font-bold text-gray-900 text-xs">{std.name || std.fullName}</h5>
-                              <p className="text-[11px] text-gray-500">
-                                Kelas: <strong>{std.className || std.classId || "-"}</strong> • NISN:{" "}
-                                <span className="font-mono">{std.nisn || std.nis || "-"}</span>
-                              </p>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[10px] text-gray-400">
-                                  Status: <strong>{std.status || "Aktif"}</strong>
-                                </span>
-                                {std.onboardingCompleted && (
-                                  <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded">
-                                    Onboarded
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
-                            Terhubung
+                return (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-extrabold text-xs text-gray-900 flex items-center gap-1.5">
+                          <GraduationCap className="w-4 h-4 text-[#531FFF]" />
+                          <span>
+                            Daftar Anak yang Terhubung ({visibleStudentIds.length})
+                            {isGuru && ` — Kelas ${teacherHomeroomClasses.join(", ")}`}
                           </span>
+                        </h4>
+                        <span className="text-[10px] text-gray-400 font-semibold">Tersinkronisasi Real-Time</span>
+                      </div>
+
+                      {visibleStudentIds.length === 0 ? (
+                        <div className="p-4 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center text-gray-400 text-xs">
+                          {isGuru
+                            ? "Tidak ada anak terhubung yang berada di kelas binaan Anda."
+                            : "Belum ada siswa yang ditautkan ke akun orang tua ini."}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {visibleStudentIds.map((sId) => {
+                            const std = getStudentById(sId);
+                            if (!std) {
+                              return (
+                                <div key={sId} className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs">
+                                  Siswa ID: {sId} (Data master tidak ditemukan)
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div
+                                key={sId}
+                                className="p-3.5 bg-gradient-to-r from-purple-50/50 to-white rounded-xl border border-purple-100 flex items-center justify-between"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <ProfileAvatar
+                                    name={std.name || std.fullName}
+                                    imageUrl={std.imageUrl}
+                                    photoUrl={std.photoUrl}
+                                    role="student"
+                                    size="md"
+                                    shape="rounded"
+                                  />
+                                  <div>
+                                    <h5 className="font-bold text-gray-900 text-xs">{std.name || std.fullName}</h5>
+                                    <p className="text-[11px] text-gray-500">
+                                      Kelas: <strong>{std.className || std.classId || "-"}</strong> • NISN:{" "}
+                                      <span className="font-mono">{std.nisn || std.nis || "-"}</span>
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <span className="text-[10px] text-gray-400">
+                                        Status: <strong>{std.status || "Aktif"}</strong>
+                                      </span>
+                                      {std.onboardingCompleted && (
+                                        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded">
+                                          Onboarded
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
+                                  Terhubung
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
               {/* Drawer Footer */}
               <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
