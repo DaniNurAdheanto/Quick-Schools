@@ -726,7 +726,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
                   Kelas {studentClass} · Jam masuk 07.00 s/d 14.00 WIB
                 </p>
               </div>
-              <Link href="/admin/schedule" className="text-xs font-bold text-[#531FFF] hover:underline flex items-center gap-1">
+              <Link href="/schedule" className="text-xs font-bold text-[#531FFF] hover:underline flex items-center gap-1">
                 Semua Jadwal <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>
@@ -863,7 +863,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
                   <p className="text-[11px] text-gray-400 font-medium">Khusus Kelas {studentClass}</p>
                 </div>
               </div>
-              <Link href="/admin/exams" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
+              <Link href="/exams" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
                 Semua Ujian <ChevronRight className="w-3 h-3" />
               </Link>
             </div>
@@ -914,7 +914,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
                 </h3>
                 <p className="text-[11px] text-gray-400 font-medium">Rekap semester berjalan</p>
               </div>
-              <Link href="/admin/attendance" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
+              <Link href="/attendance" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
                 Detail <ChevronRight className="w-3 h-3" />
               </Link>
             </div>
@@ -971,7 +971,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
                   <p className="text-[11px] text-gray-400 font-medium">Hasil tugas & ujian terakhir</p>
                 </div>
               </div>
-              <Link href="/admin/grades" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
+              <Link href="/grades" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
                 Lihat Nilai <ChevronRight className="w-3 h-3" />
               </Link>
             </div>
@@ -1011,7 +1011,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
                   <p className="text-[11px] text-gray-400 font-medium">Informasi resmi sekolah</p>
                 </div>
               </div>
-              <Link href="/admin/announcements" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
+              <Link href="/announcements" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
                 Semua <ChevronRight className="w-3 h-3" />
               </Link>
             </div>
@@ -1037,16 +1037,16 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
 
           {/* Quick Academic Shortcuts */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-xs p-4 grid grid-cols-2 gap-2 text-center text-xs font-bold">
-            <Link href="/admin/schedule" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-lg text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
+            <Link href="/schedule" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-lg text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
               <Calendar className="w-4 h-4" /> Jadwal Pelajaran
             </Link>
-            <Link href="/admin/exams" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-lg text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
+            <Link href="/exams" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-lg text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
               <CalendarRange className="w-4 h-4" /> Jadwal Ujian
             </Link>
-            <Link href="/admin/grades" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-lg text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
+            <Link href="/grades" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-lg text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
               <Award className="w-4 h-4" /> Nilai Siswa
             </Link>
-            <Link href="/admin/report-cards" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-lg text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
+            <Link href="/report-cards" className="p-3 bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 rounded-lg text-[#531FFF] transition-all flex items-center justify-center gap-2 shadow-2xs">
               <FileText className="w-4 h-4" /> Rapor Digital
             </Link>
           </div>

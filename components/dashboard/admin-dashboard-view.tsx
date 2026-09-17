@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import {
   Users,
   GraduationCap,
@@ -132,10 +133,47 @@ export function AdminDashboardView({
       setClasses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (err) => console.warn("Classes unsub error:", err));
 
-    // 4. Attendance
+    // 4. Attendance (fetch strictly real records from collection & roles)
     const unsubAttendance = onSnapshot(collection(db, "attendance"), (snap) => {
-      setAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Attendance unsub error:", err));
+      const dbRecords = snap.docs
+        .filter(d => !d.id.startsWith("ATT-100") && !d.id.startsWith("MOCK"))
+        .map(d => ({ id: d.id, ...d.data() }));
+
+      // Also merge with local clean records if available
+      try {
+        const stored = localStorage.getItem("quick_schools_attendance_records");
+        if (stored) {
+          const localList = JSON.parse(stored);
+          if (Array.isArray(localList)) {
+            const cleanLocal = localList.filter((r: any) => r && !r.id?.startsWith("ATT-100") && !r.id?.startsWith("MOCK"));
+            const map: Record<string, any> = {};
+            dbRecords.forEach((r: any) => { map[r.id] = r; });
+            cleanLocal.forEach((r: any) => { map[r.id] = r; });
+            setAttendance(Object.values(map));
+            return;
+          }
+        }
+      } catch (e) {}
+
+      setAttendance(dbRecords);
+    }, (err) => console.warn("Attendance unsub notice:", err));
+
+    // 4b. Also subscribe to roles attendance records
+    const qRolesAtt = query(collection(db, "roles"), where("type", "==", "attendance_record"));
+    const unsubRolesAtt = onSnapshot(qRolesAtt, (snap) => {
+      if (!snap.empty) {
+        const rolesRecords = snap.docs
+          .filter(d => !d.id.startsWith("ATT-100") && !d.id.startsWith("MOCK"))
+          .map(d => ({ id: d.id, ...d.data() }));
+
+        setAttendance((prev) => {
+          const map: Record<string, any> = {};
+          prev.forEach((r: any) => { map[r.id] = r; });
+          rolesRecords.forEach((r: any) => { map[r.id] = r; });
+          return Object.values(map);
+        });
+      }
+    }, (err) => console.warn("Roles attendance unsub error:", err));
 
     // 5. Schedules
     const unsubSchedules = onSnapshot(collection(db, "schedules"), (snap) => {
@@ -177,6 +215,7 @@ export function AdminDashboardView({
       unsubTeachers();
       unsubClasses();
       unsubAttendance();
+      unsubRolesAtt();
       unsubSchedules();
       unsubAnnouncements();
       unsubGrades();
@@ -189,18 +228,18 @@ export function AdminDashboardView({
   // ─── Dynamic Metrics & Calculations ───────────────────────────────────────
   const todayDateStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  // Today's student attendance stats
+  // Today's student attendance stats (strictly real calculations from DB & actions)
   const attendanceToday = useMemo(() => {
     const todayRecords = attendance.filter((a: any) => a.date === todayDateStr || a.date?.startsWith(todayDateStr));
     const hadir = todayRecords.filter((a: any) => (a.status || "").toLowerCase() === "hadir").length;
     const terlambat = todayRecords.filter((a: any) => (a.status || "").toLowerCase() === "terlambat").length;
-    const tidakHadir = todayRecords.filter((a: any) => ["sakit", "izin", "alpa"].includes((a.status || "").toLowerCase())).length;
+    const tidakHadir = todayRecords.filter((a: any) => ["sakit", "izin", "alpa", "ditolak"].includes((a.status || "").toLowerCase())).length;
     const totalRecords = todayRecords.length;
 
-    const baseCount = students.length || totalRecords || 100;
+    const baseCount = students.length || totalRecords || 1;
     const rateNumber = totalRecords > 0 
-      ? Math.min(100, Math.round(((hadir + terlambat) / Math.max(1, Math.min(totalRecords, baseCount))) * 1000) / 10)
-      : 95.4; // Fallback display when no attendance marked yet today
+      ? Math.min(100, Math.round(((hadir + terlambat) / Math.max(1, baseCount)) * 1000) / 10)
+      : 0; // Strictly 0% when no attendance marked yet today
 
     return {
       hadir: hadir || 0,
@@ -251,7 +290,7 @@ export function AdminDashboardView({
     };
   }, [bills]);
 
-  // 7-day attendance trend chart data
+  // 7-day attendance trend chart data (strictly real data)
   const attendanceChartData = useMemo(() => {
     const days: { date: string; value: number }[] = [];
     const now = new Date();
@@ -265,16 +304,14 @@ export function AdminDashboardView({
       const dayRecords = attendance.filter((a: any) => a.date === dStr || a.date?.startsWith(dStr));
       if (dayRecords.length > 0) {
         const h = dayRecords.filter((a: any) => ["hadir", "terlambat"].includes((a.status || "").toLowerCase())).length;
-        const pct = Math.min(100, Math.round((h / dayRecords.length) * 100));
+        const pct = Math.min(100, Math.round((h / Math.max(1, students.length || dayRecords.length)) * 100));
         days.push({ date: dayName, value: pct });
       } else {
-        // Sensible fallback curve
-        const baseValues = [82, 88, 92, 85, 94, 97, attendanceToday.rate];
-        days.push({ date: dayName, value: Math.round(baseValues[6 - i] || 90) });
+        days.push({ date: dayName, value: 0 });
       }
     }
     return days;
-  }, [attendance, attendanceToday.rate]);
+  }, [attendance, students.length]);
 
   // Academic Performance Analytics
   const academicStats = useMemo(() => {
@@ -431,7 +468,7 @@ export function AdminDashboardView({
           )}
           
           <Link
-            href="/admin/financial-reports"
+            href="/financial-reports"
             className="flex items-center justify-center gap-2 bg-white text-[#4E54C8] hover:bg-gray-50 px-5 py-2.5 rounded-lg text-xs font-bold transition-colors shadow-sm cursor-pointer"
           >
             <BarChart2 className="w-4 h-4" />
@@ -439,7 +476,7 @@ export function AdminDashboardView({
           </Link>
 
           <Link
-            href="/admin/teacher-attendance"
+            href="/teacher-attendance"
             className="flex items-center justify-center gap-2 bg-white/20 hover:bg-white/30 text-white border border-white/25 px-5 py-2.5 rounded-lg text-xs font-bold transition-all backdrop-blur-sm cursor-pointer"
           >
             <ScanFace className="w-4 h-4" />
@@ -525,14 +562,29 @@ export function AdminDashboardView({
                 <span className="text-[26px] leading-none font-black text-gray-900 tracking-tight">
                   {attendanceToday.rate}%
                 </span>
-                <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                  <ArrowUp className="w-2.5 h-2.5" /> Siswa
+                <span
+                  className={cn(
+                    "text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5",
+                    attendanceToday.totalMarked > 0
+                      ? "text-emerald-600 bg-emerald-50"
+                      : "text-amber-700 bg-amber-50"
+                  )}
+                >
+                  {attendanceToday.totalMarked > 0 ? (
+                    <>
+                      <ArrowUp className="w-2.5 h-2.5" /> Siswa
+                    </>
+                  ) : (
+                    "Belum Ada Presensi"
+                  )}
                 </span>
               </div>
             </div>
           </div>
           <p className="text-[10px] text-gray-400 font-medium z-10 truncate">
-            {attendanceToday.hadir} Hadir • {attendanceToday.terlambat} Terlambat
+            {attendanceToday.totalMarked > 0
+              ? `${attendanceToday.hadir} Hadir • ${attendanceToday.terlambat} Terlambat`
+              : "Belum ada data presensi hari ini"}
           </p>
         </div>
 
@@ -668,7 +720,7 @@ export function AdminDashboardView({
               <h2 className="font-bold text-[16px] text-gray-900">Performa Akademik</h2>
               <p className="text-xs text-gray-500">Rekapitulasi penilaian dan capaian nilai siswa</p>
             </div>
-            <Link href="/admin/grades" className="text-xs font-bold text-[#531FFF] hover:underline">
+            <Link href="/grades" className="text-xs font-bold text-[#531FFF] hover:underline">
               Kelola Nilai →
             </Link>
           </div>
@@ -762,7 +814,7 @@ export function AdminDashboardView({
               <CalendarRange className="w-4 h-4 text-[#531FFF]" />
               Jadwal Hari Ini
             </h2>
-            <Link href="/admin/schedule" className="text-[11px] font-semibold text-[#531FFF] hover:underline">
+            <Link href="/schedule" className="text-[11px] font-semibold text-[#531FFF] hover:underline">
               Lihat Semua
             </Link>
           </div>
@@ -805,7 +857,7 @@ export function AdminDashboardView({
               <Megaphone className="w-4 h-4 text-amber-500" />
               Pengumuman
             </h2>
-            <Link href="/admin/announcements" className="text-[11px] font-semibold text-[#531FFF] hover:underline">
+            <Link href="/announcements" className="text-[11px] font-semibold text-[#531FFF] hover:underline">
               Lihat Semua
             </Link>
           </div>
@@ -892,7 +944,7 @@ export function AdminDashboardView({
           </div>
           
           <Link
-            href="/admin/financial-reports"
+            href="/financial-reports"
             className="text-[11px] font-bold text-[#531FFF] hover:underline text-right mt-2 flex items-center justify-end gap-1 pt-2 border-t border-gray-50"
           >
             Buka Laporan Keuangan SPP <span className="text-[10px]">→</span>
@@ -952,7 +1004,7 @@ export function AdminDashboardView({
           </div>
 
           <Link
-            href="/admin/teacher-attendance"
+            href="/teacher-attendance"
             className="text-[11px] font-bold text-[#531FFF] hover:underline text-center flex items-center justify-center gap-1 pt-2 border-t border-[#531FFF]/10"
           >
             Lihat Presensi Guru Lengkap <span className="text-[9px]">→</span>
@@ -971,7 +1023,7 @@ export function AdminDashboardView({
               <h2 className="font-bold text-[14px] text-gray-900">Aktivitas Terbaru Sekolah</h2>
               <p className="text-xs text-gray-500">Pembaruan transaksi SPP, kehadiran, dan administrasi</p>
             </div>
-            <Link href="/admin/financial-reports" className="text-[11px] font-semibold text-[#531FFF] hover:underline">
+            <Link href="/financial-reports" className="text-[11px] font-semibold text-[#531FFF] hover:underline">
               Riwayat Transaksi
             </Link>
           </div>
@@ -1054,7 +1106,7 @@ export function AdminDashboardView({
           
           <div className="grid grid-cols-3 gap-y-4 gap-x-2">
             {/* 1. Tambah / Data Siswa */}
-            <Link href="/admin/data-siswa" className="flex flex-col items-center gap-1.5 cursor-pointer group">
+            <Link href="/data-siswa" className="flex flex-col items-center gap-1.5 cursor-pointer group">
               <div className="w-10 h-10 rounded-xl bg-purple-50 group-hover:bg-[#531FFF] group-hover:text-white flex items-center justify-center transition-all shadow-xs border border-purple-100 text-[#531FFF]">
                 <UserCheck className="w-4 h-4" />
               </div>
@@ -1064,7 +1116,7 @@ export function AdminDashboardView({
             </Link>
 
             {/* 2. Absensi Siswa */}
-            <Link href="/admin/attendance" className="flex flex-col items-center gap-1.5 cursor-pointer group">
+            <Link href="/attendance" className="flex flex-col items-center gap-1.5 cursor-pointer group">
               <div className="w-10 h-10 rounded-xl bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white flex items-center justify-center transition-all shadow-xs border border-emerald-100 text-emerald-600">
                 <CalendarCheck className="w-4 h-4" />
               </div>
@@ -1074,7 +1126,7 @@ export function AdminDashboardView({
             </Link>
 
             {/* 3. Absensi Guru (Akses Cepat) */}
-            <Link href="/admin/teacher-attendance" className="flex flex-col items-center gap-1.5 cursor-pointer group">
+            <Link href="/teacher-attendance" className="flex flex-col items-center gap-1.5 cursor-pointer group">
               <div className="w-10 h-10 rounded-xl bg-teal-50 group-hover:bg-teal-600 group-hover:text-white flex items-center justify-center transition-all shadow-xs border border-teal-200 text-teal-700 ring-2 ring-teal-400/20">
                 <ScanFace className="w-4 h-4" />
               </div>
@@ -1084,7 +1136,7 @@ export function AdminDashboardView({
             </Link>
 
             {/* 4. Penilaian */}
-            <Link href="/admin/grades" className="flex flex-col items-center gap-1.5 cursor-pointer group">
+            <Link href="/grades" className="flex flex-col items-center gap-1.5 cursor-pointer group">
               <div className="w-10 h-10 rounded-xl bg-amber-50 group-hover:bg-amber-600 group-hover:text-white flex items-center justify-center transition-all shadow-xs border border-amber-100 text-amber-600">
                 <FileText className="w-4 h-4" />
               </div>
@@ -1094,7 +1146,7 @@ export function AdminDashboardView({
             </Link>
 
             {/* 5. Pengumuman */}
-            <Link href="/admin/announcements" className="flex flex-col items-center gap-1.5 cursor-pointer group">
+            <Link href="/announcements" className="flex flex-col items-center gap-1.5 cursor-pointer group">
               <div className="w-10 h-10 rounded-xl bg-rose-50 group-hover:bg-rose-600 group-hover:text-white flex items-center justify-center transition-all shadow-xs border border-rose-100 text-rose-600">
                 <Megaphone className="w-4 h-4" />
               </div>
@@ -1104,7 +1156,7 @@ export function AdminDashboardView({
             </Link>
 
             {/* 6. Laporan Keuangan */}
-            <Link href="/admin/financial-reports" className="flex flex-col items-center gap-1.5 cursor-pointer group">
+            <Link href="/financial-reports" className="flex flex-col items-center gap-1.5 cursor-pointer group">
               <div className="w-10 h-10 rounded-xl bg-blue-50 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center transition-all shadow-xs border border-blue-100 text-blue-600">
                 <BarChart2 className="w-4 h-4" />
               </div>

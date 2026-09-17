@@ -229,12 +229,13 @@ export default function ParentsManagementPage() {
 
     // --- PHASE 2: Merge or Insert from Dedicated 'parents' Collection ---
     rawParentsList.forEach((p) => {
+      const cleanPPhone = normalizePhone(p.phone);
+      const cleanPEmail = (p.email || "").toLowerCase().trim();
       let matched =
         (p.userUid && byUid.get(p.userUid)) ||
         (p.id && byDocId.get(p.id)) ||
-        (p.email && byEmail.get(p.email.toLowerCase().trim())) ||
-        (p.phone && byPhone.get(normalizePhone(p.phone))) ||
-        (p.name && byName.get(normalizeName(p.name)));
+        (cleanPEmail && cleanPEmail.includes("@") && byEmail.get(cleanPEmail)) ||
+        (cleanPPhone && cleanPPhone.length >= 10 && byPhone.get(cleanPPhone));
 
       const pStudentIds = Array.from(
         new Set([
@@ -294,9 +295,10 @@ export default function ParentsManagementPage() {
     });
 
     // --- PHASE 3: Automatic Ingestion & Deduplication from Onboarding & Data Siswa ---
-    // (Prevents duplicate parents for siblings and ensures full data sync)
+    // (Relasi anak harus menggunakan ID siswa unik, bukan berdasarkan nama, dan tidak menggabungkan berdasarkan kesamaan nama orang tua)
     unifiedStudents.forEach((student) => {
       const studentKey = String(student.id || student._firestoreId || student.nisn || student.nis);
+      if (!studentKey) return;
       
       const sFather = (student.fatherName || "").trim();
       const sMother = (student.motherName || "").trim();
@@ -315,18 +317,19 @@ export default function ParentsManagementPage() {
       const hasParentInfo = sFather || sMother || sGuardian || sPhone || sParentUid;
       if (!hasParentInfo) return;
 
-      // Check if student already explicitly linked to any parent
+      const cleanPhone = normalizePhone(sPhone);
+      const cleanEmail = sEmail.toLowerCase();
+
+      // Check if student already explicitly linked to any parent by unique ID, verified phone, or verified email
+      // PENTING: Jangan mencocokkan semata-mata berdasarkan nama ayah/ibu agar tidak terjadi duplikasi/tertukar bila nama sama
       let matched =
         (sParentUid && byUid.get(sParentUid)) ||
         (sParentUid && byDocId.get(sParentUid)) ||
-        (sPhone && byPhone.get(normalizePhone(sPhone))) ||
-        (sEmail && byEmail.get(sEmail.toLowerCase())) ||
-        (sFather && byName.get(normalizeName(sFather))) ||
-        (sMother && byName.get(normalizeName(sMother))) ||
-        (sGuardian && byName.get(normalizeName(sGuardian)));
+        (cleanPhone && cleanPhone.length >= 10 && byPhone.get(cleanPhone)) ||
+        (cleanEmail && cleanEmail.includes("@") && byEmail.get(cleanEmail));
 
       if (matched) {
-        // Link student to this parent if not already linked
+        // Link student to this parent if not already linked (strictly unique ID)
         if (!matched.studentIds.includes(studentKey)) {
           matched.studentIds.push(studentKey);
         }
@@ -348,9 +351,8 @@ export default function ParentsManagementPage() {
         const bestName = sFather || sMother || sGuardian || `Orang Tua Siswa (${student.name})`;
         const bestRelation = sGuardian ? "Wali Murid" : sMother && !sFather ? "Ibu Kandung" : "Ayah Kandung";
 
-        // Create a unique, deterministic ID based on phone or first student ID
-        const cleanP = normalizePhone(sPhone);
-        const synthId = cleanP ? `prt_phone_${cleanP}` : `prt_std_${studentKey.slice(0, 10)}`;
+        // Create a unique, deterministic ID based on phone or unique student ID
+        const synthId = cleanPhone && cleanPhone.length >= 10 ? `prt_phone_${cleanPhone}` : `prt_std_${studentKey.slice(0, 10)}`;
 
         const newParent: ParentData = {
           id: synthId,
@@ -380,6 +382,31 @@ export default function ParentsManagementPage() {
         parentList.push(newParent);
         registerParentIndex(newParent);
       }
+    });
+
+    // Deduplicate and canonicalize each parent's studentIds using canonical student ID
+    parentList.forEach((p) => {
+      const canonicalSet = new Set<string>();
+      const cleanStudentIds: string[] = [];
+
+      (p.studentIds || []).forEach((rawId) => {
+        if (!rawId) return;
+        const std = unifiedStudents.find(
+          (s) =>
+            String(s.id) === String(rawId) ||
+            String(s._firestoreId) === String(rawId) ||
+            String(s.uid) === String(rawId) ||
+            String(s.nisn) === String(rawId) ||
+            String(s.nis) === String(rawId)
+        );
+        const canonId = std ? String(std.id || std._firestoreId) : String(rawId);
+        if (!canonicalSet.has(canonId)) {
+          canonicalSet.add(canonId);
+          cleanStudentIds.push(canonId);
+        }
+      });
+
+      p.studentIds = cleanStudentIds;
     });
 
     // Sort alphabetically by name

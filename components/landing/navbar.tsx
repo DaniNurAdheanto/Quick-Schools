@@ -123,7 +123,7 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
                     <p className="text-[11px] text-gray-400 font-medium">
                       {lang === "id" ? "Platform manajemen sekolah terintegrasi" : "Integrated school management platform"}
                     </p>
-                    <Link href="/admin/dashboard" className="flex items-center gap-1.5 text-[12px] font-bold text-[#531FFF] hover:text-[#4314cc] transition-colors">
+                    <Link href="/dashboard" className="flex items-center gap-1.5 text-[12px] font-bold text-[#531FFF] hover:text-[#4314cc] transition-colors">
                       {lang === "id" ? "Buka Dashboard" : "Open Dashboard"} <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                   </div>
@@ -159,7 +159,7 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
 
           <div className="hidden lg:flex items-center gap-2">
             {user ? (
-              <Link href="/admin/dashboard" className="flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] text-white rounded-xl text-[13px] font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/30">
+              <Link href="/dashboard" className="flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] text-white rounded-xl text-[13px] font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/30">
                 <LayoutDashboard className="w-3.5 h-3.5" /> {t.dashboard}
               </Link>
             ) : (
@@ -234,7 +234,7 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
                   ))}
                 </div>
                 {user ? (
-                  <Link href="/admin/dashboard" onClick={() => setMobileOpen(false)} className="flex items-center justify-center gap-2 py-3 bg-[#531FFF] text-white rounded-xl text-[14px] font-bold">
+                  <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="flex items-center justify-center gap-2 py-3 bg-[#531FFF] text-white rounded-xl text-[14px] font-bold">
                     <LayoutDashboard className="w-4 h-4" /> {t.dashboard}
                   </Link>
                 ) : (

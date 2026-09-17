@@ -156,106 +156,8 @@ const DEFAULT_CONFIG: AttendanceConfig = {
   whatsappTemplateAbsent: "Yth. Orang Tua/Wali dari [NAMA_SISWA], hingga pukul [WAKTU] ananda tercatat belum hadir tanpa keterangan (Alpa). Mohon konfirmasi ke pihak sekolah."
 };
 
-// Fallback Mock data for Biometric feed demo if attendance collection is empty
-const MOCK_BIOMETRIC_FEED: AttendanceRecord[] = [
-  {
-    id: "ATT-1001",
-    studentName: "Ahmad Rizqi Pratama",
-    studentId: "NISN-2023001",
-    className: "10 MIPA 1",
-    timestamp: "06:45:22",
-    date: new Date().toISOString().split("T")[0],
-    faceVerified: true,
-    faceMatchScore: 98.5,
-    capturedImage: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&auto=format&fit=crop&q=80",
-    location: {
-      lat: -6.200000,
-      lng: 106.816666,
-      distance: 12,
-      inRadius: true
-    },
-    status: "Hadir",
-    source: "biometric"
-  },
-  {
-    id: "ATT-1002",
-    studentName: "Budi Santoso",
-    studentId: "NISN-2023002",
-    className: "10 MIPA 1",
-    timestamp: "07:08:15",
-    date: new Date().toISOString().split("T")[0],
-    faceVerified: true,
-    faceMatchScore: 92.1,
-    capturedImage: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80",
-    location: {
-      lat: -6.200100,
-      lng: 106.816700,
-      distance: 25,
-      inRadius: true
-    },
-    status: "Terlambat",
-    source: "biometric",
-    notes: "Terlambat 8 menit melewati jam 07:00"
-  },
-  {
-    id: "ATT-1003",
-    studentName: "Citra Lestari",
-    studentId: "NISN-2023003",
-    className: "10 MIPA 2",
-    timestamp: "06:50:05",
-    date: new Date().toISOString().split("T")[0],
-    faceVerified: false,
-    faceMatchScore: 45.2,
-    capturedImage: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&auto=format&fit=crop&q=80",
-    location: {
-      lat: -6.200050,
-      lng: 106.816680,
-      distance: 15,
-      inRadius: true
-    },
-    status: "Ditolak",
-    notes: "Wajah Tidak Cocok dengan Master Database",
-    source: "biometric"
-  },
-  {
-    id: "ATT-1004",
-    studentName: "Bintang Pratama",
-    studentId: "IS3U2ZSg0WaOIad7HHYmiEeVXHz1",
-    className: "10 MIPA 1",
-    timestamp: "06:38:40",
-    date: new Date().toISOString().split("T")[0],
-    faceVerified: true,
-    faceMatchScore: 97.2,
-    capturedImage: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
-    location: {
-      lat: -6.200010,
-      lng: 106.816670,
-      distance: 8,
-      inRadius: true
-    },
-    status: "Hadir",
-    source: "biometric"
-  },
-  {
-    id: "ATT-1005",
-    studentName: "Wahyu Hidayat",
-    studentId: "Kv8XK680MQOZXrwLVLTg4vaq55p1",
-    className: "10 MIPA 1",
-    timestamp: "06:52:19",
-    date: new Date().toISOString().split("T")[0],
-    faceVerified: true,
-    faceMatchScore: 94.8,
-    capturedImage: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=80",
-    location: {
-      lat: -6.200020,
-      lng: 106.816680,
-      distance: 14,
-      inRadius: true
-    },
-    status: "Hadir",
-    source: "biometric"
-  }
-];
+// Real attendance data only - mock/dummy feed disabled
+
 
 export default function AttendancePage() {
   const toast = useToast();
@@ -405,18 +307,26 @@ export default function AttendancePage() {
       console.warn("Teachers snapshot error in attendance:", err);
     });
 
-    // 4. Fetch Attendance Records from localStorage, roles collection, and attendance collection
+    // 4. Fetch Attendance Records from localStorage, roles collection, and attendance collection (strictly real records only)
     try {
       const stored = localStorage.getItem("quick_schools_attendance_records");
       if (stored) {
         const localList: AttendanceRecord[] = JSON.parse(stored);
-        if (Array.isArray(localList) && localList.length > 0) {
-          setAttendanceRecords(() => mergeAttendanceRecords(MOCK_BIOMETRIC_FEED, localList));
+        if (Array.isArray(localList)) {
+          // Strictly remove legacy mock dummy records (e.g. ATT-1001 to ATT-1005 or MOCK IDs)
+          const cleanLocalList = localList.filter(
+            (rec) => rec && !rec.id?.startsWith("ATT-100") && !rec.id?.startsWith("MOCK")
+          );
+          setAttendanceRecords(cleanLocalList);
+          // Persist cleaned list back to client localStorage
+          if (cleanLocalList.length !== localList.length) {
+            localStorage.setItem("quick_schools_attendance_records", JSON.stringify(cleanLocalList));
+          }
         }
       }
     } catch (e) {}
 
-    // Subscribe to attendance records stored in roles (allowed in Firestore rules)
+    // Subscribe to real attendance records stored in roles (allowed in Firestore rules)
     const qRolesAtt = query(collection(db, "roles"), where("type", "==", "attendance_record"));
     const unsubRolesAtt = onSnapshot(
       qRolesAtt,
@@ -424,6 +334,7 @@ export default function AttendancePage() {
         if (!snap.empty) {
           const list: AttendanceRecord[] = [];
           snap.forEach((d) => {
+            if (d.id?.startsWith("ATT-100") || d.id?.startsWith("MOCK")) return;
             const data = d.data();
             list.push({
               id: d.id,
@@ -436,7 +347,7 @@ export default function AttendancePage() {
               notes: data.notes || "",
               faceVerified: data.faceVerified ?? true,
               faceMatchScore: data.faceMatchScore ?? 95,
-              capturedImage: data.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
+              capturedImage: data.capturedImage || "",
               location: data.location || {
                 lat: -6.200000,
                 lng: 106.816666,
@@ -464,6 +375,7 @@ export default function AttendancePage() {
         if (!snap.empty) {
           const list: AttendanceRecord[] = [];
           snap.forEach((d) => {
+            if (d.id?.startsWith("ATT-100") || d.id?.startsWith("MOCK")) return;
             const data = d.data();
             list.push({
               id: d.id,
@@ -476,7 +388,7 @@ export default function AttendancePage() {
               notes: data.notes || "",
               faceVerified: data.faceVerified ?? true,
               faceMatchScore: data.faceMatchScore ?? 95,
-              capturedImage: data.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
+              capturedImage: data.capturedImage || "",
               location: data.location || {
                 lat: -6.200000,
                 lng: 106.816666,
@@ -494,7 +406,7 @@ export default function AttendancePage() {
         setLoading(false);
       },
       (err) => {
-        console.warn("Attendance snapshot restricted, using roles/mock data:", err);
+        console.warn("Attendance collection snapshot notice:", err);
         setLoading(false);
       }
     );
@@ -2428,63 +2340,77 @@ export default function AttendancePage() {
 
           {/* View Mode 2: Photo Cards Grid */}
           {biometricViewMode === "grid" && (
-            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-gray-50/50">
-              {filteredBiometricData.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => setSelectedRecord(item)}
-                  className="bg-white rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-lg hover:border-[#531FFF]/30 transition-all overflow-hidden cursor-pointer group flex flex-col"
-                >
-                  <div className="relative aspect-[4/3] w-full bg-gray-100">
-                    <Image
-                      src={item.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80"}
-                      alt={item.studentName}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-500"
-                      unoptimized
-                    />
-                    <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
-                      <span
-                        className={cn(
-                          "px-2 py-0.5 text-[10px] font-extrabold rounded backdrop-blur-md shadow-xs",
-                          item.status === "Hadir" && "bg-emerald-500/90 text-white",
-                          item.status === "Terlambat" && "bg-amber-500/90 text-white",
-                          (item.status === "Alpa" || item.status === "Ditolak") && "bg-rose-500/90 text-white"
-                        )}
-                      >
-                        {item.status}
-                      </span>
-                      <span className="px-2 py-0.5 text-[10px] font-extrabold bg-black/60 text-white rounded backdrop-blur-md flex items-center gap-1 shadow-xs">
-                        <ScanFace className="w-3 h-3 text-cyan-300" />
-                        {item.faceMatchScore}%
-                      </span>
+            filteredBiometricData.length > 0 ? (
+              <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-gray-50/50">
+                {filteredBiometricData.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => setSelectedRecord(item)}
+                    className="bg-white rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-lg hover:border-[#531FFF]/30 transition-all overflow-hidden cursor-pointer group flex flex-col"
+                  >
+                    <div className="relative aspect-[4/3] w-full bg-gray-100">
+                      {item.capturedImage ? (
+                        <Image
+                          src={item.capturedImage}
+                          alt={item.studentName}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform duration-500"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-400">
+                          <UserCheck className="w-10 h-10 opacity-30" />
+                        </div>
+                      )}
+                      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
+                        <span
+                          className={cn(
+                            "px-2 py-0.5 text-[10px] font-extrabold rounded backdrop-blur-md shadow-xs",
+                            item.status === "Hadir" && "bg-emerald-500/90 text-white",
+                            item.status === "Terlambat" && "bg-amber-500/90 text-white",
+                            (item.status === "Alpa" || item.status === "Ditolak") && "bg-rose-500/90 text-white"
+                          )}
+                        >
+                          {item.status}
+                        </span>
+                        <span className="px-2 py-0.5 text-[10px] font-extrabold bg-black/60 text-white rounded backdrop-blur-md flex items-center gap-1 shadow-xs">
+                          <ScanFace className="w-3 h-3 text-cyan-300" />
+                          {item.faceMatchScore}%
+                        </span>
+                      </div>
+                      <div className="absolute bottom-2.5 left-2.5 bg-white/90 backdrop-blur-md px-2 py-0.5 rounded text-[11px] font-bold text-gray-900 shadow-xs flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-[#531FFF]" />
+                        {item.timestamp}
+                      </div>
                     </div>
-                    <div className="absolute bottom-2.5 left-2.5 bg-white/90 backdrop-blur-md px-2 py-0.5 rounded text-[11px] font-bold text-gray-900 shadow-xs flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-[#531FFF]" />
-                      {item.timestamp}
-                    </div>
-                  </div>
 
-                  <div className="p-3.5 flex flex-col justify-between flex-1">
-                    <div>
-                      <h4 className="font-bold text-gray-900 group-hover:text-[#531FFF] transition-colors truncate">
-                        {item.studentName}
-                      </h4>
-                      <p className="text-[11px] text-gray-400 font-medium">
-                        {item.studentId} • {item.className}
-                      </p>
-                    </div>
-                    <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-[11px]">
-                      <span className="text-gray-500 flex items-center gap-1 font-medium">
-                        <MapPin className="w-3 h-3 text-emerald-600" />
-                        {item.location?.distance || 0}m radius
-                      </span>
-                      <span className="text-[#531FFF] font-bold">Detail AI →</span>
+                    <div className="p-3.5 flex flex-col justify-between flex-1">
+                      <div>
+                        <h4 className="font-bold text-gray-900 group-hover:text-[#531FFF] transition-colors truncate">
+                          {item.studentName}
+                        </h4>
+                        <p className="text-[11px] text-gray-400 font-medium">
+                          {item.studentId} • {item.className}
+                        </p>
+                      </div>
+                      <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-[11px]">
+                        <span className="text-gray-500 flex items-center gap-1 font-medium">
+                          <MapPin className="w-3 h-3 text-emerald-600" />
+                          {item.location?.distance || 0}m radius
+                        </span>
+                        <span className="text-[#531FFF] font-bold">Detail AI →</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-16 text-center text-gray-400 bg-gray-50/50 flex flex-col items-center justify-center">
+                <ScanFace className="w-12 h-12 text-gray-300 mb-3" />
+                <p className="font-semibold text-gray-600 text-sm">Belum ada log biometrik</p>
+                <p className="text-xs text-gray-400 mt-1">Data absensi biometrik akan muncul secara otomatis saat siswa melakukan presensi.</p>
+              </div>
+            )
           )}
 
           {/* View Mode 3: Radar Peta GPS Leaflet */}
@@ -2497,7 +2423,9 @@ export default function AttendancePage() {
                     Peta Persebaran Lokasi Presensi Siswa (Real-Time GPS)
                   </h4>
                   <p className="text-xs text-gray-500">
-                    Menampilkan titik presensi {filteredBiometricData.length} siswa relatif terhadap lingkaran radius absensi ({config.geofenceRadiusMeters}m).
+                    {filteredBiometricData.length > 0 
+                      ? `Menampilkan titik presensi ${filteredBiometricData.length} siswa relatif terhadap lingkaran radius absensi (${config.geofenceRadiusMeters}m).`
+                      : `Belum ada presensi siswa yang tercatat hari ini. Lingkaran hijau menunjukkan radius absensi sekolah (${config.geofenceRadiusMeters}m).`}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 text-xs">

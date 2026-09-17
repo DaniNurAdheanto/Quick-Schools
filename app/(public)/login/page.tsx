@@ -4,21 +4,25 @@ import { Mail, Lock, EyeOff, Eye, BarChart3, ShieldCheck, Zap, Building2, Loader
 import Link from "next/link";
 import Image from "next/image";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 
-export default function LoginPage() {
+function LoginFormContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { profile } = useSchoolProfile();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const redirectParam = searchParams.get("redirect");
+  const targetRedirect = redirectParam ? decodeURIComponent(redirectParam) : "/dashboard";
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,7 +48,7 @@ export default function LoginPage() {
         console.warn("Status check warning:", checkErr);
       }
 
-      router.push("/admin/dashboard");
+      router.push(targetRedirect);
     } catch (err: any) {
       if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
         setError("Email atau kata sandi salah. Silakan periksa kembali.");
@@ -282,5 +286,22 @@ export default function LoginPage() {
           
         </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F8F9FE] flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 text-[#531FFF] animate-spin" />
+            <p className="text-xs font-semibold text-gray-500">Memuat Halaman Masuk...</p>
+          </div>
+        </div>
+      }
+    >
+      <LoginFormContent />
+    </Suspense>
   );
 }

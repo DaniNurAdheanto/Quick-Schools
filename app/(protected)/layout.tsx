@@ -1,39 +1,32 @@
 "use client";
 
-import React, { useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import React from "react";
+import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layouts/sidebar";
 import { Header } from "@/components/layouts/header";
 import { AcademicYearProvider } from "@/context/AcademicYearContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ShieldAlert, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { AuthRequiredState } from "@/components/ui/auth-required-state";
 
 function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
   const { user, isAuthLoading, role, isSuperAdmin, isStudent, isParent } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
 
-  // Redirect to login if user is not authenticated after loading completes
-  useEffect(() => {
-    if (!isAuthLoading && !user) {
-      router.replace("/login");
-    }
-  }, [isAuthLoading, user, router]);
-
-  // Route protection rules
-  const isAccountsRoute = pathname?.startsWith("/admin/accounts");
-  const isRolesRoute = pathname?.startsWith("/admin/roles");
-  const isTeachersRoute = pathname?.startsWith("/admin/teachers");
-  const isStudentsManagementRoute = pathname === "/admin/data-siswa" || pathname?.startsWith("/admin/data-siswa/");
-  const isSettingsRoute = pathname?.startsWith("/admin/settings");
-  const isClassesRoute = pathname?.startsWith("/admin/classes");
-  const isHomeroomRoute = pathname?.startsWith("/admin/homeroom");
-  const isSubjectsRoute = pathname?.startsWith("/admin/subjects");
-  const isTeacherAttendanceRoute = pathname?.startsWith("/admin/teacher-attendance");
-  const isFinancialReportsRoute = pathname?.startsWith("/admin/financial-reports");
-  const isAcademicYearsRoute = pathname?.startsWith("/admin/academic-years");
-  const isParentsRoute = pathname === "/admin/parents" || pathname?.startsWith("/admin/parents");
+  // Route protection rules (URL without role prefixes)
+  const isAccountsRoute = pathname === "/accounts" || pathname?.startsWith("/accounts/");
+  const isRolesRoute = pathname === "/roles" || pathname?.startsWith("/roles/");
+  const isTeachersRoute = pathname === "/teachers" || pathname?.startsWith("/teachers/");
+  const isStudentsManagementRoute = pathname === "/data-siswa" || pathname?.startsWith("/data-siswa/");
+  const isSettingsRoute = pathname === "/settings" || pathname?.startsWith("/settings/");
+  const isClassesRoute = pathname === "/classes" || pathname?.startsWith("/classes/");
+  const isHomeroomRoute = pathname === "/homeroom" || pathname?.startsWith("/homeroom/");
+  const isSubjectsRoute = pathname === "/subjects" || pathname?.startsWith("/subjects/");
+  const isTeacherAttendanceRoute = pathname === "/teacher-attendance" || pathname?.startsWith("/teacher-attendance/");
+  const isFinancialReportsRoute = pathname === "/financial-reports" || pathname?.startsWith("/financial-reports/");
+  const isAcademicYearsRoute = pathname === "/academic-years" || pathname?.startsWith("/academic-years/");
+  const isParentsRoute = pathname === "/parents" || pathname?.startsWith("/parents/");
 
   const isSchoolAdminRoute = 
     isAccountsRoute ||
@@ -81,9 +74,46 @@ function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // 2. Unauthenticated state fallback
+function getPageTitleFromPath(pathname: string | null): string {
+  if (!pathname) return "Dashboard & Sistem Sekolah";
+  if (pathname.includes("/data-siswa")) return "Data Siswa";
+  if (pathname.includes("/parents")) return "Data Orang Tua & Wali";
+  if (pathname.includes("/teachers")) return "Data Guru & Tenaga Pengajar";
+  if (pathname.includes("/classes")) return "Kelas & Rombel";
+  if (pathname.includes("/homeroom")) return "Wali Kelas";
+  if (pathname.includes("/subjects")) return "Mata Pelajaran";
+  if (pathname.includes("/schedule")) return "Jadwal Pelajaran";
+  if (pathname.includes("/grades")) return "Penilaian & Nilai Siswa";
+  if (pathname.includes("/teacher-attendance")) return "Presensi Guru";
+  if (pathname.includes("/attendance")) return "Presensi Siswa";
+  if (pathname.includes("/exams")) return "Jadwal & Hasil Ujian";
+  if (pathname.includes("/calendar")) return "Kalender Akademik";
+  if (pathname.includes("/announcements")) return "Pengumuman Sekolah";
+  if (pathname.includes("/report-cards")) return "E-Rapor Siswa";
+  if (pathname.includes("/financial-reports")) return "Laporan Keuangan";
+  if (pathname.includes("/payments")) return "Pembayaran SPP";
+  if (pathname.includes("/academic-years")) return "Tahun Ajaran";
+  if (pathname.includes("/accounts")) return "Manajemen Akun System";
+  if (pathname.includes("/roles")) return "Manajemen Role & Hak Akses";
+  if (pathname.includes("/settings")) return "Pengaturan Sekolah";
+  if (pathname.includes("/profile")) return "Profil Pengguna";
+  if (pathname.includes("/dashboard") || pathname === "/") return "Dashboard Utama";
+  return "Area Manajemen Sekolah";
+}
+
+  // 2. Unauthenticated state: Render statement & empty state with Back to Home & Login buttons
   if (!user) {
-    return null;
+    const pageTitle = getPageTitleFromPath(pathname);
+    return (
+      <AuthRequiredState
+        pageName={pageTitle}
+        title="Autentikasi Akun Diperlukan"
+        description={`Halaman ${pageTitle} merupakan area terproteksi sistem Smart School OS. Silakan masuk (login) dengan akun terdaftar untuk melihat atau mengelola data pada menu ini.`}
+        loginHref={`/login?redirect=${encodeURIComponent(pathname || "/dashboard")}`}
+        homeHref="/"
+        showRegisterLink={true}
+      />
+    );
   }
 
   // 3. Strict Route Guard: Manajemen Akun System is exclusively for Super Admin
@@ -101,7 +131,7 @@ function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
             </p>
           </div>
           <Link
-            href="/admin/dashboard"
+            href="/dashboard"
             className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white text-xs font-bold rounded-lg shadow-md transition-all active:scale-95 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -127,7 +157,7 @@ function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
             </p>
           </div>
           <Link
-            href="/admin/dashboard"
+            href="/dashboard"
             className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white text-xs font-bold rounded-lg shadow-md transition-all active:scale-95 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -153,7 +183,7 @@ function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
             </p>
           </div>
           <Link
-            href="/admin/dashboard"
+            href="/dashboard"
             className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-bold rounded-lg shadow-md transition-all active:scale-95 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />

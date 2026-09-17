@@ -20,7 +20,6 @@ export function resolveParentStudent(
   const parentUid = currentUser?.uid;
   const parentEmail = (currentUser?.email || "").toLowerCase().trim();
   const parentPhone = (currentUserData?.phone || currentUser?.phoneNumber || "").replace(/[^0-9]/g, "");
-  const parentName = (currentUserData?.name || "").toLowerCase().trim();
 
   // Explicit IDs
   const linkedIds: string[] = [];
@@ -33,53 +32,52 @@ export function resolveParentStudent(
   }
   if (currentUserData?.nisn) linkedIds.push(String(currentUserData.nisn));
 
-  const matched = studentsList.filter((s) => {
+  // Strict deduplication by unique student ID
+  const uniqueStudentsMap = new Map<string, any>();
+
+  studentsList.forEach((s) => {
     const sId = String(s.id || s._firestoreId || "");
     const sNisn = String(s.nisn || "");
     const sNis = String(s.nis || "");
     const sUid = String(s.uid || "");
 
-    // Direct ID/NISN match
-    if (linkedIds.some((lid) => lid === sId || lid === sNisn || lid === sNis || lid === sUid)) {
-      return true;
+    // 1. Match explicit ID or NISN
+    const isIdMatch = linkedIds.some((lid) => lid && (lid === sId || lid === sNisn || lid === sNis || lid === sUid));
+    if (isIdMatch) {
+      uniqueStudentsMap.set(sId || sUid, s);
+      return;
     }
 
-    // Direct UID match
+    // 2. Match explicit parent UID
     if (parentUid && (s.parentUid === parentUid || s.parentUserId === parentUid)) {
-      return true;
+      uniqueStudentsMap.set(sId || sUid, s);
+      return;
     }
 
-    // Phone match
-    if (parentPhone && s.parentPhone) {
+    // 3. Match verified phone
+    if (parentPhone && parentPhone.length >= 8 && s.parentPhone) {
       const cleanSPhone = String(s.parentPhone).replace(/[^0-9]/g, "");
-      if (cleanSPhone && (cleanSPhone === parentPhone || cleanSPhone.endsWith(parentPhone) || parentPhone.endsWith(cleanSPhone))) {
-        return true;
+      if (cleanSPhone && cleanSPhone === parentPhone) {
+        uniqueStudentsMap.set(sId || sUid, s);
+        return;
       }
     }
 
-    // Email match
-    if (parentEmail && s.parentEmail && String(s.parentEmail).toLowerCase().trim() === parentEmail) {
-      return true;
+    // 4. Match verified email
+    if (parentEmail && parentEmail.includes("@") && s.parentEmail && String(s.parentEmail).toLowerCase().trim() === parentEmail) {
+      uniqueStudentsMap.set(sId || sUid, s);
+      return;
     }
-
-    // Parent name match
-    if (parentName && parentName.length > 2) {
-      const pNameLow = (s.parentName || s.fatherName || s.motherName || s.guardianName || "").toLowerCase().trim();
-      if (pNameLow && (pNameLow.includes(parentName) || parentName.includes(pNameLow))) {
-        return true;
-      }
-    }
-
-    return false;
   });
 
-  const activeStudent = matched.length > 0 ? matched[0] : studentsList[0];
+  const matched = Array.from(uniqueStudentsMap.values());
+  const activeStudent = matched.length > 0 ? matched[0] : null;
   const classId = activeStudent?.classId || activeStudent?.className || activeStudent?.rombel || null;
   const className = activeStudent?.className || activeStudent?.classId || activeStudent?.rombel || null;
 
   return {
     student: activeStudent,
-    allChildren: matched.length > 0 ? matched : [activeStudent],
+    allChildren: matched,
     classId,
     className,
   };

@@ -20,7 +20,7 @@ import {
   UserCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { AttendanceRecord, AttendanceConfig } from "@/app/(protected)/admin/attendance/page";
+import type { AttendanceRecord, AttendanceConfig } from "@/app/(protected)/attendance/page";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 
 interface StudentInfo {

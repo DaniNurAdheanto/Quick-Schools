@@ -422,7 +422,7 @@ export function TeacherDashboardView({
     const izin = relevantRecords.filter((r: any) => r.status === "Izin").length;
     const alpa = relevantRecords.filter((r: any) => r.status === "Alpa").length;
 
-    let percentage = 96.5; // realistic fallback
+    let percentage = 0;
     if (totalRecords > 0) {
       percentage = Math.round(((hadir + terlambat) / totalRecords) * 1000) / 10;
     }
@@ -460,13 +460,13 @@ export function TeacherDashboardView({
     const terlambat = records.filter((r: any) => r.status === "Terlambat").length;
 
     return {
-      totalStudents: classStudents.length || 32,
+      totalStudents: classStudents.length,
       recordedCount: records.length,
-      hadir: hadir > 0 ? hadir : Math.max(0, (classStudents.length || 32) - 2),
-      sakit: sakit > 0 ? sakit : 1,
-      izin: izin > 0 ? izin : 1,
-      alpa: alpa,
-      terlambat: terlambat
+      hadir,
+      sakit,
+      izin,
+      alpa,
+      terlambat
     };
   }, [resolvedHomeroomClass, students, attendanceRecords]);
 
@@ -566,13 +566,6 @@ export function TeacherDashboardView({
         }
       }
     });
-
-    if (list.length === 0) {
-      return [
-        { name: "Ahmad Fauzi", className: targetClass, type: "attendance", status: "Sakit", note: "Surat dokter terverifikasi" },
-        { name: "Dewi Lestari", className: targetClass, type: "grade", status: "Nilai: 68", note: `Perlu remedial Bab 2 (KKM: ${schoolKkm})` }
-      ];
-    }
 
     return list.slice(0, 4);
   }, [resolvedHomeroomClass, taughtClasses, attendanceRecords, grades, schoolKkm]);
@@ -698,7 +691,7 @@ export function TeacherDashboardView({
               </div>
 
               <Link
-                href="/admin/teacher-attendance"
+                href="/teacher-attendance"
                 className="w-full py-2 px-3 rounded-lg text-xs font-black text-center transition-all flex items-center justify-center gap-1.5 shadow-md active:scale-95 cursor-pointer bg-white text-[#531FFF] hover:bg-white/95"
               >
                 {!todayTeacherRecord?.clockIn ? (
@@ -876,14 +869,14 @@ export function TeacherDashboardView({
 
             <div className="flex items-center gap-2">
               <Link
-                href="/admin/report-cards"
+                href="/report-cards"
                 className="px-3.5 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
               >
                 <Award className="w-3.5 h-3.5" />
                 Rapor Digital Kelas
               </Link>
               <Link
-                href="/admin/data-siswa"
+                href="/data-siswa"
                 className="px-3.5 py-2 rounded-lg bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <Users className="w-3.5 h-3.5" />
@@ -897,7 +890,7 @@ export function TeacherDashboardView({
             <div className="bg-white rounded-lg p-3.5 border border-purple-100 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-gray-400 uppercase">Total Siswa</span>
-                <p className="text-lg font-black text-gray-900">{homeroomAttendance?.totalStudents || 32}</p>
+                <p className="text-lg font-black text-gray-900">{homeroomAttendance?.totalStudents ?? 0}</p>
               </div>
               <Users className="w-5 h-5 text-gray-400" />
             </div>
@@ -905,7 +898,7 @@ export function TeacherDashboardView({
             <div className="bg-white rounded-lg p-3.5 border border-emerald-100 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-emerald-600 uppercase">Hadir Hari Ini</span>
-                <p className="text-lg font-black text-emerald-600">{homeroomAttendance?.hadir || 30}</p>
+                <p className="text-lg font-black text-emerald-600">{homeroomAttendance?.hadir ?? 0}</p>
               </div>
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
             </div>
@@ -1106,7 +1099,7 @@ export function TeacherDashboardView({
                           </button>
 
                           <Link
-                            href={`/admin/grades?class=${encodeURIComponent(schedule.class || "")}&subject=${encodeURIComponent(schedule.subject || "")}`}
+                            href={`/grades?class=${encodeURIComponent(schedule.class || "")}&subject=${encodeURIComponent(schedule.subject || "")}`}
                             className="px-3 py-2 rounded-lg bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
                             title="Input Nilai Siswa untuk Kelas Ini"
                           >
@@ -1125,7 +1118,7 @@ export function TeacherDashboardView({
             <div className="pt-2 flex items-center justify-between text-xs text-gray-500">
               <span>Menampilkan jadwal aktif semester ganjil {academicYear}</span>
               <Link
-                href="/admin/schedule"
+                href="/schedule"
                 className="font-bold text-[#531FFF] hover:underline flex items-center gap-1"
               >
                 Lihat Jadwal Lengkap Mingguan <ArrowRight className="w-3.5 h-3.5" />
@@ -1205,7 +1198,7 @@ export function TeacherDashboardView({
             <div className="grid grid-cols-1 gap-2.5">
               {/* Presensi Guru Mandiri Quick Action */}
               <Link
-                href="/admin/teacher-attendance"
+                href="/teacher-attendance"
                 className="p-3 rounded-lg bg-emerald-50/70 hover:bg-emerald-100/70 border border-emerald-200 transition-all flex items-center justify-between group cursor-pointer shadow-2xs"
               >
                 <div className="flex items-center gap-3">
@@ -1238,7 +1231,7 @@ export function TeacherDashboardView({
               </Link>
 
               <Link
-                href="/admin/grades"
+                href="/grades"
                 className="p-3 rounded-lg bg-indigo-50/60 hover:bg-indigo-50 border border-indigo-100 transition-all flex items-center justify-between group cursor-pointer"
               >
                 <div className="flex items-center gap-3">
@@ -1274,7 +1267,7 @@ export function TeacherDashboardView({
               </button>
 
               <Link
-                href="/admin/schedule"
+                href="/schedule"
                 className="p-3 rounded-lg bg-blue-50/60 hover:bg-blue-50 border border-blue-100 transition-all flex items-center justify-between group cursor-pointer"
               >
                 <div className="flex items-center gap-3">
@@ -1292,7 +1285,7 @@ export function TeacherDashboardView({
               </Link>
 
               <Link
-                href="/admin/report-cards"
+                href="/report-cards"
                 className="p-3 rounded-lg bg-purple-50/60 hover:bg-purple-50 border border-purple-100 transition-all flex items-center justify-between group cursor-pointer"
               >
                 <div className="flex items-center gap-3">
@@ -1323,46 +1316,53 @@ export function TeacherDashboardView({
               </span>
             </div>
 
-            <div className="space-y-2.5">
-              {studentsNeedAttention.map((item, i) => {
-                const sMatch = students.find(s => (s.name || s.fullName || "").toLowerCase() === (item.name || "").toLowerCase());
-                return (
-                  <div
-                    key={i}
-                    className="p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-amber-200 transition-all flex items-center justify-between gap-3"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <ProfileAvatar
-                        name={item.name}
-                        imageUrl={sMatch?.imageUrl}
-                        photoUrl={sMatch?.photoUrl}
-                        avatar={sMatch?.avatar}
-                        gender={sMatch?.gender}
-                        role="student"
-                        size="sm"
-                        shape="rounded"
-                      />
-                      <div className="space-y-0.5 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h5 className="text-xs font-bold text-gray-900 truncate">{item.name}</h5>
-                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-white text-gray-600 border border-gray-200">
-                            {item.className}
-                          </span>
+            {studentsNeedAttention.length > 0 ? (
+              <div className="space-y-2.5">
+                {studentsNeedAttention.map((item, i) => {
+                  const sMatch = students.find(s => (s.name || s.fullName || "").toLowerCase() === (item.name || "").toLowerCase());
+                  return (
+                    <div
+                      key={i}
+                      className="p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-amber-200 transition-all flex items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <ProfileAvatar
+                          name={item.name}
+                          imageUrl={sMatch?.imageUrl}
+                          photoUrl={sMatch?.photoUrl}
+                          avatar={sMatch?.avatar}
+                          gender={sMatch?.gender}
+                          role="student"
+                          size="sm"
+                          shape="rounded"
+                        />
+                        <div className="space-y-0.5 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h5 className="text-xs font-bold text-gray-900 truncate">{item.name}</h5>
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-white text-gray-600 border border-gray-200">
+                              {item.className}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-500 truncate">{item.note}</p>
                         </div>
-                        <p className="text-[11px] text-gray-500 truncate">{item.note}</p>
                       </div>
-                    </div>
 
-                    <span className={cn(
-                      "px-2 py-0.5 rounded text-[10px] font-extrabold uppercase shrink-0",
-                      item.type === "attendance" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-800"
-                    )}>
-                      {item.status}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                      <span className={cn(
+                        "px-2 py-0.5 rounded text-[10px] font-extrabold uppercase shrink-0",
+                        item.type === "attendance" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-800"
+                      )}>
+                        {item.status}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-4 rounded-lg bg-emerald-50/60 border border-emerald-100 text-center">
+                <p className="text-xs font-bold text-emerald-800">Semua Siswa Terpantau Baik</p>
+                <p className="text-[11px] text-emerald-600 mt-0.5">Tidak ada siswa yang sakit, terlambat, atau berkinerja di bawah KKM hari ini.</p>
+              </div>
+            )}
           </div>
 
           {/* INTERACTIVE TEACHER TO-DO / NOTES */}
@@ -1434,7 +1434,7 @@ export function TeacherDashboardView({
                 <Megaphone className="w-4 h-4 text-blue-600" />
                 Pengumuman Sekolah
               </h3>
-              <Link href="/admin/announcements" className="text-[11px] font-bold text-[#531FFF] hover:underline">
+              <Link href="/announcements" className="text-[11px] font-bold text-[#531FFF] hover:underline">
                 Lihat Semua
               </Link>
             </div>

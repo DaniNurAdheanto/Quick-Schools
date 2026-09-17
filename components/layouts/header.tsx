@@ -92,22 +92,22 @@ export function Header() {
   };
   
   const generateBreadcrumbs = () => {
-    if (!pathname) return [{ label: "Home", href: "/admin/dashboard" }];
+    if (!pathname) return [{ label: "Home", href: "/dashboard" }];
     
     const pathWithoutQuery = pathname.split('?')[0];
     const pathParts = pathWithoutQuery.split('/').filter(p => p);
     
-    if (pathParts.length === 0 || (pathParts.length === 1 && pathParts[0] === 'admin')) {
-      return [{ label: "Home", href: "/admin/dashboard" }, { label: "Dashboard", href: "/admin/dashboard" }];
+    if (pathParts.length === 0 || (pathParts.length === 1 && pathParts[0] === 'dashboard')) {
+      return [{ label: "Home", href: "/dashboard" }, { label: "Dashboard", href: "/dashboard" }];
     }
     
     const breadcrumbs = [];
-    breadcrumbs.push({ label: "Home", href: "/admin/dashboard" });
+    breadcrumbs.push({ label: "Home", href: "/dashboard" });
     
     let currentPath = "";
     pathParts.forEach((part) => {
       currentPath += `/${part}`;
-      if (part === "admin" || part === "(protected)") return;
+      if (part === "dashboard" || part === "admin" || part === "(protected)") return;
       
       const formattedLabel = part
         .replace(/-/g, ' ')
@@ -326,7 +326,7 @@ export function Header() {
                 {/* Menu Items */}
                 <div className="space-y-1">
                   <Link
-                    href="/admin/profile"
+                    href="/profile"
                     onClick={() => setShowProfileDropdown(false)}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-bold text-gray-700 hover:text-[#531FFF] hover:bg-[#531FFF]/5 transition-all group cursor-pointer"
                   >

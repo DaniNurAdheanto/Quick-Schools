@@ -38,6 +38,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useToast } from "@/context/ToastContext";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { createAuthAccount } from "@/lib/create-user-auth";
+import { AuthRequiredState } from "@/components/ui/auth-required-state";
 
 export default function StudentOnboardingPage() {
   const router = useRouter();
@@ -157,7 +158,7 @@ export default function StudentOnboardingPage() {
             }));
             if (uData.onboardingCompleted && (role === "siswa" || role === "student")) {
               // Only redirect if it is a student who already completed onboarding
-              router.push("/admin/dashboard");
+              router.push("/dashboard");
               return;
             }
           }
@@ -466,6 +467,21 @@ export default function StudentOnboardingPage() {
       </div>
     );
   }
+
+  // Auth Required Guard: Show Empty State if not authenticated
+  if (!currentUser) {
+    return (
+      <AuthRequiredState
+        pageName="Onboarding Siswa"
+        title="Pendaftaran Memerlukan Autentikasi"
+        description="Untuk memulai proses pengisian formulir Onboarding dan kelengkapan data akademik siswa, silakan masuk (login) terlebih dahulu menggunakan akun terdaftar atau daftarkan akun baru."
+        loginHref="/login?redirect=/onboarding"
+        homeHref="/"
+        showRegisterLink={true}
+      />
+    );
+  }
+
   const progressPercent = Math.min(100, Math.max(0, ((step) / 5) * 100));
 
   return (
@@ -1483,7 +1499,7 @@ export default function StudentOnboardingPage() {
 
             <div className="pt-4">
               <button
-                onClick={() => router.push("/admin/dashboard")}
+                onClick={() => router.push("/dashboard")}
                 className="px-8 py-4 bg-[#531FFF] hover:bg-[#4314cc] text-white font-bold rounded-lg text-sm transition-all shadow-lg shadow-[#531FFF]/25 hover:shadow-xl hover:shadow-[#531FFF]/30 inline-flex items-center gap-2 active:scale-95 cursor-pointer"
               >
                 Masuk ke Dashboard Siswa <ArrowRight className="w-4 h-4" />

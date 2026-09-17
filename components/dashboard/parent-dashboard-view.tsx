@@ -13,11 +13,11 @@ import {
   TrendingUp,
   Star,
   AlertTriangle,
+  AlertCircle,
   ChevronRight,
   Megaphone,
   Phone,
   ShieldCheck,
-  ChevronDown,
   Calendar,
   Lock,
   School,
@@ -35,7 +35,7 @@ import {
   Cell,
   ReferenceLine
 } from "recharts";
-import { collection, onSnapshot, doc, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, getDoc, query, where, getDocs } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
@@ -58,10 +58,12 @@ export function ParentDashboardView({
   currentDay
 }: ParentDashboardViewProps) {
   const { profile: schoolProfile } = useSchoolProfile();
+
+  // Current authenticated user state
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [parentData, setParentData] = useState<any>(null);
 
-  // Firestore Realtime Collections
+  // Raw Database Collections
   const [studentsList, setStudentsList] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
   const [gradesRecords, setGradesRecords] = useState<any[]>([]);
@@ -73,7 +75,6 @@ export function ParentDashboardView({
 
   // Active Selected Child State
   const [selectedChildId, setSelectedChildId] = useState<string>("");
-  const [isChildDropdownOpen, setIsChildDropdownOpen] = useState<boolean>(false);
 
   // Live time tracker
   const [nowTimeStr, setNowTimeStr] = useState<string>(() => {
@@ -96,9 +97,29 @@ export function ParentDashboardView({
         setCurrentUser(u);
         try {
           const userSnap = await getDoc(doc(db, "users", u.uid));
-          if (userSnap.exists()) {
-            setParentData(userSnap.data());
-          }
+          let pData = userSnap.exists() ? userSnap.data() : {};
+
+          // Check parents collection as well (direct doc ID or userUid / email query)
+          try {
+            const parentSnap = await getDoc(doc(db, "parents", u.uid));
+            if (parentSnap.exists()) {
+              pData = { ...pData, ...parentSnap.data() };
+            } else {
+              const qUid = query(collection(db, "parents"), where("userUid", "==", u.uid));
+              const qUidSnap = await getDocs(qUid);
+              if (!qUidSnap.empty) {
+                pData = { ...pData, ...qUidSnap.docs[0].data() };
+              } else if (u.email) {
+                const qEmail = query(collection(db, "parents"), where("email", "==", u.email.toLowerCase().trim()));
+                const qEmailSnap = await getDocs(qEmail);
+                if (!qEmailSnap.empty) {
+                  pData = { ...pData, ...qEmailSnap.docs[0].data() };
+                }
+              }
+            }
+          } catch (pe) {}
+
+          setParentData(pData);
         } catch (e) {
           console.error("Parent profile fetch error:", e);
         }
@@ -153,79 +174,69 @@ export function ParentDashboardView({
     };
   }, []);
 
-  // 3. Resolve Connected Child / Children
+  // 3. Resolve Connected Child / Children (strictly based on unique student IDs, NO name-based matching)
   const connectedChildren = useMemo(() => {
     if (!studentsList || studentsList.length === 0) return [];
 
     const parentUid = currentUser?.uid;
     const parentEmail = (currentUser?.email || "").toLowerCase().trim();
     const parentPhone = (parentData?.phone || currentUser?.phoneNumber || "").replace(/[^0-9]/g, "");
-    const parentName = (userName || parentData?.name || "").toLowerCase().trim();
 
-    // Specific linked ID fields
-    const linkedIds: string[] = [];
-    if (parentData?.studentId) linkedIds.push(String(parentData.studentId));
+    // Specific linked ID fields from registered parent data
+    const linkedIds = new Set<string>();
+    if (parentData?.studentId) linkedIds.add(String(parentData.studentId));
     if (parentData?.studentIds && Array.isArray(parentData.studentIds)) {
-      linkedIds.push(...parentData.studentIds.map(String));
+      parentData.studentIds.forEach((id: any) => id && linkedIds.add(String(id)));
     }
     if (parentData?.linkedStudentIds && Array.isArray(parentData.linkedStudentIds)) {
-      linkedIds.push(...parentData.linkedStudentIds.map(String));
+      parentData.linkedStudentIds.forEach((id: any) => id && linkedIds.add(String(id)));
     }
-    if (parentData?.nisn) linkedIds.push(String(parentData.nisn));
+    if (parentData?.nisn) linkedIds.add(String(parentData.nisn));
 
-    // Filter students
-    let matched = studentsList.filter(s => {
-      const sId = String(s.id);
+    // Deduplicate students strictly by unique student ID (Map prevents any duplicate students)
+    const matchedMap = new Map<string, any>();
+
+    studentsList.forEach(s => {
+      const sId = String(s.id || s._firestoreId || "");
       const sNisn = String(s.nisn || "");
       const sNis = String(s.nis || "");
       const sUid = String(s.uid || "");
 
-      // Match explicit ID or NISN
-      if (linkedIds.some(lid => lid === sId || lid === sNisn || lid === sNis || lid === sUid)) {
-        return true;
+      // 1. Direct Unique Student ID or NISN match with registered linked IDs
+      const isLinkedById = Array.from(linkedIds).some(
+        lid => lid && (lid === sId || lid === sNisn || lid === sNis || lid === sUid)
+      );
+      if (isLinkedById) {
+        matchedMap.set(sId || sUid, s);
+        return;
       }
 
-      // Match explicit parent UID
+      // 2. Direct parent UID match on student record
       if (parentUid && (s.parentUid === parentUid || s.parentUserId === parentUid)) {
-        return true;
+        matchedMap.set(sId || sUid, s);
+        return;
       }
 
-      // Match parent phone
-      if (parentPhone && s.parentPhone) {
+      // 3. Verified parent phone match (exact)
+      if (parentPhone && parentPhone.length >= 8 && s.parentPhone) {
         const cleanSPhone = String(s.parentPhone).replace(/[^0-9]/g, "");
-        if (cleanSPhone && (cleanSPhone === parentPhone || cleanSPhone.endsWith(parentPhone) || parentPhone.endsWith(cleanSPhone))) {
-          return true;
+        if (cleanSPhone && cleanSPhone === parentPhone) {
+          matchedMap.set(sId || sUid, s);
+          return;
         }
       }
 
-      // Match parent name in father/mother/guardian
-      if (parentName.length > 2) {
-        const f = (s.fatherName || "").toLowerCase().trim();
-        const m = (s.motherName || "").toLowerCase().trim();
-        const g = (s.guardianName || "").toLowerCase().trim();
-        if (f.includes(parentName) || parentName.includes(f) ||
-            m.includes(parentName) || parentName.includes(m) ||
-            g.includes(parentName) || parentName.includes(g)) {
-          return true;
+      // 4. Verified parent email match (exact)
+      if (parentEmail && parentEmail.includes("@") && s.parentEmail) {
+        if (String(s.parentEmail).toLowerCase().trim() === parentEmail) {
+          matchedMap.set(sId || sUid, s);
+          return;
         }
       }
-
-      // Match parent email
-      if (parentEmail && s.parentEmail && s.parentEmail.toLowerCase().trim() === parentEmail) {
-        return true;
-      }
-
-      return false;
     });
 
-    // Fallback: If no explicit links found (e.g. newly created parent demo or test account),
-    // pick the first active students so the dashboard displays realistic student data cleanly.
-    if (matched.length === 0) {
-      matched = studentsList.slice(0, 3);
-    }
-
-    return matched;
-  }, [studentsList, currentUser, parentData, userName]);
+    return Array.from(matchedMap.values());
+  }, [studentsList, currentUser, parentData]);
 
   // Auto select first child if none selected yet
   useEffect(() => {
@@ -236,19 +247,21 @@ export function ParentDashboardView({
 
   // Active Child Object
   const activeChild = useMemo(() => {
-    if (!selectedChildId && connectedChildren.length > 0) return connectedChildren[0];
+    if (connectedChildren.length === 0) return null;
+    if (!selectedChildId) return connectedChildren[0];
     const found = connectedChildren.find(c => c.id === selectedChildId);
-    return found || connectedChildren[0] || null;
+    return found || connectedChildren[0];
   }, [selectedChildId, connectedChildren]);
 
   // Active child normalized details
-  const childName = activeChild?.fullName || activeChild?.name || "Adiratna Sekar";
-  const childClass = activeChild?.className || activeChild?.classId || activeChild?.kelas || "10 MIPA 1";
-  const childNisn = activeChild?.nisn || activeChild?.nis || "202300124";
+  const childName = activeChild?.fullName || activeChild?.name || "";
+  const childClass = activeChild?.className || activeChild?.classId || activeChild?.kelas || "";
+  const childNisn = activeChild?.nisn || activeChild?.nis || "";
 
   // Resolve homeroom teacher for child
   const homeroomTeacher = useMemo(() => {
-    if (activeChild?.homeroom || activeChild?.waliKelas) {
+    if (!activeChild) return "-";
+    if (activeChild.homeroom || activeChild.waliKelas) {
       return activeChild.homeroom || activeChild.waliKelas;
     }
     if (childClass && classesList.length > 0) {
@@ -261,19 +274,35 @@ export function ParentDashboardView({
         return matched.homeroomTeacher || matched.waliKelas;
       }
     }
-    return "Ibu Sri Wahyuni, M.Pd.";
+    return "Wali Kelas";
   }, [activeChild, childClass, classesList]);
 
-  // 4. Computed Attendance for Active Child
+  // 4. Computed Attendance for Active Child (strictly unique student ID, NEVER by name)
   const childAttendance = useMemo(() => {
-    const sId = activeChild?.id;
-    const sNisn = childNisn;
-    const sNameLower = childName.toLowerCase().trim();
+    if (!activeChild) {
+      return {
+        total: 0,
+        hadir: 0,
+        terlambat: 0,
+        sakit: 0,
+        izin: 0,
+        alpa: 0,
+        percentage: "0.0",
+        todayRecord: null,
+        pieData: [],
+        recentLogs: [],
+        isLive: false
+      };
+    }
+
+    const sId = String(activeChild.id || activeChild._firestoreId || "");
+    const sUid = String(activeChild.uid || "");
+    const sNisn = childNisn ? String(childNisn) : "";
 
     const myRecords = attendanceRecords.filter(r => {
-      if (sId && (r.studentId === sId || r.uid === sId)) return true;
-      if (sNisn && (r.studentId === sNisn || r.nisn === sNisn)) return true;
-      if (r.studentName && r.studentName.toLowerCase().trim() === sNameLower) return true;
+      if (sId && String(r.studentId) === sId) return true;
+      if (sUid && (String(r.studentId) === sUid || String(r.uid) === sUid)) return true;
+      if (sNisn && (String(r.studentId) === sNisn || String(r.nisn) === sNisn)) return true;
       return false;
     });
 
@@ -285,76 +314,71 @@ export function ParentDashboardView({
     const terlambat = myRecords.filter(r => r.status === "Terlambat").length;
     const sakit = myRecords.filter(r => r.status === "Sakit").length;
     const izin = myRecords.filter(r => r.status === "Izin").length;
-    const alpa = myRecords.filter(r => r.status === "Alpa").length;
+    const alpa = myRecords.filter(r => r.status === "Alpa" || r.status === "Ditolak").length;
 
-    let percentage = "98.5";
+    let percentage = "0.0";
     if (total > 0) {
       percentage = (((hadir + terlambat) / total) * 100).toFixed(1);
     }
 
     const pieData = [
-      { name: "Hadir", value: total > 0 ? hadir : 42, color: "#531FFF" },
-      { name: "Terlambat", value: total > 0 ? terlambat : 1, color: "#8B5CF6" },
-      { name: "Izin", value: total > 0 ? izin : 1, color: "#F59E0B" },
-      { name: "Sakit", value: total > 0 ? sakit : 1, color: "#3B82F6" },
-      { name: "Alpa", value: total > 0 ? alpa : 0, color: "#EF4444" },
+      { name: "Hadir", value: hadir, color: "#531FFF" },
+      { name: "Terlambat", value: terlambat, color: "#8B5CF6" },
+      { name: "Izin", value: izin, color: "#F59E0B" },
+      { name: "Sakit", value: sakit, color: "#3B82F6" },
+      { name: "Alpa", value: alpa, color: "#EF4444" },
     ].filter(item => item.value > 0);
 
-    // Recent 5 logs
     const recentLogs = [...myRecords]
       .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
       .slice(0, 5);
 
     return {
-      total: total > 0 ? total : 45,
-      hadir: total > 0 ? hadir : 42,
-      terlambat: total > 0 ? terlambat : 1,
-      sakit: total > 0 ? sakit : 1,
-      izin: total > 0 ? izin : 1,
-      alpa: total > 0 ? alpa : 0,
+      total,
+      hadir,
+      terlambat,
+      sakit,
+      izin,
+      alpa,
       percentage,
       todayRecord,
       pieData,
       recentLogs,
       isLive: total > 0
     };
-  }, [attendanceRecords, activeChild, childNisn, childName]);
+  }, [attendanceRecords, activeChild, childNisn]);
 
-  // 5. Computed Academic Performance & Grades for Active Child
+  // 5. Computed Academic Performance & Grades for Active Child (strictly unique student ID, NEVER by name)
   const childGrades = useMemo(() => {
-    const sId = activeChild?.id;
-    const sNisn = childNisn;
-    const sNameLower = childName.toLowerCase().trim();
+    if (!activeChild) {
+      return {
+        chartData: [],
+        averageScore: "0.0",
+        predikat: "Belum Ada Nilai",
+        passRate: 0,
+        recentEvaluations: [],
+        isLive: false
+      };
+    }
+
+    const sId = String(activeChild.id || activeChild._firestoreId || "");
+    const sUid = String(activeChild.uid || "");
+    const sNisn = childNisn ? String(childNisn) : "";
 
     const myGrades = gradesRecords.filter(g => {
-      if (sId && (g.studentId === sId || g.uid === sId)) return true;
-      if (sNisn && (g.studentId === sNisn || g.nisn === sNisn)) return true;
-      if (g.studentName && g.studentName.toLowerCase().trim() === sNameLower) return true;
+      if (sId && (String(g.studentId) === sId || String(g.studentUid) === sId)) return true;
+      if (sUid && (String(g.studentId) === sUid || String(g.studentUid) === sUid || String(g.uid) === sUid)) return true;
+      if (sNisn && (String(g.studentId) === sNisn || String(g.nisn) === sNisn)) return true;
       return false;
     });
 
-    const FALLBACK_GRADES = [
-      { subject: "Matematika", score: 88, kkm: 75, grade: "A" },
-      { subject: "B. Indonesia", score: 92, kkm: 75, grade: "A+" },
-      { subject: "B. Inggris", score: 95, kkm: 75, grade: "A+" },
-      { subject: "Fisika", score: 82, kkm: 75, grade: "B+" },
-      { subject: "Kimia", score: 85, kkm: 75, grade: "A" },
-      { subject: "Biologi", score: 90, kkm: 75, grade: "A" },
-      { subject: "Sejarah", score: 86, kkm: 75, grade: "A" },
-    ];
-
     if (myGrades.length === 0) {
       return {
-        chartData: FALLBACK_GRADES,
-        averageScore: "88.3",
-        predikat: "A · Sangat Memuaskan",
-        passRate: 100,
-        recentEvaluations: [
-          { subject: "Bahasa Inggris", type: "UTS Genap", score: 95, kkm: 75, date: "02 Mei 2026", status: "Lulus KKM" },
-          { subject: "Matematika", type: "Tugas 2 Integral", score: 88, kkm: 75, date: "28 Apr 2026", status: "Lulus KKM" },
-          { subject: "Fisika Dasar", type: "Kuis Termodinamika", score: 82, kkm: 75, date: "22 Apr 2026", status: "Lulus KKM" },
-          { subject: "Biologi", type: "Praktikum Sel", score: 90, kkm: 75, date: "15 Apr 2026", status: "Lulus KKM" },
-        ],
+        chartData: [],
+        averageScore: "0.0",
+        predikat: "Belum Ada Data Nilai",
+        passRate: 0,
+        recentEvaluations: [],
         isLive: false
       };
     }
@@ -407,7 +431,7 @@ export function ParentDashboardView({
       recentEvaluations: recent,
       isLive: true
     };
-  }, [gradesRecords, activeChild, childNisn, childName]);
+  }, [gradesRecords, activeChild, childNisn]);
 
   // 6. Computed Daily Timetable for Child's Class
   const childTimetable = useMemo(() => {
@@ -415,6 +439,16 @@ export function ParentDashboardView({
     const todayIndex = new Date().getDay();
     const todayName = daysIndo[todayIndex];
     const isWeekend = todayIndex === 0 || todayIndex === 6;
+
+    if (!activeChild || !childClass) {
+      return {
+        dayList: [],
+        isWeekend,
+        targetDay: isWeekend ? "Senin" : todayName,
+        nextSubject: "-",
+        nextTime: "-"
+      };
+    }
 
     const cleanChildClass = childClass.toLowerCase().replace(/[\s\-_]/g, "");
 
@@ -424,16 +458,7 @@ export function ParentDashboardView({
     });
 
     const targetDay = isWeekend ? "Senin" : todayName;
-    let dayList = matchedSchedules.filter(s => (s.day || "").toLowerCase() === targetDay.toLowerCase());
-
-    if (dayList.length === 0) {
-      dayList = [
-        { time: "07:00 - 08:30", startTime: "07:00", endTime: "08:30", subject: "Matematika", room: "Ruang X-IPA-1", teacher: "Drs. Bambang H.", type: "Wajib" },
-        { time: "08:30 - 10:00", startTime: "08:30", endTime: "10:00", subject: "Bahasa Indonesia", room: "Ruang X-IPA-1", teacher: "Ibu Dewi R., M.Pd", type: "Wajib" },
-        { time: "10:15 - 11:45", startTime: "10:15", endTime: "11:45", subject: "Fisika Dasar", room: "Lab Fisika A", teacher: "Bp. Hendra W., S.T", type: "Praktikum" },
-        { time: "12:30 - 14:00", startTime: "12:30", endTime: "14:00", subject: "Bahasa Inggris", room: "Ruang X-IPA-1", teacher: "Ibu Rina K., M.Hum", type: "Wajib" },
-      ];
-    }
+    const dayList = matchedSchedules.filter(s => (s.day || "").toLowerCase() === targetDay.toLowerCase());
 
     const [nowH, nowM] = nowTimeStr.split(":").map(Number);
     const nowMin = nowH * 60 + nowM;
@@ -480,13 +505,21 @@ export function ParentDashboardView({
       dayList: mapped,
       isWeekend,
       targetDay,
-      nextSubject: nextSubject !== "-" ? nextSubject : (mapped[0]?.subject || "Matematika"),
-      nextTime: nextTime !== "-" ? nextTime : (mapped[0]?.time || "07:00 WIB")
+      nextSubject: nextSubject !== "-" ? nextSubject : (mapped[0]?.subject || "-"),
+      nextTime: nextTime !== "-" ? nextTime : (mapped[0]?.time || "-")
     };
-  }, [schedulesList, childClass, nowTimeStr]);
+  }, [schedulesList, childClass, nowTimeStr, activeChild]);
 
   // 7. Computed Semester Exams for Child's Class
   const childExams = useMemo(() => {
+    if (!activeChild || !childClass) {
+      return {
+        list: [],
+        nearest: null,
+        countdownLabel: "-"
+      };
+    }
+
     const cleanChildClass = childClass.toLowerCase().replace(/[\s\-_]/g, "");
     const allExams = [...examSchedulesList, ...schedulesList.filter(s => s.isExam || s.examType)];
 
@@ -503,38 +536,11 @@ export function ParentDashboardView({
              titleUpper.includes("PAS") || titleUpper.includes("UAS");
     });
 
-    let examItems = filtered;
-    if (examItems.length === 0) {
-      examItems = [
-        {
-          id: "exam_1",
-          title: "Penilaian Tengah Semester (PTS) Ganjil",
-          examType: "PTS",
-          subject: "Matematika Peminatan",
-          date: "2025-09-18",
-          startTime: "07:30",
-          endTime: "09:00",
-          room: "Ruang R.101",
-          proctor: "Drs. Taufik Hidayat, M.Pd."
-        },
-        {
-          id: "exam_2",
-          title: "Penilaian Tengah Semester (PTS) Ganjil",
-          examType: "PTS",
-          subject: "Fisika Terapan",
-          date: "2025-09-19",
-          startTime: "07:30",
-          endTime: "09:00",
-          room: "Lab Fisika A",
-          proctor: "Dr. Budi Santoso, M.Si."
-        }
-      ];
-    }
-
+    const examItems = [...filtered];
     examItems.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const nearest = examItems[0] || null;
 
-    let countdownLabel = "Segera";
+    let countdownLabel = "-";
     if (nearest?.date) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -553,59 +559,39 @@ export function ParentDashboardView({
       nearest,
       countdownLabel
     };
-  }, [examSchedulesList, schedulesList, childClass]);
+  }, [examSchedulesList, schedulesList, childClass, activeChild]);
 
-  // 8. Computed SPP Billing & Payment Status for Child
+  // 8. Computed SPP Billing & Payment Status for Child (strictly unique student ID, NEVER by name)
   const childSPP = useMemo(() => {
-    const sId = activeChild?.id;
-    const sNisn = childNisn;
-    const sNameLower = childName.toLowerCase().trim();
-
-    // Filter child bills
-    const myBills = sppBillsList.filter(b => {
-      if (sId && (b.studentId === sId || b.uid === sId)) return true;
-      if (sNisn && (b.studentId === sNisn || b.nisn === sNisn)) return true;
-      if (b.studentName && b.studentName.toLowerCase().trim() === sNameLower) return true;
-      return false;
-    });
-
-    const currentMonthYear = new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(new Date());
-
-    // Fallback sample if no bills created yet in db
-    if (myBills.length === 0) {
+    if (!activeChild) {
       return {
-        currentBill: {
-          periodMonth: currentMonthYear,
-          amount: 500000,
-          paidAmount: 500000,
-          remainingAmount: 0,
-          status: "Paid",
-          dueDate: "10 September 2026",
-          invoiceNo: "INV/SPP/2026/09/0088",
-          paidAt: "05 September 2026",
-          paymentMethod: "Transfer Bank BCA Virtual Account"
-        },
+        currentBill: null,
         arrearsCount: 0,
         totalArrears: 0,
         isUpToDate: true,
-        receipts: [
-          {
-            receiptNo: "KW-SPP/2026/09/0088",
-            periodMonth: currentMonthYear,
-            amount: 500000,
-            date: "05 Sep 2026",
-            method: "BCA Virtual Account",
-            cashier: "Auto Gateway"
-          },
-          {
-            receiptNo: "KW-SPP/2026/08/0074",
-            periodMonth: "Agustus 2026",
-            amount: 500000,
-            date: "08 Agu 2026",
-            method: "Mandiri Bill",
-            cashier: "Auto Gateway"
-          }
-        ]
+        receipts: []
+      };
+    }
+
+    const sId = String(activeChild.id || activeChild._firestoreId || "");
+    const sUid = String(activeChild.uid || "");
+    const sNisn = childNisn ? String(childNisn) : "";
+
+    // Filter child bills strictly by ID or NISN
+    const myBills = sppBillsList.filter(b => {
+      if (sId && (String(b.studentId) === sId || String(b.studentUid) === sId)) return true;
+      if (sUid && (String(b.studentId) === sUid || String(b.studentUid) === sUid || String(b.uid) === sUid)) return true;
+      if (sNisn && (String(b.studentId) === sNisn || String(b.nisn) === sNisn)) return true;
+      return false;
+    });
+
+    if (myBills.length === 0) {
+      return {
+        currentBill: null,
+        arrearsCount: 0,
+        totalArrears: 0,
+        isUpToDate: true,
+        receipts: []
       };
     }
 
@@ -648,7 +634,7 @@ export function ParentDashboardView({
       isUpToDate: totalArrears === 0,
       receipts: allReceipts.slice(0, 5)
     };
-  }, [sppBillsList, activeChild, childNisn, childName]);
+  }, [sppBillsList, activeChild, childNisn]);
 
   // 9. Computed School Announcements for Parents
   const parentAnnouncements = useMemo(() => {
@@ -683,68 +669,55 @@ export function ParentDashboardView({
   return (
     <div className="p-4 md:p-8 max-w-[1600px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
       
-      {/* ── Top Bar: Child Selector & Verification Chip ─────────────────────── */}
+      {/* ── Top Bar: Child Info & Verification Chip (Otomatis berdasarkan relasi resmi) ─────────────────────── */}
       <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         
-        {/* Child Selector Left */}
+        {/* Child Identity Info */}
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 text-[#531FFF] flex items-center justify-center font-black shrink-0">
             <Users className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Anak yang Dipantau:</span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <BadgeCheck className="w-3 h-3 text-emerald-600" />
-                Terverifikasi
-              </span>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Siswa Terdaftar:</span>
+              {connectedChildren.length > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <BadgeCheck className="w-3 h-3 text-emerald-600" />
+                  Terverifikasi
+                </span>
+              )}
             </div>
             
-            {/* Child Selection Dropdown or Fixed Display */}
+            {/* If parent has multiple registered children (siblings), provide clean tab switcher */}
             {connectedChildren.length > 1 ? (
-              <div className="relative mt-1">
-                <button
-                  onClick={() => setIsChildDropdownOpen(!isChildDropdownOpen)}
-                  className="flex items-center gap-2 text-sm font-extrabold text-gray-900 hover:text-[#531FFF] transition-colors py-0.5 cursor-pointer"
-                >
-                  <span>{childName} ({childClass})</span>
-                  <ChevronDown className={cn("w-4 h-4 transition-transform", isChildDropdownOpen && "rotate-180")} />
-                </button>
-
-                {isChildDropdownOpen && (
-                  <div className="absolute left-0 top-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-1.5 w-64 space-y-1 animate-in fade-in zoom-in-95">
-                    <div className="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                      Pilih Putra / Putri:
-                    </div>
-                    {connectedChildren.map(child => (
-                      <button
-                        key={child.id}
-                        onClick={() => {
-                          setSelectedChildId(child.id);
-                          setIsChildDropdownOpen(false);
-                        }}
-                        className={cn(
-                          "w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-between",
-                          child.id === activeChild?.id 
-                            ? "bg-[#531FFF] text-white shadow-xs" 
-                            : "text-gray-700 hover:bg-gray-100"
-                        )}
-                      >
-                        <div>
-                          <div className="truncate">{child.fullName || child.name}</div>
-                          <div className={cn("text-[10px] font-medium truncate", child.id === activeChild?.id ? "text-white/80" : "text-gray-400")}>
-                            Kelas {child.className || child.classId || "Siswa"} · NISN: {child.nisn || child.nis || "-"}
-                          </div>
-                        </div>
-                        {child.id === activeChild?.id && <CheckCircle className="w-4 h-4 shrink-0" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                {connectedChildren.map((child) => (
+                  <button
+                    key={child.id}
+                    onClick={() => setSelectedChildId(child.id)}
+                    className={cn(
+                      "px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                      child.id === activeChild?.id
+                        ? "bg-[#531FFF] text-white shadow-xs"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    )}
+                  >
+                    <span>{child.fullName || child.name}</span>
+                    <span className={cn("text-[10px]", child.id === activeChild?.id ? "text-purple-200" : "text-gray-400")}>
+                      ({child.className || child.classId || "Siswa"})
+                    </span>
+                  </button>
+                ))}
               </div>
             ) : (
               <h2 className="text-sm font-extrabold text-gray-900 mt-0.5">
-                {childName} <span className="text-xs font-semibold text-gray-500">· Kelas {childClass} (NISN: {childNisn})</span>
+                {childName ? (
+                  <>
+                    {childName} <span className="text-xs font-semibold text-gray-500">· Kelas {childClass || "-"} {childNisn ? `(NISN: ${childNisn})` : ""}</span>
+                  </>
+                ) : (
+                  <span className="text-gray-400 italic font-normal text-xs">Belum ada siswa terhubung ke akun ini</span>
+                )}
               </h2>
             )}
           </div>
@@ -758,7 +731,7 @@ export function ParentDashboardView({
           </div>
 
           <Link
-            href="/admin/payments"
+            href="/payments"
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg text-xs font-bold transition-all shadow-xs active:scale-95"
           >
             <CreditCard className="w-3.5 h-3.5" />
@@ -767,6 +740,23 @@ export function ParentDashboardView({
         </div>
 
       </div>
+
+      {/* ── Empty State Banner if no student connected ──────────────────────── */}
+      {connectedChildren.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 md:p-6 text-amber-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-200 text-amber-700 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm md:text-base font-bold text-amber-900">Akun Orang Tua Belum Terhubung dengan Data Siswa</h3>
+              <p className="text-xs text-amber-700 mt-1 max-w-2xl leading-relaxed">
+                Data anak ditampilkan otomatis berdasarkan ID Siswa / NISN resmi yang terdaftar pada akun Orang Tua. Sistem mendeteksi akun ini belum memiliki relasi siswa yang terdaftar. Silakan hubungi bagian Tata Usaha atau Admin Sekolah untuk menghubungkan profil siswa ke akun Anda.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Hero Welcome Section ─────────────────────────────────────────────── */}
       <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-[#3B0DBE] via-[#531FFF] to-[#7942FF] p-6 md:p-8 text-white shadow-xl flex flex-col lg:flex-row justify-between lg:items-center gap-6 border border-white/15">
@@ -926,13 +916,13 @@ export function ParentDashboardView({
             </div>
           </div>
           <div className="text-2xl font-black text-[#531FFF] tracking-tight mb-1">
-            {childExams.countdownLabel}
+            {childExams.countdownLabel !== "-" ? childExams.countdownLabel : "Tidak Ada Ujian"}
           </div>
           <div className="text-xs text-gray-500 font-medium truncate">
             {childExams.nearest ? (
               <span>{childExams.nearest.subject} ({childExams.nearest.examType || "PTS"})</span>
             ) : (
-              <span>Tidak ada jadwal ujian pekan ini</span>
+              <span>Tidak ada jadwal ujian dekat</span>
             )}
           </div>
         </div>
@@ -957,7 +947,7 @@ export function ParentDashboardView({
                   Kelas {childClass} · Ruang belajar & jadwal mengajar aktif
                 </p>
               </div>
-              <Link href="/admin/schedule" className="text-xs font-bold text-[#531FFF] hover:underline flex items-center gap-1">
+              <Link href="/schedule" className="text-xs font-bold text-[#531FFF] hover:underline flex items-center gap-1">
                 Semua Jadwal <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>
@@ -974,49 +964,57 @@ export function ParentDashboardView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 font-medium text-gray-700">
-                  {childTimetable.dayList.map((item, idx) => (
-                    <tr 
-                      key={idx}
-                      className={cn(
-                        "transition-colors",
-                        item.status === "Berlangsung" 
-                          ? "bg-emerald-50/50 hover:bg-emerald-50/80 font-semibold" 
-                          : "hover:bg-gray-50/80"
-                      )}
-                    >
-                      <td className="py-3.5 px-5 font-bold text-gray-900 whitespace-nowrap">
-                        {item.time}
-                      </td>
-                      <td className="py-3.5 px-5">
-                        <div className="font-bold text-gray-900 text-sm">{item.subject}</div>
-                        <span className="text-[10px] text-gray-400 font-medium">{item.type || "Wajib"}</span>
-                      </td>
-                      <td className="py-3.5 px-5 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-[#531FFF] rounded-md font-bold">
-                          <MapPin className="w-3 h-3 text-[#531FFF]" /> {item.room || "Ruang Kelas"}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-5 text-gray-600 font-semibold whitespace-nowrap">
-                        {item.teacher || "Guru Pengampu"}
-                      </td>
-                      <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                        {item.status === "Berlangsung" ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full font-extrabold shadow-xs">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                            Sedang Berlangsung
-                          </span>
-                        ) : item.status === "Selesai" ? (
-                          <span className="px-3 py-1 bg-gray-100 text-gray-500 rounded-full font-bold">
-                            Selesai
-                          </span>
-                        ) : (
-                          <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full font-bold">
-                            Selanjutnya
-                          </span>
-                        )}
+                  {childTimetable.dayList.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-xs text-gray-400">
+                        Tidak ada jadwal pelajaran aktif untuk hari ini ({childTimetable.targetDay}).
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    childTimetable.dayList.map((item, idx) => (
+                      <tr 
+                        key={idx}
+                        className={cn(
+                          "transition-colors",
+                          item.status === "Berlangsung" 
+                            ? "bg-emerald-50/50 hover:bg-emerald-50/80 font-semibold" 
+                            : "hover:bg-gray-50/80"
+                        )}
+                      >
+                        <td className="py-3.5 px-5 font-bold text-gray-900 whitespace-nowrap">
+                          {item.time}
+                        </td>
+                        <td className="py-3.5 px-5">
+                          <div className="font-bold text-gray-900 text-sm">{item.subject}</div>
+                          <span className="text-[10px] text-gray-400 font-medium">{item.type || "Wajib"}</span>
+                        </td>
+                        <td className="py-3.5 px-5 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-[#531FFF] rounded-md font-bold">
+                            <MapPin className="w-3 h-3 text-[#531FFF]" /> {item.room || "Ruang Kelas"}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-5 text-gray-600 font-semibold whitespace-nowrap">
+                          {item.teacher || "Guru Pengampu"}
+                        </td>
+                        <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                          {item.status === "Berlangsung" ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full font-extrabold shadow-xs">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                              Sedang Berlangsung
+                            </span>
+                          ) : item.status === "Selesai" ? (
+                            <span className="px-3 py-1 bg-gray-100 text-gray-500 rounded-full font-bold">
+                              Selesai
+                            </span>
+                          ) : (
+                            <span className="px-3 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full font-bold">
+                              Selanjutnya
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1107,7 +1105,7 @@ export function ParentDashboardView({
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                   Riwayat Evaluasi & Penilaian Terbaru
                 </h3>
-                <Link href="/admin/grades" className="text-xs font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
+                <Link href="/grades" className="text-xs font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
                   Lihat Buku Nilai <ChevronRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
@@ -1144,7 +1142,7 @@ export function ParentDashboardView({
                   Monitoring absensi semester ini · Total {childAttendance.total} hari efektif sekolah
                 </p>
               </div>
-              <Link href="/admin/attendance" className="text-xs font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
+              <Link href="/attendance" className="text-xs font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
                 Detail Presensi <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>
@@ -1244,7 +1242,7 @@ export function ParentDashboardView({
                   <p className="text-[11px] text-gray-400 font-medium">Status tagihan SPP sekolah</p>
                 </div>
               </div>
-              <Link href="/admin/payments" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
+              <Link href="/payments" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
                 Portal SPP <ChevronRight className="w-3 h-3" />
               </Link>
             </div>
@@ -1335,27 +1333,33 @@ export function ParentDashboardView({
                   <p className="text-[11px] text-gray-400 font-medium">PTS & PAS Kelas {childClass}</p>
                 </div>
               </div>
-              <Link href="/admin/exams" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
+              <Link href="/exams" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
                 Semua Ujian <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>
 
             <div className="space-y-2.5">
-              {childExams.list.map((ex, i) => (
-                <div key={ex.id || i} className="p-3 bg-purple-50/50 border border-purple-100 rounded-xl space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded text-[9px] font-black bg-[#531FFF] text-white tracking-wide uppercase">
-                      {ex.examType || "PTS"}
-                    </span>
-                    <span className="text-[11px] font-extrabold text-[#531FFF]">{ex.date}</span>
-                  </div>
-                  <h4 className="text-xs font-bold text-gray-900">{ex.subject}</h4>
-                  <div className="flex items-center justify-between text-[11px] text-gray-500 pt-0.5">
-                    <span>Waktu: {ex.startTime} - {ex.endTime}</span>
-                    <span className="font-semibold text-gray-700">{ex.room || "Ruang Ujian"}</span>
-                  </div>
+              {childExams.list.length === 0 ? (
+                <div className="py-6 text-center text-xs text-gray-400">
+                  Belum ada jadwal ujian yang terdaftar untuk kelas ini.
                 </div>
-              ))}
+              ) : (
+                childExams.list.map((ex, i) => (
+                  <div key={ex.id || i} className="p-3 bg-purple-50/50 border border-purple-100 rounded-xl space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded text-[9px] font-black bg-[#531FFF] text-white tracking-wide uppercase">
+                        {ex.examType || "PTS"}
+                      </span>
+                      <span className="text-[11px] font-extrabold text-[#531FFF]">{ex.date}</span>
+                    </div>
+                    <h4 className="text-xs font-bold text-gray-900">{ex.subject}</h4>
+                    <div className="flex items-center justify-between text-[11px] text-gray-500 pt-0.5">
+                      <span>Waktu: {ex.startTime} - {ex.endTime}</span>
+                      <span className="font-semibold text-gray-700">{ex.room || "Ruang Ujian"}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -1371,7 +1375,7 @@ export function ParentDashboardView({
                   <p className="text-[11px] text-gray-400 font-medium">Khusus Orang Tua / Wali Murid</p>
                 </div>
               </div>
-              <Link href="/admin/announcements" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
+              <Link href="/announcements" className="text-[11px] font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
                 Semua <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>

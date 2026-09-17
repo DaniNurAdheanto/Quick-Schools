@@ -34,64 +34,64 @@ import { auth, db } from "@/lib/firebase";
 import { DEFAULT_PERMISSIONS, isSuperAdminRole, isStudentRole, isParentRole } from "@/lib/roles-config";
 
 const NAV_MODULE_MAP: Record<string, string> = {
-  "/admin/dashboard": "dashboard",
-  "/admin/calendar": "academic",
-  "/admin/schedule": "academic",
-  "/admin/announcements": "announcements",
-  "/admin/data-siswa": "users",
-  "/admin/parents": "users",
-  "/admin/classes": "academic",
-  "/admin/teachers": "users",
-  "/admin/homeroom": "users",
-  "/admin/subjects": "academic",
-  "/admin/attendance": "attendance",
-  "/admin/teacher-attendance": "attendance",
-  "/admin/grades": "grades",
-  "/admin/report-cards": "grades",
-  "/admin/exams": "academic",
-  "/admin/academic-years": "settings",
-  "/admin/payments": "finance",
-  "/admin/financial-reports": "finance",
-  "/admin/accounts": "accounts",
-  "/admin/settings": "settings",
-  "/admin/roles": "settings",
+  "/dashboard": "dashboard",
+  "/calendar": "academic",
+  "/schedule": "academic",
+  "/announcements": "announcements",
+  "/data-siswa": "users",
+  "/parents": "users",
+  "/classes": "academic",
+  "/teachers": "users",
+  "/homeroom": "users",
+  "/subjects": "academic",
+  "/attendance": "attendance",
+  "/teacher-attendance": "attendance",
+  "/grades": "grades",
+  "/report-cards": "grades",
+  "/exams": "academic",
+  "/academic-years": "settings",
+  "/payments": "finance",
+  "/financial-reports": "finance",
+  "/accounts": "accounts",
+  "/settings": "settings",
+  "/roles": "settings",
 };
 
 const OVERVIEW_NAV = [
-  { href: "/admin/dashboard", label: "Dashboard", badge: 1, icon: LayoutDashboard },
-  { href: "/admin/calendar", label: "Kalender Akademik", badge: 10, icon: CalendarDays },
-  { href: "/admin/schedule", label: "Jadwal Pelajaran", badge: 8, icon: BookOpen },
-  { href: "/admin/announcements", label: "Pengumuman", badge: 8, icon: Megaphone },
+  { href: "/dashboard", label: "Dashboard", badge: 1, icon: LayoutDashboard },
+  { href: "/calendar", label: "Kalender Akademik", badge: 10, icon: CalendarDays },
+  { href: "/schedule", label: "Jadwal Pelajaran", badge: 8, icon: BookOpen },
+  { href: "/announcements", label: "Pengumuman", badge: 8, icon: Megaphone },
 ];
 
 const MASTER_DATA_NAV = [
-  { href: "/admin/data-siswa", label: "Data Siswa", icon: User },
-  { href: "/admin/parents", label: "Data Orang Tua", icon: Users },
-  { href: "/admin/classes", label: "Kelas", icon: Users },
-  { href: "/admin/teachers", label: "Staff Guru", icon: GraduationCap },
-  { href: "/admin/homeroom", label: "Wali Kelas", icon: GraduationCap },
-  { href: "/admin/subjects", label: "Mata Pelajaran", badge: 8, icon: BookOpen },
+  { href: "/data-siswa", label: "Data Siswa", icon: User },
+  { href: "/parents", label: "Data Orang Tua", icon: Users },
+  { href: "/classes", label: "Kelas", icon: Users },
+  { href: "/teachers", label: "Staff Guru", icon: GraduationCap },
+  { href: "/homeroom", label: "Wali Kelas", icon: GraduationCap },
+  { href: "/subjects", label: "Mata Pelajaran", badge: 8, icon: BookOpen },
 ];
 
 const AKADEMIK_NAV = [
-  { href: "/admin/attendance", label: "Absensi Siswa", badge: 12, icon: FileCheck },
-  { href: "/admin/teacher-attendance", label: "Absensi Guru", icon: UserCheck },
-  { href: "/admin/grades", label: "Penilaian", icon: PenLine },
-  { href: "/admin/report-cards", label: "Rapor Digital", icon: Award },
-  { href: "/admin/exams", label: "Jadwal Ujian", icon: CalendarRange },
-  { href: "/admin/academic-years", label: "Tahun Ajaran & Kenaikan", icon: CalendarDays },
+  { href: "/attendance", label: "Absensi Siswa", badge: 12, icon: FileCheck },
+  { href: "/teacher-attendance", label: "Absensi Guru", icon: UserCheck },
+  { href: "/grades", label: "Penilaian", icon: PenLine },
+  { href: "/report-cards", label: "Rapor Digital", icon: Award },
+  { href: "/exams", label: "Jadwal Ujian", icon: CalendarRange },
+  { href: "/academic-years", label: "Tahun Ajaran & Kenaikan", icon: CalendarDays },
 ];
 
 const KEUANGAN_NAV = [
-  { href: "/admin/payments", label: "Pembayaran SPP", icon: CreditCard },
-  { href: "/admin/financial-reports", label: "Laporan Keuangan", icon: FileText },
+  { href: "/payments", label: "Pembayaran SPP", icon: CreditCard },
+  { href: "/financial-reports", label: "Laporan Keuangan", icon: FileText },
 ];
 
 const SYSTEM_NAV = [
-  { href: "/admin/profile", label: "Profile", icon: User },
-  { href: "/admin/accounts", label: "Manajemen Akun System", icon: UserCheck },
-  { href: "/admin/settings", label: "Pengaturan Sekolah", icon: Settings },
-  { href: "/admin/roles", label: "Role & Permission", icon: UserCog },
+  { href: "/profile", label: "Profile", icon: User },
+  { href: "/accounts", label: "Manajemen Akun System", icon: UserCheck },
+  { href: "/settings", label: "Pengaturan Sekolah", icon: Settings },
+  { href: "/roles", label: "Role & Permission", icon: UserCog },
   { href: "/", label: "Keluar", icon: LogOut, isDanger: true },
 ];
 
@@ -123,35 +123,35 @@ function NavGroup({
 
   // Filter items based on permissions
   const visibleItems = items.filter(item => {
-    if (item.isDanger || item.href === "/" || item.href === "/admin/profile") return true;
+    if (item.isDanger || item.href === "/" || item.href === "/profile") return true;
 
     // Strict rule: Manajemen Akun System is exclusively visible & accessible to Super Admin / Admin
-    if (item.href === "/admin/accounts" || NAV_MODULE_MAP[item.href] === "accounts") {
+    if (item.href === "/accounts" || NAV_MODULE_MAP[item.href] === "accounts") {
       return isSuperAdmin;
     }
 
     // Strict rule: Laporan Keuangan is exclusively for Super Admin / Admin
-    if (item.href === "/admin/financial-reports") {
+    if (item.href === "/financial-reports") {
       return isSuperAdmin;
     }
 
     // Strict rule: Pengaturan Sekolah & Role & Permission are exclusively for Super Admin / Admin
-    if (item.href === "/admin/settings" || item.href === "/admin/roles") {
+    if (item.href === "/settings" || item.href === "/roles") {
       if (isParent || isStudent) return false;
     }
 
     // Strict rule: Tahun Ajaran & Kenaikan is for school staff only
-    if (item.href === "/admin/academic-years") {
+    if (item.href === "/academic-years") {
       if (isParent || isStudent) return false;
     }
 
     // Pembayaran SPP is accessible to Admin, Guru (Wali Kelas), Siswa, and Orang Tua
-    if (item.href === "/admin/payments") {
+    if (item.href === "/payments") {
       return true;
     }
 
     // Strict rule: Absensi Guru is strictly for Guru, Admin, Kepala Sekolah, Super Admin (HIDDEN from Siswa and Orang Tua)
-    if (item.href === "/admin/teacher-attendance") {
+    if (item.href === "/teacher-attendance") {
       if (isStudent || isParent) {
         return false;
       }
@@ -183,7 +183,7 @@ function NavGroup({
 
       <div className={cn("space-y-1", isCollapsed && "space-y-1.5 px-2")}>
         {visibleItems.map((item) => {
-          const isActive = currentPath === item.href || (item.href === '/admin/data-siswa' && currentPath.includes('/admin/data-siswa'));
+          const isActive = currentPath === item.href || (item.href === '/data-siswa' && currentPath.includes('/data-siswa'));
           const Icon = item.icon;
 
           if (isCollapsed) {
