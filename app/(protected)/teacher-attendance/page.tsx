@@ -740,6 +740,13 @@ export default function TeacherAttendancePage() {
   // Perform Clock In
   const handleExecuteClockIn = async () => {
     if (!currentTeacherInfo) return;
+
+    // Prevent duplicate clock-in: if today's record already exists, block
+    if (activeTodayRecord?.clockIn) {
+      showError("Anda sudah melakukan Clock In hari ini. Clock In hanya dapat dilakukan satu kali per hari.");
+      return;
+    }
+
     const targetTeacherId = currentTeacherInfo.uid || currentTeacherInfo.id || authUser?.uid || currentUser?.uid;
     if (!targetTeacherId) {
       showError("Data identitas akun guru tidak ditemukan. Silakan login kembali.");

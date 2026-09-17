@@ -137,7 +137,25 @@ service cloud.firestore {
     }
     match /attendance/{attendanceId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      // Only allow creating new records (not overwriting existing ones) — enforces one attendance per day
+      allow create: if isSignedIn();
+      // Updates only allowed if the record belongs to the same user or by admin
+      allow update: if isSignedIn() && (
+        resource.data.studentId == request.auth.uid ||
+        (resource.data.studentEmail != null && resource.data.studentEmail == request.auth.token.email)
+      );
+      allow delete: if isSignedIn();
+    }
+    match /teacher_attendance/{recordId} {
+      allow read: if isSignedIn();
+      // Only allow creating new records — prevents overwriting existing clock-in data
+      allow create: if isSignedIn();
+      // Updates allowed for clock-out (same teacher) or by admin
+      allow update: if isSignedIn() && (
+        resource.data.teacherId == request.auth.uid ||
+        (resource.data.email != null && resource.data.email == request.auth.token.email)
+      );
+      allow delete: if isSignedIn();
     }
     match /attendance_config/{configId} {
       allow read: if isSignedIn();

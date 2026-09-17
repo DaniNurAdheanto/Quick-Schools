@@ -255,14 +255,21 @@ export default function StudentPersonalAttendanceView({
             )}
 
             {!readOnly ? (
-              <button
-                type="button"
-                onClick={onOpenScanModal}
-                className="inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-gradient-to-r from-[#531FFF] to-[#7E42EA] hover:from-[#4516db] hover:to-[#6f33db] text-white font-extrabold text-xs sm:text-sm rounded-lg shadow-lg shadow-[#531FFF]/40 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              >
-                <Camera className="w-4 h-4" />
-                <span>{todayAttendance ? "Presensi Ulang" : "Ambil Presensi Sekarang"}</span>
-              </button>
+              todayAttendance ? (
+                <div className="inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-emerald-500/20 backdrop-blur-md border border-emerald-400/30 text-emerald-300 font-extrabold text-xs sm:text-sm rounded-lg cursor-not-allowed opacity-90">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Presensi Hari Ini Selesai ✓</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onOpenScanModal}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-3.5 bg-gradient-to-r from-[#531FFF] to-[#7E42EA] hover:from-[#4516db] hover:to-[#6f33db] text-white font-extrabold text-xs sm:text-sm rounded-lg shadow-lg shadow-[#531FFF]/40 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span>Ambil Presensi Sekarang</span>
+                </button>
+              )
             ) : (
               <div className="inline-flex items-center justify-center gap-2 px-4 py-3.5 bg-white/10 backdrop-blur-md border border-white/20 text-white font-bold text-xs rounded-lg">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />

@@ -25,8 +25,7 @@ import {
   GraduationCap,
   ListTodo,
   ScanFace,
-  LogIn,
-  LogOut
+  LogIn
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -657,9 +656,9 @@ export function TeacherDashboardView({
                   Presensi Guru Hari Ini
                 </span>
                 {todayTeacherRecord?.clockIn ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-400 text-emerald-950 uppercase flex items-center gap-1 shadow-xs">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-400 text-emerald-950 uppercase flex items-center gap-1 shadow-xs select-none">
                     <CheckCircle2 className="w-3 h-3" />
-                    {todayTeacherRecord.clockIn.status || "Hadir"}
+                    Sudah Absen Hari Ini
                   </span>
                 ) : (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-amber-950 uppercase flex items-center gap-1 shadow-xs animate-pulse">
@@ -690,27 +689,20 @@ export function TeacherDashboardView({
                 </div>
               </div>
 
-              <Link
-                href="/teacher-attendance"
-                className="w-full py-2 px-3 rounded-lg text-xs font-black text-center transition-all flex items-center justify-center gap-1.5 shadow-md active:scale-95 cursor-pointer bg-white text-[#531FFF] hover:bg-white/95"
-              >
-                {!todayTeacherRecord?.clockIn ? (
-                  <>
-                    <LogIn className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Absen Masuk Sekarang</span>
-                  </>
-                ) : !todayTeacherRecord?.clockOut ? (
-                  <>
-                    <LogOut className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Absen Pulang Sekarang</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Presensi Lengkap • Buka Riwayat</span>
-                  </>
-                )}
-              </Link>
+              {todayTeacherRecord?.clockIn ? (
+                <div className="w-full py-2 px-3 rounded-lg text-xs font-black text-center flex items-center justify-center gap-1.5 bg-emerald-500/25 border border-emerald-300/40 text-emerald-100 cursor-not-allowed select-none shadow-xs">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Sudah Absen Hari Ini</span>
+                </div>
+              ) : (
+                <Link
+                  href="/teacher-attendance"
+                  className="w-full py-2 px-3 rounded-lg text-xs font-black text-center transition-all flex items-center justify-center gap-1.5 shadow-md active:scale-95 cursor-pointer bg-white text-[#531FFF] hover:bg-white/95"
+                >
+                  <LogIn className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Absen Masuk Sekarang</span>
+                </Link>
+              )}
             </div>
 
             {/* 2. Status Mengajar */}
@@ -1197,38 +1189,59 @@ export function TeacherDashboardView({
 
             <div className="grid grid-cols-1 gap-2.5">
               {/* Presensi Guru Mandiri Quick Action */}
-              <Link
-                href="/teacher-attendance"
-                className="p-3 rounded-lg bg-emerald-50/70 hover:bg-emerald-100/70 border border-emerald-200 transition-all flex items-center justify-between group cursor-pointer shadow-2xs"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-600 to-teal-600 text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
-                    <ScanFace className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <h4 className="text-xs font-bold text-gray-900 group-hover:text-emerald-700 transition-colors">
-                        Absensi Guru (Presensi Mandiri)
-                      </h4>
-                      {todayTeacherRecord?.clockIn ? (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-emerald-200 text-emerald-900">
-                          {todayTeacherRecord.clockIn.time?.slice(0, 5)}
+              {todayTeacherRecord?.clockIn ? (
+                <div
+                  className="p-3 rounded-lg bg-emerald-50/50 border border-emerald-200/80 transition-all flex items-center justify-between cursor-not-allowed select-none shadow-2xs"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-sm">
+                      <CheckCircle2 className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-xs font-bold text-gray-900">
+                          Absensi Guru (Presensi Mandiri)
+                        </h4>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-200 text-emerald-900 flex items-center gap-1">
+                          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-800" />
+                          Sudah Absen Hari Ini
                         </span>
-                      ) : (
+                      </div>
+                      <p className="text-[10px] text-gray-500">
+                        Masuk pukul {todayTeacherRecord.clockIn.time?.slice(0, 5)} WIB • Presensi harian tercatat
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
+                    Selesai ✓
+                  </span>
+                </div>
+              ) : (
+                <Link
+                  href="/teacher-attendance"
+                  className="p-3 rounded-lg bg-emerald-50/70 hover:bg-emerald-100/70 border border-emerald-200 transition-all flex items-center justify-between group cursor-pointer shadow-2xs"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-600 to-teal-600 text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                      <ScanFace className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-xs font-bold text-gray-900 group-hover:text-emerald-700 transition-colors">
+                          Absensi Guru (Presensi Mandiri)
+                        </h4>
                         <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-amber-200 text-amber-900 animate-pulse">
                           Belum Hadir
                         </span>
-                      )}
+                      </div>
+                      <p className="text-[10px] text-gray-500">
+                        Presensi masuk/pulang harian dengan selfie & GPS
+                      </p>
                     </div>
-                    <p className="text-[10px] text-gray-500">
-                      {todayTeacherRecord?.clockIn 
-                        ? (todayTeacherRecord.clockOut ? `Selesai (${todayTeacherRecord.workDurationFormatted || "8j"})` : "Masuk tercatat • Klik untuk absen pulang")
-                        : "Presensi masuk/pulang harian dengan selfie & GPS"}
-                    </p>
                   </div>
-                </div>
-                <ChevronRight className="w-4 h-4 text-emerald-600 group-hover:translate-x-0.5 transition-transform" />
-              </Link>
+                  <ChevronRight className="w-4 h-4 text-emerald-600 group-hover:translate-x-0.5 transition-transform" />
+                </Link>
+              )}
 
               <Link
                 href="/grades"
@@ -1471,6 +1484,8 @@ export function TeacherDashboardView({
         onClose={() => setShowAttendanceModal(false)}
         userName={teacherProfile.name}
         studentClass={attendanceModalClass || resolvedHomeroomClass || "10 MIPA 1"}
+        studentId={teacherProfile.nip || "GURU"}
+        alreadyAttendedToday={Boolean(todayTeacherRecord?.clockIn)}
       />
     </div>
   );

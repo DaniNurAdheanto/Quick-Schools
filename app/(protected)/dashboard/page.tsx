@@ -34,14 +34,15 @@ import {
   PieChart,
   Pie
 } from 'recharts';
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, collection, onSnapshot, query, where } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 
 
 import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal";
+import { useToast } from "@/context/ToastContext";
 import { TeacherDashboardView } from "@/components/dashboard/teacher-dashboard-view";
 import { AdminDashboardView } from "@/components/dashboard/admin-dashboard-view";
 import { ParentDashboardView } from "@/components/dashboard/parent-dashboard-view";
@@ -63,13 +64,47 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
   const [studentNisn, setStudentNisn] = useState<string>("202300124");
   const [homeroomTeacher, setHomeroomTeacher] = useState<string>("");
 
-  // Firestore Realtime Collections
-  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+  const { showError } = useToast();
+
+  // Firestore Realtime Collections with instant LocalStorage hydration
+  const [attendanceRecords, setAttendanceRecords] = useState<any[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("quick_schools_attendance_records");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {}
+    }
+    return [];
+  });
   const [gradesRecords, setGradesRecords] = useState<any[]>([]);
   const [schedulesList, setSchedulesList] = useState<any[]>([]);
   const [examSchedulesList, setExamSchedulesList] = useState<any[]>([]);
   const [announcementsList, setAnnouncementsList] = useState<any[]>([]);
   const [classesList, setClassesList] = useState<any[]>([]);
+
+  // Synchronize attendance from local storage
+  const syncAttendanceFromStorage = useCallback(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = localStorage.getItem("quick_schools_attendance_records");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAttendanceRecords(prev => {
+            const map = new Map<string, any>();
+            parsed.forEach(r => { if (r?.id) map.set(r.id, r); });
+            prev.forEach(r => { if (r?.id && !map.has(r.id)) map.set(r.id, r); });
+            return Array.from(map.values());
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("syncAttendanceFromStorage error:", e);
+    }
+  }, []);
 
   // Time tracker for live class status
   const [nowTimeStr, setNowTimeStr] = useState<string>(() => {
@@ -131,12 +166,42 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
     return () => unsubAuth();
   }, []);
 
-  // 2. Realtime Subscriptions
+  // 2. Realtime Subscriptions (attendance, roles, grades, schedules, exams, announcements, classes)
   useEffect(() => {
-    // Attendance
+    // 2a. Attendance collection
     const unsubAttendance = onSnapshot(collection(db, "attendance"), (snap) => {
-      setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const liveList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setAttendanceRecords(prev => {
+        const map = new Map<string, any>();
+        prev.forEach(r => { if (r?.id) map.set(r.id, r); });
+        liveList.forEach(r => { if (r?.id) map.set(r.id, r); });
+        return Array.from(map.values());
+      });
     }, (err) => console.warn("Attendance listener warning:", err));
+
+    // 2b. Roles collection attendance records (used when cloud rules restrict direct writes to attendance)
+    const unsubRolesAttendance = onSnapshot(
+      query(collection(db, "roles"), where("type", "==", "attendance_record")),
+      (snap) => {
+        const liveList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setAttendanceRecords(prev => {
+          const map = new Map<string, any>();
+          prev.forEach(r => { if (r?.id) map.set(r.id, r); });
+          liveList.forEach(r => { if (r?.id) map.set(r.id, r); });
+          return Array.from(map.values());
+        });
+      },
+      (err) => console.warn("Roles attendance listener warning:", err)
+    );
+
+    // 2c. Storage & custom event listener for multi-tab / instant modal sync
+    const handleStorageChange = () => {
+      syncAttendanceFromStorage();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", handleStorageChange);
+      window.addEventListener("attendance_updated", handleStorageChange);
+    }
 
     // Grades
     const unsubGrades = onSnapshot(collection(db, "grades"), (snap) => {
@@ -165,13 +230,18 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
 
     return () => {
       unsubAttendance();
+      unsubRolesAttendance();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("storage", handleStorageChange);
+        window.removeEventListener("attendance_updated", handleStorageChange);
+      }
       unsubGrades();
       unsubSchedules();
       unsubExams();
       unsubAnnouncements();
       unsubClasses();
     };
-  }, []);
+  }, [syncAttendanceFromStorage]);
 
   // Helper to match class names flexibly (e.g. "10 MIPA 1" vs "10-MIPA-1")
   const matchClass = (examClass: string, targetClass: string): boolean => {
@@ -191,30 +261,64 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
     }
   }, [homeroomTeacher, studentClass, classesList]);
 
-  // 3. Computed Attendance Stats & Today's Checkin Status
+  // 3. Computed Attendance Stats & Today's Checkin Status (with multi-source localStorage & Firestore fusion)
   const attendanceComputed = useMemo(() => {
     const uid = currentUser?.uid;
     const nameLower = (userName || "").toLowerCase().trim();
     const nisn = studentNisn;
+    const userEmail = (currentUser?.email || "").toLowerCase().trim();
 
-    // Filter student records
-    const myRecords = attendanceRecords.filter(r => {
-      if (uid && (r.studentId === uid || r.uid === uid)) return true;
-      if (nisn && (r.studentId === nisn || r.nisn === nisn)) return true;
-      if (studentDoc?.id && r.studentId === studentDoc.id) return true;
-      if (r.studentName && r.studentName.toLowerCase().trim() === nameLower) return true;
+    // Read localStorage directly for zero-latency detection
+    const localRecords = (() => {
+      if (typeof window === "undefined") return [];
+      try {
+        const stored = localStorage.getItem("quick_schools_attendance_records");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {}
+      return [];
+    })();
+
+    // Merge in-memory and local storage records with deduplication
+    const mergedMap = new Map<string, any>();
+    [...attendanceRecords, ...localRecords].forEach((rec) => {
+      if (!rec) return;
+      const key = rec.id || `${rec.studentId || ""}_${rec.date || ""}_${rec.timestamp || ""}`;
+      if (!mergedMap.has(key)) {
+        mergedMap.set(key, rec);
+      }
+    });
+    const allRecords = Array.from(mergedMap.values());
+
+    // Filter student records by ID, NISN, UID, Email, or Name
+    const myRecords = allRecords.filter((r) => {
+      if (uid && (r.studentId === uid || r.uid === uid || r.id?.includes(uid))) return true;
+      if (nisn && (r.studentId === nisn || r.nisn === nisn || r.id?.includes(nisn))) return true;
+      if (studentDoc?.id && (r.studentId === studentDoc.id || r.id?.includes(studentDoc.id))) return true;
+      if (userEmail && r.studentEmail && r.studentEmail.toLowerCase().trim() === userEmail) return true;
+      if (nameLower && r.studentName && r.studentName.toLowerCase().trim() === nameLower) return true;
       return false;
     });
 
-    const todayStr = new Date().toISOString().split("T")[0];
-    const todayRecord = myRecords.find(r => r.date === todayStr);
+    const todayIso = new Date().toISOString().split("T")[0];
+    const todayLocal = new Date().toLocaleDateString("sv-SE");
+
+    // Find if student already checked in today (matching ISO, local date, or doc ID format)
+    const todayRecord = myRecords.find((r) => {
+      if (r.date === todayIso || r.date === todayLocal) return true;
+      if (r.id?.includes(todayIso) || r.id?.includes(todayLocal)) return true;
+      if (r.createdAt && (r.createdAt.startsWith(todayIso) || r.createdAt.startsWith(todayLocal))) return true;
+      return false;
+    });
 
     const total = myRecords.length;
-    const hadir = myRecords.filter(r => r.status === "Hadir").length;
-    const terlambat = myRecords.filter(r => r.status === "Terlambat").length;
-    const sakit = myRecords.filter(r => r.status === "Sakit").length;
-    const izin = myRecords.filter(r => r.status === "Izin").length;
-    const alpa = myRecords.filter(r => r.status === "Alpa").length;
+    const hadir = myRecords.filter((r) => r.status === "Hadir").length;
+    const terlambat = myRecords.filter((r) => r.status === "Terlambat").length;
+    const sakit = myRecords.filter((r) => r.status === "Sakit").length;
+    const izin = myRecords.filter((r) => r.status === "Izin").length;
+    const alpa = myRecords.filter((r) => r.status === "Alpa").length;
 
     let percentage = "98.5";
     if (total > 0) {
@@ -227,7 +331,7 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
       { name: "Izin", value: total > 0 ? izin : 1, color: "#F59E0B", count: `${total > 0 ? izin : 1} Hari` },
       { name: "Sakit", value: total > 0 ? sakit : 1, color: "#3B82F6", count: `${total > 0 ? sakit : 1} Hari` },
       { name: "Alfa", value: total > 0 ? alpa : 0, color: "#EF4444", count: `${total > 0 ? alpa : 0} Hari` },
-    ].filter(item => item.value > 0);
+    ].filter((item) => item.value > 0);
 
     return {
       myRecords,
@@ -240,9 +344,21 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
       alpa: total > 0 ? alpa : 0,
       percentage,
       pieData,
-      isLive: total > 0
+      isLive: total > 0,
     };
   }, [attendanceRecords, currentUser, userName, studentNisn, studentDoc]);
+
+  // Handler to open attendance modal with strict daily single-check guard
+  const handleOpenAttendanceModal = useCallback(() => {
+    if (attendanceComputed.todayRecord) {
+      showError(
+        "Anda sudah melakukan presensi hari ini. Presensi hanya dapat dilakukan 1 kali per hari.",
+        "Sudah Absen Hari Ini"
+      );
+      return;
+    }
+    setShowAttendanceModal(true);
+  }, [attendanceComputed.todayRecord, showError]);
 
   // 4. Computed Academic Grades & Chart
   const gradesComputed = useMemo(() => {
@@ -525,10 +641,23 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
       {/* Quick Attendance Modal with Real Student Class & ID */}
       <QuickAttendanceModal 
         isOpen={showAttendanceModal}
-        onClose={() => setShowAttendanceModal(false)}
+        onClose={() => {
+          setShowAttendanceModal(false);
+          syncAttendanceFromStorage();
+        }}
         userName={userName}
         studentClass={studentClass}
-        studentId={studentNisn}
+        studentId={studentNisn || currentUser?.uid || "NISN-2023001"}
+        alreadyAttendedToday={Boolean(attendanceComputed.todayRecord)}
+        onAttendanceSuccess={(newRec) => {
+          setAttendanceRecords((prev) => {
+            const filtered = prev.filter((r) => r.id !== newRec.id);
+            return [newRec, ...filtered];
+          });
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("attendance_updated"));
+          }
+        }}
       />
 
       {/* Hero Welcome Banner */}
@@ -565,20 +694,27 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
 
           {/* Action Button & Quick Profile Chips */}
           <div className="flex flex-wrap items-center gap-3 pt-1">
-            {/* Realtime Attendance Status Chip or Action */}
+            {/* Realtime Attendance Status Button (Disabled Once Attended) */}
             {attendanceComputed.todayRecord ? (
-              <div className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-500/25 border border-emerald-300/40 text-emerald-100 rounded-lg text-xs font-extrabold backdrop-blur-md shadow-sm">
+              <button
+                type="button"
+                disabled={true}
+                aria-disabled="true"
+                title="Anda sudah melakukan presensi hari ini. Tombol dinonaktifkan untuk mencegah duplikasi absensi."
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-500/25 border border-emerald-300/50 text-emerald-100 rounded-lg text-xs md:text-sm font-extrabold backdrop-blur-md shadow-inner cursor-not-allowed select-none opacity-90 transition-all ring-1 ring-emerald-400/30"
+              >
                 <CheckCircle className="w-4 h-4 text-emerald-300 shrink-0" />
-                <span>Sudah Presensi Hari Ini ({attendanceComputed.todayRecord.timestamp || "07:15 WIB"})</span>
+                <span>Sudah Absen Hari Ini ({attendanceComputed.todayRecord.timestamp?.slice(0, 5) || "07:15"} WIB)</span>
                 {attendanceComputed.todayRecord.faceVerified && (
                   <span className="px-2 py-0.5 rounded-full bg-emerald-400/20 text-[10px] text-emerald-200 font-bold border border-emerald-300/30">
                     Wajah Terverifikasi
                   </span>
                 )}
-              </div>
+              </button>
             ) : (
               <button
-                onClick={() => setShowAttendanceModal(true)}
+                type="button"
+                onClick={handleOpenAttendanceModal}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white rounded-lg font-extrabold text-xs md:text-sm shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer border border-white/20"
               >
                 <ScanFace className="w-4 h-4 animate-pulse" />
@@ -647,8 +783,13 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
 
         {/* KPI 2: Kehadiran Presensi */}
         <div 
-          onClick={() => setShowAttendanceModal(true)}
-          className="bg-white p-5 rounded-lg border border-gray-100 shadow-xs hover:shadow-md transition-all group cursor-pointer hover:border-emerald-200"
+          onClick={handleOpenAttendanceModal}
+          className={cn(
+            "bg-white p-5 rounded-lg border border-gray-100 shadow-xs transition-all group",
+            attendanceComputed.todayRecord
+              ? "cursor-default border-emerald-200/80 bg-emerald-50/10"
+              : "cursor-pointer hover:shadow-md hover:border-emerald-200"
+          )}
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Tingkat Presensi</span>
@@ -660,9 +801,16 @@ function StudentDashboardView({ userName, greeting, academicYear, currentDate, c
             <div className="text-2xl font-black text-gray-900 tracking-tight">
               {attendanceComputed.percentage}%
             </div>
-            <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-              + Presensi
-            </span>
+            {attendanceComputed.todayRecord ? (
+              <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100/90 px-2.5 py-1 rounded-md border border-emerald-200/80 flex items-center gap-1 select-none">
+                <CheckCircle className="w-3 h-3 text-emerald-600" />
+                Sudah Absen Hari Ini
+              </span>
+            ) : (
+              <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                + Presensi
+              </span>
+            )}
           </div>
           <div className="text-xs text-gray-500 font-medium">
             {attendanceComputed.hadir} Hadir · {attendanceComputed.izin} Izin · {attendanceComputed.sakit} Sakit · {attendanceComputed.alpa} Alfa

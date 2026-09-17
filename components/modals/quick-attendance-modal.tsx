@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { auth, db } from "@/lib/firebase";
-import { doc, setDoc, onSnapshot } from "firebase/firestore";
+import { doc, setDoc, getDoc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/context/ToastContext";
 import { calculateDistanceMeters, formatDistance } from "@/lib/geofence-utils";
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
@@ -45,12 +45,16 @@ export function QuickAttendanceModal({
   userName,
   studentClass = "10 IPA 1",
   studentId = "NISN-2023001",
+  alreadyAttendedToday = false,
+  onAttendanceSuccess,
 }: {
   isOpen: boolean;
   onClose: () => void;
   userName: string;
   studentClass?: string;
   studentId?: string;
+  alreadyAttendedToday?: boolean;
+  onAttendanceSuccess?: (record: any) => void;
 }) {
   const toastCtx = useToast();
   const showSuccess = toastCtx?.showSuccess;
@@ -315,10 +319,17 @@ export function QuickAttendanceModal({
     capturedPhoto &&
     !gpsLoading &&
     locationData.inRadius &&
-    !isSubmitting
+    !isSubmitting &&
+    !alreadyAttendedToday
   );
 
   const handleSubmitAttendance = async () => {
+    // Block if already attended today
+    if (alreadyAttendedToday) {
+      if (showError) showError("Anda sudah melakukan presensi hari ini. Presensi hanya dapat dilakukan satu kali per hari.", "Sudah Presensi");
+      return;
+    }
+
     // Strict enforcement
     if (!capturedPhoto) {
       if (showError) showError("Silakan ambil foto wajah melalui kamera terlebih dahulu.", "Foto Diperlukan");
@@ -352,7 +363,8 @@ export function QuickAttendanceModal({
     const isLate = currentTotalMinutes > startTotalMinutes;
 
     const user = auth.currentUser;
-    const recordDocId = `att_rec_${studentId}_${dateStr}_${Date.now()}`;
+    // Deterministic doc ID: one per student per day — prevents duplicates at database level
+    const recordDocId = `att_${studentId}_${dateStr}`;
     const recordPayload = {
       id: recordDocId,
       type: "attendance_record",
@@ -381,6 +393,28 @@ export function QuickAttendanceModal({
     };
 
     try {
+      // 0. Server-side duplicate check: verify no existing record for this student+date
+      try {
+        const existingDoc = await getDoc(doc(db, "attendance", recordDocId));
+        if (existingDoc.exists()) {
+          if (showError) showError("Data presensi untuk hari ini sudah tercatat di database. Presensi hanya dapat dilakukan satu kali per hari.", "Duplikasi Dicegah");
+          setStep("input");
+          setIsSubmitting(false);
+          return;
+        }
+      } catch (checkErr) {
+        // Also check 'roles' collection as fallback
+        try {
+          const existingRole = await getDoc(doc(db, "roles", recordDocId));
+          if (existingRole.exists()) {
+            if (showError) showError("Data presensi untuk hari ini sudah tercatat di database. Presensi hanya dapat dilakukan satu kali per hari.", "Duplikasi Dicegah");
+            setStep("input");
+            setIsSubmitting(false);
+            return;
+          }
+        } catch (e) {}
+      }
+
       // 1. Primary write to Firestore allowed collection: 'roles'
       await setDoc(doc(db, "roles", recordDocId), recordPayload);
 
@@ -388,8 +422,10 @@ export function QuickAttendanceModal({
       try {
         const stored = localStorage.getItem("quick_schools_attendance_records");
         const list = stored ? JSON.parse(stored) : [];
-        list.unshift(recordPayload);
-        localStorage.setItem("quick_schools_attendance_records", JSON.stringify(list.slice(0, 100)));
+        // Remove any existing record for same student+date before adding
+        const filtered = list.filter((r: any) => r.id !== recordDocId);
+        filtered.unshift(recordPayload);
+        localStorage.setItem("quick_schools_attendance_records", JSON.stringify(filtered.slice(0, 100)));
       } catch (e) {}
 
       // 3. Try saving to 'attendance' collection (silent if cloud rules deny)
@@ -405,6 +441,7 @@ export function QuickAttendanceModal({
           "Presensi Terverifikasi"
         );
       }
+      onAttendanceSuccess?.(recordPayload);
       setStep("success");
     } catch (err: any) {
       console.warn("Primary firestore write error, attempting local fallback:", err);
@@ -420,6 +457,7 @@ export function QuickAttendanceModal({
             "Presensi Tersimpan"
           );
         }
+        onAttendanceSuccess?.(recordPayload);
         setStep("success");
       } catch (fallbackErr: any) {
         if (showError) showError("Gagal menyimpan data absensi: " + err.message, "Gagal");
@@ -470,7 +508,19 @@ export function QuickAttendanceModal({
 
         {/* View Switcher Tabs (Camera vs Interactive Map) */}
         {step === "input" && (
-          <div className="px-6 pt-3 bg-gray-50/70 border-b border-gray-200/80 flex items-center justify-between gap-2 shrink-0">
+          <>
+            {alreadyAttendedToday && (
+              <div className="mx-6 mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2.5 text-emerald-900">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                <div className="text-xs">
+                  <span className="font-extrabold block text-emerald-950">Sudah Absen Hari Ini</span>
+                  <span className="text-[11px] text-emerald-800 font-medium">
+                    Anda telah melakukan presensi hari ini. Tombol absensi dinonaktifkan untuk mencegah duplikasi data.
+                  </span>
+                </div>
+              </div>
+            )}
+            <div className="px-6 pt-3 bg-gray-50/70 border-b border-gray-200/80 flex items-center justify-between gap-2 shrink-0">
             <div className="flex gap-2">
               <button
                 type="button"
@@ -512,7 +562,8 @@ export function QuickAttendanceModal({
               <span>Refresh GPS</span>
             </button>
           </div>
-        )}
+        </>
+      )}
 
         {/* Modal Body Container */}
         <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
@@ -810,6 +861,11 @@ export function QuickAttendanceModal({
                     <>
                       <RefreshCw className="w-5 h-5 animate-spin" />
                       <span>Memverifikasi & Menyimpan Absensi...</span>
+                    </>
+                  ) : alreadyAttendedToday ? (
+                    <>
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      <span>Sudah Absen Hari Ini (Presensi Nonaktif)</span>
                     </>
                   ) : !capturedPhoto ? (
                     <>

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   setDoc,
   deleteDoc,
@@ -394,6 +395,29 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
     location?: ClockEventDetail["location"];
     notes?: string;
   }) => {
+    const docId = `TA_${teacherId}_${todayDate}`;
+
+    // 1. In-memory check: prevent duplicate clock-in for this teacher today
+    const existing = records.find(
+      (r) =>
+        r.date === todayDate &&
+        (r.teacherId === teacherId || r.id === docId || (r as any).uid === teacherId)
+    );
+    if (existing?.clockIn) {
+      throw new Error("Anda sudah melakukan Clock In hari ini. Presensi guru hanya dapat dilakukan satu kali per hari.");
+    }
+
+    // 2. Server check: verify no record already exists in Firestore
+    try {
+      const serverDoc = await getDoc(doc(db, "teacher_attendance", docId));
+      if (serverDoc.exists() && serverDoc.data()?.clockIn) {
+        throw new Error("Data presensi guru hari ini sudah tersimpan di sistem. Presensi hanya dapat dilakukan satu kali per hari.");
+      }
+    } catch (err: any) {
+      if (err.message?.includes("sudah tersimpan") || err.message?.includes("Clock In")) {
+        throw err;
+      }
+    }
     const timeNow = getCurrentTimeString();
     const isoNow = new Date().toISOString();
     const { status: inStatus, lateMinutes } = determineClockInStatus(
@@ -420,7 +444,6 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
     const overallStatus: TeacherAttendanceStatus =
       inStatus === "Terlambat" ? "Terlambat" : "Hadir";
 
-    const docId = `TA_${teacherId}_${todayDate}`;
     const newRecord: TeacherAttendanceRecord = {
       id: docId,
       teacherId,

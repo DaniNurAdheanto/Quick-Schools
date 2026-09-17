@@ -1090,6 +1090,20 @@ export default function AttendancePage() {
         userName={studentInfo?.name || currentUser?.displayName || "Siswa"}
         studentClass={studentInfo?.className || selectedClass}
         studentId={studentInfo?.nisn || "NISN-2023001"}
+        alreadyAttendedToday={(() => {
+          const todayDateStr = new Date().toISOString().split("T")[0];
+          const sId = studentInfo?.id || "";
+          const sNisn = studentInfo?.nisn || "";
+          const sEmail = (studentInfo?.email || "").toLowerCase().trim();
+          const sName = (studentInfo?.name || "").toLowerCase().trim();
+          return attendanceRecords.some((r) =>
+            r.date === todayDateStr && (
+              (r.studentId && (r.studentId === sId || r.studentId === sNisn)) ||
+              ((r as any).studentEmail && (r as any).studentEmail.toLowerCase().trim() === sEmail && sEmail) ||
+              (r.studentName && r.studentName.toLowerCase().trim() === sName && sName)
+            )
+          );
+        })()}
       />
 
       {/* ------------------------------------------------------------- */}
