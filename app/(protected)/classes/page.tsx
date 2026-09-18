@@ -35,7 +35,6 @@ import {
   onSnapshot, 
   addDoc, 
   setDoc,
-  updateDoc, 
   deleteDoc, 
   doc, 
   writeBatch 
@@ -44,6 +43,8 @@ import { useToast } from "@/context/ToastContext";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
+import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { isStudentInClass, cascadeUpdateClassRelations } from "@/lib/class-relations";
 
 // Standard Class Presets for Quick Creation
 const STANDARD_CLASS_PRESETS = [
@@ -101,6 +102,7 @@ export default function ClassesPage() {
   const [targetClassId, setTargetClassId] = useState<string>("");
 
   const toast = useToast();
+  const { currentStage, gradeLevels, majorOptions } = useSchoolProfile();
 
   const isGuru = currentUserRole === "guru" || currentUserRole === "teacher";
 
@@ -114,35 +116,30 @@ export default function ClassesPage() {
     // 1. Classes
     const qClasses = query(collection(db, "classes"));
     const unsubClasses = onSnapshot(qClasses, (snapshot) => {
-      const classesData = snapshot.docs.map(doc => ({
-        _firestoreId: doc.id,
-        ...doc.data()
-      }));
-      setClasses(classesData);
+      const cls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setClasses(cls);
       setLoading(false);
     }, (error) => {
-      console.error("Error fetching classes:", error);
+      console.error("Classes listener error:", error);
       setLoading(false);
     });
 
     // 2. Students
     const qStudents = query(collection(db, "students"));
     const unsubStudents = onSnapshot(qStudents, (snapshot) => {
-      const studentsData = snapshot.docs.map(doc => ({
-        _firestoreId: doc.id,
-        id: doc.id,
-        ...doc.data()
-      }));
-      setStudents(studentsData);
+      const stds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setStudents(stds);
+    }, (error) => {
+      console.error("Students listener error:", error);
     });
 
     // 3. Teachers
     const qTeachers = query(collection(db, "teachers"));
     const unsubTeachers = onSnapshot(qTeachers, (snapshot) => {
-      setTeachers(snapshot.docs.map(doc => ({
-        _firestoreId: doc.id,
-        ...doc.data()
-      })));
+      const tchs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setTeachers(tchs);
+    }, (error) => {
+      console.error("Teachers listener error:", error);
     });
     
     return () => {
@@ -152,20 +149,20 @@ export default function ClassesPage() {
     };
   }, []);
 
-  // Map real-time students count to each class
+  // Map real-time students count to each class using robust relational matching
   const classStudentsMap = useMemo(() => {
     const map = new Map<string, any[]>();
     classes.forEach(c => {
-      map.set(c.name, []);
-    });
-
-    students.forEach(s => {
-      const cName = s.classId || s.className || s.class;
-      if (cName && map.has(cName)) {
-        map.get(cName)?.push(s);
+      const matched = students.filter(s => isStudentInClass(s, c));
+      map.set(c.name, matched);
+      if (c._firestoreId) map.set(c._firestoreId, matched);
+      if (c.id) map.set(c.id, matched);
+      if (Array.isArray(c.previousNames)) {
+        c.previousNames.forEach((prev: string) => {
+          if (prev && !map.has(prev)) map.set(prev, matched);
+        });
       }
     });
-
     return map;
   }, [classes, students]);
 
@@ -174,7 +171,13 @@ export default function ClassesPage() {
     { 
       name: "name", 
       label: "Nama Kelas", 
-      placeholder: "Contoh: 10 MIPA 1, 11 IPS 2",
+      placeholder: currentStage === "SD" 
+        ? "Contoh: 1A, 2B, 3 Amanah" 
+        : currentStage === "SMP" 
+        ? "Contoh: 7A, 8B, 9 Unggulan" 
+        : currentStage === "SMK" 
+        ? "Contoh: 10 RPL 1, 11 TKJ 2" 
+        : "Contoh: 10 MIPA 1, 11 IPS 2",
       category: "akademik",
       colSpan: 1 
     },
@@ -184,25 +187,16 @@ export default function ClassesPage() {
       type: "select",
       category: "akademik",
       placeholder: "Pilih Tingkat",
-      options: [
-        { label: "Kelas 10", value: "Kelas 10" },
-        { label: "Kelas 11", value: "Kelas 11" },
-        { label: "Kelas 12", value: "Kelas 12" }
-      ],
+      options: gradeLevels.map(lvl => ({ label: lvl, value: lvl })),
       colSpan: 1
     },
     { 
       name: "major", 
-      label: "Jurusan / Peminatan",
+      label: currentStage === "SMK" ? "Program Keahlian (Jurusan)" : "Jurusan / Peminatan",
       type: "select",
       category: "akademik",
       placeholder: "Pilih Jurusan",
-      options: [
-        { label: "IPA", value: "IPA" },
-        { label: "IPS", value: "IPS" },
-        { label: "Bahasa", value: "Bahasa" },
-        { label: "Kejuruan", value: "Kejuruan" }
-      ],
+      options: majorOptions.map(m => ({ label: m.label, value: m.value })),
       colSpan: 1
     },
     { 
@@ -213,7 +207,12 @@ export default function ClassesPage() {
       placeholder: "Pilih Wali Kelas (Opsional)",
       options: [
         { label: "-- Tanpa Wali Kelas --", value: "" },
-        ...teachers.map(t => ({ label: `${t.name} (${t.subject || "Guru"})`, value: t.name }))
+        ...teachers.map(t => {
+          const subjectsDisplay = Array.isArray(t.subjects) && t.subjects.length > 0 
+            ? t.subjects.join(", ") 
+            : (t.subject || t.role || "Guru");
+          return { label: `${t.name} (${subjectsDisplay})`, value: t.name };
+        })
       ],
       colSpan: 1
     },
@@ -237,7 +236,7 @@ export default function ClassesPage() {
       ],
       colSpan: 1
     }
-  ], [teachers]);
+  ], [teachers, gradeLevels, majorOptions, currentStage]);
 
   // Handle Create / Edit / Delete Class
   const handleCrudSubmit = async (data: any) => {
@@ -249,8 +248,8 @@ export default function ClassesPage() {
     try {
       const payload = {
         name: (data.name || "").trim(),
-        level: data.level || "Kelas 10",
-        major: data.major || "IPA",
+        level: data.level || gradeLevels[0] || "Kelas 10",
+        major: data.major || majorOptions[0]?.value || "Umum",
         homeroom: data.homeroom || "",
         maxCapacity: Number(data.maxCapacity) || 36,
         status: data.status || "Aktif",
@@ -261,15 +260,37 @@ export default function ClassesPage() {
         await addDoc(collection(db, "classes"), {
           id: data.id || `C${Math.floor(100 + Math.random() * 900)}`,
           ...payload,
+          previousNames: [],
           createdAt: new Date().toISOString()
         });
+        toast.showSuccess(`Kelas ${payload.name} berhasil dibuat!`, "Kelas Ditambahkan");
       } else if (crudState.mode === "edit" && data._firestoreId) {
-        await updateDoc(doc(db, "classes", data._firestoreId), payload);
+        const existingClass = classes.find(c => c._firestoreId === data._firestoreId) || data;
+        const result = await cascadeUpdateClassRelations(db, existingClass, payload);
+        if (result.studentsUpdated > 0) {
+          toast.showSuccess(
+            `Kelas berhasil diperbarui! Seluruh ${result.studentsUpdated} siswa tetap terhubung otomatis pada nama kelas '${payload.name}'.`,
+            "Sinkronisasi Relasi Sukses"
+          );
+        } else {
+          toast.showSuccess(`Informasi kelas ${payload.name} berhasil diperbarui.`, "Kelas Diperbarui");
+        }
       } else if (crudState.mode === "delete" && data._firestoreId) {
+        const targetClass = classes.find(c => c._firestoreId === data._firestoreId) || data;
+        const enrolledStudents = students.filter(s => isStudentInClass(s, targetClass));
+        if (enrolledStudents.length > 0) {
+          toast.showError(
+            `Kelas ${targetClass.name} tidak dapat dihapus karena masih memiliki ${enrolledStudents.length} siswa terdaftar. Silakan pindahkan atau keluarkan siswa terlebih dahulu demi menjaga keutuhan relasi data.`,
+            "Penghapusan Ditolak"
+          );
+          return;
+        }
         await deleteDoc(doc(db, "classes", data._firestoreId));
+        toast.showSuccess(`Kelas ${targetClass.name} berhasil dihapus.`, "Kelas Dihapus");
       }
     } catch (error) {
       console.error("Error saving class data:", error);
+      toast.showError("Terjadi kesalahan saat memproses data kelas.", "Gagal");
       throw error;
     }
   };
@@ -323,6 +344,10 @@ export default function ClassesPage() {
         id: studentId,
         name: studentName.slice(0, 100),
         classId: "-",
+        className: "-",
+        class: "-",
+        kelas: "-",
+        classDocId: "-",
         status: studentStatus,
       };
       if (student.imageUrl) payload.imageUrl = student.imageUrl.slice(0, 500);
@@ -337,6 +362,7 @@ export default function ClassesPage() {
           className: "-",
           kelas: "-",
           class: "-",
+          classDocId: "-",
           updatedAt: new Date().toISOString()
         }, { merge: true });
       } catch (uErr) {
@@ -364,12 +390,17 @@ export default function ClassesPage() {
       setIsProcessingStudent(true);
       const studentId = student._firestoreId;
       const targetClass = managingClass.name;
+      const targetDocId = managingClass._firestoreId || managingClass.id || "";
       const studentName = (student.fullName || student.name || "Siswa").trim();
       const studentStatus = student.status || "Aktif";
       const payload: any = {
         id: studentId,
         name: studentName.slice(0, 100),
         classId: targetClass.slice(0, 50),
+        className: targetClass,
+        class: targetClass,
+        kelas: targetClass,
+        classDocId: targetDocId,
         status: studentStatus,
       };
       if (student.imageUrl) payload.imageUrl = student.imageUrl.slice(0, 500);
@@ -384,6 +415,7 @@ export default function ClassesPage() {
           className: targetClass,
           kelas: targetClass,
           class: targetClass,
+          classDocId: targetDocId,
           updatedAt: new Date().toISOString()
         }, { merge: true });
       } catch (uErr) {
@@ -410,11 +442,28 @@ export default function ClassesPage() {
     try {
       setIsProcessingStudent(true);
       const batch = writeBatch(db);
+      const targetDocId = managingClass._firestoreId || managingClass.id || "";
 
       selectedStudentIdsToAdd.forEach((docId) => {
         const studentRef = doc(db, "students", docId);
         batch.update(studentRef, {
           classId: managingClass.name,
+          className: managingClass.name,
+          class: managingClass.name,
+          kelas: managingClass.name,
+          classDocId: targetDocId,
+          updatedAt: new Date().toISOString()
+        });
+
+        const studentObj = students.find(s => s._firestoreId === docId || s.id === docId);
+        const userUid = studentObj?.uid || docId;
+        const userRef = doc(db, "users", userUid);
+        batch.update(userRef, {
+          classId: managingClass.name,
+          className: managingClass.name,
+          class: managingClass.name,
+          kelas: managingClass.name,
+          classDocId: targetDocId,
           updatedAt: new Date().toISOString()
         });
       });
@@ -445,6 +494,7 @@ export default function ClassesPage() {
 
     try {
       setIsProcessingStudent(true);
+      const targetDocId = managingClass._firestoreId || managingClass.id || "";
       const randomAvatar = `https://images.unsplash.com/photo-${[
         "1539571696357-5a69c17a67c6",
         "1517841905240-472988babdf9",
@@ -456,11 +506,15 @@ export default function ClassesPage() {
       const studentNisn = newStudentForm.nisn.trim() || `SIS-${Date.now().toString().slice(-6)}`;
       const studentName = newStudentForm.name.trim();
 
-      // 1. Strictly 5 keys for students collection
+      // 1. Strictly structured for students collection
       await setDoc(doc(db, "students", newStudentUid), {
         id: newStudentUid,
         name: studentName.slice(0, 100),
         classId: managingClass.name.slice(0, 50),
+        className: managingClass.name,
+        class: managingClass.name,
+        kelas: managingClass.name,
+        classDocId: targetDocId,
         status: "Aktif",
         imageUrl: randomAvatar.slice(0, 500)
       });
@@ -476,6 +530,9 @@ export default function ClassesPage() {
         gender: newStudentForm.gender,
         classId: managingClass.name,
         className: managingClass.name,
+        class: managingClass.name,
+        kelas: managingClass.name,
+        classDocId: targetDocId,
         role: "siswa",
         status: "Aktif",
         imageUrl: randomAvatar,
@@ -507,12 +564,20 @@ export default function ClassesPage() {
     try {
       setIsProcessingStudent(true);
       const studentId = transferringStudent._firestoreId;
+      const targetClassObj = classes.find(c => c.name === targetClassId || c._firestoreId === targetClassId || c.id === targetClassId);
+      const resolvedTargetName = targetClassObj?.name || targetClassId;
+      const targetDocId = targetClassObj?._firestoreId || targetClassObj?.id || "";
+
       const studentName = (transferringStudent.fullName || transferringStudent.name || "Siswa").trim();
       const studentStatus = transferringStudent.status || "Aktif";
       const payload: any = {
         id: studentId,
         name: studentName.slice(0, 100),
-        classId: targetClassId.slice(0, 50),
+        classId: resolvedTargetName.slice(0, 50),
+        className: resolvedTargetName,
+        class: resolvedTargetName,
+        kelas: resolvedTargetName,
+        classDocId: targetDocId,
         status: studentStatus,
       };
       if (transferringStudent.imageUrl) payload.imageUrl = transferringStudent.imageUrl.slice(0, 500);
@@ -523,10 +588,11 @@ export default function ClassesPage() {
       const userTargetId = transferringStudent.uid || studentId;
       try {
         await setDoc(doc(db, "users", userTargetId), {
-          classId: targetClassId,
-          className: targetClassId,
-          kelas: targetClassId,
-          class: targetClassId,
+          classId: resolvedTargetName,
+          className: resolvedTargetName,
+          kelas: resolvedTargetName,
+          class: resolvedTargetName,
+          classDocId: targetDocId,
           updatedAt: new Date().toISOString()
         }, { merge: true });
       } catch (uErr) {
@@ -534,7 +600,7 @@ export default function ClassesPage() {
       }
 
       toast.showSuccess(
-        `${transferringStudent.fullName || transferringStudent.name} berhasil dipindahkan ke kelas ${targetClassId}!`,
+        `${transferringStudent.fullName || transferringStudent.name} berhasil dipindahkan ke kelas ${resolvedTargetName}!`,
         "Siswa Dipindahkan"
       );
       setTransferringStudent(null);
@@ -563,23 +629,20 @@ export default function ClassesPage() {
     });
   }, [classes, searchQuery, selectedLevel, selectedMajor]);
 
-  // Enrolled students in currently managed class
+  // Enrolled students in currently managed class (relational match)
   const currentlyEnrolledStudents = useMemo(() => {
-    if (!managingClass?.name) return [];
-    return students.filter(s => {
-      const cName = s.classId || s.className || s.class;
-      return cName === managingClass.name;
-    });
+    if (!managingClass) return [];
+    return students.filter(s => isStudentInClass(s, managingClass));
   }, [students, managingClass]);
 
   // Available students to add to currently managed class
   const availableStudentsToAdd = useMemo(() => {
-    if (!managingClass?.name) return [];
+    if (!managingClass) return [];
     return students.filter(s => {
-      const cName = s.classId || s.className || s.class;
       // Exclude students already in this class
-      if (cName === managingClass.name) return false;
+      if (isStudentInClass(s, managingClass)) return false;
 
+      const cName = s.classId || s.className || s.class;
       // Filter by unassigned only if toggled
       if (onlyUnassigned && cName && cName !== "-" && cName !== "") {
         return false;
@@ -642,8 +705,9 @@ export default function ClassesPage() {
     if (!studentClassId && !studentMyClass) return [];
     const targetClassName = (studentMyClass?.name || studentClassId || "").toLowerCase();
     
-    // Filter from students collection
+    // Filter from students collection using relational matching
     const list = students.filter(s => {
+      if (studentMyClass && isStudentInClass(s, studentMyClass)) return true;
       const c = (s.classId || s.className || s.class || "").toLowerCase();
       return c === targetClassName;
     });
@@ -688,11 +752,21 @@ export default function ClassesPage() {
   // Homeroom teacher for this class
   const studentHomeroomTeacher = useMemo(() => {
     if (!studentMyClass?.homeroom) return null;
-    return teachers.find(t => 
+    const matched = teachers.find(t => 
       t.name?.toLowerCase() === studentMyClass.homeroom?.toLowerCase() ||
       t.id === studentMyClass.homeroom ||
       t.nip === studentMyClass.homeroom
-    ) || { 
+    );
+    if (matched) {
+      const subjectText = Array.isArray(matched.subjects) && matched.subjects.length > 0
+        ? matched.subjects.join(", ")
+        : (matched.subject || matched.role || studentMyClass.homeroomRole || "Wali Kelas");
+      return {
+        ...matched,
+        subject: subjectText
+      };
+    }
+    return { 
       name: studentMyClass.homeroom, 
       contact: studentMyClass.homeroomContact || "", 
       nip: studentMyClass.homeroomNip || "",
@@ -1162,8 +1236,8 @@ export default function ClassesPage() {
                 open: true, 
                 mode: "create",
                 data: {
-                  level: "Kelas 10",
-                  major: "IPA",
+                  level: gradeLevels[0] || "Kelas 10",
+                  major: majorOptions[0]?.value || "Umum",
                   homeroom: "",
                   maxCapacity: 36,
                   status: "Aktif"
@@ -1314,7 +1388,7 @@ export default function ClassesPage() {
 
           {/* Level Tabs */}
           <div className="flex items-center gap-1 p-1 bg-gray-100/80 rounded-lg overflow-x-auto w-full sm:w-auto shrink-0">
-            {["All", "Kelas 10", "Kelas 11", "Kelas 12"].map((lvl) => {
+            {["All", ...gradeLevels].map((lvl) => {
               const isActive = selectedLevel === lvl;
               return (
                 <button
@@ -1343,10 +1417,9 @@ export default function ClassesPage() {
             className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer"
           >
             <option value="All">Semua Jurusan</option>
-            <option value="IPA">IPA / MIPA</option>
-            <option value="IPS">IPS</option>
-            <option value="Bahasa">Bahasa</option>
-            <option value="Kejuruan">Kejuruan</option>
+            {majorOptions.map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
           </select>
 
           {/* View Format Switcher */}

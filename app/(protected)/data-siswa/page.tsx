@@ -33,6 +33,8 @@ import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
+import { isStudentInClass } from "@/lib/class-relations";
+import { useSchoolProfile } from "@/context/SchoolProfileContext";
 
 // Helper to clean undefined fields before saving to Firestore
 function cleanFirestoreData<T>(obj: T): T {
@@ -97,6 +99,7 @@ async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0
 
 export default function DataSiswaPage() {
   const toast = useToast();
+  const { currentStage, gradeLevels, majorOptions } = useSchoolProfile();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const { students, setStudents, loading, rawStudents, rawUsers } = useUnifiedStudents();
   const [classes, setClasses] = useState<any[]>([]);
@@ -442,26 +445,18 @@ export default function DataSiswaPage() {
     },
     { 
       name: "major", 
-      label: "Jurusan / Peminatan",
+      label: currentStage === "SMK" ? "Program Keahlian (Jurusan)" : "Jurusan / Peminatan",
       category: "akademik",
       type: "select",
-      options: [
-        { label: "MIPA", value: "MIPA" },
-        { label: "IPS", value: "IPS" },
-        { label: "Bahasa", value: "Bahasa" }
-      ]
+      options: majorOptions.map(m => ({ label: m.label, value: m.value }))
     },
     { name: "entryYear", label: "Tahun Masuk", category: "akademik" },
     { 
       name: "level", 
-      label: "Jenjang Pendidikan",
+      label: "Tingkat Kelas",
       category: "akademik",
       type: "select",
-      options: [
-        { label: "SMA", value: "SMA" },
-        { label: "SMP", value: "SMP" },
-        { label: "SD", value: "SD" }
-      ]
+      options: gradeLevels.map(lvl => ({ label: lvl, value: lvl }))
     },
     { 
       name: "studentStatus", 
@@ -539,6 +534,10 @@ export default function DataSiswaPage() {
 
       if (crudState.mode === "create") {
         const newUid = `siswa_${Date.now()}`;
+        const targetClassObj = classes.find(c => c.name === data.classId || c._firestoreId === data.classId || c.id === data.classId);
+        const resolvedClassName = targetClassObj?.name || data.classId || "10 IPA 1";
+        const resolvedClassDocId = targetClassObj?._firestoreId || targetClassObj?.id || "";
+
         const newStudentData = cleanFirestoreData({
           id: data.id || data.nisn || `SISWA-${Date.now().toString().slice(-6)}`,
           nis: data.id || data.nisn || "",
@@ -554,11 +553,14 @@ export default function DataSiswaPage() {
           address: data.address || "",
           phone: data.phone || "",
           email: data.email || "",
-          classId: data.classId || "10 IPA 1",
-          className: data.classId || "10 IPA 1",
-          major: data.major || "MIPA",
+          classId: resolvedClassName,
+          className: resolvedClassName,
+          class: resolvedClassName,
+          kelas: resolvedClassName,
+          classDocId: resolvedClassDocId,
+          major: data.major || majorOptions[0]?.value || "Umum",
           entryYear: data.entryYear || "2025/2026",
-          level: data.level || "SMA",
+          level: data.level || gradeLevels[0] || currentStage,
           studentStatus: data.studentStatus || "Siswa Baru",
           previousSchool: data.previousSchool || "",
           fatherName: data.fatherName || "",
@@ -579,11 +581,15 @@ export default function DataSiswaPage() {
           createdAt: new Date().toISOString()
         });
 
-        // 1. Save strictly 5 keys to students collection (complying with Firestore rules)
+        // 1. Save strictly structured keys to students collection (complying with Firestore rules)
         const compactStudentDoc = cleanFirestoreData({
           id: newUid,
           name: (data.name || "Siswa Baru").trim().slice(0, 100),
-          classId: (data.classId || "10 IPA 1").trim().slice(0, 50),
+          classId: resolvedClassName.slice(0, 50),
+          className: resolvedClassName,
+          class: resolvedClassName,
+          kelas: resolvedClassName,
+          classDocId: resolvedClassDocId,
           status: data.status || "Aktif",
           imageUrl: imageUrl.startsWith("data:") 
             ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=250&auto=format&fit=crop" 
@@ -675,10 +681,18 @@ export default function DataSiswaPage() {
           (id): id is string => typeof id === "string" && id.trim().length > 0
         );
 
-        // 2. Write strictly compliant 5 keys to students collection using setDoc with merge: true
+        const targetClassObj = classes.find(c => c.name === selectedClass || c._firestoreId === selectedClass || c.id === selectedClass);
+        const resolvedClassName = targetClassObj?.name || selectedClass;
+        const resolvedClassDocId = targetClassObj?._firestoreId || targetClassObj?.id || mergedData.classDocId || "";
+
+        // 2. Write strictly compliant structured keys to students collection using setDoc with merge: true
         const compactStudentDoc = cleanFirestoreData({
           name: studentName.slice(0, 100),
-          classId: selectedClass.slice(0, 50),
+          classId: resolvedClassName.slice(0, 50),
+          className: resolvedClassName,
+          class: resolvedClassName,
+          kelas: resolvedClassName,
+          classDocId: resolvedClassDocId,
           status: studentStatus,
           imageUrl: imageUrl.startsWith("data:") 
             ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=250&auto=format&fit=crop" 
@@ -713,13 +727,14 @@ export default function DataSiswaPage() {
           address: mergedData.address || "",
           phone: mergedData.phone || "",
           email: mergedData.email || "",
-          classId: selectedClass,
-          className: selectedClass,
-          kelas: selectedClass,
-          class: selectedClass,
-          major: mergedData.major || "MIPA",
+          classId: resolvedClassName,
+          className: resolvedClassName,
+          kelas: resolvedClassName,
+          class: resolvedClassName,
+          classDocId: resolvedClassDocId,
+          major: mergedData.major || majorOptions[0]?.value || "Umum",
           entryYear: mergedData.entryYear || "2025/2026",
-          level: mergedData.level || "SMA",
+          level: mergedData.level || gradeLevels[0] || currentStage,
           studentStatus: mergedData.studentStatus || "Siswa Baru",
           previousSchool: mergedData.previousSchool || "",
           fatherName: mergedData.fatherName || "",
@@ -845,7 +860,15 @@ export default function DataSiswaPage() {
         (student.id && student.id.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (student.classId && student.classId.toLowerCase().includes(searchQuery.toLowerCase()));
 
-      const matchClass = selectedClass === "All" || student.classId === selectedClass;
+      const targetClassObj = selectedClass !== "All"
+        ? classes.find(c => c.name === selectedClass || c._firestoreId === selectedClass || c.id === selectedClass)
+        : null;
+
+      const matchClass = selectedClass === "All" ||
+        (targetClassObj ? isStudentInClass(student, targetClassObj) : false) ||
+        student.classId === selectedClass ||
+        student.className === selectedClass ||
+        student.class === selectedClass;
       const matchStatus = selectedStatus === "All" || (student.status || "Aktif") === selectedStatus;
 
       return matchSearch && matchClass && matchStatus;

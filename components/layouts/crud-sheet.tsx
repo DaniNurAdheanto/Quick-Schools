@@ -28,7 +28,8 @@ import {
   Table,
   Sparkles,
   AlertCircle,
-  Share2
+  Share2,
+  ChevronDown
 } from "lucide-react";
 import { useToast } from "@/context/ToastContext";
 import { cn } from "@/lib/utils";
@@ -39,7 +40,7 @@ export interface CrudField {
   label: string;
   type?: string;
   placeholder?: string;
-  options?: { label: string; value: string }[];
+  options?: { label: string; value: string; sublabel?: string }[];
   category?: "pribadi" | "akademik" | "orangTua" | "darurat" | "lainnya" | string;
   colSpan?: 1 | 2;
   disabled?: boolean;
@@ -66,6 +67,205 @@ const CATEGORY_DEFINITIONS: Record<string, { label: string; icon: any }> = {
   darurat: { label: "Kontak Darurat & Status", icon: ShieldAlert },
   lainnya: { label: "Lainnya", icon: Info },
 };
+
+function MultiSelectField({
+  field,
+  value,
+  onChange,
+  disabled
+}: {
+  field: CrudField;
+  value: any;
+  onChange: (val: string[]) => void;
+  disabled?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Normalize selected values as an array of string IDs/values
+  const selectedValues: string[] = useMemo(() => {
+    if (Array.isArray(value)) {
+      return value.map(v => typeof v === "object" ? (v.id || v.value) : String(v)).filter(Boolean);
+    }
+    if (typeof value === "string" && value.trim() && value !== "-") {
+      return value.split(",").map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+  }, [value]);
+
+  const options = field.options || [];
+
+  const filteredOptions = useMemo(() => {
+    if (!query.trim()) return options;
+    const q = query.toLowerCase().trim();
+    return options.filter(opt => 
+      opt.label.toLowerCase().includes(q) || 
+      (opt.sublabel && opt.sublabel.toLowerCase().includes(q)) ||
+      opt.value.toLowerCase().includes(q)
+    );
+  }, [options, query]);
+
+  const toggleOption = (val: string) => {
+    if (disabled) return;
+    let next: string[];
+    if (selectedValues.includes(val)) {
+      next = selectedValues.filter(v => v !== val);
+    } else {
+      next = [...selectedValues, val];
+    }
+    onChange(next);
+  };
+
+  const removeOption = (val: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (disabled) return;
+    onChange(selectedValues.filter(v => v !== val));
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  return (
+    <div className="relative w-full" ref={dropdownRef}>
+      {/* Trigger Box */}
+      <div
+        onClick={() => !disabled && setIsOpen(prev => !prev)}
+        className={cn(
+          "min-h-[42px] w-full px-3 py-2 border border-gray-200 rounded-lg text-xs transition-all flex flex-wrap items-center justify-between gap-1.5 cursor-pointer bg-white",
+          isOpen && "ring-2 ring-[#531FFF]/20 border-[#531FFF]",
+          disabled && "bg-gray-100 cursor-not-allowed text-gray-400 select-none"
+        )}
+      >
+        <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
+          {selectedValues.length === 0 ? (
+            <span className="text-gray-400 font-medium py-0.5">
+              {field.placeholder || `Pilih satu atau beberapa ${field.label.toLowerCase()}...`}
+            </span>
+          ) : (
+            selectedValues.map(val => {
+              const opt = options.find(o => o.value === val);
+              const label = opt ? opt.label : val;
+              return (
+                <span
+                  key={val}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-[#531FFF] border border-purple-200/80 font-bold text-[11px] shadow-2xs group"
+                >
+                  <span className="truncate max-w-[180px]">{label}</span>
+                  {!disabled && (
+                    <button
+                      type="button"
+                      onClick={(e) => removeOption(val, e)}
+                      className="text-purple-400 hover:text-purple-700 hover:bg-purple-200/50 rounded-full p-0.5 transition-colors"
+                      title="Hapus"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </span>
+              );
+            })
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0 text-gray-400 pl-1">
+          {selectedValues.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-[#531FFF]/10 text-[#531FFF]">
+              {selectedValues.length}
+            </span>
+          )}
+          <ChevronDown className={cn("w-4 h-4 transition-transform text-gray-400", isOpen && "rotate-180 text-[#531FFF]")} />
+        </div>
+      </div>
+
+      {/* Floating Options Dropdown */}
+      {isOpen && (
+        <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in-50 zoom-in-95 duration-150">
+          {/* Search box inside dropdown */}
+          <div className="p-2 border-b border-gray-100 bg-gray-50/80">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Ketik untuk mencari pilihan..."
+                className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-medium"
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          </div>
+
+          {/* Options list */}
+          <div className="max-h-52 overflow-y-auto p-1.5 divide-y divide-gray-50 space-y-0.5 custom-scrollbar">
+            {filteredOptions.length === 0 ? (
+              <div className="py-6 text-center text-xs text-gray-400 font-medium">
+                Tidak ada data yang cocok
+              </div>
+            ) : (
+              filteredOptions.map(opt => {
+                const isSelected = selectedValues.includes(opt.value);
+                return (
+                  <div
+                    key={opt.value}
+                    onClick={() => toggleOption(opt.value)}
+                    className={cn(
+                      "px-3 py-2 rounded-lg flex items-center justify-between gap-2 cursor-pointer transition-colors text-xs",
+                      isSelected 
+                        ? "bg-purple-50/80 text-[#531FFF] font-bold" 
+                        : "hover:bg-gray-50 text-gray-700 font-medium"
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[12px]">{opt.label}</div>
+                      {opt.sublabel && (
+                        <div className="text-[10px] text-gray-400 font-normal truncate mt-0.5">
+                          {opt.sublabel}
+                        </div>
+                      )}
+                    </div>
+                    <div className={cn(
+                      "w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                      isSelected ? "bg-[#531FFF] border-[#531FFF] text-white" : "border-gray-300 bg-white"
+                    )}>
+                      {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Bottom Footer count / clear */}
+          {selectedValues.length > 0 && (
+            <div className="p-2 bg-gray-50/90 border-t border-gray-100 flex items-center justify-between text-[11px]">
+              <span className="font-bold text-gray-600">
+                {selectedValues.length} item dipilih
+              </span>
+              <button
+                type="button"
+                onClick={() => onChange([])}
+                className="text-[#531FFF] hover:underline font-bold cursor-pointer"
+              >
+                Hapus Semua
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function CrudSheet({
   open,
@@ -252,7 +452,7 @@ export function CrudSheet({
     return `Silakan isi formulir di bawah ini untuk ${mode === "create" ? "menambahkan" : "memperbarui"} data ${entityName}.`;
   };
 
-  const handleChange = (name: string, value: string | File) => {
+  const handleChange = (name: string, value: string | File | string[] | any) => {
     setFormData((prev: any) => {
       const next = { ...prev, [name]: value };
       if (onDataChange) onDataChange(next);
@@ -375,6 +575,36 @@ export function CrudSheet({
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-purple-50 text-[#531FFF] border border-purple-100 rounded-md font-bold text-xs">
           {text}
         </span>
+      );
+    }
+
+    if (field.type === "multiselect" || Array.isArray(rawValue)) {
+      const arr: any[] = Array.isArray(rawValue) 
+        ? rawValue 
+        : (typeof rawValue === "string" && rawValue.trim() && rawValue !== "-")
+          ? rawValue.split(",").map((s: string) => s.trim()).filter(Boolean)
+          : [];
+
+      if (arr.length === 0) {
+        return <span className="text-gray-400 italic text-xs font-medium">Belum Dipilih</span>;
+      }
+
+      return (
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+          {arr.map((item: any, idx: number) => {
+            const rawItemVal = typeof item === "object" ? (item.id || item.value || item.name) : String(item);
+            const foundOpt = field.options?.find(o => o.value === rawItemVal);
+            const label = foundOpt ? foundOpt.label : (typeof item === "object" ? (item.name || item.label || item.id) : String(item));
+            return (
+              <span
+                key={idx}
+                className="inline-flex items-center px-2.5 py-0.5 bg-purple-50 text-[#531FFF] border border-purple-200/80 rounded-md font-bold text-xs shadow-2xs"
+              >
+                {label}
+              </span>
+            );
+          })}
+        </div>
       );
     }
 
@@ -911,6 +1141,13 @@ export function CrudSheet({
                           </option>
                         ))}
                       </select>
+                    ) : field.type === "multiselect" ? (
+                      <MultiSelectField
+                        field={field}
+                        value={formData[field.name]}
+                        onChange={(val) => handleChange(field.name, val)}
+                        disabled={isSubmitting || field.disabled || field.readOnly}
+                      />
                     ) : field.type === "file" ? (
                       <input
                         id={field.name}

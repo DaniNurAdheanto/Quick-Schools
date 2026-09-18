@@ -28,6 +28,10 @@ import { useToast } from "@/context/ToastContext";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
+import { 
+  getSubjectsForTeacher, 
+  syncTeacherSubjectRelations 
+} from "@/lib/subject-teacher-relations";
 
 // Helper to compress uploaded photo into lightweight Base64 JPEG data URL (~15KB)
 async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0.7): Promise<string> {
@@ -100,6 +104,8 @@ export default function TeachersPage() {
         const nip = raw.id || raw.nip || "";
         const role = raw.role || raw.subject || "";
         const contact = raw.contact || raw.phone || "";
+        const subjectIds = Array.isArray(raw.subjectIds) ? raw.subjectIds : [];
+        const subjects = Array.isArray(raw.subjects) ? raw.subjects : (role ? [role] : []);
         return {
           _firestoreId: doc.id,
           ...raw,
@@ -107,6 +113,8 @@ export default function TeachersPage() {
           nip: nip,
           role: role,
           subject: role,
+          subjectIds: subjectIds,
+          subjects: subjects,
           contact: contact,
           phone: contact,
           status: raw.status || "Aktif",
@@ -131,14 +139,19 @@ export default function TeachersPage() {
   }, []);
 
   const teacherFields = [
-    { name: "name", label: "Nama Lengkap & Gelar" },
-    { name: "id", label: "NIP" },
+    { name: "name", label: "Nama Lengkap & Gelar", placeholder: "Contoh: Budi Santoso, M.Pd." },
+    { name: "id", label: "NIP", placeholder: "Nomor Induk Pegawai" },
     { 
-      name: "role", 
-      label: "Mata Pelajaran",
-      type: "select",
-      placeholder: "Pilih Mata Pelajaran",
-      options: subjectsList.map(s => ({ label: s.name, value: s.name }))
+      name: "subjectIds", 
+      label: "Mata Pelajaran yang Diampu (Bisa Lebih dari 1)",
+      type: "multiselect",
+      placeholder: "Pilih satu atau lebih mata pelajaran...",
+      helperText: "Seorang guru dapat mengajar satu atau beberapa mata pelajaran sekaligus.",
+      options: subjectsList.map(s => ({ 
+        label: s.name, 
+        value: s._firestoreId || s.id || s.code,
+        sublabel: `${s.code || "MAPEL"}${s.category ? ` • ${s.category}` : ""}${s.level ? ` • ${s.level}` : ""}`
+      }))
     },
     { name: "contact", label: "Nomor Kontak / WhatsApp", placeholder: "08..." },
     { 
@@ -158,6 +171,39 @@ export default function TeachersPage() {
       type: "file",
     }
   ];
+
+  // Centralized Helper to Open Teacher CRUD Sheet with Full Relation Resolution
+  const openTeacherCrud = (mode: "create" | "edit" | "delete" | "view", item?: any) => {
+    if (!item) {
+      setCrudState({
+        open: true,
+        mode,
+        data: {
+          status: "Aktif",
+          subjectIds: [],
+          subjects: []
+        }
+      });
+      return;
+    }
+
+    let resolvedSubjectIds: string[] = [];
+    if (Array.isArray(item.subjectIds) && item.subjectIds.length > 0) {
+      resolvedSubjectIds = item.subjectIds;
+    } else {
+      const matched = getSubjectsForTeacher(item, subjectsList);
+      resolvedSubjectIds = matched.map(s => s._firestoreId || s.id || s.code).filter((id): id is string => Boolean(id));
+    }
+
+    setCrudState({
+      open: true,
+      mode,
+      data: {
+        ...item,
+        subjectIds: resolvedSubjectIds
+      }
+    });
+  };
 
   const handleCrudSubmit = async (data: any) => {
     if (isGuru) {
@@ -191,17 +237,50 @@ export default function TeachersPage() {
         }
       }
 
+      // Resolve multiple subject assignments
+      const rawSubjectIds: string[] = Array.isArray(data.subjectIds)
+        ? data.subjectIds
+        : (typeof data.subjectIds === "string" && data.subjectIds.trim() && data.subjectIds !== "-")
+          ? data.subjectIds.split(",").map((s: string) => s.trim()).filter(Boolean)
+          : [];
+
+      const selectedSubjects = subjectsList.filter(s => {
+        const sid = (s._firestoreId || "").toLowerCase();
+        const scode = (s.code || "").toLowerCase();
+        const sdoc = (s.id || "").toLowerCase();
+        return rawSubjectIds.some(rid => {
+          const norm = rid.toLowerCase().trim();
+          return norm === sid || norm === scode || norm === sdoc;
+        });
+      });
+
+      const subjectIds = selectedSubjects.map(s => s._firestoreId || s.id || s.code).filter(Boolean);
+      const subjectsNames = selectedSubjects.map(s => s.name).filter(Boolean);
+      const subjectString = subjectsNames.join(", ") || (rawSubjectIds.length > 0 ? "Mata Pelajaran Diampu" : "");
+
+      const nipValue = data.id || data.nip || `T${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+      const contactValue = data.contact || data.phone || "";
+
       if (crudState.mode === "create") {
-        await addDoc(collection(db, "teachers"), {
-          id: data.id || `T${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
-          nip: data.id || `T${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+        const docRef = await addDoc(collection(db, "teachers"), {
+          id: nipValue,
+          nip: nipValue,
           name: data.name || "",
-          role: data.role || "",
-          subject: data.role || "",
-          contact: data.contact || "",
-          phone: data.contact || "",
+          role: subjectString,
+          subject: subjectString,
+          subjectIds: subjectIds,
+          subjects: subjectsNames,
+          contact: contactValue,
+          phone: contactValue,
           status: data.status || "Aktif",
-          imageUrl: imageUrl
+          imageUrl: imageUrl,
+          createdAt: new Date().toISOString()
+        });
+
+        await syncTeacherSubjectRelations(db, docRef.id, subjectIds, subjectsList, {
+          id: nipValue,
+          name: data.name || "",
+          nip: nipValue
         });
       } else if (crudState.mode === "edit") {
         const targetId = data._firestoreId || crudState.data?._firestoreId || data.uid || crudState.data?.uid || data.id;
@@ -209,19 +288,18 @@ export default function TeachersPage() {
           throw new Error("ID Guru tidak ditemukan untuk diperbarui.");
         }
 
-        const nipValue = data.id || data.nip || "";
-        const roleValue = data.role || data.subject || "";
-        const contactValue = data.contact || data.phone || "";
-
         const payload: any = {
           id: nipValue,
           nip: nipValue,
           name: data.name || "",
-          role: roleValue,
-          subject: roleValue,
+          role: subjectString,
+          subject: subjectString,
+          subjectIds: subjectIds,
+          subjects: subjectsNames,
           contact: contactValue,
           phone: contactValue,
           status: data.status || "Aktif",
+          updatedAt: new Date().toISOString(),
           ...(imageUrl ? { imageUrl } : {})
         };
 
@@ -242,15 +320,24 @@ export default function TeachersPage() {
             await updateDoc(doc(db, "users", userUid), {
               name: data.name || "",
               nip: nipValue,
-              subject: roleValue,
+              subject: subjectString,
+              subjectIds: subjectIds,
+              subjects: subjectsNames,
               phone: contactValue,
               status: data.status || "Aktif",
+              updatedAt: new Date().toISOString(),
               ...(imageUrl ? { imageUrl, photoUrl: imageUrl } : {})
             });
           } catch (err) {
             console.warn("Update users collection warning:", err);
           }
         }
+
+        await syncTeacherSubjectRelations(db, targetId, subjectIds, subjectsList, {
+          id: nipValue,
+          name: data.name || "",
+          nip: nipValue
+        });
 
         setTeachers((prev) =>
           prev.map((t) => (t._firestoreId === targetId || (userUid && t.uid === userUid) ? { ...t, ...payload } : t))
@@ -290,19 +377,28 @@ export default function TeachersPage() {
 
   // Filtered Teachers List
   const filteredTeachers = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
     return teachers.filter(teacher => {
-      const matchSearch = !searchQuery || 
-        (teacher.name && teacher.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (teacher.id && teacher.id.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (teacher.role && teacher.role.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (teacher.contact && teacher.contact.toLowerCase().includes(searchQuery.toLowerCase()));
+      const assignedSubjects = getSubjectsForTeacher(teacher, subjectsList);
+      const subjectNames = assignedSubjects.map(s => s.name).join(" ").toLowerCase();
 
-      const matchSubject = selectedSubject === "All" || teacher.role === selectedSubject;
+      const matchSearch = !q || 
+        (teacher.name && teacher.name.toLowerCase().includes(q)) ||
+        (teacher.id && teacher.id.toLowerCase().includes(q)) ||
+        (teacher.role && teacher.role.toLowerCase().includes(q)) ||
+        (teacher.contact && teacher.contact.toLowerCase().includes(q)) ||
+        subjectNames.includes(q);
+
+      const matchSubject = selectedSubject === "All" || 
+        teacher.role === selectedSubject ||
+        (Array.isArray(teacher.subjects) && teacher.subjects.includes(selectedSubject)) ||
+        assignedSubjects.some(s => s.name === selectedSubject);
+
       const matchStatus = selectedStatus === "All" || (teacher.status || "Aktif") === selectedStatus;
 
       return matchSearch && matchSubject && matchStatus;
     });
-  }, [teachers, searchQuery, selectedSubject, selectedStatus]);
+  }, [teachers, searchQuery, selectedSubject, selectedStatus, subjectsList]);
 
   // Dynamic Statistics
   const dynamicStats = [
@@ -314,11 +410,18 @@ export default function TeachersPage() {
 
   // Subject options for dropdown filter
   const subjectOptions = useMemo(() => {
-    const list = Array.from(new Set(teachers.map(t => t.role).filter(Boolean)));
+    const list = new Set<string>();
     subjectsList.forEach(s => {
-      if (s.name && !list.includes(s.name)) list.push(s.name);
+      if (s.name) list.add(s.name);
     });
-    return list.sort();
+    teachers.forEach(t => {
+      if (Array.isArray(t.subjects)) {
+        t.subjects.forEach((s: string) => list.add(s));
+      } else if (t.role && t.role !== "-") {
+        list.add(t.role);
+      }
+    });
+    return Array.from(list).sort();
   }, [teachers, subjectsList]);
 
   // CSV Export Handler
@@ -391,8 +494,8 @@ export default function TeachersPage() {
         <div className="flex items-center gap-3">
           {!isGuru && (
             <button 
-              onClick={() => setCrudState({ open: true, mode: "create" })}
-              className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              onClick={() => openTeacherCrud("create")}
+              className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Tambah Guru</span>
@@ -537,108 +640,137 @@ export default function TeachersPage() {
           {/* MODERN GRID VIEW (Matching Data Siswa Card Aesthetic) */}
           {viewMode === "grid" && filteredTeachers.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
-              {filteredTeachers.map((teacher, i) => (
-                <div 
-                  key={teacher._firestoreId || i} 
-                  className="group bg-white rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_30px_-8px_rgba(83,31,255,0.12)] transition-all duration-300 hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between"
-                >
-                  {/* Top Decorative Cover Header */}
-                  <div>
-                    <div className="h-20 bg-gradient-to-r from-[#531FFF]/15 via-[#6E3BFF]/10 to-[#531FFF]/5 relative p-3 flex items-start justify-end">
-                      {/* Status Badge */}
-                      <div className={cn(
-                        "px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 backdrop-blur-md border shadow-xs",
-                        (teacher.status || "Aktif") === "Aktif" 
-                          ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" 
-                          : teacher.status === "Cuti"
-                          ? "bg-amber-500/10 text-amber-700 border-amber-500/20"
-                          : "bg-rose-500/10 text-rose-700 border-rose-500/20"
-                      )}>
-                        <span className={cn(
-                          "w-1.5 h-1.5 rounded-full",
+              {filteredTeachers.map((teacher, i) => {
+                const assignedSubjects = getSubjectsForTeacher(teacher, subjectsList);
+                return (
+                  <div 
+                    key={teacher._firestoreId || i} 
+                    className="group bg-white rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_30px_-8px_rgba(83,31,255,0.12)] transition-all duration-300 hover:-translate-y-1 relative overflow-hidden flex flex-col justify-between"
+                  >
+                    {/* Top Decorative Cover Header */}
+                    <div>
+                      <div className="h-20 bg-gradient-to-r from-[#531FFF]/15 via-[#6E3BFF]/10 to-[#531FFF]/5 relative p-3 flex items-start justify-end">
+                        {/* Status Badge */}
+                        <div className={cn(
+                          "px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 backdrop-blur-md border shadow-xs",
                           (teacher.status || "Aktif") === "Aktif" 
-                            ? "bg-emerald-500 animate-pulse" 
+                            ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20" 
                             : teacher.status === "Cuti"
-                            ? "bg-amber-500"
-                            : "bg-rose-500"
-                        )} />
-                        {teacher.status || "Aktif"}
+                            ? "bg-amber-500/10 text-amber-700 border-amber-500/20"
+                            : "bg-rose-500/10 text-rose-700 border-rose-500/20"
+                        )}>
+                          <span className={cn(
+                            "w-1.5 h-1.5 rounded-full",
+                            (teacher.status || "Aktif") === "Aktif" 
+                              ? "bg-emerald-500 animate-pulse" 
+                              : teacher.status === "Cuti"
+                              ? "bg-amber-500"
+                              : "bg-rose-500"
+                          )} />
+                          {teacher.status || "Aktif"}
+                        </div>
+                      </div>
+
+                      {/* Overlapping Avatar */}
+                      <div className="px-4 flex items-end justify-between -mt-8 relative z-10 mb-3">
+                        <ProfileAvatar
+                          name={teacher.name}
+                          imageUrl={teacher.imageUrl}
+                          photoUrl={teacher.photoUrl}
+                          avatar={teacher.avatar}
+                          gender={teacher.gender}
+                          role="teacher"
+                          size="xl"
+                          shape="rounded"
+                          ring="ring-4 ring-white shadow-md"
+                          className="group-hover:scale-105"
+                        />
+
+                        {/* Subject Badge */}
+                        <span 
+                          className="px-2.5 py-1 rounded-lg bg-[#531FFF]/10 text-[#531FFF] font-extrabold text-[11px] border border-[#531FFF]/20 max-w-[130px] truncate" 
+                          title={assignedSubjects.map(s => s.name).join(", ") || teacher.role || "Guru"}
+                        >
+                          {assignedSubjects.length > 1 ? `${assignedSubjects.length} Mapel` : (assignedSubjects[0]?.name || teacher.role || "Pengajar")}
+                        </span>
+                      </div>
+
+                      {/* Teacher Info Body */}
+                      <div className="px-4 pb-2 space-y-1">
+                        <h3 className="font-extrabold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors truncate tracking-tight" title={teacher.name}>
+                          {teacher.name}
+                        </h3>
+                        <p className="text-[12px] font-semibold text-gray-400">
+                          NIP: <span className="text-gray-600">{teacher.id || "-"}</span>
+                        </p>
+                        
+                        {/* Multiple Subjects Tag Badges */}
+                        <div className="pt-1">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                            Mapel Diampu:
+                          </p>
+                          {assignedSubjects.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {assignedSubjects.map((s, sIdx) => (
+                                <span 
+                                  key={sIdx}
+                                  className="inline-flex items-center px-2 py-0.5 rounded-md bg-purple-50 text-[#531FFF] border border-purple-100 text-[10px] font-bold shadow-2xs"
+                                  title={s.code ? `Kode: ${s.code}` : undefined}
+                                >
+                                  {s.name}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic text-[11px]">Belum Ditentukan</span>
+                          )}
+                        </div>
+
+                        {teacher.contact && (
+                          <p className="text-[11px] font-medium text-gray-500 truncate pt-1">
+                            Kontak: {teacher.contact}
+                          </p>
+                        )}
                       </div>
                     </div>
 
-                    {/* Overlapping Avatar */}
-                    <div className="px-4 flex items-end justify-between -mt-8 relative z-10 mb-3">
-                      <ProfileAvatar
-                        name={teacher.name}
-                        imageUrl={teacher.imageUrl}
-                        photoUrl={teacher.photoUrl}
-                        avatar={teacher.avatar}
-                        gender={teacher.gender}
-                        role="teacher"
-                        size="xl"
-                        shape="rounded"
-                        ring="ring-4 ring-white shadow-md"
-                        className="group-hover:scale-105"
-                      />
-
-                      {/* Subject Badge */}
-                      <span className="px-3 py-1 rounded-lg bg-[#531FFF]/10 text-[#531FFF] font-extrabold text-xs border border-[#531FFF]/20 max-w-[130px] truncate" title={teacher.role || "Guru"}>
-                        {teacher.role || "Pengajar"}
+                    {/* Card Action Footer */}
+                    <div className="p-4 pt-3 border-t border-gray-100/80 flex items-center justify-between mt-2">
+                      <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                        Staf Guru
                       </span>
-                    </div>
 
-                    {/* Teacher Info Body */}
-                    <div className="px-4 pb-2 space-y-0.5">
-                      <h3 className="font-extrabold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors truncate tracking-tight" title={teacher.name}>
-                        {teacher.name}
-                      </h3>
-                      <p className="text-[12px] font-semibold text-gray-400">
-                        NIP: <span className="text-gray-600">{teacher.id || "-"}</span>
-                      </p>
-                      {teacher.contact && (
-                        <p className="text-[11px] font-medium text-gray-500 truncate pt-0.5">
-                          Kontak: {teacher.contact}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Card Action Footer */}
-                  <div className="p-4 pt-3 border-t border-gray-100/80 flex items-center justify-between mt-2">
-                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                      Staf Guru
-                    </span>
-
-                    <div className="flex items-center gap-1.5">
-                      <button 
-                        onClick={() => setCrudState({ open: true, mode: "view", data: teacher })}
-                        className="w-8 h-8 rounded-lg bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
-                        title="Lihat Detail Guru"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      {!isGuru && (
-                        <>
-                          <button 
-                            onClick={() => setCrudState({ open: true, mode: "edit", data: teacher })}
-                            className="w-8 h-8 rounded-lg bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
-                            title="Edit Data Guru"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button 
-                            onClick={() => setCrudState({ open: true, mode: "delete", data: teacher })}
-                            className="w-8 h-8 rounded-lg bg-gray-50 hover:bg-rose-50 text-gray-500 hover:text-rose-600 transition-all flex items-center justify-center"
-                            title="Hapus Data Guru"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        <button 
+                          onClick={() => openTeacherCrud("view", teacher)}
+                          className="w-8 h-8 rounded-lg bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center cursor-pointer"
+                          title="Lihat Detail Guru"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        {!isGuru && (
+                          <>
+                            <button 
+                              onClick={() => openTeacherCrud("edit", teacher)}
+                              className="w-8 h-8 rounded-lg bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center cursor-pointer"
+                              title="Edit Data Guru"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              onClick={() => openTeacherCrud("delete", teacher)}
+                              className="w-8 h-8 rounded-lg bg-gray-50 hover:bg-rose-50 text-gray-500 hover:text-rose-600 transition-all flex items-center justify-center cursor-pointer"
+                              title="Hapus Data Guru"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -658,88 +790,102 @@ export default function TeachersPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {filteredTeachers.map((teacher, i) => (
-                      <tr key={teacher._firestoreId || i} className="hover:bg-purple-50/20 transition-colors group">
-                        <td className="py-3.5 px-6">
-                          <div className="flex items-center gap-3">
-                            <ProfileAvatar
-                              name={teacher.name}
-                              imageUrl={teacher.imageUrl}
-                              photoUrl={teacher.photoUrl}
-                              avatar={teacher.avatar}
-                              gender={teacher.gender}
-                              role="teacher"
-                              size="md"
-                              shape="circle"
-                            />
-                            <div>
-                              <span className="font-bold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors block">
-                                {teacher.name}
-                              </span>
-                              <span className="text-[11px] text-gray-400 font-medium">
-                                NIP: {teacher.nip || teacher.id || "-"}
-                              </span>
+                    {filteredTeachers.map((teacher, i) => {
+                      const assignedSubjects = getSubjectsForTeacher(teacher, subjectsList);
+                      return (
+                        <tr key={teacher._firestoreId || i} className="hover:bg-purple-50/20 transition-colors group">
+                          <td className="py-3.5 px-6">
+                            <div className="flex items-center gap-3">
+                              <ProfileAvatar
+                                name={teacher.name}
+                                imageUrl={teacher.imageUrl}
+                                photoUrl={teacher.photoUrl}
+                                avatar={teacher.avatar}
+                                gender={teacher.gender}
+                                role="teacher"
+                                size="md"
+                                shape="circle"
+                              />
+                              <div>
+                                <span className="font-bold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors block">
+                                  {teacher.name}
+                                </span>
+                                <span className="text-[11px] text-gray-400 font-medium">
+                                  NIP: {teacher.nip || teacher.id || "-"}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-6 font-semibold text-sm text-gray-600">
-                          {teacher.id || "-"}
-                        </td>
-                        <td className="py-3.5 px-6">
-                          <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-[#531FFF]/10 text-[#531FFF]">
-                            {teacher.role || "-"}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-6 font-medium text-xs text-gray-600">
-                          {teacher.contact || "-"}
-                        </td>
-                        <td className="py-3.5 px-6">
-                          <span className={cn(
-                            "px-2.5 py-1 rounded text-xs font-bold inline-flex items-center gap-1.5 border",
-                            (teacher.status || "Aktif") === "Aktif"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : teacher.status === "Cuti"
-                              ? "bg-amber-50 text-amber-700 border-amber-200"
-                              : "bg-rose-50 text-rose-700 border-rose-200"
-                          )}>
-                            <span className={cn(
-                              "w-1.5 h-1.5 rounded-full", 
-                              (teacher.status || "Aktif") === "Aktif" ? "bg-emerald-500" : teacher.status === "Cuti" ? "bg-amber-500" : "bg-rose-500"
-                            )} />
-                            {teacher.status || "Aktif"}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-6 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => setCrudState({ open: true, mode: "view", data: teacher })}
-                              className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-lg transition-colors"
-                              title="Lihat Detail"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            {!isGuru && (
-                              <>
-                                <button
-                                  onClick={() => setCrudState({ open: true, mode: "edit", data: teacher })}
-                                  className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-lg transition-colors"
-                                  title="Edit"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => setCrudState({ open: true, mode: "delete", data: teacher })}
-                                  className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                  title="Hapus"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </>
+                          </td>
+                          <td className="py-3.5 px-6 font-semibold text-sm text-gray-600">
+                            {teacher.id || "-"}
+                          </td>
+                          <td className="py-3.5 px-6">
+                            {assignedSubjects.length > 0 ? (
+                              <div className="flex flex-wrap items-center gap-1.5 max-w-[280px]">
+                                {assignedSubjects.map((s, idx) => (
+                                  <span 
+                                    key={idx}
+                                    className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20 shadow-2xs"
+                                  >
+                                    {s.name}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 italic text-xs">{teacher.role || "-"}</span>
                             )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="py-3.5 px-6 font-medium text-xs text-gray-600">
+                            {teacher.contact || "-"}
+                          </td>
+                          <td className="py-3.5 px-6">
+                            <span className={cn(
+                              "px-2.5 py-1 rounded text-xs font-bold inline-flex items-center gap-1.5 border",
+                              (teacher.status || "Aktif") === "Aktif"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : teacher.status === "Cuti"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-rose-50 text-rose-700 border-rose-200"
+                            )}>
+                              <span className={cn(
+                                "w-1.5 h-1.5 rounded-full", 
+                                (teacher.status || "Aktif") === "Aktif" ? "bg-emerald-500" : teacher.status === "Cuti" ? "bg-amber-500" : "bg-rose-500"
+                              )} />
+                              {teacher.status || "Aktif"}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-6 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => openTeacherCrud("view", teacher)}
+                                className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                                title="Lihat Detail"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              {!isGuru && (
+                                <>
+                                  <button
+                                    onClick={() => openTeacherCrud("edit", teacher)}
+                                    className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                                    title="Edit"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => openTeacherCrud("delete", teacher)}
+                                    className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                    title="Hapus"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

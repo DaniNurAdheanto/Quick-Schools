@@ -68,6 +68,8 @@ export function TeacherDashboardView({
     name: string;
     nip: string;
     subject: string;
+    subjects: string[];
+    subjectIds: string[];
     homeroomClass: string;
     email: string;
     phone: string;
@@ -76,6 +78,8 @@ export function TeacherDashboardView({
     name: userName || "Bapak/Ibu Guru",
     nip: "-",
     subject: "Mata Pelajaran",
+    subjects: [],
+    subjectIds: [],
     homeroomClass: "",
     email: "",
     phone: "",
@@ -193,11 +197,16 @@ export function TeacherDashboardView({
           let profPhone = "";
           let profImageUrl = user.photoURL || "";
 
+          let profSubjects: string[] = [];
+          let profSubjectIds: string[] = [];
+
           if (userSnap.exists()) {
             const uData = userSnap.data();
             if (uData.name || uData.fullName) profName = uData.fullName || uData.name;
             if (uData.nip) profNip = uData.nip;
             if (uData.subject) profSubject = uData.subject;
+            if (Array.isArray(uData.subjects)) profSubjects.push(...uData.subjects);
+            if (Array.isArray(uData.subjectIds)) profSubjectIds.push(...uData.subjectIds);
             if (uData.homeroomClass || uData.homeroom) profHomeroom = uData.homeroomClass || uData.homeroom;
             if (uData.email) profEmail = uData.email;
             if (uData.phone) profPhone = uData.phone;
@@ -212,16 +221,29 @@ export function TeacherDashboardView({
               if (tData.name) profName = tData.name;
               if (tData.nip || tData.id) profNip = tData.nip || tData.id;
               if (tData.subject || tData.role) profSubject = tData.subject || tData.role;
+              if (Array.isArray(tData.subjects)) profSubjects.push(...tData.subjects);
+              if (Array.isArray(tData.subjectIds)) profSubjectIds.push(...tData.subjectIds);
               if (tData.homeroomClass || tData.homeroom) profHomeroom = tData.homeroomClass || tData.homeroom;
               if (tData.phone) profPhone = tData.phone;
               if (tData.imageUrl || tData.photoUrl) profImageUrl = tData.imageUrl || tData.photoUrl;
             }
           } catch {}
 
+          if (profSubject) {
+            profSubject.split(/[,;&]/).forEach((s: string) => {
+              if (s.trim()) profSubjects.push(s.trim());
+            });
+          }
+
+          const uniqueSubjects = Array.from(new Set(profSubjects.filter(Boolean)));
+          const uniqueSubjectIds = Array.from(new Set(profSubjectIds.filter(Boolean)));
+
           setTeacherProfile({
             name: profName,
             nip: profNip,
-            subject: profSubject || "Guru Mata Pelajaran",
+            subject: uniqueSubjects.join(", ") || profSubject || "Guru Mata Pelajaran",
+            subjects: uniqueSubjects,
+            subjectIds: uniqueSubjectIds,
             homeroomClass: profHomeroom,
             email: profEmail,
             phone: profPhone,
@@ -303,17 +325,45 @@ export function TeacherDashboardView({
   // 5. Classes Taught by this Teacher
   const taughtClasses = useMemo(() => {
     const tName = teacherProfile.name.toLowerCase().trim();
-    const tSubj = teacherProfile.subject.toLowerCase().trim();
+    const tNip = teacherProfile.nip.toLowerCase().trim();
+    const tUid = activeTeacherUid.toLowerCase();
+
+    const mySubjects = new Set<string>();
+    if (teacherProfile.subject && teacherProfile.subject !== "guru mata pelajaran" && teacherProfile.subject !== "mata pelajaran") {
+      teacherProfile.subject.split(/[,;&]/).forEach((s: string) => {
+        if (s.trim()) mySubjects.add(s.trim().toLowerCase());
+      });
+    }
+    if (Array.isArray(teacherProfile.subjects)) {
+      teacherProfile.subjects.forEach(s => {
+        if (s && s.trim()) mySubjects.add(s.trim().toLowerCase());
+      });
+    }
+    const mySubjectIds = new Set<string>(
+      (teacherProfile.subjectIds || []).map(id => id.trim().toLowerCase())
+    );
+
     const classSet = new Set<string>();
 
     schedules.forEach((s: any) => {
       const sTeacher = (s.teacher || "").toLowerCase().trim();
+      const sTeacherId = (s.teacherId || "").toLowerCase().trim();
+      const sTeacherNip = (s.teacherNip || "").toLowerCase().trim();
       const sSubj = (s.subject || "").toLowerCase().trim();
-      const isMySchedule = (
+      const sSubjId = (s.subjectId || "").toLowerCase().trim();
+
+      const isTeacherMatch = (
         (sTeacher && (sTeacher === tName || sTeacher.includes(tName) || tName.includes(sTeacher))) ||
-        (tSubj && tSubj !== "guru mata pelajaran" && sSubj && (sSubj === tSubj || sSubj.includes(tSubj)))
+        (sTeacherId && (sTeacherId === tUid || (tNip !== "-" && sTeacherId === tNip))) ||
+        (sTeacherNip && tNip !== "-" && sTeacherNip === tNip)
       );
-      if (isMySchedule && s.class) {
+
+      const isSubjectMatch = (
+        (sSubj && mySubjects.has(sSubj)) ||
+        (sSubjId && mySubjectIds.has(sSubjId))
+      );
+
+      if ((isTeacherMatch || isSubjectMatch) && s.class) {
         classSet.add(s.class.trim());
       }
     });
@@ -328,7 +378,7 @@ export function TeacherDashboardView({
     }
 
     return Array.from(classSet);
-  }, [teacherProfile, schedules, resolvedHomeroomClass, classes]);
+  }, [teacherProfile, schedules, resolvedHomeroomClass, classes, activeTeacherUid]);
 
   // 6. Total Students Taught
   const taughtStudents = useMemo(() => {
@@ -342,15 +392,43 @@ export function TeacherDashboardView({
   // 7. Filter Schedules for this Teacher
   const teacherSchedules = useMemo(() => {
     const tName = teacherProfile.name.toLowerCase().trim();
-    const tSubj = teacherProfile.subject.toLowerCase().trim();
+    const tNip = teacherProfile.nip.toLowerCase().trim();
+    const tUid = activeTeacherUid.toLowerCase();
+
+    const mySubjects = new Set<string>();
+    if (teacherProfile.subject && teacherProfile.subject !== "guru mata pelajaran" && teacherProfile.subject !== "mata pelajaran") {
+      teacherProfile.subject.split(/[,;&]/).forEach((s: string) => {
+        if (s.trim()) mySubjects.add(s.trim().toLowerCase());
+      });
+    }
+    if (Array.isArray(teacherProfile.subjects)) {
+      teacherProfile.subjects.forEach(s => {
+        if (s && s.trim()) mySubjects.add(s.trim().toLowerCase());
+      });
+    }
+    const mySubjectIds = new Set<string>(
+      (teacherProfile.subjectIds || []).map(id => id.trim().toLowerCase())
+    );
 
     let filtered = schedules.filter((s: any) => {
       const sTeacher = (s.teacher || "").toLowerCase().trim();
+      const sTeacherId = (s.teacherId || "").toLowerCase().trim();
+      const sTeacherNip = (s.teacherNip || "").toLowerCase().trim();
       const sSubj = (s.subject || "").toLowerCase().trim();
-      return (
+      const sSubjId = (s.subjectId || "").toLowerCase().trim();
+
+      const isTeacherMatch = (
         (sTeacher && (sTeacher === tName || sTeacher.includes(tName) || tName.includes(sTeacher))) ||
-        (tSubj && tSubj !== "guru mata pelajaran" && sSubj && (sSubj === tSubj || sSubj.includes(tSubj)))
+        (sTeacherId && (sTeacherId === tUid || (tNip !== "-" && sTeacherId === tNip))) ||
+        (sTeacherNip && tNip !== "-" && sTeacherNip === tNip)
       );
+
+      const isSubjectMatch = (
+        (sSubj && mySubjects.has(sSubj)) ||
+        (sSubjId && mySubjectIds.has(sSubjId))
+      );
+
+      return isTeacherMatch || (isSubjectMatch && !sTeacher);
     });
 
     // Fallback: if no schedule matched for new teacher, show sample schedules from existing data
@@ -359,7 +437,7 @@ export function TeacherDashboardView({
     }
 
     return filtered;
-  }, [schedules, teacherProfile]);
+  }, [schedules, teacherProfile, activeTeacherUid]);
 
   // Today's Schedules
   const todaySchedules = useMemo(() => {
@@ -636,7 +714,17 @@ export function TeacherDashboardView({
 
               <div className="flex items-center gap-2 bg-black/15 px-3 py-1.5 rounded-lg backdrop-blur-sm border border-white/10">
                 <span className="text-white/60">Mata Pelajaran:</span>
-                <span className="font-bold text-amber-200">{teacherProfile.subject}</span>
+                {Array.isArray(teacherProfile.subjects) && teacherProfile.subjects.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {teacherProfile.subjects.map((subj, idx) => (
+                      <span key={idx} className="font-bold text-amber-200 bg-white/10 px-2 py-0.5 rounded text-xs">
+                        {subj}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="font-bold text-amber-200">{teacherProfile.subject}</span>
+                )}
               </div>
 
               <div className="flex items-center gap-2 bg-black/15 px-3 py-1.5 rounded-lg backdrop-blur-sm border border-white/10">

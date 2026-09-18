@@ -49,6 +49,8 @@ import { useToast } from "@/context/ToastContext";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
+import { isTeacherAssignedToSubject, getSubjectsForTeacher } from "@/lib/subject-teacher-relations";
+import { useSchoolProfile } from "@/context/SchoolProfileContext";
 
 // 6 Core Assessment Types requested by user
 const ASSESSMENT_TYPES = [
@@ -62,6 +64,7 @@ const ASSESSMENT_TYPES = [
 
 export default function GradesPage() {
   const toast = useToast();
+  const { stageConfig } = useSchoolProfile();
 
   // Firestore Realtime Collections
   const [grades, setGrades] = useState<any[]>([]);
@@ -88,7 +91,14 @@ export default function GradesPage() {
   const [matrixSubject, setMatrixSubject] = useState<string>("");
   const [matrixSemester, setMatrixSemester] = useState<string>("Ganjil");
   const [matrixAcademicYear, setMatrixAcademicYear] = useState<string>("2025/2026");
-  const [matrixKkm, setMatrixKkm] = useState<number>(75);
+  const [matrixKkm, setMatrixKkm] = useState<number>(() => stageConfig?.defaultKkm || 75);
+
+  // Sync matrixKkm when stage default KKM updates
+  useEffect(() => {
+    if (stageConfig?.defaultKkm) {
+      setMatrixKkm(stageConfig.defaultKkm);
+    }
+  }, [stageConfig?.defaultKkm]);
 
   // Local Editable Matrix Grid: studentId -> { tugas: string, kuis: string, ulanganHarian: string, pts: string, pas: string, asesmenAkhir: string, notes: string }
   const [gridValues, setGridValues] = useState<Record<string, Record<string, string>>>({});
@@ -161,9 +171,19 @@ export default function GradesPage() {
     const finalNip = tDoc?.nip || tDoc?.id || tNip || "-";
     const finalSubject = tDoc?.subject || userObj.subject || "";
     const finalSubjects: string[] = [];
-    if (finalSubject) finalSubjects.push(finalSubject);
+    if (finalSubject) {
+      finalSubject.split(/[,;&]/).forEach((s: string) => {
+        if (s.trim()) finalSubjects.push(s.trim());
+      });
+    }
     if (Array.isArray(tDoc?.subjects)) finalSubjects.push(...tDoc.subjects);
     if (Array.isArray(userObj?.subjects)) finalSubjects.push(...userObj.subjects);
+    if (tDoc) {
+      const assignedFromSubjects = getSubjectsForTeacher(tDoc, subjects);
+      assignedFromSubjects.forEach(s => {
+        if (s.name) finalSubjects.push(s.name);
+      });
+    }
 
     return {
       name: finalName,
@@ -174,7 +194,7 @@ export default function GradesPage() {
       declaredSubjects: Array.from(new Set(finalSubjects.filter(Boolean))),
       teacherDoc: tDoc
     };
-  }, [isGuru, currentUser, currentUserData, teachers]);
+  }, [isGuru, currentUser, currentUserData, teachers, subjects]);
 
   // 1. Homeroom Classes (Wali Kelas)
   const homeroomClasses = useMemo(() => {
@@ -198,34 +218,35 @@ export default function GradesPage() {
         (cHomeroom.length > 5 && tName.includes(cHomeroom))
       );
       const matchNip = tNip && tNip !== "-" && cNip && cNip === tNip;
-      const matchId = (tUid && cId && cId === tUid) || (currentUserData?.id && cId === currentUserData.id);
+      const matchId = tUid && cId && cId === tUid;
 
       if (matchName || matchNip || matchId) {
-        if (cName) matched.add(cName);
+        matched.add(cName);
       }
     });
 
-    // Direct field in users collection or teacherDoc
+    // Direct homeroomClass in teacherDoc or currentUserData
     const directClass = teacherInfo.teacherDoc?.homeroomClass || teacherInfo.teacherDoc?.homeroom || currentUserData?.homeroomClass || currentUserData?.homeroom || currentUserData?.className || currentUserData?.classId;
-    if (directClass && directClass !== "-" && classes.some(c => (c.name || c.id) === directClass)) {
+    if (directClass && directClass !== "-") {
       matched.add(directClass);
     }
 
     return Array.from(matched);
   }, [isGuru, teacherInfo, classes, currentUserData]);
 
-  // 2. Subject Teaching Responsibilities (Guru Mata Pelajaran pairs: { class, subject })
+  // 2. Exact Subject-Class Pairs Taught by this Teacher
+  // Robustly identifies all classes and subjects this teacher is assigned to teach
   const taughtSubjectClassPairs = useMemo(() => {
     if (!isGuru || !teacherInfo) return [];
 
     const pairs: { class: string; subject: string }[] = [];
     const pairKeys = new Set<string>();
 
-    const addPair = (cls: string, subj: string) => {
-      if (!cls || !subj) return;
-      const cleanClass = cls.trim();
-      const cleanSubj = subj.trim();
-      const key = `${cleanClass.toLowerCase()}:::${cleanSubj.toLowerCase()}`;
+    const addPair = (c: string, s: string) => {
+      const cleanClass = (c || "").trim();
+      const cleanSubj = (s || "").trim();
+      if (!cleanClass || !cleanSubj) return;
+      const key = `${cleanClass.toLowerCase()}_||_${cleanSubj.toLowerCase()}`;
       if (!pairKeys.has(key)) {
         pairKeys.add(key);
         pairs.push({ class: cleanClass, subject: cleanSubj });
@@ -236,6 +257,14 @@ export default function GradesPage() {
     const tNip = teacherInfo.nip.toLowerCase();
     const tEmail = teacherInfo.email.toLowerCase();
     const tUid = teacherInfo.uid;
+    const teacherEntity = teacherInfo.teacherDoc || {
+      id: teacherInfo.nip || teacherInfo.uid,
+      _firestoreId: teacherInfo.uid,
+      nip: teacherInfo.nip,
+      name: teacherInfo.name,
+      subjects: teacherInfo.declaredSubjects,
+      subjectIds: teacherInfo.teacherDoc?.subjectIds
+    };
 
     // A. From schedules collection
     schedules.forEach(s => {
@@ -250,7 +279,7 @@ export default function GradesPage() {
         (sTeacher.length > 4 && tName.includes(sTeacher))
       );
       const matchNip = tNip && tNip !== "-" && sNip && sNip === tNip;
-      const matchId = tUid && sId && sId === tUid;
+      const matchId = (tUid && sId && sId === tUid) || (teacherInfo.nip && sId && sId === teacherInfo.nip) || (teacherInfo.teacherDoc?._firestoreId && sId === teacherInfo.teacherDoc._firestoreId);
       const matchEmail = tEmail && sEmail && sEmail === tEmail;
 
       if (matchName || matchNip || matchId || matchEmail) {
@@ -262,17 +291,18 @@ export default function GradesPage() {
       }
     });
 
-    // B. From subjects collection where subject.teacher matches this teacher
+    // B. From subjects collection where teacher is assigned (supporting multiple teachers per subject)
     subjects.forEach(subj => {
-      const subjTeacher = (subj.teacher || "").toLowerCase().trim();
-      const matchName = tName && subjTeacher && (
-        subjTeacher === tName ||
-        (tName.length > 4 && subjTeacher.includes(tName)) ||
-        (subjTeacher.length > 4 && tName.includes(subjTeacher))
-      );
-      if (matchName) {
+      const isAssigned = isTeacherAssignedToSubject(teacherEntity, subj);
+      if (isAssigned) {
         // Find classes in schedules for this subject
-        const matchingSchedules = schedules.filter(s => (s.subject || "").toLowerCase().trim() === subj.name?.toLowerCase().trim());
+        const matchingSchedules = schedules.filter(s => {
+          const sSubj = (s.subject || "").toLowerCase().trim();
+          const subName = (subj.name || "").toLowerCase().trim();
+          const subCode = (subj.code || "").toLowerCase().trim();
+          const sSubjId = (s.subjectId || "").trim();
+          return sSubj === subName || (subCode && sSubj === subCode) || (subj._firestoreId && sSubjId === subj._firestoreId) || (subj.id && sSubjId === subj.id);
+        });
         if (matchingSchedules.length > 0) {
           matchingSchedules.forEach(ms => {
             if (ms.class) addPair(ms.class, subj.name);
@@ -301,7 +331,15 @@ export default function GradesPage() {
         const sSubj = (s.subject || "").toLowerCase().trim();
         if (sSubj === declaredSubj.toLowerCase().trim()) {
           const sTeacher = (s.teacher || "").toLowerCase().trim();
-          if (sTeacher === tName || (tName.length > 4 && sTeacher.includes(tName)) || (sTeacher.length > 4 && tName.includes(sTeacher))) {
+          const sId = (s.teacherId || "").trim();
+          const sNip = (s.teacherNip || "").toLowerCase().trim();
+          if (
+            sTeacher === tName || 
+            (tName.length > 4 && sTeacher.includes(tName)) || 
+            (sTeacher.length > 4 && tName.includes(sTeacher)) ||
+            (sId && (sId === tUid || sId === teacherInfo.nip || (teacherInfo.teacherDoc?._firestoreId && sId === teacherInfo.teacherDoc._firestoreId))) ||
+            (tNip && tNip !== "-" && sNip && sNip === tNip)
+          ) {
             if (s.class) addPair(s.class, s.subject || declaredSubj);
           }
         }

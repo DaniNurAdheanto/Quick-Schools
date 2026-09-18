@@ -270,19 +270,55 @@ export default function HomeroomPage() {
 
     try {
       setIsSaving(true);
-      const selectedTeacher = teachers.find(t => t._firestoreId === selectedTeacherId);
+      const selectedTeacher = teachers.find(t => t._firestoreId === selectedTeacherId || t.id === selectedTeacherId);
 
       const targetDocId = assignModal.targetClass._firestoreId;
+      const targetClassName = assignModal.targetClass.name;
+      const prevTeacherName = assignModal.targetClass.homeroom;
       const newHomeroomName = selectedTeacher ? selectedTeacher.name : "";
       const newHomeroomNip = selectedTeacher ? (selectedTeacher.nip || selectedTeacher.id || "") : "";
       const newHomeroomContact = selectedTeacher ? (selectedTeacher.contact || selectedTeacher.phone || "") : "";
 
+      // 1. Update class document
       await updateDoc(doc(db, "classes", targetDocId), {
         homeroom: newHomeroomName,
         homeroomNip: newHomeroomNip,
         homeroomContact: newHomeroomContact,
+        homeroomId: selectedTeacher ? (selectedTeacher._firestoreId || selectedTeacher.id || "") : "",
         updatedAt: serverTimestamp()
       });
+
+      // 2. Synchronize teacher document in teachers collection
+      if (selectedTeacher && selectedTeacher._firestoreId) {
+        try {
+          await updateDoc(doc(db, "teachers", selectedTeacher._firestoreId), {
+            homeroomClass: targetClassName,
+            homeroom: targetClassName,
+            waliKelas: targetClassName,
+            classDocId: targetDocId,
+            updatedAt: new Date().toISOString()
+          });
+        } catch (tErr) {
+          console.warn("Sync to selected teacher warning:", tErr);
+        }
+      }
+
+      // 3. Clear previous teacher if replaced
+      if (prevTeacherName && prevTeacherName !== newHomeroomName) {
+        const prevTeacherDoc = teachers.find(t => t.name === prevTeacherName);
+        if (prevTeacherDoc && prevTeacherDoc._firestoreId) {
+          try {
+            await updateDoc(doc(db, "teachers", prevTeacherDoc._firestoreId), {
+              homeroomClass: "",
+              homeroom: "",
+              waliKelas: "",
+              updatedAt: new Date().toISOString()
+            });
+          } catch (pErr) {
+            console.warn("Clear prev teacher warning:", pErr);
+          }
+        }
+      }
 
       // Optimistic update
       setClasses(prev => prev.map(c => {
@@ -299,12 +335,12 @@ export default function HomeroomPage() {
 
       if (newHomeroomName) {
         toast.showSuccess(
-          `${newHomeroomName} berhasil ditetapkan sebagai wali kelas ${assignModal.targetClass.name}.`,
+          `${newHomeroomName} berhasil ditetapkan sebagai wali kelas ${targetClassName}. Data guru dan kelas tersinkronisasi.`,
           "Wali Kelas Ditetapkan"
         );
       } else {
         toast.showEdit(
-          `Penugasan wali kelas untuk ${assignModal.targetClass.name} telah dikosongkan.`,
+          `Penugasan wali kelas untuk ${targetClassName} telah dikosongkan.`,
           "Wali Kelas Dikosongkan"
         );
       }
@@ -330,14 +366,32 @@ export default function HomeroomPage() {
     try {
       setIsSaving(true);
       const targetDocId = unassignModal.targetClass._firestoreId;
-      const prevTeacher = unassignModal.targetClass.homeroom;
+      const prevTeacherName = unassignModal.targetClass.homeroom;
 
       await updateDoc(doc(db, "classes", targetDocId), {
         homeroom: "",
         homeroomNip: "",
         homeroomContact: "",
+        homeroomId: "",
         updatedAt: serverTimestamp()
       });
+
+      // Clear teacher's homeroomClass reference
+      if (prevTeacherName) {
+        const prevTeacherDoc = teachers.find(t => t.name === prevTeacherName);
+        if (prevTeacherDoc && prevTeacherDoc._firestoreId) {
+          try {
+            await updateDoc(doc(db, "teachers", prevTeacherDoc._firestoreId), {
+              homeroomClass: "",
+              homeroom: "",
+              waliKelas: "",
+              updatedAt: new Date().toISOString()
+            });
+          } catch (pErr) {
+            console.warn("Clear prev teacher warning:", pErr);
+          }
+        }
+      }
 
       setClasses(prev => prev.map(c => {
         if (c._firestoreId === targetDocId) {
@@ -347,7 +401,7 @@ export default function HomeroomPage() {
       }));
 
       toast.showEdit(
-        `Penugasan ${prevTeacher || "guru"} pada kelas ${unassignModal.targetClass.name} berhasil dilepas.`,
+        `Penugasan ${prevTeacherName || "guru"} pada kelas ${unassignModal.targetClass.name} berhasil dilepas dan disinkronkan.`,
         "Wali Kelas Dilepas"
       );
       setUnassignModal({ open: false });

@@ -30,42 +30,13 @@ import { useToast } from "@/context/ToastContext";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
-
-// Standard Curriculum Presets (Kurikulum Merdeka & Nasional)
-interface SubjectPreset {
-  code: string;
-  name: string;
-  category: "Wajib" | "Peminatan" | "Muatan Lokal";
-  creditHours: string;
-  level: string;
-  kkm: number;
-  icon: string;
-  description: string;
-}
-
-const STANDARD_PRESETS: SubjectPreset[] = [
-  { code: "PAI", name: "Pendidikan Agama & Budi Pekerti", category: "Wajib", creditHours: "3 JP", level: "Semua Tingkat", kkm: 75, icon: "🕌", description: "Pendidikan nilai keimanan, moral, dan akhlak mulia" },
-  { code: "PKN", name: "Pendidikan Pancasila (PPKn)", category: "Wajib", creditHours: "2 JP", level: "Semua Tingkat", kkm: 75, icon: "🏛️", description: "Pendidikan kewarganegaraan, konstitusi, dan ideologi bangsa" },
-  { code: "BIN", name: "Bahasa Indonesia", category: "Wajib", creditHours: "4 JP", level: "Semua Tingkat", kkm: 75, icon: "🇮🇩", description: "Literasi, tata bahasa, dan sastra bahasa Indonesia" },
-  { code: "MAT", name: "Matematika Wajib", category: "Wajib", creditHours: "4 JP", level: "Semua Tingkat", kkm: 75, icon: "📐", description: "Aljabar, geometri, statistika, dan penalaran kuantitatif" },
-  { code: "BIG", name: "Bahasa Inggris", category: "Wajib", creditHours: "3 JP", level: "Semua Tingkat", kkm: 75, icon: "🇬🇧", description: "Komunikasi lisan, tulisan, dan literatur Bahasa Inggris" },
-  { code: "SEJ", name: "Sejarah Indonesia", category: "Wajib", creditHours: "2 JP", level: "Semua Tingkat", kkm: 75, icon: "📜", description: "Sejarah kemerdekaan, peradaban, dan dinamika kebangsaan" },
-  { code: "PJK", name: "Pendidikan Jasmani (PJOK)", category: "Wajib", creditHours: "3 JP", level: "Semua Tingkat", kkm: 75, icon: "⚽", description: "Kebugaran fisik, sportivitas, dan pola hidup sehat" },
-  { code: "SNB", name: "Seni Budaya & Prakarya", category: "Wajib", creditHours: "2 JP", level: "Semua Tingkat", kkm: 75, icon: "🎨", description: "Kreativitas seni musik, rupa, tari, dan karya terapan" },
-  { code: "INF", name: "Informatika", category: "Wajib", creditHours: "2 JP", level: "Semua Tingkat", kkm: 75, icon: "💻", description: "Pemrograman, literasi digital, algoritma, dan sistem komputasi" },
-  // Peminatan MIPA
-  { code: "FIS", name: "Fisika", category: "Peminatan", creditHours: "4 JP", level: "Kelas 10-12", kkm: 75, icon: "⚛️", description: "Mekanika, termodinamika, gelombang, dan fisika modern" },
-  { code: "KIM", name: "Kimia", category: "Peminatan", creditHours: "4 JP", level: "Kelas 10-12", kkm: 75, icon: "🧪", description: "Struktur atom, ikatan kimia, stoikiometri, dan kinetika" },
-  { code: "BIO", name: "Biologi", category: "Peminatan", creditHours: "4 JP", level: "Kelas 10-12", kkm: 75, icon: "🧬", description: "Genetika, ekosistem, bioteknologi, dan fisiologi makhluk hidup" },
-  { code: "MTL", name: "Matematika Tingkat Lanjut", category: "Peminatan", creditHours: "4 JP", level: "Kelas 11-12", kkm: 75, icon: "📊", description: "Kalkulus lanjutan, aljabar matriks, vektor, dan polinomial" },
-  // Peminatan IPS
-  { code: "EKO", name: "Ekonomi", category: "Peminatan", creditHours: "4 JP", level: "Kelas 10-12", kkm: 75, icon: "💰", description: "Makroekonomi, mikroekonomi, akuntansi, dan perbankan" },
-  { code: "GEO", name: "Geografi", category: "Peminatan", creditHours: "4 JP", level: "Kelas 10-12", kkm: 75, icon: "🌍", description: "Litosfer, hidrosfer, atmosfer, dan sistem informasi geografis" },
-  { code: "SOS", name: "Sosiologi", category: "Peminatan", creditHours: "4 JP", level: "Kelas 10-12", kkm: 75, icon: "👥", description: "Dinamika sosial, konflik, stratifikasi, dan perubahan masyarakat" },
-  // Muatan Lokal
-  { code: "BHD", name: "Bahasa Daerah", category: "Muatan Lokal", creditHours: "2 JP", level: "Semua Tingkat", kkm: 75, icon: "🗣️", description: "Pelestarian budaya dan tata krama bahasa daerah" },
-  { code: "PLH", name: "Pendidikan Lingkungan Hidup", category: "Muatan Lokal", creditHours: "2 JP", level: "Semua Tingkat", kkm: 75, icon: "🌱", description: "Ekologi sekolah, konservasi alam, dan pengelolaan sampah" }
-];
+import { ProfileAvatar } from "@/components/ui/profile-avatar";
+import { 
+  getTeachersForSubject, 
+  syncSubjectTeacherRelations 
+} from "@/lib/subject-teacher-relations";
+import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { getSubjectPresetsForStage, SubjectPresetDef } from "@/lib/school-level-config";
 
 export default function SubjectsPage() {
   const [subjects, setSubjects] = useState<any[]>([]);
@@ -79,6 +50,8 @@ export default function SubjectsPage() {
   const [selectedBatchPresets, setSelectedBatchPresets] = useState<string[]>([]);
   const [isBatchAdding, setIsBatchAdding] = useState(false);
   const toast = useToast();
+  const { currentStage, stageConfig, gradeLevels } = useSchoolProfile();
+  const activePresets = useMemo(() => getSubjectPresetsForStage(currentStage), [currentStage]);
 
   // Centralized useAuth
   const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
@@ -121,11 +94,23 @@ export default function SubjectsPage() {
     // 2. Teachers
     const qTeachers = query(collection(db, "teachers"));
     const unsubTeachers = onSnapshot(qTeachers, (snapshot) => {
-      const tList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().name || "Guru",
-        subject: doc.data().subject || doc.data().role || ""
-      }));
+      const tList = snapshot.docs.map(doc => {
+        const d = doc.data();
+        const nipVal = d.nip || d.id || "";
+        const roleVal = d.role || d.subject || "";
+        return {
+          _firestoreId: doc.id,
+          id: nipVal || doc.id,
+          nip: nipVal,
+          name: d.name || "Guru",
+          role: roleVal,
+          subject: roleVal,
+          subjectIds: Array.isArray(d.subjectIds) ? d.subjectIds : [],
+          subjects: Array.isArray(d.subjects) ? d.subjects : (roleVal ? [roleVal] : []),
+          imageUrl: d.imageUrl || d.photoUrl || "",
+          ...d
+        };
+      });
       setTeachers(tList);
     });
 
@@ -177,7 +162,15 @@ export default function SubjectsPage() {
       label: "Kategori Kelompok Mapel", 
       type: "select", 
       category: "akademik",
-      options: [
+      options: currentStage === "SMK" ? [
+        { label: "Wajib (Muatan Nasional / Kewilayahan)", value: "Wajib" },
+        { label: "Peminatan / Kejuruan (Produktif)", value: "Peminatan" },
+        { label: "Muatan Lokal", value: "Muatan Lokal" }
+      ] : currentStage === "SD" ? [
+        { label: "Wajib / Tematik", value: "Wajib" },
+        { label: "Peminatan / Ekstrakurikuler", value: "Peminatan" },
+        { label: "Muatan Lokal", value: "Muatan Lokal" }
+      ] : [
         { label: "Wajib", value: "Wajib" },
         { label: "Peminatan", value: "Peminatan" },
         { label: "Muatan Lokal", value: "Muatan Lokal" }
@@ -194,7 +187,7 @@ export default function SubjectsPage() {
     { 
       name: "kkm", 
       label: "KKM (Kriteria Ketuntasan)", 
-      placeholder: "Contoh: 75", 
+      placeholder: `Contoh: ${stageConfig.defaultKkm}`, 
       category: "akademik",
       colSpan: 1
     },
@@ -205,21 +198,26 @@ export default function SubjectsPage() {
       category: "akademik",
       options: [
         { label: "Semua Tingkat", value: "Semua Tingkat" },
-        { label: "Kelas 10", value: "Kelas 10" },
-        { label: "Kelas 11", value: "Kelas 11" },
-        { label: "Kelas 12", value: "Kelas 12" }
+        ...gradeLevels.map(lvl => ({ label: lvl, value: lvl }))
       ],
       colSpan: 1
     },
     {
-      name: "teacher",
-      label: "Guru Pengampu / Koordinator",
-      type: "select",
+      name: "teacherIds",
+      label: "Guru Pengajar (Bisa Lebih dari 1)",
+      type: "multiselect",
       category: "akademik",
-      options: [
-        { label: "-- Belum Ditentukan --", value: "-" },
-        ...teachers.map(t => ({ label: `${t.name} (${t.subject || "Guru"})`, value: t.name }))
-      ],
+      placeholder: "Pilih satu atau lebih guru pengajar...",
+      helperText: "Satu mata pelajaran dapat diampu oleh beberapa guru pengajar sekaligus.",
+      options: teachers.map(t => {
+        const idVal = t.id || t._firestoreId || t.nip;
+        const sub = t.subject || (Array.isArray(t.subjects) ? t.subjects.join(", ") : "");
+        return {
+          label: t.name,
+          value: idVal,
+          sublabel: t.nip ? `NIP: ${t.nip}${sub ? ` • ${sub}` : ""}` : sub
+        };
+      }),
       colSpan: 2
     },
     {
@@ -240,7 +238,45 @@ export default function SubjectsPage() {
       ],
       colSpan: 2
     }
-  ], [teachers]);
+  ], [teachers, gradeLevels, currentStage, stageConfig]);
+
+  // Centralized Helper to Open Subject CRUD Sheet with Full Relation Resolution
+  const openSubjectCrud = (mode: "create" | "edit" | "delete" | "view", item?: any) => {
+    if (!item) {
+      setCrudState({
+        open: true,
+        mode,
+        data: {
+          category: "Wajib",
+          creditHours: "3 JP",
+          level: "Semua Tingkat",
+          kkm: stageConfig.defaultKkm || 75,
+          status: "Aktif",
+          teacherIds: [],
+          teachers: [],
+          teacher: "-"
+        }
+      });
+      return;
+    }
+
+    let resolvedTeacherIds: string[] = [];
+    if (Array.isArray(item.teacherIds) && item.teacherIds.length > 0) {
+      resolvedTeacherIds = item.teacherIds;
+    } else {
+      const matched = getTeachersForSubject(item, teachers);
+      resolvedTeacherIds = matched.map(t => t.id || t._firestoreId || t.nip).filter((id): id is string => Boolean(id));
+    }
+
+    setCrudState({
+      open: true,
+      mode,
+      data: {
+        ...item,
+        teacherIds: resolvedTeacherIds
+      }
+    });
+  };
 
   // CRUD Submission Handler
   const handleCrudSubmit = async (data: any) => {
@@ -250,6 +286,31 @@ export default function SubjectsPage() {
     }
 
     try {
+      const rawTeacherIds: string[] = Array.isArray(data.teacherIds)
+        ? data.teacherIds
+        : (typeof data.teacherIds === "string" && data.teacherIds.trim() && data.teacherIds !== "-")
+          ? data.teacherIds.split(",").map((s: string) => s.trim()).filter(Boolean)
+          : [];
+
+      // Resolve teachers from teachers state
+      const selectedTeachers = teachers.filter(t => {
+        const tid = (t.id || "").toLowerCase();
+        const tdoc = (t._firestoreId || "").toLowerCase();
+        const tnip = (t.nip || "").toLowerCase();
+        return rawTeacherIds.some(rid => {
+          const norm = rid.toLowerCase().trim();
+          return norm === tid || norm === tdoc || norm === tnip;
+        });
+      });
+
+      const teacherIds = selectedTeachers.map(t => t.id || t._firestoreId || t.nip).filter(Boolean);
+      const teachersDenorm = selectedTeachers.map(t => ({
+        id: t.id || t._firestoreId || t.nip,
+        name: t.name,
+        nip: t.nip || ""
+      }));
+      const teacherString = teachersDenorm.map(t => t.name).join(", ") || (rawTeacherIds.length > 0 ? "Guru Pengajar Ditugaskan" : "-");
+
       const payload = {
         code: (data.code || "").toUpperCase().trim(),
         name: (data.name || "").trim(),
@@ -257,21 +318,26 @@ export default function SubjectsPage() {
         creditHours: data.creditHours || "3 JP",
         kkm: Number(data.kkm) || 75,
         level: data.level || "Semua Tingkat",
-        teacher: data.teacher || "-",
+        teacherIds,
+        teachers: teachersDenorm,
+        teacher: teacherString,
         description: data.description || "",
         status: data.status || "Aktif",
         updatedAt: new Date().toISOString()
       };
 
       if (crudState.mode === "create") {
-        await addDoc(collection(db, "subjects"), {
+        const docRef = await addDoc(collection(db, "subjects"), {
           ...payload,
           createdAt: new Date().toISOString()
         });
+        await syncSubjectTeacherRelations(db, docRef.id, teacherIds, teachers, payload);
       } else if (crudState.mode === "edit" && data._firestoreId) {
         await updateDoc(doc(db, "subjects", data._firestoreId), payload);
+        await syncSubjectTeacherRelations(db, data._firestoreId, teacherIds, teachers, payload);
       } else if (crudState.mode === "delete" && data._firestoreId) {
         await deleteDoc(doc(db, "subjects", data._firestoreId));
+        await syncSubjectTeacherRelations(db, data._firestoreId, [], teachers, payload);
       }
     } catch (error: any) {
       console.error("Error saving subject data:", error);
@@ -280,7 +346,7 @@ export default function SubjectsPage() {
   };
 
   // Quick Apply Preset to New Form
-  const handleApplyPreset = (preset: SubjectPreset) => {
+  const handleApplyPreset = (preset: SubjectPresetDef) => {
     if (isGuru) return;
     setCrudState({
       open: true,
@@ -288,11 +354,13 @@ export default function SubjectsPage() {
       data: {
         code: preset.code,
         name: preset.name,
-        category: preset.category,
+        category: (preset.category === "Kejuruan / Produktif" ? "Peminatan" : preset.category) as "Wajib" | "Peminatan" | "Muatan Lokal",
         creditHours: preset.creditHours,
         level: preset.level,
         kkm: preset.kkm,
         description: preset.description,
+        teacherIds: [],
+        teachers: [],
         teacher: "-",
         status: "Aktif"
       }
@@ -317,7 +385,7 @@ export default function SubjectsPage() {
       let count = 0;
 
       selectedBatchPresets.forEach(code => {
-        const preset = STANDARD_PRESETS.find(p => p.code === code);
+        const preset = activePresets.find(p => p.code === code);
         if (preset) {
           const docRef = doc(collection(db, "subjects"));
           batch.set(docRef, {
@@ -351,12 +419,17 @@ export default function SubjectsPage() {
 
   // Filtered & Searched Subjects List
   const filteredSubjects = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
     return subjects.filter((item) => {
+      const assignedTeachers = getTeachersForSubject(item, teachers);
+      const teacherNames = assignedTeachers.map(t => t.name).join(" ").toLowerCase();
+
       const matchSearch = 
-        !searchQuery.trim() ||
-        (item.name || "").toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-        (item.code || "").toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-        (item.teacher || "").toLowerCase().includes(searchQuery.toLowerCase().trim());
+        !q ||
+        (item.name || "").toLowerCase().includes(q) ||
+        (item.code || "").toLowerCase().includes(q) ||
+        (item.teacher || "").toLowerCase().includes(q) ||
+        teacherNames.includes(q);
 
       const matchCategory = 
         selectedCategory === "All" || item.category === selectedCategory;
@@ -366,7 +439,7 @@ export default function SubjectsPage() {
 
       return matchSearch && matchCategory && matchStatus;
     });
-  }, [subjects, searchQuery, selectedCategory, selectedStatus]);
+  }, [subjects, searchQuery, selectedCategory, selectedStatus, teachers]);
 
   // Analytics
   const activeCount = subjects.filter(s => (s.status || "Aktif") === "Aktif").length;
@@ -890,14 +963,14 @@ export default function SubjectsPage() {
               type="button"
               onClick={() => {
                 // Preselect subjects that aren't yet in system
-                const unadded = STANDARD_PRESETS.filter(p => !existingCodes.has(p.code.toUpperCase())).map(p => p.code);
+                const unadded = activePresets.filter(p => !existingCodes.has(p.code.toUpperCase())).map(p => p.code);
                 setSelectedBatchPresets(unadded);
                 setShowBatchModal(true);
               }}
               className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 text-[#531FFF] hover:bg-purple-100 border border-purple-200/80 rounded-lg text-[13px] font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
             >
               <Sparkles className="w-4 h-4 text-[#531FFF]" />
-              <span>Paket Kurikulum Nasional</span>
+              <span>Paket Kurikulum {stageConfig.name}</span>
             </button>
 
             {/* New Subject Button */}
@@ -909,7 +982,7 @@ export default function SubjectsPage() {
                 data: {
                   category: "Wajib",
                   creditHours: "3 JP",
-                  kkm: 75,
+                  kkm: stageConfig.defaultKkm || 75,
                   level: "Semua Tingkat",
                   status: "Aktif",
                   teacher: "-"
@@ -931,7 +1004,7 @@ export default function SubjectsPage() {
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-[#531FFF]" />
               <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-800">
-                Template Cepat: Tambah Sekali Klik
+                Template Cepat: Tambah Sekali Klik ({stageConfig.name})
               </h3>
             </div>
             <span className="text-[11px] font-semibold text-gray-400">
@@ -940,7 +1013,7 @@ export default function SubjectsPage() {
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
-            {STANDARD_PRESETS.slice(0, 10).map((preset) => {
+            {activePresets.slice(0, 10).map((preset) => {
               const isAlreadyAdded = existingCodes.has(preset.code.toUpperCase());
               return (
                 <button
@@ -972,7 +1045,7 @@ export default function SubjectsPage() {
               onClick={() => setShowBatchModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[#531FFF] hover:underline shrink-0 cursor-pointer"
             >
-              <span>Lihat Semua ({STANDARD_PRESETS.length})</span>
+              <span>Lihat Semua ({activePresets.length})</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -1172,7 +1245,7 @@ export default function SubjectsPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCrudState({ open: true, mode: "create" })}
+                  onClick={() => openSubjectCrud("create")}
                   className="px-4 py-2 bg-[#531FFF] text-white hover:bg-[#4314cc] rounded-lg text-xs font-bold transition-colors cursor-pointer"
                 >
                   + Tambah Manual
@@ -1187,6 +1260,7 @@ export default function SubjectsPage() {
           {filteredSubjects.map((item) => {
             const isWajib = item.category === "Wajib";
             const isPeminatan = item.category === "Peminatan";
+            const assignedTeachers = getTeachersForSubject(item, teachers);
 
             return (
               <div
@@ -1249,11 +1323,27 @@ export default function SubjectsPage() {
                       <span>KKM: <strong>{item.kkm || 75}</strong></span>
                     </div>
 
-                    <div className="col-span-2 flex items-center gap-2 text-xs font-semibold text-gray-600 truncate">
-                      <UserCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                      <span className="truncate">
-                        Guru: {item.teacher && item.teacher !== "-" ? item.teacher : <em className="text-gray-400">Belum Ditentukan</em>}
-                      </span>
+                    <div className="col-span-2 pt-2 border-t border-gray-100 flex flex-col gap-1.5">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700">
+                        <UserCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                        <span className="font-bold">Guru Pengajar ({assignedTeachers.length}):</span>
+                      </div>
+                      {assignedTeachers.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5 pl-5">
+                          {assignedTeachers.map((t, idx) => (
+                            <span 
+                              key={idx}
+                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-purple-50 text-[#531FFF] border border-purple-100 text-[11px] font-bold shadow-2xs"
+                              title={t.nip ? `NIP: ${t.nip}` : undefined}
+                            >
+                              <ProfileAvatar name={t.name} size="xs" />
+                              <span className="truncate max-w-[140px]">{t.name}</span>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="pl-5 text-gray-400 italic text-[11px]">Belum Ditentukan</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1262,7 +1352,7 @@ export default function SubjectsPage() {
                 <div className="flex items-center justify-between gap-2 mt-5 pt-3 border-t border-gray-100">
                   <button
                     type="button"
-                    onClick={() => setCrudState({ open: true, mode: "view", data: item })}
+                    onClick={() => openSubjectCrud("view", item)}
                     className="text-xs font-bold text-gray-500 hover:text-[#531FFF] flex items-center gap-1 transition-colors cursor-pointer"
                   >
                     <Eye className="w-3.5 h-3.5" />
@@ -1273,7 +1363,7 @@ export default function SubjectsPage() {
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
+                        onClick={() => openSubjectCrud("edit", item)}
                         className="p-2 rounded-lg text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-all cursor-pointer"
                         title="Edit Mapel"
                       >
@@ -1281,7 +1371,7 @@ export default function SubjectsPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
+                        onClick={() => openSubjectCrud("delete", item)}
                         className="p-2 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
                         title="Hapus Mapel"
                       >
@@ -1311,82 +1401,100 @@ export default function SubjectsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredSubjects.map((item) => (
-                  <tr key={item._firestoreId} className="hover:bg-purple-50/20 transition-colors group">
-                    <td className="py-4 px-6 font-mono font-black text-xs text-gray-800">
-                      {item.code || "-"}
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="font-extrabold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors">
-                        {item.name || "-"}
-                      </div>
-                      {item.level && item.level !== "Semua Tingkat" && (
-                        <span className="text-[10px] text-gray-400 font-semibold">{item.level}</span>
-                      )}
-                    </td>
-                    <td className="py-4 px-6">
-                      <span className={cn(
-                        "px-2.5 py-0.5 rounded-md text-xs font-bold border",
-                        item.category === "Wajib" 
-                          ? "bg-blue-50 text-blue-700 border-blue-200"
-                          : item.category === "Peminatan"
-                            ? "bg-purple-50 text-purple-700 border-purple-200"
-                            : "bg-amber-50 text-amber-700 border-amber-200"
-                      )}>
-                        {item.category || "Wajib"}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="text-xs font-bold text-gray-800">{item.creditHours || "3 JP"}</div>
-                      <div className="text-[11px] font-medium text-emerald-600">KKM: {item.kkm || 75}</div>
-                    </td>
-                    <td className="py-4 px-6 text-xs font-semibold text-gray-700">
-                      {item.teacher && item.teacher !== "-" ? item.teacher : <span className="text-gray-400 italic">Belum Ada</span>}
-                    </td>
-                    <td className="py-4 px-6 text-center">
-                      <span className={cn(
-                        "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border",
-                        (item.status || "Aktif") === "Aktif"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-gray-100 text-gray-500 border-gray-200"
-                      )}>
-                        {item.status || "Aktif"}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setCrudState({ open: true, mode: "view", data: item })}
-                          className="p-1.5 rounded-md text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
-                          title="Lihat Detail"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {!isGuru && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
-                              className="p-1.5 rounded-md text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
-                              title="Edit"
-                            >
-                              <PenTool className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setCrudState({ open: true, mode: "delete", data: item })}
-                              className="p-1.5 rounded-md text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                              title="Hapus"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
+                {filteredSubjects.map((item) => {
+                  const assignedTeachers = getTeachersForSubject(item, teachers);
+                  return (
+                    <tr key={item._firestoreId} className="hover:bg-purple-50/20 transition-colors group">
+                      <td className="py-4 px-6 font-mono font-black text-xs text-gray-800">
+                        {item.code || "-"}
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="font-extrabold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors">
+                          {item.name || "-"}
+                        </div>
+                        {item.level && item.level !== "Semua Tingkat" && (
+                          <span className="text-[10px] text-gray-400 font-semibold">{item.level}</span>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className={cn(
+                          "px-2.5 py-0.5 rounded-md text-xs font-bold border",
+                          item.category === "Wajib" 
+                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                            : item.category === "Peminatan"
+                              ? "bg-purple-50 text-purple-700 border-purple-200"
+                              : "bg-amber-50 text-amber-700 border-amber-200"
+                        )}>
+                          {item.category || "Wajib"}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="text-xs font-bold text-gray-800">{item.creditHours || "3 JP"}</div>
+                        <div className="text-[11px] font-medium text-emerald-600">KKM: {item.kkm || 75}</div>
+                      </td>
+                      <td className="py-4 px-6 text-xs font-semibold text-gray-700">
+                        {assignedTeachers.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-1.5 max-w-[280px]">
+                            {assignedTeachers.map((t, idx) => (
+                              <span 
+                                key={idx}
+                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-purple-50 text-[#531FFF] border border-purple-100 text-[11px] font-bold shadow-2xs"
+                                title={t.nip ? `NIP: ${t.nip}` : undefined}
+                              >
+                                <ProfileAvatar name={t.name} size="xs" />
+                                <span>{t.name}</span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 italic">Belum Ada</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <span className={cn(
+                          "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border",
+                          (item.status || "Aktif") === "Aktif"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-gray-100 text-gray-500 border-gray-200"
+                        )}>
+                          {item.status || "Aktif"}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => openSubjectCrud("view", item)}
+                            className="p-1.5 rounded-md text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
+                            title="Lihat Detail"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {!isGuru && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openSubjectCrud("edit", item)}
+                                className="p-1.5 rounded-md text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 transition-colors cursor-pointer"
+                                title="Edit"
+                              >
+                                <PenTool className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openSubjectCrud("delete", item)}
+                                className="p-1.5 rounded-md text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                title="Hapus"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1423,12 +1531,12 @@ export default function SubjectsPage() {
 
             {/* Modal Select All Bar */}
             <div className="p-4 bg-gray-50/80 border-b border-gray-100 flex items-center justify-between text-xs font-bold text-gray-600 shrink-0">
-              <span>{selectedBatchPresets.length} dari {STANDARD_PRESETS.length} dipilih</span>
+              <span>{selectedBatchPresets.length} dari {activePresets.length} dipilih</span>
               <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => {
-                    const unadded = STANDARD_PRESETS.filter(p => !existingCodes.has(p.code.toUpperCase())).map(p => p.code);
+                    const unadded = activePresets.filter(p => !existingCodes.has(p.code.toUpperCase())).map(p => p.code);
                     setSelectedBatchPresets(unadded);
                   }}
                   className="text-[#531FFF] hover:underline cursor-pointer"
@@ -1448,7 +1556,7 @@ export default function SubjectsPage() {
 
             {/* Modal Presets List */}
             <div className="p-5 overflow-y-auto flex-1 custom-scrollbar space-y-2.5">
-              {STANDARD_PRESETS.map((preset) => {
+              {activePresets.map((preset) => {
                 const isAlreadyInSystem = existingCodes.has(preset.code.toUpperCase());
                 const isSelected = selectedBatchPresets.includes(preset.code);
 

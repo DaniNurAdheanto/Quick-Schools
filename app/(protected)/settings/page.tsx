@@ -41,7 +41,14 @@ import {
   Phone,
   Mail,
   Navigation,
-  School as SchoolIcon
+  School as SchoolIcon,
+  GraduationCap,
+  Briefcase,
+  BookOpen,
+  Layers,
+  ArrowRight,
+  ExternalLink,
+  User
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -52,9 +59,15 @@ import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-m
 import { useTimePresets, TimePreset } from "@/lib/time-presets";
 import SPPPaymentSettings from "@/components/settings/spp-payment-settings";
 import { useSchoolProfile, DEFAULT_SCHOOL_PROFILE, SchoolProfile } from "@/context/SchoolProfileContext";
+import {
+  EducationalStage,
+  VocationalProgram,
+  STAGE_CONFIGS
+} from "@/lib/school-level-config";
 
 type SettingCategory = 
   | "profile" 
+  | "academic_stage"
   | "grading" 
   | "attendance"
   | "time_presets"
@@ -77,7 +90,8 @@ const SETTINGS_GROUPS: NavGroup[] = [
   {
     groupTitle: "PROFIL & IDENTITAS",
     items: [
-      { id: "profile", label: "Profil Sekolah", desc: "Nama, logo, NPSN & alamat resmi", icon: Building2 }
+      { id: "profile", label: "Profil Sekolah", desc: "Nama, logo, NPSN & alamat resmi", icon: Building2 },
+      { id: "academic_stage", label: "Jenjang & Kurikulum", desc: "Pilihan SD, SMP, SMA, SMK & Jurusan", icon: GraduationCap, badge: "Utama" }
     ]
   },
   {
@@ -173,8 +187,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (tabParam && ["profile", "grading", "attendance", "time_presets", "spp_config"].includes(tabParam)) {
-      setActiveTab(tabParam);
+    if (tabParam && ["profile", "academic_stage", "grading", "attendance", "time_presets", "spp_config"].includes(tabParam)) {
+      setActiveTab(tabParam as SettingCategory);
     }
   }, [tabParam]);
 
@@ -183,11 +197,47 @@ export default function SettingsPage() {
   const [selectedAuditLog, setSelectedAuditLog] = useState<any | null>(null);
 
   // School Profile Single Source of Truth
-  const { profile: globalSchoolProfile, saveProfile: saveGlobalSchoolProfile, resetToDefault: resetSchoolProfileDefault } = useSchoolProfile();
+  const { 
+    profile: globalSchoolProfile, 
+    saveProfile: saveGlobalSchoolProfile, 
+    resetToDefault: resetSchoolProfileDefault,
+    currentStage,
+    stageConfig,
+    gradeLevels,
+    majorOptions,
+    setEducationalStage,
+    addVocationalProgram,
+    updateVocationalProgram,
+    deleteVocationalProgram,
+    resetVocationalProgramsToDefault
+  } = useSchoolProfile();
+
   const logoFileInputRef = useRef<HTMLInputElement | null>(null);
   const [showCustomLogoUrl, setShowCustomLogoUrl] = useState(false);
   const [customLogoUrlInput, setCustomLogoUrlInput] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
+
+  // Vocational Programs CRUD Modal State (for SMK)
+  const [showVocationalModal, setShowVocationalModal] = useState(false);
+  const [editingVocationalProgram, setEditingVocationalProgram] = useState<VocationalProgram | null>(null);
+  const [vocationalForm, setVocationalForm] = useState<{
+    code: string;
+    name: string;
+    field: string;
+    headOfProgram: string;
+    description: string;
+    status: "Aktif" | "Non-Aktif";
+  }>({
+    code: "",
+    name: "",
+    field: "Teknologi Informasi & Komunikasi",
+    headOfProgram: "",
+    description: "",
+    status: "Aktif"
+  });
+  const [savingVocational, setSavingVocational] = useState(false);
+  const [vocationalSearch, setVocationalSearch] = useState("");
+  const [vocationalFieldFilter, setVocationalFieldFilter] = useState("All");
 
   // Form State Definitions
   const [profile, setProfile] = useState<SchoolProfile>(() => {
@@ -203,12 +253,140 @@ export default function SettingsPage() {
       setProfile((prev) => ({
         ...prev,
         ...globalSchoolProfile,
+        educationalStage: globalSchoolProfile.educationalStage || prev.educationalStage || "SMA",
+        vocationalPrograms: Array.isArray(globalSchoolProfile.vocationalPrograms) && globalSchoolProfile.vocationalPrograms.length > 0
+          ? globalSchoolProfile.vocationalPrograms
+          : prev.vocationalPrograms,
         latitude: Number(globalSchoolProfile.latitude ?? prev.latitude ?? -6.200000),
         longitude: Number(globalSchoolProfile.longitude ?? prev.longitude ?? 106.816666),
         radiusMeters: Number(globalSchoolProfile.radiusMeters ?? prev.radiusMeters ?? 100),
       }));
     }
   }, [globalSchoolProfile]);
+
+  // Handler to change Educational Stage
+  const handleChangeStage = async (newStage: EducationalStage) => {
+    const info = STAGE_CONFIGS[newStage];
+    let correspondingType = profile.schoolType;
+    if (newStage === "SD") correspondingType = "SD (Sekolah Dasar)";
+    if (newStage === "SMP") correspondingType = "SMP (Sekolah Menengah Pertama)";
+    if (newStage === "SMA") correspondingType = "SMA (Sekolah Menengah Atas)";
+    if (newStage === "SMK") correspondingType = "SMK (Sekolah Menengah Kejuruan)";
+
+    const updatedProfile = {
+      ...profile,
+      educationalStage: newStage,
+      schoolType: correspondingType
+    };
+    setProfile(updatedProfile);
+
+    await setEducationalStage(newStage);
+    await saveGlobalSchoolProfile({
+      educationalStage: newStage,
+      schoolType: correspondingType
+    });
+
+    if (showSuccess) {
+      showSuccess(
+        `Jenjang berhasil dialihkan ke ${info.name} (${info.fullName}). Seluruh kelas, mata pelajaran, dan penilaian otomatis menyesuaikan!`,
+        "Jenjang Sekolah Diperbarui"
+      );
+    }
+  };
+
+  // Vocational Program Modal Handlers
+  const handleOpenAddVocational = () => {
+    setEditingVocationalProgram(null);
+    setVocationalForm({
+      code: "",
+      name: "",
+      field: "Teknologi Informasi & Komunikasi",
+      headOfProgram: "",
+      description: "",
+      status: "Aktif"
+    });
+    setShowVocationalModal(true);
+  };
+
+  const handleOpenEditVocational = (program: VocationalProgram) => {
+    setEditingVocationalProgram(program);
+    setVocationalForm({
+      code: program.code,
+      name: program.name,
+      field: program.field || "Teknologi Informasi & Komunikasi",
+      headOfProgram: program.headOfProgram || "",
+      description: program.description || "",
+      status: program.status || "Aktif"
+    });
+    setShowVocationalModal(true);
+  };
+
+  const handleSaveVocationalForm = async () => {
+    if (!vocationalForm.code.trim() || !vocationalForm.name.trim()) {
+      if (showError) showError("Kode dan Nama Jurusan wajib diisi!", "Validasi Gagal");
+      return;
+    }
+
+    try {
+      setSavingVocational(true);
+      if (editingVocationalProgram) {
+        await updateVocationalProgram(editingVocationalProgram.id, vocationalForm);
+        if (showSuccess) showSuccess(`Program keahlian ${vocationalForm.code} berhasil diperbarui!`, "Berhasil Edit");
+      } else {
+        await addVocationalProgram(vocationalForm);
+        if (showSuccess) showSuccess(`Program keahlian ${vocationalForm.code} berhasil ditambahkan!`, "Berhasil Tambah");
+      }
+      setShowVocationalModal(false);
+    } catch (err: any) {
+      if (showError) showError(err.message || "Gagal menyimpan jurusan", "Error");
+    } finally {
+      setSavingVocational(false);
+    }
+  };
+
+  const handleDeleteVocational = async (id: string, name: string) => {
+    if (confirm(`Apakah Anda yakin ingin menghapus program keahlian "${name}"? Data kelas dengan jurusan ini mungkin terpengaruh.`)) {
+      await deleteVocationalProgram(id);
+      if (showSuccess) showSuccess(`Program keahlian "${name}" berhasil dihapus.`, "Berhasil Hapus");
+    }
+  };
+
+  const handleLoadPopularSMKPresets = async () => {
+    if (confirm("Muat daftar 6 program keahlian / jurusan SMK populer (RPL, TKJ, DKV, AKL, MPLB, TKRO)?")) {
+      await resetVocationalProgramsToDefault();
+      if (showSuccess) showSuccess("Preset 6 jurusan SMK populer berhasil dimuat!", "Berhasil Muat Preset");
+    }
+  };
+
+  const handleToggleVocationalStatus = async (program: VocationalProgram) => {
+    const newStatus = program.status === "Aktif" ? "Non-Aktif" : "Aktif";
+    await updateVocationalProgram(program.id, { status: newStatus });
+    if (showSuccess) showSuccess(`Status program keahlian ${program.code} diubah menjadi ${newStatus}.`);
+  };
+
+  const filteredVocationalPrograms = useMemo(() => {
+    const list = profile.vocationalPrograms || [];
+    return list.filter((p) => {
+      const q = vocationalSearch.trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        p.code.toLowerCase().includes(q) ||
+        p.name.toLowerCase().includes(q) ||
+        (p.headOfProgram && p.headOfProgram.toLowerCase().includes(q)) ||
+        (p.field && p.field.toLowerCase().includes(q));
+      const matchField = vocationalFieldFilter === "All" || p.field === vocationalFieldFilter;
+      return matchSearch && matchField;
+    });
+  }, [profile.vocationalPrograms, vocationalSearch, vocationalFieldFilter]);
+
+  const uniqueVocationalFields = useMemo(() => {
+    const list = profile.vocationalPrograms || [];
+    const fields = new Set<string>();
+    list.forEach((p) => {
+      if (p.field) fields.add(p.field);
+    });
+    return Array.from(fields);
+  }, [profile.vocationalPrograms]);
 
   const [branding, setBranding] = useState({
     primaryColor: "#531FFF",
@@ -613,6 +791,8 @@ export default function SettingsPage() {
     setSavingProfile(true);
     const profilePayload: SchoolProfile = {
       ...profile,
+      educationalStage: profile.educationalStage || currentStage,
+      vocationalPrograms: profile.vocationalPrograms || globalSchoolProfile?.vocationalPrograms || [],
       latitude: Number(profile.latitude || attendance.schoolCenterLat || -6.200000),
       longitude: Number(profile.longitude || attendance.schoolCenterLng || 106.816666),
       radiusMeters: Number(profile.radiusMeters || attendance.geofenceRadiusMeters || 100),
@@ -690,6 +870,8 @@ export default function SettingsPage() {
     setSaving(true);
     const profilePayload: SchoolProfile = {
       ...profile,
+      educationalStage: profile.educationalStage || currentStage,
+      vocationalPrograms: profile.vocationalPrograms || globalSchoolProfile?.vocationalPrograms || [],
       latitude: Number(profile.latitude || attendance.schoolCenterLat || -6.200000),
       longitude: Number(profile.longitude || attendance.schoolCenterLng || 106.816666),
       radiusMeters: Number(profile.radiusMeters || attendance.geofenceRadiusMeters || 100),
@@ -1526,6 +1708,789 @@ export default function SettingsPage() {
                   </button>
                 </div>
 
+              </div>
+            </div>
+          )}
+
+          {/* TAB 1.5: Educational Stage & Vocational Programs (SD, SMP, SMA, SMK) */}
+          {activeTab === "academic_stage" && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              
+              {/* ================= HERO HEADER & LIVE STATUS KPI STRIP ================= */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
+                <div className="h-1.5 w-full bg-gradient-to-r from-[#531FFF] via-[#8B5CF6] to-pink-500" />
+                
+                <div className="p-6 md:p-8 space-y-6">
+                  {/* Top Bar with Title and Action */}
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 pb-6 border-b border-gray-100">
+                    <div className="flex items-start sm:items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-bold shadow-lg shadow-[#531FFF]/25 shrink-0">
+                        <GraduationCap className="w-7 h-7" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <h2 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">
+                            Jenjang Pendidikan & Struktur Kurikulum
+                          </h2>
+                          <span className="px-3 py-1 text-xs font-black bg-purple-50 text-[#531FFF] rounded-full border border-purple-200/80 flex items-center gap-1.5 shadow-2xs">
+                            <Sparkles className="w-3.5 h-3.5 text-[#531FFF]" />
+                            Konfigurasi Master Sekolah
+                          </span>
+                        </div>
+                        <p className="text-xs md:text-sm text-gray-500 font-medium mt-1 max-w-3xl leading-relaxed">
+                          Pilihan jenjang satuan pendidikan (SD, SMP, SMA, SMK) secara dinamis menyelaraskan rombel kelas, kurikulum mata pelajaran, standar ketuntasan (KKM), dan pengelolaan jurusan di seluruh ekosistem Smart School OS.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveProfileOnly}
+                      disabled={savingProfile}
+                      className="px-6 py-3 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-xl hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm shrink-0 disabled:opacity-50"
+                    >
+                      {savingProfile ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                          <span>Menyimpan Konfigurasi...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4 text-white" />
+                          <span>Simpan Konfigurasi Jenjang</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* 4 Live Summary KPI Tiles */}
+                  <div>
+                    <div className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400 mb-3 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                      Ringkasan Status Jenjang Sekolah Aktif
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                      {/* KPI 1: Jenjang Aktif */}
+                      <div className="p-4 rounded-xl bg-gradient-to-br from-purple-50/60 to-white border border-purple-100 shadow-2xs flex items-center gap-3.5">
+                        <div className="w-11 h-11 rounded-xl bg-white border border-purple-200 flex items-center justify-center text-[#531FFF] font-black text-base shadow-xs shrink-0">
+                          {stageConfig.id}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">
+                            Satuan Pendidikan
+                          </span>
+                          <span className="text-sm font-black text-gray-900 block truncate">
+                            Jenjang {stageConfig.name}
+                          </span>
+                          <span className="text-[11px] text-[#531FFF] font-bold block truncate">
+                            {stageConfig.fullName}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* KPI 2: Rentang Rombel */}
+                      <div className="p-4 rounded-xl bg-gray-50/80 border border-gray-200/70 shadow-2xs flex items-center gap-3.5">
+                        <div className="w-11 h-11 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-blue-600 font-bold shadow-xs shrink-0">
+                          <Building2 className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">
+                            Rombongan Belajar
+                          </span>
+                          <span className="text-sm font-black text-gray-900 block truncate">
+                            {stageConfig.levelRange}
+                          </span>
+                          <span className="text-[11px] text-gray-500 font-medium block truncate">
+                            {gradeLevels.length} Tingkat Kelas Aktif
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* KPI 3: Standar KKM */}
+                      <div className="p-4 rounded-xl bg-emerald-50/50 border border-emerald-100 shadow-2xs flex items-center gap-3.5">
+                        <div className="w-11 h-11 rounded-xl bg-white border border-emerald-200 flex items-center justify-center text-emerald-600 font-bold shadow-xs shrink-0">
+                          <Award className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">
+                            Standar Ketuntasan
+                          </span>
+                          <span className="text-sm font-black text-emerald-800 block truncate">
+                            KKM {stageConfig.defaultKkm} Poin
+                          </span>
+                          <span className="text-[11px] text-emerald-600 font-medium block truncate">
+                            Rujukan Baku Buku Nilai
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* KPI 4: Model Peminatan / Jurusan */}
+                      <div className="p-4 rounded-xl bg-amber-50/50 border border-amber-100 shadow-2xs flex items-center gap-3.5">
+                        <div className="w-11 h-11 rounded-xl bg-white border border-amber-200 flex items-center justify-center text-amber-600 font-bold shadow-xs shrink-0">
+                          <Briefcase className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">
+                            Struktur Jurusan
+                          </span>
+                          <span className="text-sm font-black text-amber-900 block truncate">
+                            {currentStage === "SMK"
+                              ? `${(profile.vocationalPrograms || []).length} Program Keahlian`
+                              : currentStage === "SMA"
+                              ? "3 Peminatan Akademik"
+                              : "Kelas Reguler Terpadu"}
+                          </span>
+                          <span className="text-[11px] text-amber-700 font-medium block truncate">
+                            {currentStage === "SMK"
+                              ? `${(profile.vocationalPrograms || []).filter(p => p.status === "Aktif").length} Jurusan Aktif`
+                              : currentStage === "SMA"
+                              ? "MIPA, IPS, & Bahasa"
+                              : "Tanpa Penjurusan Khusus"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ================= SECTION 1: 4 INTERACTIVE STAGE SELECTOR CARDS ================= */}
+              <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black bg-purple-100 text-[#531FFF]">
+                        Langkah 1
+                      </span>
+                      <h3 className="text-base font-black text-gray-900 tracking-tight">
+                        Pilih Satuan Pendidikan Sekolah
+                      </h3>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Klik salah satu kartu jenjang di bawah ini untuk mengubah konfigurasi utama sistem secara instan.
+                    </p>
+                  </div>
+
+                  <span className="text-xs font-bold text-gray-400 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200/60 self-start sm:self-auto">
+                    4 Jenjang Pendidikan Nasional
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {(["SD", "SMP", "SMA", "SMK"] as EducationalStage[]).map((stageKey) => {
+                    const cfg = STAGE_CONFIGS[stageKey];
+                    const isSelected = (profile.educationalStage || currentStage) === stageKey;
+
+                    return (
+                      <div
+                        key={stageKey}
+                        onClick={() => handleChangeStage(stageKey)}
+                        className={cn(
+                          "relative rounded-2xl p-5 border-2 transition-all cursor-pointer flex flex-col justify-between group text-left",
+                          isSelected
+                            ? "bg-gradient-to-b from-purple-50/80 via-white to-indigo-50/30 border-[#531FFF] shadow-lg shadow-purple-500/10 ring-2 ring-[#531FFF]/20 scale-[1.01]"
+                            : "bg-white border-gray-200/90 hover:border-purple-200 hover:shadow-md hover:bg-gray-50/30"
+                        )}
+                      >
+                        {/* Selected Live Badge */}
+                        {isSelected && (
+                          <div className="absolute top-3.5 right-3.5 flex items-center gap-1.5 bg-[#531FFF] text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full shadow-xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            <span>Sedang Aktif</span>
+                          </div>
+                        )}
+
+                        <div className="space-y-3.5">
+                          {/* Stage Icon & Titles */}
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              "w-12 h-12 rounded-xl flex items-center justify-center font-black text-base shadow-xs shrink-0 border",
+                              cfg.badgeBg, cfg.badgeColor, cfg.borderColor
+                            )}>
+                              {stageKey}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-base font-black text-gray-900 block leading-tight">
+                                Jenjang {stageKey}
+                              </span>
+                              <span className="text-[11px] text-gray-400 font-medium block truncate">
+                                {cfg.fullName}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Quick Spec Tags */}
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            <div className="p-2 rounded-lg bg-gray-50 border border-gray-100">
+                              <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wider block">
+                                Rentang Kelas
+                              </span>
+                              <span className="text-xs font-bold text-gray-800 block">
+                                {cfg.levelRange}
+                              </span>
+                            </div>
+
+                            <div className="p-2 rounded-lg bg-emerald-50/60 border border-emerald-100">
+                              <span className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider block">
+                                KKM Acuan
+                              </span>
+                              <span className="text-xs font-black text-emerald-800 block">
+                                {cfg.defaultKkm} Poin
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Curriculum & Cycle Info */}
+                          <div className="p-2.5 rounded-xl bg-gray-50/90 border border-gray-100 space-y-1">
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider block flex items-center gap-1">
+                              <BookOpen className="w-3 h-3 text-[#531FFF]" />
+                              Siklus Kurikulum
+                            </span>
+                            <span className="text-xs text-gray-700 font-bold block line-clamp-1">
+                              {cfg.curriculumCycle}
+                            </span>
+                          </div>
+
+                          {/* Description */}
+                          <p className="text-[11px] text-gray-500 leading-relaxed font-medium">
+                            {cfg.description}
+                          </p>
+                        </div>
+
+                        {/* Interactive Footer Button */}
+                        <div className="mt-5 pt-3 border-t border-gray-100">
+                          <button
+                            type="button"
+                            className={cn(
+                              "w-full py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2",
+                              isSelected
+                                ? "bg-[#531FFF] text-white shadow-sm"
+                                : "bg-gray-100 text-gray-700 hover:bg-purple-100 hover:text-[#531FFF]"
+                            )}
+                          >
+                            {isSelected ? (
+                              <>
+                                <Check className="w-4 h-4 stroke-[3]" />
+                                <span>Jenjang Terpilih</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>Beralih ke Jenjang Ini</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ================= SECTION 2: DYNAMIC STAGE CONFIG & VOCATIONAL CONSOLE ================= */}
+              {(profile.educationalStage || currentStage) === "SMK" ? (
+                /* SMK: COMPREHENSIVE VOCATIONAL PROGRAM CONSOLE */
+                <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6">
+                  
+                  {/* Top Bar with Filter and Action Buttons */}
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-gray-100 pb-5">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black bg-amber-100 text-amber-800">
+                          Langkah 2
+                        </span>
+                        <h3 className="text-base md:text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
+                          Pengelolaan Jurusan & Program Keahlian SMK
+                        </h3>
+                      </div>
+                      <p className="text-xs text-gray-500 font-medium mt-1">
+                        Kelola daftar kompetensi keahlian resmi sekolah. Setiap jurusan akan otomatis menjadi pilihan pada form kelas, rombel, guru pengampu, dan data siswa.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleLoadPopularSMKPresets}
+                        className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-2xs active:scale-95"
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-600" />
+                        <span>Muat 6 Preset Populer</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleOpenAddVocational}
+                        className="px-5 py-2.5 bg-[#531FFF] hover:bg-[#4317CC] text-white text-xs font-black rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/20 active:scale-95"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Tambah Jurusan Baru</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Search, Filter & Quick Count Strip */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/80 p-3 rounded-xl border border-gray-200/70">
+                    <div className="flex items-center gap-2.5 flex-1 max-w-lg">
+                      <div className="relative flex-1">
+                        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          placeholder="Cari kode, nama jurusan, bidang, atau kaprog..."
+                          value={vocationalSearch}
+                          onChange={(e) => setVocationalSearch(e.target.value)}
+                          className="w-full pl-9 pr-8 py-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-[#531FFF] focus:ring-2 focus:ring-[#531FFF]/20 transition-all"
+                        />
+                        {vocationalSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setVocationalSearch("")}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <select
+                        value={vocationalFieldFilter}
+                        onChange={(e) => setVocationalFieldFilter(e.target.value)}
+                        className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:border-[#531FFF] focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer shrink-0"
+                      >
+                        <option value="All">Semua Bidang Keahlian</option>
+                        {uniqueVocationalFields.map((f) => (
+                          <option key={f} value={f}>{f}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs font-bold text-gray-500 self-end sm:self-auto">
+                      <span className="px-2.5 py-1 bg-white rounded-lg border border-gray-200 text-gray-700">
+                        Total: <strong className="text-gray-900">{(profile.vocationalPrograms || []).length}</strong>
+                      </span>
+                      <span className="px-2.5 py-1 bg-emerald-50 rounded-lg border border-emerald-200 text-emerald-800">
+                        Aktif: <strong>{(profile.vocationalPrograms || []).filter(p => p.status === "Aktif").length}</strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* List of Vocational Programs Cards */}
+                  {(!profile.vocationalPrograms || profile.vocationalPrograms.length === 0) ? (
+                    /* Initial Empty State */
+                    <div className="p-10 md:p-14 text-center bg-amber-50/30 rounded-2xl border-2 border-dashed border-amber-200 space-y-4">
+                      <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto shadow-sm">
+                        <Briefcase className="w-8 h-8" />
+                      </div>
+                      <div className="max-w-md mx-auto space-y-1">
+                        <h4 className="text-base font-black text-gray-900">
+                          Belum Ada Program Keahlian / Jurusan SMK
+                        </h4>
+                        <p className="text-xs text-gray-500 leading-relaxed">
+                          Daftarkan program keahlian secara manual atau muat paket 6 preset jurusan SMK populer (RPL, TKJ, DKV, AKL, MPLB, TKRO) dalam sekali klik.
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-center gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={handleLoadPopularSMKPresets}
+                          className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-xs font-black rounded-xl hover:shadow-md transition-all cursor-pointer flex items-center gap-2"
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          <span>Muat 6 Preset Jurusan Populer</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleOpenAddVocational}
+                          className="px-5 py-2.5 bg-[#531FFF] text-white text-xs font-black rounded-xl hover:bg-[#4317CC] transition-all cursor-pointer flex items-center gap-2"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Tambah Manual</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : filteredVocationalPrograms.length === 0 ? (
+                    /* Filter Empty State */
+                    <div className="p-8 text-center bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+                      <p className="text-xs font-bold text-gray-700">
+                        Tidak ada jurusan yang cocok dengan pencarian &quot;{vocationalSearch}&quot;.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => { setVocationalSearch(""); setVocationalFieldFilter("All"); }}
+                        className="text-xs text-[#531FFF] font-bold hover:underline"
+                      >
+                        Reset Filter Pencarian
+                      </button>
+                    </div>
+                  ) : (
+                    /* Populated Grid */
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filteredVocationalPrograms.map((prog) => {
+                        const isActive = prog.status === "Aktif";
+
+                        return (
+                          <div
+                            key={prog.id}
+                            className={cn(
+                              "bg-white border rounded-2xl p-5 space-y-4 hover:shadow-md transition-all flex flex-col justify-between group",
+                              isActive ? "border-gray-200 hover:border-[#531FFF]/40" : "border-gray-200/60 opacity-75 bg-gray-50/50"
+                            )}
+                          >
+                            <div className="space-y-3">
+                              {/* Top Bar: Code Badge, Status Toggle, Actions */}
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="px-3 py-1 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white font-mono font-black text-xs rounded-xl shadow-xs">
+                                    {prog.code}
+                                  </span>
+
+                                  {/* Clickable Quick Status Toggle */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleVocationalStatus(prog)}
+                                    title="Klik untuk mengubah status aktif/non-aktif"
+                                    className={cn(
+                                      "px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer",
+                                      isActive 
+                                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100" 
+                                        : "bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200"
+                                    )}
+                                  >
+                                    <span className={cn("w-1.5 h-1.5 rounded-full", isActive ? "bg-emerald-500" : "bg-gray-400")} />
+                                    <span>{prog.status || "Aktif"}</span>
+                                  </button>
+                                </div>
+
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditVocational(prog)}
+                                    title="Ubah Data Program Keahlian"
+                                    className="p-2 text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteVocational(prog.id, prog.name)}
+                                    title="Hapus Program Keahlian"
+                                    className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Program Name & Field */}
+                              <div>
+                                <h4 className="font-black text-sm text-gray-900 leading-snug">
+                                  {prog.name}
+                                </h4>
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100 mt-1.5">
+                                  <Briefcase className="w-3 h-3 text-amber-600" />
+                                  {prog.field || "Teknologi & Kejuruan"}
+                                </span>
+                              </div>
+
+                              {/* Description */}
+                              {prog.description && (
+                                <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed font-normal">
+                                  {prog.description}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Card Footer: Kaprog Info */}
+                            <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
+                              <span className="text-gray-400 font-medium flex items-center gap-1">
+                                <User className="w-3 h-3 text-gray-400" />
+                                Ka. Program:
+                              </span>
+                              <span className="font-bold text-gray-800">
+                                {prog.headOfProgram || "Belum Ditugaskan"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* System Note for SMK */}
+                  <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100 flex items-start gap-3">
+                    <Sparkles className="w-4 h-4 text-[#531FFF] shrink-0 mt-0.5" />
+                    <div className="space-y-0.5 text-xs text-purple-900">
+                      <p className="font-bold">Informasi Integrasi Otomatis Jurusan SMK:</p>
+                      <p className="text-[11px] text-purple-700 leading-relaxed font-medium">
+                        Setiap program keahlian yang berstatus <strong>Aktif</strong> otomatis muncul pada menu pembuatan kelas rombel (<code className="bg-white/80 px-1 py-0.5 rounded font-mono text-purple-900">/classes</code>), form pemilihan jurusan data siswa (<code className="bg-white/80 px-1 py-0.5 rounded font-mono text-purple-900">/data-siswa</code>), dan pembagian guru mata pelajaran produktif kejuruan (<code className="bg-white/80 px-1 py-0.5 rounded font-mono text-purple-900">/subjects</code>).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (profile.educationalStage || currentStage) === "SMA" ? (
+                /* SMA: VISUAL ACADEMIC TRACK MAP */
+                <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6">
+                  <div className="border-b border-gray-100 pb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black bg-indigo-100 text-indigo-800">
+                        Langkah 2
+                      </span>
+                      <h3 className="text-base font-black text-gray-900 tracking-tight">
+                        Peta Peminatan Akademik & Kurikulum SMA
+                      </h3>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Jenjang SMA menggunakan peminatan akademik nasional terstandar yang mempersiapkan siswa menuju perguruan tinggi dan karir akademik.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* MIPA Card */}
+                    <div className="p-5 rounded-2xl bg-gradient-to-b from-blue-50/60 to-white border border-blue-200/80 space-y-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xs">
+                        IPA
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-gray-900">MIPA (Matematika &amp; Sains)</h4>
+                        <p className="text-xs text-gray-500 mt-0.5">Fokus sains murni, logika analitis, dan teknologi.</p>
+                      </div>
+                      <div className="p-2.5 bg-white rounded-xl border border-blue-100 space-y-1">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Mata Pelajaran Khas:</span>
+                        <span className="text-xs font-bold text-blue-900 block">Fisika, Kimia, Biologi, Matematika Tingkat Lanjut</span>
+                      </div>
+                      <span className="text-[11px] text-gray-500 block">
+                        Rujukan karir: Kedokteran, Teknik, Farmasi, Data Science.
+                      </span>
+                    </div>
+
+                    {/* IPS Card */}
+                    <div className="p-5 rounded-2xl bg-gradient-to-b from-amber-50/60 to-white border border-amber-200/80 space-y-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-black text-xs">
+                        IPS
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-gray-900">IPS (Sosial &amp; Humaniora)</h4>
+                        <p className="text-xs text-gray-500 mt-0.5">Fokus dinamika masyarakat, ekonomi, dan peradaban.</p>
+                      </div>
+                      <div className="p-2.5 bg-white rounded-xl border border-amber-100 space-y-1">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Mata Pelajaran Khas:</span>
+                        <span className="text-xs font-bold text-amber-900 block">Ekonomi, Sosiologi, Geografi, Sejarah Lanjut</span>
+                      </div>
+                      <span className="text-[11px] text-gray-500 block">
+                        Rujukan karir: Bisnis, Hukum, Akuntansi, Kebijakan Publik.
+                      </span>
+                    </div>
+
+                    {/* Bahasa Card */}
+                    <div className="p-5 rounded-2xl bg-gradient-to-b from-emerald-50/60 to-white border border-emerald-200/80 space-y-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs">
+                        BHS
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-gray-900">Bahasa &amp; Budaya</h4>
+                        <p className="text-xs text-gray-500 mt-0.5">Fokus literasi global, komunikasi, dan antropologi.</p>
+                      </div>
+                      <div className="p-2.5 bg-white rounded-xl border border-emerald-100 space-y-1">
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Mata Pelajaran Khas:</span>
+                        <span className="text-xs font-bold text-emerald-900 block">Bahasa &amp; Sastra Asing, Antropologi, Linguistik</span>
+                      </div>
+                      <span className="text-[11px] text-gray-500 block">
+                        Rujukan karir: Hubungan Internasional, Sastra, Komunikasi.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* SD & SMP: THEMATIC & REGULAR FOUNDATION PROGRESSION */
+                <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6">
+                  <div className="border-b border-gray-100 pb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black bg-emerald-100 text-emerald-800">
+                        Langkah 2
+                      </span>
+                      <h3 className="text-base font-black text-gray-900 tracking-tight">
+                        Struktur Fase Pembelajaran Reguler Terpadu (Jenjang {stageConfig.name})
+                      </h3>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Jenjang {stageConfig.name} tidak memerlukan peminatan jurusan kejuruan rumit. Sistem secara otomatis menerapkan rombel kelas reguler dengan kurikulum terpadu.
+                    </p>
+                  </div>
+
+                  {currentStage === "SD" ? (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="p-5 rounded-2xl bg-emerald-50/50 border border-emerald-200/70 space-y-2">
+                        <span className="px-2.5 py-1 bg-emerald-600 text-white font-black text-xs rounded-lg inline-block">
+                          Fase A (Kelas 1 - 2)
+                        </span>
+                        <h4 className="text-sm font-black text-gray-900">Fondasi Literasi &amp; Numerasi</h4>
+                        <p className="text-xs text-gray-500 leading-relaxed font-medium">
+                          Pembiasaan karakter dasar, membaca lancar, berhitung konkret, dan eksplorasi lingkungan tematik.
+                        </p>
+                      </div>
+
+                      <div className="p-5 rounded-2xl bg-sky-50/50 border border-sky-200/70 space-y-2">
+                        <span className="px-2.5 py-1 bg-sky-600 text-white font-black text-xs rounded-lg inline-block">
+                          Fase B (Kelas 3 - 4)
+                        </span>
+                        <h4 className="text-sm font-black text-gray-900">Penguatan Konseptual</h4>
+                        <p className="text-xs text-gray-500 leading-relaxed font-medium">
+                          Mulai mengenal IPAS terpadu dasar, logika sains sederhana, kerja kelompok, dan seni budaya terapan.
+                        </p>
+                      </div>
+
+                      <div className="p-5 rounded-2xl bg-purple-50/50 border border-purple-200/70 space-y-2">
+                        <span className="px-2.5 py-1 bg-[#531FFF] text-white font-black text-xs rounded-lg inline-block">
+                          Fase C (Kelas 5 - 6)
+                        </span>
+                        <h4 className="text-sm font-black text-gray-900">Pemantapan &amp; Kesiapan SMP</h4>
+                        <p className="text-xs text-gray-500 leading-relaxed font-medium">
+                          Penalaran kritis mandiri, proyek P5 Kurikulum Merdeka, dan persiapan kelulusan menuju jenjang menengah.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-5 rounded-2xl bg-sky-50/60 border border-sky-200 space-y-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold">
+                          <Layers className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-gray-900">Fase D Kurikulum Merdeka (Kelas 7, 8, dan 9 SMP)</h4>
+                          <p className="text-xs text-gray-500">Pematangan konsep mata pelajaran mandiri sebelum menentukan peminatan di tingkat SMA/SMK.</p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-600 leading-relaxed font-medium">
+                        Pada jenjang SMP, mata pelajaran dipisahkan secara terstruktur (IPA Terpadu, IPS Terpadu, Informatika, Bahasa Inggris, PPKn, dsb.) dengan pengelolaan rombel kelas reguler (A, B, C / Unggulan) yang sangat fleksibel.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ================= SECTION 3: LIVE CROSS-MODULE INTEGRATION PIPELINE ================= */}
+              <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6">
+                <div className="border-b border-gray-100 pb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black bg-purple-100 text-[#531FFF]">
+                      Langkah 3
+                    </span>
+                    <h3 className="text-base font-black text-gray-900 tracking-tight flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-[#531FFF]" />
+                      Status Penyelarasan Sistem Global Antar Modul
+                    </h3>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Setiap pergantian jenjang sekolah secara otomatis mengalirkan konfigurasi ke seluruh modul operasional berikut secara real-time:
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Module 1: Classes */}
+                  <div className="p-4 rounded-2xl bg-gray-50/80 border border-gray-200/80 space-y-3 flex flex-col justify-between hover:bg-white hover:border-[#531FFF]/40 hover:shadow-sm transition-all">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="w-8 h-8 rounded-lg bg-purple-100 text-[#531FFF] flex items-center justify-center font-bold">
+                          <Building2 className="w-4 h-4" />
+                        </div>
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[10px] font-extrabold">
+                          Tersinkron 100%
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-black text-gray-900">Manajemen Rombel Kelas</h4>
+                      <p className="text-[11px] text-gray-500 leading-relaxed font-medium">
+                        Opsi tingkat dibatasi ke <strong>{gradeLevels.join(", ")}</strong>. Jurusan: <strong>{majorOptions.slice(0, 3).map(m => m.value).join(", ")}{majorOptions.length > 3 ? "..." : ""}</strong>.
+                      </p>
+                    </div>
+
+                    <Link
+                      href="/classes"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#531FFF] hover:underline pt-2 border-t border-gray-200/60"
+                    >
+                      <span>Buka Modul Kelas</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </Link>
+                  </div>
+
+                  {/* Module 2: Subjects */}
+                  <div className="p-4 rounded-2xl bg-gray-50/80 border border-gray-200/80 space-y-3 flex flex-col justify-between hover:bg-white hover:border-[#531FFF]/40 hover:shadow-sm transition-all">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                          <BookOpen className="w-4 h-4" />
+                        </div>
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[10px] font-extrabold">
+                          Tersinkron 100%
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-black text-gray-900">Kurikulum Mata Pelajaran</h4>
+                      <p className="text-[11px] text-gray-500 leading-relaxed font-medium">
+                        Paket preset kurikulum otomatis menyajikan mapel rujukan jenjang <strong>{stageConfig.name}</strong>.
+                      </p>
+                    </div>
+
+                    <Link
+                      href="/subjects"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#531FFF] hover:underline pt-2 border-t border-gray-200/60"
+                    >
+                      <span>Buka Modul Mapel</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </Link>
+                  </div>
+
+                  {/* Module 3: Grades */}
+                  <div className="p-4 rounded-2xl bg-gray-50/80 border border-gray-200/80 space-y-3 flex flex-col justify-between hover:bg-white hover:border-[#531FFF]/40 hover:shadow-sm transition-all">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold">
+                          <Award className="w-4 h-4" />
+                        </div>
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[10px] font-extrabold">
+                          Tersinkron 100%
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-black text-gray-900">Penilaian &amp; Buku Nilai</h4>
+                      <p className="text-[11px] text-gray-500 leading-relaxed font-medium">
+                        Standar KKM matriks spreadsheet otomatis terpatok ke <strong>{stageConfig.defaultKkm} poin</strong>.
+                      </p>
+                    </div>
+
+                    <Link
+                      href="/grades"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#531FFF] hover:underline pt-2 border-t border-gray-200/60"
+                    >
+                      <span>Buka Buku Nilai</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </Link>
+                  </div>
+
+                  {/* Module 4: Students */}
+                  <div className="p-4 rounded-2xl bg-gray-50/80 border border-gray-200/80 space-y-3 flex flex-col justify-between hover:bg-white hover:border-[#531FFF]/40 hover:shadow-sm transition-all">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                          <UserCog className="w-4 h-4" />
+                        </div>
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[10px] font-extrabold">
+                          Tersinkron 100%
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-black text-gray-900">Basis Data Siswa</h4>
+                      <p className="text-[11px] text-gray-500 leading-relaxed font-medium">
+                        Form pendaftaran siswa otomatis menyelaraskan opsi jurusan dan tingkat rombel sekolah.
+                      </p>
+                    </div>
+
+                    <Link
+                      href="/data-siswa"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#531FFF] hover:underline pt-2 border-t border-gray-200/60"
+                    >
+                      <span>Buka Data Siswa</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </Link>
+                  </div>
+                </div>
               </div>
 
             </div>
@@ -2700,7 +3665,7 @@ export default function SettingsPage() {
           )}
 
           {/* Render Default Placeholder for Other Active Tabs */}
-          {!["profile", "branding", "attendance", "grading", "roles", "history", "security", "preferences", "privacy", "time_presets", "spp_config"].includes(activeTab) && (
+          {!["profile", "branding", "attendance", "grading", "roles", "history", "security", "preferences", "privacy", "time_presets", "spp_config", "academic_stage"].includes(activeTab) && (
             <div className="bg-white p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] text-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto border border-purple-100">
                 <Sparkles className="w-8 h-8" />
@@ -2801,6 +3766,173 @@ export default function SettingsPage() {
                 className="w-full py-2.5 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-700 shadow-md"
               >
                 Konfirmasi Purge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VOCATIONAL PROGRAM MODAL (SMK JURUSAN CRUD) */}
+      {showVocationalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" 
+            onClick={() => !savingVocational && setShowVocationalModal(false)} 
+          />
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-10 animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-purple-50 via-white to-purple-50/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center border border-[#531FFF]/20">
+                  <Briefcase className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-gray-900">
+                    {editingVocationalProgram ? "Ubah Program Keahlian (Jurusan)" : "Tambah Jurusan Baru"}
+                  </h3>
+                  <p className="text-xs text-gray-500 font-medium">
+                    {editingVocationalProgram ? `Mengedit jurusan ${editingVocationalProgram.code}` : "Tambahkan program keahlian baru untuk jenjang SMK"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => !savingVocational && setShowVocationalModal(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-1">
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                    Kode Jurusan <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: RPL"
+                    value={vocationalForm.code}
+                    onChange={(e) => setVocationalForm({ ...vocationalForm, code: e.target.value.toUpperCase() })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:border-[#531FFF] focus:ring-2 focus:ring-[#531FFF]/20 outline-none transition-all uppercase"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">Singkatan / Akronim</p>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                    Nama Program Keahlian <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Rekayasa Perangkat Lunak"
+                    value={vocationalForm.name}
+                    onChange={(e) => setVocationalForm({ ...vocationalForm, name: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:bg-white focus:border-[#531FFF] focus:ring-2 focus:ring-[#531FFF]/20 outline-none transition-all"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">Nama lengkap jurusan</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                  Bidang / Sektor Keahlian
+                </label>
+                <select
+                  value={vocationalForm.field}
+                  onChange={(e) => setVocationalForm({ ...vocationalForm, field: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:border-[#531FFF] focus:ring-2 focus:ring-[#531FFF]/20 outline-none transition-all"
+                >
+                  <option value="Teknologi Informasi & Komunikasi">Teknologi Informasi & Komunikasi (TIK)</option>
+                  <option value="Bisnis dan Manajemen">Bisnis dan Manajemen (Bismen)</option>
+                  <option value="Teknologi Manufaktur dan Rekayasa">Teknologi Manufaktur dan Rekayasa (Teknik Mesin/Otomotif)</option>
+                  <option value="Seni dan Ekonomi Kreatif">Seni dan Ekonomi Kreatif (DKV / Multimedia)</option>
+                  <option value="Energi dan Pertambangan">Energi dan Pertambangan (Listrik / Elektronika)</option>
+                  <option value="Kesehatan dan Pekerjaan Sosial">Kesehatan dan Pekerjaan Sosial (Farmasi / Keperawatan)</option>
+                  <option value="Pariwisata">Pariwisata (Perhotelan / Kuliner / Tata Boga)</option>
+                  <option value="Agribisnis dan Agriteknologi">Agribisnis dan Agriteknologi (Pertanian / Peternakan)</option>
+                  <option value="Lainnya">Bidang Lainnya</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                    Kepala Program (Kaprog)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Nama Kaprog / Koordinator"
+                    value={vocationalForm.headOfProgram}
+                    onChange={(e) => setVocationalForm({ ...vocationalForm, headOfProgram: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-900 focus:bg-white focus:border-[#531FFF] focus:ring-2 focus:ring-[#531FFF]/20 outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                    Status Program
+                  </label>
+                  <select
+                    value={vocationalForm.status}
+                    onChange={(e) => setVocationalForm({ ...vocationalForm, status: e.target.value as "Aktif" | "Non-Aktif" })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:border-[#531FFF] focus:ring-2 focus:ring-[#531FFF]/20 outline-none transition-all"
+                  >
+                    <option value="Aktif">Aktif (Dapat dipilih di kelas & siswa)</option>
+                    <option value="Non-Aktif">Non-Aktif</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                  Deskripsi / Keterangan Singkat
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Keterangan kompetensi atau fokus kurikulum jurusan..."
+                  value={vocationalForm.description}
+                  onChange={(e) => setVocationalForm({ ...vocationalForm, description: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:bg-white focus:border-[#531FFF] focus:ring-2 focus:ring-[#531FFF]/20 outline-none transition-all resize-none"
+                />
+              </div>
+
+              <div className="p-3 bg-purple-50/70 border border-purple-100 rounded-xl flex items-start gap-2.5 text-xs text-purple-900">
+                <Sparkles className="w-4 h-4 text-[#531FFF] shrink-0 mt-0.5" />
+                <p className="text-[11px] leading-relaxed">
+                  Program keahlian ini akan langsung tersedia di menu pembuatan kelas, pemilihan jurusan siswa, dan pembagian mata pelajaran kejuruan.
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                disabled={savingVocational}
+                onClick={() => setShowVocationalModal(false)}
+                className="px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-100 transition-all cursor-pointer disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={savingVocational}
+                onClick={handleSaveVocationalForm}
+                className="px-5 py-2.5 bg-[#531FFF] text-white rounded-xl text-xs font-bold hover:bg-[#4317CC] transition-all shadow-md shadow-purple-500/20 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {savingVocational ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{editingVocationalProgram ? "Simpan Perubahan" : "Tambah Program"}</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

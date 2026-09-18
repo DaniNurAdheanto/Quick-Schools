@@ -16,6 +16,7 @@ import { isParentRole } from "@/lib/roles-config";
 import { resolveParentStudent } from "@/lib/parent-child-resolver";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
+import { getTeachersForSubject } from "@/lib/subject-teacher-relations";
 
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
@@ -145,11 +146,14 @@ export default function SchedulePage() {
     setActiveItem(null);
     setFormDay(presetDay || (selectedDay !== "Minggu" ? selectedDay : "Senin"));
     setFormClass(presetClass || (selectedClassFilter !== "All" ? selectedClassFilter : (classes[0]?.name || "")));
-    setFormSubject(subjects[0]?.name || "");
     
-    // Auto pick teacher matching subject if available
-    const matchedTeacher = teachers.find(t => t.role === (subjects[0]?.name || ""));
-    setFormTeacher(matchedTeacher ? matchedTeacher.name : (teachers[0]?.name || ""));
+    const initialSubject = subjects[0]?.name || "";
+    setFormSubject(initialSubject);
+    
+    // Auto pick qualified teacher matching subject if available
+    const matchedSubject = subjects.find(s => s.name === initialSubject || s._firestoreId === initialSubject);
+    const qualified = matchedSubject ? getTeachersForSubject(matchedSubject, teachers) : [];
+    setFormTeacher(qualified[0]?.name || teachers[0]?.name || "");
     
     setFormStartTime(presetStart || "07:00");
     setFormEndTime(presetEnd || "08:30");
@@ -177,14 +181,33 @@ export default function SchedulePage() {
     setIsModalOpen(true);
   };
 
-  // Subject change auto-selects qualified teacher
+  // Subject change auto-selects qualified teacher for this subject
   const handleSubjectChange = (newSubj: string) => {
     setFormSubject(newSubj);
-    const matchingTeacher = teachers.find(t => t.role === newSubj);
-    if (matchingTeacher) {
-      setFormTeacher(matchingTeacher.name);
+    const matchedSubject = subjects.find(s => s.name === newSubj || s._firestoreId === newSubj);
+    if (matchedSubject) {
+      const qualified = getTeachersForSubject(matchedSubject, teachers);
+      if (qualified.length > 0) {
+        setFormTeacher(qualified[0].name);
+      }
     }
   };
+
+  // Resolving qualified teachers for the currently selected subject in form
+  const selectedSubjectObj = useMemo(() => {
+    if (!formSubject) return null;
+    return subjects.find(s => s.name === formSubject || s._firestoreId === formSubject) || null;
+  }, [subjects, formSubject]);
+
+  const currentQualifiedTeachers = useMemo(() => {
+    if (!selectedSubjectObj) return [];
+    return getTeachersForSubject(selectedSubjectObj, teachers);
+  }, [selectedSubjectObj, teachers]);
+
+  const otherTeachers = useMemo(() => {
+    const qIds = new Set(currentQualifiedTeachers.map(t => t.id || t._firestoreId || t.name));
+    return teachers.filter(t => !qIds.has(t.id || t._firestoreId || t.name));
+  }, [teachers, currentQualifiedTeachers]);
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -214,12 +237,27 @@ export default function SchedulePage() {
       return;
     }
 
-    // Check conflict
+    // Resolve entities & IDs
+    const teacherObj = teachers.find(t => t.name === formTeacher);
+    const formTeacherId = teacherObj?.id || teacherObj?._firestoreId || teacherObj?.nip || "";
+    const formTeacherNip = teacherObj?.nip || teacherObj?.id || "";
+
+    const subjectObj = subjects.find(s => s.name === formSubject);
+    const formSubjectId = subjectObj?._firestoreId || subjectObj?.id || subjectObj?.code || "";
+
+    const classObj = classes.find(c => c.name === formClass);
+    const formClassId = classObj?._firestoreId || classObj?.id || formClass;
+
+    // Check conflict using ID & Name
     const conflict = schedules.find((s: any) => {
       if (modalMode === "edit" && s._firestoreId === activeItem?._firestoreId) return false;
       if (s.day !== formDay) return false;
-      if (s.teacher !== formTeacher) return false;
-      if (!s.teacher || !formTeacher) return false;
+
+      const teacherMatches = 
+        (formTeacherId && s.teacherId && s.teacherId === formTeacherId) ||
+        (s.teacher && formTeacher && s.teacher.toLowerCase().trim() === formTeacher.toLowerCase().trim());
+
+      if (!teacherMatches) return false;
 
       return (formStartTime < s.endTime && formEndTime > s.startTime);
     });
@@ -233,25 +271,28 @@ export default function SchedulePage() {
 
     setIsSubmitting(true);
     try {
+      const schedulePayload = {
+        day: formDay,
+        class: formClass,
+        classId: formClassId,
+        subject: formSubject,
+        subjectId: formSubjectId,
+        teacher: formTeacher,
+        teacherId: formTeacherId,
+        teacherNip: formTeacherNip,
+        startTime: formStartTime,
+        endTime: formEndTime,
+      };
+
       if (modalMode === "create") {
         await addDoc(collection(db, "schedules"), {
-          day: formDay,
-          class: formClass,
-          subject: formSubject,
-          teacher: formTeacher,
-          startTime: formStartTime,
-          endTime: formEndTime,
+          ...schedulePayload,
           createdAt: new Date().toISOString()
         });
         toast.showSuccess(`Jadwal pelajaran ${formSubject} di ${formClass} berhasil ditambahkan.`, "Berhasil Tambah");
       } else if (modalMode === "edit" && activeItem?._firestoreId) {
         await updateDoc(doc(db, "schedules", activeItem._firestoreId), {
-          day: formDay,
-          class: formClass,
-          subject: formSubject,
-          teacher: formTeacher,
-          startTime: formStartTime,
-          endTime: formEndTime,
+          ...schedulePayload,
           updatedAt: new Date().toISOString()
         });
         toast.showEdit(`Jadwal pelajaran ${formSubject} di ${formClass} berhasil diperbarui.`, "Berhasil Edit");
@@ -318,9 +359,13 @@ export default function SchedulePage() {
   const studentClassSchedules = useMemo(() => {
     if (!studentClassId) return [];
     const targetClass = (studentMyClass?.name || studentClassId).toLowerCase().trim();
+    const classDocId = studentMyClass?._firestoreId || studentMyClass?.id || "";
     return schedules.filter(s => {
-      const sc = (s.class || s.classId || "").toLowerCase().trim();
-      return sc === targetClass;
+      if (classDocId && s.classDocId && s.classDocId === classDocId) return true;
+      const sc = (s.class || s.classId || s.className || "").toLowerCase().trim();
+      if (sc === targetClass || sc.replace(/\s+/g, "") === targetClass.replace(/\s+/g, "")) return true;
+      if (studentMyClass?.previousNames?.some((p: string) => p && p.toLowerCase().trim() === sc)) return true;
+      return false;
     });
   }, [schedules, studentClassId, studentMyClass]);
 
@@ -1468,18 +1513,38 @@ export default function SchedulePage() {
 
                   {/* Guru Pengajar */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Guru Pengajar</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-gray-700">Guru Pengajar</label>
+                      {currentQualifiedTeachers.length > 0 && (
+                        <span className="text-[11px] font-bold text-[#531FFF] bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100">
+                          {currentQualifiedTeachers.length} Guru Pengampu Mapel Ini
+                        </span>
+                      )}
+                    </div>
                     <select
                       value={formTeacher}
                       onChange={(e) => setFormTeacher(e.target.value)}
                       className="w-full px-3 py-2 text-xs font-semibold bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
                     >
                       {teachers.length === 0 && <option value="">Pilih Guru</option>}
-                      {teachers.map(t => (
-                        <option key={t._firestoreId || t.name} value={t.name}>
-                          {t.name} {t.role ? `(${t.role})` : ""}
-                        </option>
-                      ))}
+                      {currentQualifiedTeachers.length > 0 && (
+                        <optgroup label="Guru Pengampu Resmi Mata Pelajaran Ini">
+                          {currentQualifiedTeachers.map(t => (
+                            <option key={t._firestoreId || t.id || t.name} value={t.name}>
+                              ⭐ {t.name} {t.nip ? `(NIP: ${t.nip})` : ""}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {otherTeachers.length > 0 && (
+                        <optgroup label={currentQualifiedTeachers.length > 0 ? "Guru Lainnya" : "Semua Guru"}>
+                          {otherTeachers.map(t => (
+                            <option key={t._firestoreId || t.id || t.name} value={t.name}>
+                              {t.name} {t.role ? `(${t.role})` : ""}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
                   </div>
 
