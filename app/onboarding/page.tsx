@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -28,23 +28,83 @@ import {
   Check,
   Copy,
   Lock,
-  UserCheck
+  UserCheck,
+  GraduationCap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { auth, db, storage } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, setDoc, query, collection, where, getDocs, arrayUnion } from "firebase/firestore";
+import { doc, getDoc, setDoc, query, collection, where, getDocs, arrayUnion, onSnapshot } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useToast } from "@/context/ToastContext";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { createAuthAccount } from "@/lib/create-user-auth";
 import { AuthRequiredState } from "@/components/ui/auth-required-state";
 
+function cleanFirestoreData<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return "" as any;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(cleanFirestoreData) as any;
+  }
+  if (typeof obj === "object" && !(obj instanceof Date)) {
+    const cleaned: any = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (v !== undefined) {
+        cleaned[k] = cleanFirestoreData(v);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
+async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0.75): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = document.createElement("img");
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            let width = img.width || maxWidth;
+            let height = img.height || maxWidth;
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const dataUrl = canvas.toDataURL("image/jpeg", quality);
+              resolve(dataUrl);
+              return;
+            }
+            resolve((e.target?.result as string) || "");
+          } catch {
+            resolve((e.target?.result as string) || "");
+          }
+        };
+        img.onerror = () => resolve((e.target?.result as string) || "");
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(file);
+    } catch {
+      resolve("");
+    }
+  });
+}
+
 export default function StudentOnboardingPage() {
   const router = useRouter();
   const toast = useToast();
-  const { profile } = useSchoolProfile();
-  const currentSchoolName = profile?.schoolName || "SMA Garuda Nusantara";
+  const { profile, currentStage, stageConfig, gradeLevels, majorOptions } = useSchoolProfile();
+  const currentSchoolName = profile?.schoolName || "Smart School OS";
 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>("");
@@ -108,16 +168,111 @@ export default function StudentOnboardingPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>("");
 
-  // Step 2: Data Akademik
+  // Step 2: Data Akademik (Dynamically synced with School Profile)
   const [akademik, setAkademik] = useState({
     entryYear: "2025/2026",
-    level: "SMA",
-    className: "10 IPA 1",
-    major: "MIPA",
+    level: currentStage || "SMA",
+    gradeLevel: gradeLevels[0] || (currentStage === "SD" ? "Kelas 1" : currentStage === "SMP" ? "Kelas 7" : "Kelas 10"),
+    className: "",
+    major: majorOptions[0]?.value || (currentStage === "SMK" ? "RPL" : currentStage === "SMA" ? "MIPA" : "Umum"),
     studentStatus: "Siswa Baru",
     previousSchool: "",
     previousStudentId: ""
   });
+
+  // Real-time listener for classes from Firestore
+  const [classesList, setClassesList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const q = query(collection(db, "classes"));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const cls = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setClassesList(cls);
+    }, (err) => {
+      console.warn("Classes listener warning:", err);
+    });
+    return () => unsub();
+  }, []);
+
+  // Update default akademik state when profile or stage changes
+  useEffect(() => {
+    setAkademik(prev => {
+      const stage = currentStage || "SMA";
+      const defaultLvl = gradeLevels[0] || (stage === "SD" ? "Kelas 1" : stage === "SMP" ? "Kelas 7" : "Kelas 10");
+      const defaultMaj = majorOptions[0]?.value || (stage === "SMK" ? "RPL" : stage === "SMA" ? "MIPA" : "Umum");
+      return {
+        ...prev,
+        entryYear: prev.entryYear || "2025/2026",
+        level: prev.level || stage,
+        gradeLevel: prev.gradeLevel || defaultLvl,
+        major: prev.major || defaultMaj,
+      };
+    });
+  }, [currentStage, gradeLevels, majorOptions]);
+
+  // Compute dynamic available classes matching current stage and selected level
+  const availableClasses = useMemo(() => {
+    const stage = akademik.level || currentStage;
+    const activeClasses = classesList.filter(c => (c.status || "Aktif") !== "Nonaktif");
+    
+    // If real classes exist in Firestore, prioritize matching classes
+    if (activeClasses.length > 0) {
+      const selGrade = akademik.gradeLevel || gradeLevels[0] || "";
+      const selGradeNum = selGrade.replace(/\D/g, "");
+
+      const matching = activeClasses.filter(c => {
+        const cLevel = String(c.level || "");
+        const cName = String(c.name || "");
+        return (
+          (selGrade && cLevel === selGrade) ||
+          (selGradeNum && (cLevel.includes(selGradeNum) || cName.startsWith(selGradeNum)))
+        );
+      });
+
+      if (matching.length > 0) {
+        return matching.map(c => c.name || c.id);
+      }
+      return activeClasses.map(c => c.name || c.id);
+    }
+
+    // Smart fallback generated classes based on stage & grade level
+    const selGrade = akademik.gradeLevel || gradeLevels[0] || (stage === "SD" ? "Kelas 1" : stage === "SMP" ? "Kelas 7" : "Kelas 10");
+    const lvlNum = selGrade.replace(/\D/g, "") || (stage === "SD" ? "1" : stage === "SMP" ? "7" : "10");
+
+    if (stage === "SD" || currentStage === "SD") {
+      return [`${lvlNum}A`, `${lvlNum}B`, `${lvlNum}C`, `${lvlNum} Unggulan`];
+    }
+    if (stage === "SMP" || currentStage === "SMP") {
+      return [`${lvlNum}A`, `${lvlNum}B`, `${lvlNum}C`, `${lvlNum} Unggulan`];
+    }
+    if (stage === "SMK" || currentStage === "SMK") {
+      const activeVoc = (profile.vocationalPrograms && profile.vocationalPrograms.length > 0)
+        ? profile.vocationalPrograms.filter(p => p.status !== "Non-Aktif")
+        : [{ code: "RPL" }, { code: "TKJ" }, { code: "DKV" }];
+      
+      const gen: string[] = [];
+      activeVoc.forEach(p => {
+        gen.push(`${lvlNum} ${p.code} 1`);
+        gen.push(`${lvlNum} ${p.code} 2`);
+      });
+      return gen;
+    }
+    // SMA
+    return [
+      `${lvlNum} MIPA 1`,
+      `${lvlNum} MIPA 2`,
+      `${lvlNum} IPS 1`,
+      `${lvlNum} IPS 2`,
+      `${lvlNum} Bahasa 1`
+    ];
+  }, [classesList, akademik.level, akademik.gradeLevel, currentStage, gradeLevels, profile.vocationalPrograms]);
+
+  // Keep selected className valid when availableClasses changes
+  useEffect(() => {
+    if (availableClasses.length > 0 && (!akademik.className || !availableClasses.includes(akademik.className))) {
+      setAkademik(prev => ({ ...prev, className: availableClasses[0] }));
+    }
+  }, [availableClasses, akademik.className]);
 
   // Step 3: Data Orang Tua / Wali
   const [orangTua, setOrangTua] = useState({
@@ -207,7 +362,7 @@ export default function StudentOnboardingPage() {
     }
   };
 
-  // Final Submit Handler - Robust & Persistent
+  // Final Submit Handler - 100% Robust, Persistent & Deduplicated
   const handleSubmitOnboarding = async () => {
     // 0. Ensure user is authenticated
     if (!currentUser && !auth.currentUser) {
@@ -228,36 +383,77 @@ export default function StudentOnboardingPage() {
     setSubmitting(true);
 
     try {
-      const photoUrl = await uploadPhotoIfAny();
+      // 1. Process Photo with local base64 fallback to prevent broken blob: URLs
+      let finalPhotoUrl = pribadi.photoUrl || "";
+      if (photoFile) {
+        const base64Data = await compressImageFileToBase64(photoFile, 360, 0.75);
+        if (base64Data) {
+          finalPhotoUrl = base64Data;
+        }
+        try {
+          const uploadedUrl = await uploadPhotoIfAny();
+          if (uploadedUrl && !uploadedUrl.startsWith("blob:")) {
+            finalPhotoUrl = uploadedUrl;
+          }
+        } catch (e) {
+          console.warn("Storage upload fallback used base64:", e);
+        }
+      }
+
       const activeUser = currentUser || auth.currentUser;
-      
-      // Determine target student ID:
-      // If current user is a student completing their own registration, use their auth UID.
-      // If current user is an admin or teacher testing or registering a student, create a separate student UID.
       const isAdminOrStaff = ["super-admin", "admin", "guru"].includes(currentUserRole);
       const isSelfRegistration = !isAdminOrStaff && activeUser?.uid;
-      const targetStudentUid = isSelfRegistration ? activeUser.uid : `siswa_${Date.now()}`;
-      const studentEmail = pribadi.email || (isSelfRegistration ? activeUser?.email : "") || `${pribadi.nisn || targetStudentUid}@quickschools.sch.id`;
 
-      // 1. Strictly 5 keys payload for /students/{studentId} to satisfy Firestore security rules:
-      // isValidStudent: id, name, classId, status, and imageUrl (keys().size() <= 5)
-      const studentDocPayload: Record<string, string> = {
-        id: targetStudentUid,
-        name: finalFullName.slice(0, 100),
-        classId: (akademik.className || "10 IPA 1").trim().slice(0, 50),
-        status: "Aktif",
-        imageUrl: (photoUrl || "").slice(0, 500)
-      };
+      // 2. Discover existing student records to prevent duplicates and update pre-created docs
+      const nisnClean = (pribadi.nisn || "").trim();
+      const studentEmail = (pribadi.email || (isSelfRegistration ? activeUser?.email : "") || "").trim().toLowerCase();
+      
+      const docIdsToUpdate = new Set<string>();
+      if (isSelfRegistration && activeUser?.uid) {
+        docIdsToUpdate.add(activeUser.uid);
+      }
 
-      // 2. Comprehensive rich profile payload for /users/{userId}
-      const userDocPayload: Record<string, any> = {
-        uid: targetStudentUid,
-        id: targetStudentUid,
+      // Query students collection by NISN
+      if (nisnClean && nisnClean !== "-") {
+        try {
+          const qNisn = query(collection(db, "students"), where("nisn", "==", nisnClean));
+          const snapNisn = await getDocs(qNisn);
+          snapNisn.docs.forEach(d => docIdsToUpdate.add(d.id));
+
+          const qId = query(collection(db, "students"), where("id", "==", nisnClean));
+          const snapId = await getDocs(qId);
+          snapId.docs.forEach(d => docIdsToUpdate.add(d.id));
+        } catch (e) {}
+      }
+
+      // Query students collection by Email
+      if (studentEmail) {
+        try {
+          const qEmail = query(collection(db, "students"), where("email", "==", studentEmail));
+          const snapEmail = await getDocs(qEmail);
+          snapEmail.docs.forEach(d => docIdsToUpdate.add(d.id));
+        } catch (e) {}
+      }
+
+      // Primary Student ID
+      const primaryStudentId = (isSelfRegistration && activeUser?.uid)
+        ? activeUser.uid
+        : (Array.from(docIdsToUpdate)[0] || nisnClean || `siswa_${Date.now()}`);
+
+      docIdsToUpdate.add(primaryStudentId);
+
+      // 3. Construct Complete & Rich Unified Student Payload
+      const resolvedClass = (akademik.className || availableClasses[0] || "Kelas 10").trim();
+      const resolvedMajor = akademik.major || majorOptions[0]?.value || (currentStage === "SMK" ? "RPL" : currentStage === "SMA" ? "MIPA" : "Umum");
+
+      const unifiedStudentPayload = cleanFirestoreData({
+        uid: (isSelfRegistration && activeUser?.uid) ? activeUser.uid : primaryStudentId,
+        id: nisnClean || primaryStudentId,
+        nisn: nisnClean || `NISN-${Date.now().toString().slice(-6)}`,
+        nis: (akademik.previousStudentId || "").trim() || nisnClean || `NIS-${Date.now().toString().slice(-6)}`,
         name: finalFullName,
         fullName: finalFullName,
         nickname: (pribadi.nickname || "").trim(),
-        nisn: pribadi.nisn || `NISN-${Date.now().toString().slice(-6)}`,
-        nis: pribadi.nisn || `NIS-${Date.now().toString().slice(-6)}`,
         gender: pribadi.gender || "Laki-laki",
         birthPlace: (pribadi.birthPlace || "").trim(),
         birthDate: pribadi.birthDate || "",
@@ -265,21 +461,26 @@ export default function StudentOnboardingPage() {
         nik: (pribadi.nik || "").trim(),
         address: (pribadi.address || "").trim(),
         phone: (pribadi.phone || "").trim(),
-        email: studentEmail,
-        photoUrl: photoUrl || "",
-        imageUrl: photoUrl || "",
+        email: studentEmail || `${nisnClean || primaryStudentId}@quickschools.sch.id`,
+        photoUrl: finalPhotoUrl,
+        imageUrl: finalPhotoUrl,
+        pasFoto: finalPhotoUrl,
 
-        // Academic
+        // Academic Data (Strictly synchronized with School Profile)
         entryYear: akademik.entryYear || "2025/2026",
-        level: akademik.level || "SMA",
-        classId: (akademik.className || "10 IPA 1").trim(),
-        className: (akademik.className || "10 IPA 1").trim(),
-        major: akademik.major || "MIPA",
+        level: akademik.level || currentStage,
+        gradeLevel: akademik.gradeLevel || gradeLevels[0] || "Kelas 10",
+        educationalStage: currentStage,
+        classId: resolvedClass,
+        className: resolvedClass,
+        class: resolvedClass,
+        kelas: resolvedClass,
+        major: resolvedMajor,
         studentStatus: akademik.studentStatus || "Siswa Baru",
         previousSchool: (akademik.previousSchool || "").trim(),
         previousStudentId: (akademik.previousStudentId || "").trim(),
 
-        // Parent
+        // Parents Data
         fatherName: (orangTua.fatherName || "").trim(),
         motherName: (orangTua.motherName || "").trim(),
         guardianName: (orangTua.guardianName || "").trim(),
@@ -296,6 +497,7 @@ export default function StudentOnboardingPage() {
         emergencyPhone: (darurat.contactPhone || "").trim(),
         emergencyAddress: (darurat.contactAddress || "").trim(),
 
+        // Status & Metadata
         role: "siswa",
         status: "Aktif",
         onboardingCompleted: true,
@@ -303,10 +505,28 @@ export default function StudentOnboardingPage() {
         hasPendingReminder: false,
         updatedAt: new Date().toISOString(),
         createdAt: new Date().toISOString()
-      };
+      });
 
-      // 3. AUTOMATIC PARENT ACCOUNT CREATION (Role: orang-tua)
-      // Automatically creates a dedicated parent login account registered directly in Manajemen Akun System
+      // 4. Save to `students` collection across all matching document IDs (eliminates orphaned pending records)
+      for (const sId of docIdsToUpdate) {
+        try {
+          await setDoc(doc(db, "students", sId), unifiedStudentPayload, { merge: true });
+        } catch (errStudents) {
+          console.warn(`Could not save student doc ${sId}:`, errStudents);
+        }
+      }
+
+      // 5. Save to `users` collection for authenticated user
+      if (activeUser?.uid) {
+        await setDoc(doc(db, "users", activeUser.uid), unifiedStudentPayload, { merge: true });
+      }
+      if (primaryStudentId !== activeUser?.uid) {
+        try {
+          await setDoc(doc(db, "users", primaryStudentId), unifiedStudentPayload, { merge: true });
+        } catch (e) {}
+      }
+
+      // 6. PARENT RECORD CREATION (Guaranteed for `parents` and optionally `users`)
       const parentEmailInput = (orangTua.parentEmail || "").trim().toLowerCase();
       const bestParentName = (
         orangTua.fatherName ||
@@ -315,92 +535,91 @@ export default function StudentOnboardingPage() {
         `${finalFullName} (Orang Tua)`
       ).trim();
 
-      let linkedParentUid: string | null = null;
-
-      if (parentEmailInput && bestParentName) {
-        const defaultPassword = generateParentDefaultPassword(bestParentName, currentSchoolName);
-        let parentAuthUid = "";
+      if (bestParentName) {
+        let parentDocId = "";
+        let defaultPassword = "";
         let isExisting = false;
 
-        try {
-          // Create Firebase Authentication Account in background using isolated secondary app
-          const authRes = await createAuthAccount(parentEmailInput, defaultPassword, bestParentName);
-          parentAuthUid = authRes.uid;
-        } catch (authErr: any) {
-          console.warn("createAuthAccount in onboarding notice:", authErr);
-          // Check if parent account already exists (e.g. sibling registered previously)
-          if (
-            authErr?.code === "auth/email-already-in-use" ||
-            (authErr?.message && authErr.message.includes("sudah terdaftar"))
-          ) {
-            isExisting = true;
-            try {
-              const userQuery = query(collection(db, "users"), where("email", "==", parentEmailInput));
-              const snap = await getDocs(userQuery);
-              if (!snap.empty) {
-                parentAuthUid = snap.docs[0].id;
-              }
-            } catch (qErr) {
-              console.warn("Could not query existing parent user:", qErr);
+        if (parentEmailInput) {
+          defaultPassword = generateParentDefaultPassword(bestParentName, currentSchoolName);
+          try {
+            const authRes = await createAuthAccount(parentEmailInput, defaultPassword, bestParentName);
+            parentDocId = authRes.uid;
+          } catch (authErr: any) {
+            if (
+              authErr?.code === "auth/email-already-in-use" ||
+              (authErr?.message && authErr.message.includes("sudah terdaftar"))
+            ) {
+              isExisting = true;
+              try {
+                const userQuery = query(collection(db, "users"), where("email", "==", parentEmailInput));
+                const snap = await getDocs(userQuery);
+                if (!snap.empty) {
+                  parentDocId = snap.docs[0].id;
+                }
+              } catch (qErr) {}
             }
           }
         }
 
-        // If parent account was created or found in system
-        if (parentAuthUid) {
-          linkedParentUid = parentAuthUid;
-          const parentRelationFormatted =
-            orangTua.relation === "Ibu"
-              ? "Ibu Kandung"
-              : orangTua.relation === "Wali"
-              ? "Wali Murid"
-              : "Ayah Kandung";
+        if (!parentDocId) {
+          parentDocId = `parent_${primaryStudentId}`;
+        }
 
-          const parentUserDocPayload: Record<string, any> = {
-            uid: parentAuthUid,
-            id: parentAuthUid,
-            name: bestParentName,
-            email: parentEmailInput,
-            role: "orang-tua",
-            phone: (orangTua.parentPhone || "").trim(),
-            status: "Aktif",
-            studentIds: arrayUnion(targetStudentUid),
-            linkedStudentIds: arrayUnion(targetStudentUid),
-            studentId: targetStudentUid,
-            fatherName: (orangTua.fatherName || "").trim(),
-            motherName: (orangTua.motherName || "").trim(),
-            guardianName: (orangTua.guardianName || "").trim(),
-            relationship: parentRelationFormatted,
-            relation: parentRelationFormatted,
-            job: (orangTua.parentJob || "").trim(),
-            income: orangTua.parentIncome || "< 2 Juta",
-            address: (orangTua.parentAddress || "").trim(),
-            emergencyName: (darurat.contactName || "").trim(),
-            emergencyRelation: darurat.relation || "",
-            emergencyPhone: (darurat.contactPhone || "").trim(),
-            passwordHint: defaultPassword,
-            updatedAt: new Date().toISOString(),
-            ...(!isExisting ? { createdAt: new Date().toISOString() } : {})
-          };
+        const parentRelationFormatted =
+          orangTua.relation === "Ibu"
+            ? "Ibu Kandung"
+            : orangTua.relation === "Wali"
+            ? "Wali Murid"
+            : "Ayah Kandung";
 
-          // Save directly to 'users' collection (Instantly registered in Manajemen Akun System)
+        const parentPayload = cleanFirestoreData({
+          uid: parentDocId,
+          id: parentDocId,
+          parentId: `PRT-${parentDocId.slice(0, 5).toUpperCase()}`,
+          name: bestParentName,
+          fullName: bestParentName,
+          email: parentEmailInput,
+          phone: (orangTua.parentPhone || "").trim(),
+          role: "orang-tua",
+          status: "Aktif",
+          relationship: parentRelationFormatted,
+          relation: parentRelationFormatted,
+          fatherName: (orangTua.fatherName || "").trim(),
+          motherName: (orangTua.motherName || "").trim(),
+          guardianName: (orangTua.guardianName || "").trim(),
+          job: (orangTua.parentJob || "").trim(),
+          parentJob: (orangTua.parentJob || "").trim(),
+          income: orangTua.parentIncome || "< 5 Juta",
+          parentIncome: orangTua.parentIncome || "< 5 Juta",
+          address: (orangTua.parentAddress || "").trim(),
+          parentAddress: (orangTua.parentAddress || "").trim(),
+          emergencyName: (darurat.contactName || "").trim(),
+          emergencyRelation: darurat.relation || "",
+          emergencyPhone: (darurat.contactPhone || "").trim(),
+          studentIds: arrayUnion(primaryStudentId, ...Array.from(docIdsToUpdate)),
+          linkedStudentIds: arrayUnion(primaryStudentId, ...Array.from(docIdsToUpdate)),
+          studentId: primaryStudentId,
+          source: "student_onboarding",
+          passwordHint: defaultPassword || undefined,
+          updatedAt: new Date().toISOString(),
+          ...(!isExisting ? { createdAt: new Date().toISOString() } : {})
+        });
+
+        // Always save to `parents` collection so parents appear in /parents
+        try {
+          await setDoc(doc(db, "parents", parentDocId), parentPayload, { merge: true });
+        } catch (pErr) {
+          console.warn("Could not save to parents collection:", pErr);
+        }
+
+        // Save to `users` collection if email account is created
+        if (parentEmailInput) {
           try {
-            await setDoc(doc(db, "users", parentAuthUid), parentUserDocPayload, { merge: true });
+            await setDoc(doc(db, "users", parentDocId), parentPayload, { merge: true });
           } catch (uErr) {
-            console.warn("Could not save parent to users doc:", uErr);
+            console.warn("Could not save to users collection for parent:", uErr);
           }
-
-          // Save to 'parents' collection
-          try {
-            await setDoc(doc(db, "parents", parentAuthUid), {
-              ...parentUserDocPayload,
-              parentId: `PRT-${parentAuthUid.slice(0, 4).toUpperCase()}`,
-              userUid: parentAuthUid
-            }, { merge: true });
-          } catch (pErr) {
-            console.warn("Could not save parent to parents doc:", pErr);
-          }
-
           setCreatedParentAccount({
             email: parentEmailInput,
             passwordDefault: defaultPassword,
@@ -410,33 +629,18 @@ export default function StudentOnboardingPage() {
         }
       }
 
-      // Link parent to student user profile
-      if (linkedParentUid) {
-        userDocPayload.parentUid = linkedParentUid;
-        userDocPayload.linkedParentUid = linkedParentUid;
-        userDocPayload.hasLinkedParent = true;
-        userDocPayload.parentName = bestParentName;
-      }
-
-      // 4. Save to LocalStorage immediately for instant local availability
+      // 7. Save to LocalStorage immediately for instant local hydration
       try {
-        localStorage.setItem("quick_schools_student_profile", JSON.stringify(userDocPayload));
+        localStorage.setItem("quick_schools_student_profile", JSON.stringify(unifiedStudentPayload));
         localStorage.setItem("onboarding_completed", "true");
       } catch (errLocal) {
         console.warn("LocalStorage save warning:", errLocal);
       }
 
-      // 5. Save to Cloud Firestore
-      // A. Save to students collection (5 keys strictly matching rule)
-      await setDoc(doc(db, "students", targetStudentUid), studentDocPayload, { merge: true });
-
-      // B. Save to users collection (full profile fields)
-      await setDoc(doc(db, "users", targetStudentUid), userDocPayload, { merge: true });
-
       setSubmitting(false);
       setStep(6); // Selesai
       toast.showSuccess(
-        `Data profil siswa ${finalFullName} berhasil disimpan ke database!`,
+        `Data profil siswa ${finalFullName} berhasil disimpan lengkap ke database!`,
         "Registrasi Selesai"
       );
     } catch (err: any) {
@@ -756,8 +960,8 @@ export default function StudentOnboardingPage() {
                     <p className="text-xs text-slate-400 font-medium truncate mt-0.5">
                       {pribadi.nisn || "NISN: Belum diisi"}
                     </p>
-                    <p className="text-[11px] text-[#531FFF] font-bold mt-1 inline-block bg-purple-500/20 px-2 py-0.5 rounded">
-                      {akademik.className} • {akademik.major}
+                    <p className="text-[11px] text-[#531FFF] font-bold mt-1 inline-block bg-purple-500/20 px-2 py-0.5 rounded truncate max-w-full">
+                      {akademik.className || "Kelas Rombel"} • {akademik.major || (currentStage === "SD" || currentStage === "SMP" ? "Tematik" : "Umum")}
                     </p>
                   </div>
                 </div>
@@ -1012,49 +1216,111 @@ export default function StudentOnboardingPage() {
                     >
                       <option value="2025/2026">2025/2026</option>
                       <option value="2026/2027">2026/2027</option>
+                      <option value="2024/2025">2024/2025</option>
                     </select>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label>Jenjang / Tingkat *</label>
+                    <label className="flex items-center justify-between">
+                      <span>Jenjang Satuan Pendidikan *</span>
+                      <span className="text-[10px] font-bold text-[#531FFF] bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                        {stageConfig.name} Aktif
+                      </span>
+                    </label>
                     <select
                       value={akademik.level}
-                      onChange={(e) => setAkademik({ ...akademik, level: e.target.value })}
+                      onChange={(e) => setAkademik({ ...akademik, level: e.target.value as any })}
                       className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
                     >
-                      <option value="SMA">SMA</option>
-                      <option value="SMK">SMK</option>
-                      <option value="SMP">SMP</option>
+                      <option value="SD">SD (Sekolah Dasar)</option>
+                      <option value="SMP">SMP (Sekolah Menengah Pertama)</option>
+                      <option value="SMA">SMA (Sekolah Menengah Atas)</option>
+                      <option value="SMK">SMK (Sekolah Menengah Kejuruan)</option>
                     </select>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label>Pilihan Kelas *</label>
+                    <label>Tingkat / Tingkatan Kelas *</label>
+                    <select
+                      value={akademik.gradeLevel}
+                      onChange={(e) => setAkademik({ ...akademik, gradeLevel: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                    >
+                      {gradeLevels.map((lvl) => (
+                        <option key={lvl} value={lvl}>{lvl}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label>Pilihan Kelas (Rombel) *</label>
                     <select
                       value={akademik.className}
                       onChange={(e) => setAkademik({ ...akademik, className: e.target.value })}
                       className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
                     >
-                      <option value="10 IPA 1">10 IPA 1</option>
-                      <option value="10 IPA 2">10 IPA 2</option>
-                      <option value="10 IPS 1">10 IPS 1</option>
-                      <option value="11 IPA 1">11 IPA 1</option>
-                      <option value="12 IPS 2">12 IPS 2</option>
+                      {availableClasses.map((cls: string) => (
+                        <option key={cls} value={cls}>{cls}</option>
+                      ))}
                     </select>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label>Jurusan / Program Studi</label>
-                    <select
-                      value={akademik.major}
-                      onChange={(e) => setAkademik({ ...akademik, major: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
-                    >
-                      <option value="MIPA">MIPA (Matematika & IPA)</option>
-                      <option value="IPS">IPS (Ilmu Pengetahuan Sosial)</option>
-                      <option value="Rekayasa Perangkat Lunak">Rekayasa Perangkat Lunak (RPL)</option>
-                    </select>
-                  </div>
+                  {/* Dynamic Major Selection based on Active Stage */}
+                  {(akademik.level === "SMK" || currentStage === "SMK") ? (
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-1.5">
+                          <Briefcase className="w-3.5 h-3.5 text-amber-600" />
+                          Program Keahlian (Jurusan SMK) *
+                        </label>
+                        <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                          {(profile.vocationalPrograms || []).length} Jurusan Tersedia
+                        </span>
+                      </div>
+                      <select
+                        value={akademik.major}
+                        onChange={(e) => setAkademik({ ...akademik, major: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-white border border-amber-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                      >
+                        {majorOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label} {opt.field ? `(${opt.field})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (akademik.level === "SMA" || currentStage === "SMA") ? (
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="flex items-center gap-1.5">
+                        <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
+                        Peminatan Akademik (SMA) *
+                      </label>
+                      <select
+                        value={akademik.major}
+                        onChange={(e) => setAkademik({ ...akademik, major: e.target.value })}
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      >
+                        {majorOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="sm:col-span-2 p-3 bg-emerald-50/60 rounded-xl border border-emerald-200 flex items-center justify-between">
+                      <div>
+                        <span className="font-extrabold text-emerald-900 text-xs block flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          Model Kelas Reguler Terpadu ({stageConfig.name})
+                        </span>
+                        <span className="text-[11px] text-emerald-700">
+                          Jenjang {stageConfig.name} tidak menerapkan penjurusan kejuruan. Siswa ditempatkan pada kelas rombel terpadu.
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 bg-white text-emerald-800 text-[10px] font-bold rounded border border-emerald-200 shrink-0">
+                        Reguler
+                      </span>
+                    </div>
+                  )}
 
                   <div className="space-y-1.5">
                     <label>Status Siswa *</label>
@@ -1077,7 +1343,7 @@ export default function StudentOnboardingPage() {
                       type="text"
                       value={akademik.previousSchool}
                       onChange={(e) => setAkademik({ ...akademik, previousSchool: e.target.value })}
-                      placeholder="Nama SMP / Sekolah Asal"
+                      placeholder={currentStage === "SD" ? "Nama TK / PAUD Asal" : currentStage === "SMP" ? "Nama SD / MI Asal" : "Nama SMP / MTs Asal"}
                       className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
                     />
                   </div>
@@ -1329,8 +1595,8 @@ export default function StudentOnboardingPage() {
                           </span>
                           <button onClick={() => setStep(2)} className="text-[#531FFF] font-extrabold text-[11px] hover:underline cursor-pointer">Edit</button>
                         </div>
-                        <p><span className="text-slate-500 font-medium">Kelas / Jenjang:</span> <span className="font-bold text-slate-900 block">{akademik.className} ({akademik.level})</span></p>
-                        <p><span className="text-slate-500 font-medium">Jurusan:</span> <span className="font-bold text-slate-900 block">{akademik.major}</span></p>
+                        <p><span className="text-slate-500 font-medium">Kelas / Jenjang:</span> <span className="font-bold text-slate-900 block">{akademik.className} (Jenjang {akademik.level} • {akademik.gradeLevel})</span></p>
+                        <p><span className="text-slate-500 font-medium">Jurusan:</span> <span className="font-bold text-slate-900 block">{akademik.major || "Umum / Reguler"}</span></p>
                         <p><span className="text-slate-500 font-medium">Tahun Masuk:</span> <span className="font-bold text-slate-900 block">{akademik.entryYear}</span></p>
                         <p><span className="text-slate-500 font-medium">Status Siswa:</span> <span className="font-bold text-slate-900 block">{akademik.studentStatus}</span></p>
                       </div>
