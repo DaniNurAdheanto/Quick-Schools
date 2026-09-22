@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 
 import { useState, Suspense } from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, deleteUser } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -31,18 +31,56 @@ function LoginFormContent() {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+      const cleanEmail = email.toLowerCase().trim();
 
-      // Check account activation status in Firestore
+      // Check account activation and deletion status in Firestore
       try {
+        let isDeleted = false;
         const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const uData = userDoc.data();
-          if (uData.status === "Nonaktif") {
-            await auth.signOut();
-            setError("Akun Anda berstatus Nonaktif. Silakan hubungi Super Admin untuk mengaktifkan akun Anda.");
-            setLoading(false);
-            return;
+        if (!userDoc.exists()) {
+          isDeleted = true;
+        } else {
+          try {
+            const delByUid = await getDoc(doc(db, "deleted_accounts", user.uid));
+            if (delByUid.exists()) isDeleted = true;
+          } catch (e) {}
+
+          if (!isDeleted && cleanEmail) {
+            try {
+              const delByEmail = await getDoc(doc(db, "deleted_accounts", cleanEmail.replace(/[^a-z0-9]/g, "_")));
+              if (delByEmail.exists()) isDeleted = true;
+            } catch (e) {}
           }
+        }
+
+        if (isDeleted) {
+          try {
+            await deleteUser(user);
+          } catch (delAuthErr) {}
+          try {
+            await auth.signOut();
+          } catch (signOutErr) {}
+          try {
+            localStorage.removeItem("quick_schools_auth_session");
+            localStorage.removeItem("qs_auth_role_cache_v1");
+          } catch (e) {}
+          setError("Akun ini telah dihapus oleh Administrator dan tidak dapat digunakan lagi.");
+          setLoading(false);
+          return;
+        }
+
+        const uData = userDoc.data();
+        if (uData && (uData.status === "Nonaktif" || uData.status === "deleted" || uData.isDeleted === true)) {
+          try {
+            await auth.signOut();
+          } catch (e) {}
+          try {
+            localStorage.removeItem("quick_schools_auth_session");
+            localStorage.removeItem("qs_auth_role_cache_v1");
+          } catch (e) {}
+          setError("Akun Anda berstatus Nonaktif. Silakan hubungi Super Admin untuk mengaktifkan akun Anda.");
+          setLoading(false);
+          return;
         }
       } catch (checkErr) {
         console.warn("Status check warning:", checkErr);

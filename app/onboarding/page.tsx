@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -29,17 +29,22 @@ import {
   Copy,
   Lock,
   UserCheck,
-  GraduationCap
+  GraduationCap,
+  RotateCcw,
+  Save,
+  AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { auth, db, storage } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, setDoc, query, collection, where, getDocs, arrayUnion, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteField, query, collection, where, getDocs, onSnapshot } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useToast } from "@/context/ToastContext";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { createAuthAccount } from "@/lib/create-user-auth";
+import { syncParentWithStudents } from "@/lib/parent-student-sync";
 import { AuthRequiredState } from "@/components/ui/auth-required-state";
+import { INDONESIAN_CITIES_BY_REGION, INDONESIAN_PARENT_JOBS } from "@/lib/indonesian-cities";
 
 function cleanFirestoreData<T>(obj: T): T {
   if (obj === null || obj === undefined) {
@@ -100,6 +105,43 @@ async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0
   });
 }
 
+const DEFAULT_PRIBADI = {
+  fullName: "",
+  nickname: "",
+  nisn: "",
+  gender: "Laki-laki",
+  birthPlace: "",
+  birthDate: "",
+  religion: "Islam",
+  nik: "",
+  address: "",
+  phone: "",
+  email: "",
+  photoUrl: ""
+};
+
+const DEFAULT_ORANG_TUA = {
+  fatherName: "",
+  motherName: "",
+  guardianName: "",
+  relation: "Ayah",
+  parentPhone: "",
+  parentEmail: "",
+  parentAddress: "",
+  parentJob: "",
+  parentIncome: "< 5 Juta"
+};
+
+const DEFAULT_DARURAT = {
+  contactName: "",
+  relation: "Paman",
+  contactPhone: "",
+  contactAddress: ""
+};
+
+const getDraftStorageKey = (uid?: string | null) =>
+  uid ? `qs_onboarding_draft_${uid}` : "qs_onboarding_draft_guest";
+
 export default function StudentOnboardingPage() {
   const router = useRouter();
   const toast = useToast();
@@ -148,25 +190,103 @@ export default function StudentOnboardingPage() {
   // Step State: 0 (Welcome), 1 (Pribadi), 2 (Akademik), 3 (OrangTua), 4 (Darurat), 5 (Review), 6 (Selesai)
   const [step, setStep] = useState<number>(0);
 
+  // Auto-Save & Draft Recovery States
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const [hasSavedDraft, setHasSavedDraft] = useState<boolean>(false);
+  const [savedDraftInfo, setSavedDraftInfo] = useState<{ step: number; lastSavedAt: string; studentName?: string } | null>(null);
+  const hasHydratedDraftRef = useRef(false);
+
   // Step 1: Data Pribadi
-  const [pribadi, setPribadi] = useState({
-    fullName: "",
-    nickname: "",
-    nisn: "",
-    gender: "Laki-laki",
-    birthPlace: "",
-    birthDate: "",
-    religion: "Islam",
-    nik: "",
-    address: "",
-    phone: "",
-    email: "",
-    photoUrl: ""
-  });
+  const [pribadi, setPribadi] = useState({ ...DEFAULT_PRIBADI });
 
   // Photo upload preview
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>("");
+
+  // 1. Initial Mount: Hydrate saved draft from localStorage (Instant recovery on refresh/return)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const primaryKey = auth.currentUser?.uid ? getDraftStorageKey(auth.currentUser.uid) : null;
+      const guestKey = getDraftStorageKey();
+      const rawDraft = (primaryKey ? localStorage.getItem(primaryKey) : null) || localStorage.getItem(guestKey);
+
+      if (rawDraft) {
+        const parsed = JSON.parse(rawDraft);
+        if (parsed && typeof parsed === "object") {
+          const hasMeaningfulData = (
+            (parsed.pribadi && Object.values(parsed.pribadi).some(v => typeof v === "string" && v.trim() !== "" && v !== "Laki-laki" && v !== "Islam")) ||
+            (parsed.orangTua && Object.values(parsed.orangTua).some(v => typeof v === "string" && v.trim() !== "" && v !== "Ayah" && v !== "< 5 Juta")) ||
+            (parsed.darurat && Object.values(parsed.darurat).some(v => typeof v === "string" && v.trim() !== "" && v !== "Paman")) ||
+            (typeof parsed.step === "number" && parsed.step > 0) ||
+            Boolean(parsed.photoPreview)
+          );
+
+          if (hasMeaningfulData) {
+            if (parsed.pribadi) setPribadi(prev => ({ ...prev, ...parsed.pribadi }));
+            if (parsed.akademik) setAkademik(prev => ({ ...prev, ...parsed.akademik }));
+            if (parsed.orangTua) setOrangTua(prev => ({ ...prev, ...parsed.orangTua }));
+            if (parsed.darurat) setDarurat(prev => ({ ...prev, ...parsed.darurat }));
+            if (parsed.photoPreview && typeof parsed.photoPreview === "string") {
+              setPhotoPreview(parsed.photoPreview);
+            }
+
+            const draftStep = typeof parsed.step === "number" && parsed.step >= 1 && parsed.step <= 5 ? parsed.step : 1;
+            const timeFormatted = parsed.lastSavedAt
+              ? new Date(parsed.lastSavedAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
+              : null;
+
+            setLastSavedTime(timeFormatted);
+            setHasSavedDraft(true);
+            setSavedDraftInfo({
+              step: draftStep,
+              lastSavedAt: parsed.lastSavedAt || new Date().toISOString(),
+              studentName: parsed.pribadi?.fullName || ""
+            });
+            setAutoSaveStatus("saved");
+
+            // If user previously reached a step (1-5), resume directly
+            if (typeof parsed.step === "number" && parsed.step >= 1 && parsed.step <= 5) {
+              setStep(parsed.step);
+            }
+          }
+        }
+      }
+    } catch (hydrateErr) {
+      console.warn("Draft hydration warning:", hydrateErr);
+    } finally {
+      hasHydratedDraftRef.current = true;
+    }
+  }, []);
+
+  // Real-time active academic year listener
+  const [activeAcademicYear, setActiveAcademicYear] = useState<string>("2025/2026");
+
+  useEffect(() => {
+    const savedYear = typeof window !== "undefined" ? localStorage.getItem("qs_active_year") : null;
+    if (savedYear) {
+      setActiveAcademicYear(savedYear);
+      setAkademik(prev => ({ ...prev, entryYear: savedYear }));
+    }
+
+    const unsubYears = onSnapshot(collection(db, "academicYears"), (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      if (list.length > 0) {
+        const defaultItem = list.find(l => l.isDefault) || list[0];
+        const yearVal = defaultItem?.name || defaultItem?.id;
+        if (yearVal) {
+          setActiveAcademicYear(yearVal);
+          setAkademik(prev => ({ ...prev, entryYear: yearVal }));
+        }
+      }
+    }, (err) => {
+      console.warn("Academic year fetch fallback:", err);
+    });
+
+    return () => unsubYears();
+  }, []);
 
   // Step 2: Data Akademik (Dynamically synced with School Profile)
   const [akademik, setAkademik] = useState({
@@ -177,7 +297,6 @@ export default function StudentOnboardingPage() {
     major: majorOptions[0]?.value || (currentStage === "SMK" ? "RPL" : currentStage === "SMA" ? "MIPA" : "Umum"),
     studentStatus: "Siswa Baru",
     previousSchool: "",
-    previousStudentId: ""
   });
 
   // Real-time listener for classes from Firestore
@@ -194,7 +313,7 @@ export default function StudentOnboardingPage() {
     return () => unsub();
   }, []);
 
-  // Update default akademik state when profile or stage changes
+  // Update default akademik state when profile, stage, or activeAcademicYear changes
   useEffect(() => {
     setAkademik(prev => {
       const stage = currentStage || "SMA";
@@ -202,19 +321,19 @@ export default function StudentOnboardingPage() {
       const defaultMaj = majorOptions[0]?.value || (stage === "SMK" ? "RPL" : stage === "SMA" ? "MIPA" : "Umum");
       return {
         ...prev,
-        entryYear: prev.entryYear || "2025/2026",
-        level: prev.level || stage,
+        entryYear: activeAcademicYear || prev.entryYear || "2025/2026",
+        level: stage,
         gradeLevel: prev.gradeLevel || defaultLvl,
         major: prev.major || defaultMaj,
       };
     });
-  }, [currentStage, gradeLevels, majorOptions]);
+  }, [currentStage, gradeLevels, majorOptions, activeAcademicYear]);
 
   // Compute dynamic available classes matching current stage and selected level
   const availableClasses = useMemo(() => {
     const stage = akademik.level || currentStage;
     const activeClasses = classesList.filter(c => (c.status || "Aktif") !== "Nonaktif");
-    
+
     // If real classes exist in Firestore, prioritize matching classes
     if (activeClasses.length > 0) {
       const selGrade = akademik.gradeLevel || gradeLevels[0] || "";
@@ -249,7 +368,7 @@ export default function StudentOnboardingPage() {
       const activeVoc = (profile.vocationalPrograms && profile.vocationalPrograms.length > 0)
         ? profile.vocationalPrograms.filter(p => p.status !== "Non-Aktif")
         : [{ code: "RPL" }, { code: "TKJ" }, { code: "DKV" }];
-      
+
       const gen: string[] = [];
       activeVoc.forEach(p => {
         gen.push(`${lvlNum} ${p.code} 1`);
@@ -275,27 +394,12 @@ export default function StudentOnboardingPage() {
   }, [availableClasses, akademik.className]);
 
   // Step 3: Data Orang Tua / Wali
-  const [orangTua, setOrangTua] = useState({
-    fatherName: "",
-    motherName: "",
-    guardianName: "",
-    relation: "Ayah",
-    parentPhone: "",
-    parentEmail: "",
-    parentAddress: "",
-    parentJob: "",
-    parentIncome: "< 5 Juta"
-  });
+  const [orangTua, setOrangTua] = useState({ ...DEFAULT_ORANG_TUA });
 
   // Step 4: Data Kontak Darurat
-  const [darurat, setDarurat] = useState({
-    contactName: "",
-    relation: "Paman",
-    contactPhone: "",
-    contactAddress: ""
-  });
+  const [darurat, setDarurat] = useState({ ...DEFAULT_DARURAT });
 
-  // Auth User check
+  // Auth User check & Cloud Draft Restoration
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -306,13 +410,81 @@ export default function StudentOnboardingPage() {
             const uData = userSnap.data();
             const role = uData.role || "";
             setCurrentUserRole(role);
+
+            // Cloud Draft check & sync
+            if (uData.onboardingDraft && typeof uData.onboardingDraft === "object") {
+              const cloudDraft = uData.onboardingDraft;
+              const localKey = getDraftStorageKey(user.uid);
+              const localRaw = typeof window !== "undefined" ? localStorage.getItem(localKey) : null;
+              let shouldHydrateCloud = true;
+
+              if (localRaw) {
+                try {
+                  const localParsed = JSON.parse(localRaw);
+                  if (localParsed?.lastSavedAt && cloudDraft?.lastSavedAt) {
+                    if (new Date(localParsed.lastSavedAt).getTime() > new Date(cloudDraft.lastSavedAt).getTime()) {
+                      shouldHydrateCloud = false;
+                    }
+                  }
+                } catch (e) { }
+              }
+
+              if (shouldHydrateCloud) {
+                if (cloudDraft.pribadi) setPribadi(prev => ({ ...prev, ...cloudDraft.pribadi }));
+                if (cloudDraft.akademik) setAkademik(prev => ({ ...prev, ...cloudDraft.akademik }));
+                if (cloudDraft.orangTua) setOrangTua(prev => ({ ...prev, ...cloudDraft.orangTua }));
+                if (cloudDraft.darurat) setDarurat(prev => ({ ...prev, ...cloudDraft.darurat }));
+                if (cloudDraft.photoPreview && typeof cloudDraft.photoPreview === "string") {
+                  setPhotoPreview(cloudDraft.photoPreview);
+                }
+
+                const draftStep = typeof cloudDraft.step === "number" && cloudDraft.step >= 1 && cloudDraft.step <= 5 ? cloudDraft.step : 1;
+                const timeFormatted = cloudDraft.lastSavedAt
+                  ? new Date(cloudDraft.lastSavedAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
+                  : null;
+
+                setLastSavedTime(timeFormatted);
+                setHasSavedDraft(true);
+                setSavedDraftInfo({
+                  step: draftStep,
+                  lastSavedAt: cloudDraft.lastSavedAt || new Date().toISOString(),
+                  studentName: cloudDraft.pribadi?.fullName || ""
+                });
+                setAutoSaveStatus("saved");
+
+                if (typeof cloudDraft.step === "number" && cloudDraft.step >= 1 && cloudDraft.step <= 5) {
+                  setStep(cloudDraft.step);
+                }
+
+                try {
+                  localStorage.setItem(localKey, JSON.stringify(cloudDraft));
+                } catch (errLocal) { }
+              }
+            } else {
+              // If user logged in and has a local guest draft, migrate it to user's storage key & sync to Firestore
+              try {
+                const guestRaw = localStorage.getItem(getDraftStorageKey());
+                if (guestRaw) {
+                  const parsedGuest = JSON.parse(guestRaw);
+                  localStorage.setItem(getDraftStorageKey(user.uid), guestRaw);
+                  await setDoc(doc(db, "users", user.uid), {
+                    onboardingDraft: cleanFirestoreData({
+                      ...parsedGuest,
+                      photoPreview: undefined
+                    })
+                  }, { merge: true });
+                }
+              } catch (migrErr) { }
+            }
+
+            // Populate user's default registered name and email without overriding draft input
             setPribadi(prev => ({
               ...prev,
-              fullName: uData.fullName || uData.name || prev.fullName,
-              email: uData.email || user.email || prev.email
+              fullName: prev.fullName || uData.fullName || uData.name || "",
+              email: prev.email || uData.email || user.email || ""
             }));
+
             if (uData.onboardingCompleted && (role === "siswa" || role === "student")) {
-              // Only redirect if it is a student who already completed onboarding
               router.push("/dashboard");
               return;
             }
@@ -329,18 +501,190 @@ export default function StudentOnboardingPage() {
     return () => unsub();
   }, [router]);
 
-  // Handle Photo File selection
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 2. Debounced Auto-Save Effect (triggers on field changes or step changes)
+  useEffect(() => {
+    if (!hasHydratedDraftRef.current) return;
+    if (step === 6) return; // Do not auto-save once completed
+
+    const hasAnyContent = (
+      step > 0 ||
+      pribadi.fullName.trim() !== "" ||
+      pribadi.nisn.trim() !== "" ||
+      pribadi.phone.trim() !== "" ||
+      pribadi.address.trim() !== "" ||
+      orangTua.fatherName.trim() !== "" ||
+      orangTua.motherName.trim() !== "" ||
+      orangTua.parentPhone.trim() !== "" ||
+      darurat.contactName.trim() !== "" ||
+      darurat.contactPhone.trim() !== "" ||
+      Boolean(photoPreview)
+    );
+
+    if (!hasAnyContent) return;
+
+    setAutoSaveStatus("saving");
+
+    const timer = setTimeout(() => {
+      try {
+        const now = new Date();
+        const isoTime = now.toISOString();
+        const timeFormatted = now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+
+        // Safe preview string for localStorage quota
+        const safePreview = photoPreview && photoPreview.length < 500000 ? photoPreview : undefined;
+
+        const draftData = {
+          step,
+          pribadi,
+          photoPreview: safePreview,
+          akademik,
+          orangTua,
+          darurat,
+          lastSavedAt: isoTime,
+          version: 1
+        };
+
+        const jsonDraft = JSON.stringify(draftData);
+
+        // 1. Save to LocalStorage
+        const userKey = getDraftStorageKey(currentUser?.uid);
+        localStorage.setItem(userKey, jsonDraft);
+        if (currentUser?.uid) {
+          localStorage.setItem(getDraftStorageKey(), jsonDraft);
+        }
+
+        // 2. Save to Firestore users collection as cloud draft
+        if (currentUser?.uid) {
+          setDoc(doc(db, "users", currentUser.uid), {
+            onboardingDraft: cleanFirestoreData({
+              ...draftData,
+              photoPreview: undefined // Avoid storing large base64 strings in Firestore document
+            })
+          }, { merge: true }).catch(fErr => console.warn("Firestore auto-save warning:", fErr));
+        }
+
+        setAutoSaveStatus("saved");
+        setLastSavedTime(timeFormatted);
+        setHasSavedDraft(true);
+        setSavedDraftInfo({
+          step: step > 0 ? step : 1,
+          lastSavedAt: isoTime,
+          studentName: pribadi.fullName || ""
+        });
+      } catch (err) {
+        console.warn("Auto-save execution error:", err);
+        setAutoSaveStatus("error");
+      }
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [step, pribadi, photoPreview, akademik, orangTua, darurat, currentUser]);
+
+  // 3. Synchronous flush before tab close or refresh
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (!hasHydratedDraftRef.current || step === 6) return;
+      try {
+        const safePreview = photoPreview && photoPreview.length < 500000 ? photoPreview : undefined;
+        const draftData = {
+          step,
+          pribadi,
+          photoPreview: safePreview,
+          akademik,
+          orangTua,
+          darurat,
+          lastSavedAt: new Date().toISOString(),
+          version: 1
+        };
+        const userKey = getDraftStorageKey(currentUser?.uid);
+        localStorage.setItem(userKey, JSON.stringify(draftData));
+      } catch (e) { }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handleBeforeUnload);
+    };
+  }, [step, pribadi, photoPreview, akademik, orangTua, darurat, currentUser]);
+
+  // Handle Reset Draft action
+  const handleResetDraft = () => {
+    if (!window.confirm("Apakah Anda yakin ingin menghapus seluruh draf pengisian dan memulai kembali dari formulir kosong?")) {
+      return;
+    }
+
+    try {
+      const userKey = getDraftStorageKey(currentUser?.uid);
+      localStorage.removeItem(userKey);
+      localStorage.removeItem(getDraftStorageKey());
+
+      if (currentUser?.uid) {
+        updateDoc(doc(db, "users", currentUser.uid), {
+          onboardingDraft: deleteField()
+        }).catch(() => {
+          setDoc(doc(db, "users", currentUser.uid), { onboardingDraft: null }, { merge: true });
+        });
+      }
+
+      setPribadi({ ...DEFAULT_PRIBADI });
+      setPhotoFile(null);
+      setPhotoPreview("");
+      setAkademik({
+        entryYear: activeAcademicYear || "2025/2026",
+        level: currentStage || "SMA",
+        gradeLevel: gradeLevels[0] || (currentStage === "SD" ? "Kelas 1" : currentStage === "SMP" ? "Kelas 7" : "Kelas 10"),
+        className: availableClasses[0] || "",
+        major: majorOptions[0]?.value || (currentStage === "SMK" ? "RPL" : currentStage === "SMA" ? "MIPA" : "Umum"),
+        studentStatus: "Siswa Baru",
+        previousSchool: ""
+      });
+      setOrangTua({ ...DEFAULT_ORANG_TUA });
+      setDarurat({ ...DEFAULT_DARURAT });
+      setStep(0);
+      setHasSavedDraft(false);
+      setSavedDraftInfo(null);
+      setLastSavedTime(null);
+      setAutoSaveStatus("idle");
+
+      toast.showSuccess("Draf pendaftaran telah dibersihkan. Anda dapat mengisi formulir dari awal.", "Draf Direset");
+    } catch (e) {
+      console.warn("Reset draft error:", e);
+    }
+  };
+
+  // Handle Photo File selection with lightweight compressed preview persistence
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setPhotoFile(file);
-      setPhotoPreview(URL.createObjectURL(file));
+      try {
+        const compressedBase64 = await compressImageFileToBase64(file, 300, 0.75);
+        setPhotoPreview(compressedBase64 || URL.createObjectURL(file));
+      } catch {
+        setPhotoPreview(URL.createObjectURL(file));
+      }
     }
   };
 
   // Upload Photo to Firebase Storage or base64 preview with timeout safeguard
   const uploadPhotoIfAny = async (): Promise<string> => {
-    if (!photoFile) return photoPreview || pribadi.photoUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80";
+    if (!photoFile) {
+      if (photoPreview && photoPreview.startsWith("data:image")) {
+        try {
+          const res = await fetch(photoPreview);
+          const blob = await res.blob();
+          const targetUid = currentUser?.uid || `temp_${Date.now()}`;
+          const storageRef = ref(storage, `students/${targetUid}_profile.jpg`);
+          await uploadBytes(storageRef, blob);
+          return await getDownloadURL(storageRef);
+        } catch (bErr) {
+          console.warn("Base64 photo upload fallback:", bErr);
+        }
+      }
+      return photoPreview || pribadi.photoUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80";
+    }
     try {
       const targetUid = currentUser?.uid || "siswa_temp";
       const storageRef = ref(storage, `students/${targetUid}_profile.jpg`);
@@ -359,6 +703,82 @@ export default function StudentOnboardingPage() {
     } catch (e) {
       console.warn("Photo storage upload fallback:", e);
       return photoPreview || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80";
+    }
+  };
+
+  // Per-step validation before proceeding forward
+  const validateCurrentStep = (targetStep: number): boolean => {
+    if (targetStep <= step) return true;
+
+    if (step === 1) {
+      if (!pribadi.fullName.trim()) {
+        toast.showError("Nama lengkap siswa wajib diisi.", "Validasi Formulir");
+        return false;
+      }
+      if (!pribadi.nisn.trim()) {
+        toast.showError("NIS / NISN siswa wajib diisi.", "Validasi Formulir");
+        return false;
+      }
+      if (!pribadi.birthPlace) {
+        toast.showError("Silakan pilih Kota/Kabupaten Tempat Lahir.", "Validasi Formulir");
+        return false;
+      }
+      if (!pribadi.birthDate) {
+        toast.showError("Tanggal Lahir wajib dipilih dari kalender.", "Validasi Formulir");
+        return false;
+      }
+      if (!pribadi.phone.trim()) {
+        toast.showError("Nomor HP siswa wajib diisi.", "Validasi Formulir");
+        return false;
+      }
+      if (!pribadi.email.trim()) {
+        toast.showError("Email siswa wajib diisi.", "Validasi Formulir");
+        return false;
+      }
+    }
+
+    if (step === 2) {
+      if (!akademik.className) {
+        toast.showError("Silakan pilih Rombel / Kelas siswa terlebih dahulu.", "Validasi Formulir");
+        return false;
+      }
+    }
+
+    if (step === 3) {
+      const hasParentName = Boolean(
+        orangTua.fatherName.trim() || orangTua.motherName.trim() || orangTua.guardianName.trim()
+      );
+      if (!hasParentName) {
+        toast.showError("Nama Orang Tua (Ayah / Ibu / Wali) wajib diisi minimal salah satu.", "Validasi Formulir");
+        return false;
+      }
+      if (!orangTua.parentPhone.trim()) {
+        toast.showError("Nomor HP WhatsApp Orang Tua / Wali wajib diisi.", "Validasi Formulir");
+        return false;
+      }
+      if (!orangTua.parentEmail.trim()) {
+        toast.showError("Email Orang Tua wajib diisi untuk akun login otomatis.", "Validasi Formulir");
+        return false;
+      }
+    }
+
+    if (step === 4) {
+      if (!darurat.contactName.trim()) {
+        toast.showError("Nama kontak darurat wajib diisi.", "Validasi Formulir");
+        return false;
+      }
+      if (!darurat.contactPhone.trim()) {
+        toast.showError("Nomor telepon kontak darurat wajib diisi.", "Validasi Formulir");
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const handleNextStep = () => {
+    if (validateCurrentStep(step + 1)) {
+      setStep(s => Math.min(5, s + 1));
     }
   };
 
@@ -407,7 +827,7 @@ export default function StudentOnboardingPage() {
       // 2. Discover existing student records to prevent duplicates and update pre-created docs
       const nisnClean = (pribadi.nisn || "").trim();
       const studentEmail = (pribadi.email || (isSelfRegistration ? activeUser?.email : "") || "").trim().toLowerCase();
-      
+
       const docIdsToUpdate = new Set<string>();
       if (isSelfRegistration && activeUser?.uid) {
         docIdsToUpdate.add(activeUser.uid);
@@ -418,12 +838,8 @@ export default function StudentOnboardingPage() {
         try {
           const qNisn = query(collection(db, "students"), where("nisn", "==", nisnClean));
           const snapNisn = await getDocs(qNisn);
-          snapNisn.docs.forEach(d => docIdsToUpdate.add(d.id));
-
-          const qId = query(collection(db, "students"), where("id", "==", nisnClean));
-          const snapId = await getDocs(qId);
-          snapId.docs.forEach(d => docIdsToUpdate.add(d.id));
-        } catch (e) {}
+          snapNisn.forEach(d => docIdsToUpdate.add(d.id));
+        } catch (e) { }
       }
 
       // Query students collection by Email
@@ -431,102 +847,19 @@ export default function StudentOnboardingPage() {
         try {
           const qEmail = query(collection(db, "students"), where("email", "==", studentEmail));
           const snapEmail = await getDocs(qEmail);
-          snapEmail.docs.forEach(d => docIdsToUpdate.add(d.id));
-        } catch (e) {}
+          snapEmail.forEach(d => docIdsToUpdate.add(d.id));
+        } catch (e) { }
       }
 
-      // Primary Student ID
-      const primaryStudentId = (isSelfRegistration && activeUser?.uid)
-        ? activeUser.uid
-        : (Array.from(docIdsToUpdate)[0] || nisnClean || `siswa_${Date.now()}`);
-
+      const primaryStudentId = docIdsToUpdate.values().next().value || activeUser?.uid || `stu_${Date.now()}`;
       docIdsToUpdate.add(primaryStudentId);
 
-      // 3. Construct Complete & Rich Unified Student Payload
-      const resolvedClass = (akademik.className || availableClasses[0] || "Kelas 10").trim();
-      const resolvedMajor = akademik.major || majorOptions[0]?.value || (currentStage === "SMK" ? "RPL" : currentStage === "SMA" ? "MIPA" : "Umum");
+      const resolvedClass = akademik.className || availableClasses[0] || (currentStage === "SD" ? "1A" : currentStage === "SMP" ? "7A" : "10 IPA 1");
+      const resolvedMajor = (akademik.level === "SD" || currentStage === "SD" || akademik.level === "SMP" || currentStage === "SMP")
+        ? "Tematik / Terpadu"
+        : (akademik.major || "Umum");
 
-      const unifiedStudentPayload = cleanFirestoreData({
-        uid: (isSelfRegistration && activeUser?.uid) ? activeUser.uid : primaryStudentId,
-        id: nisnClean || primaryStudentId,
-        nisn: nisnClean || `NISN-${Date.now().toString().slice(-6)}`,
-        nis: (akademik.previousStudentId || "").trim() || nisnClean || `NIS-${Date.now().toString().slice(-6)}`,
-        name: finalFullName,
-        fullName: finalFullName,
-        nickname: (pribadi.nickname || "").trim(),
-        gender: pribadi.gender || "Laki-laki",
-        birthPlace: (pribadi.birthPlace || "").trim(),
-        birthDate: pribadi.birthDate || "",
-        religion: pribadi.religion || "Islam",
-        nik: (pribadi.nik || "").trim(),
-        address: (pribadi.address || "").trim(),
-        phone: (pribadi.phone || "").trim(),
-        email: studentEmail || `${nisnClean || primaryStudentId}@quickschools.sch.id`,
-        photoUrl: finalPhotoUrl,
-        imageUrl: finalPhotoUrl,
-        pasFoto: finalPhotoUrl,
-
-        // Academic Data (Strictly synchronized with School Profile)
-        entryYear: akademik.entryYear || "2025/2026",
-        level: akademik.level || currentStage,
-        gradeLevel: akademik.gradeLevel || gradeLevels[0] || "Kelas 10",
-        educationalStage: currentStage,
-        classId: resolvedClass,
-        className: resolvedClass,
-        class: resolvedClass,
-        kelas: resolvedClass,
-        major: resolvedMajor,
-        studentStatus: akademik.studentStatus || "Siswa Baru",
-        previousSchool: (akademik.previousSchool || "").trim(),
-        previousStudentId: (akademik.previousStudentId || "").trim(),
-
-        // Parents Data
-        fatherName: (orangTua.fatherName || "").trim(),
-        motherName: (orangTua.motherName || "").trim(),
-        guardianName: (orangTua.guardianName || "").trim(),
-        relation: orangTua.relation || "Ayah",
-        parentPhone: (orangTua.parentPhone || "").trim(),
-        parentEmail: (orangTua.parentEmail || "").trim(),
-        parentAddress: (orangTua.parentAddress || "").trim(),
-        parentJob: (orangTua.parentJob || "").trim(),
-        parentIncome: orangTua.parentIncome || "< 5 Juta",
-
-        // Emergency Contact
-        emergencyName: (darurat.contactName || "").trim(),
-        emergencyRelation: darurat.relation || "",
-        emergencyPhone: (darurat.contactPhone || "").trim(),
-        emergencyAddress: (darurat.contactAddress || "").trim(),
-
-        // Status & Metadata
-        role: "siswa",
-        status: "Aktif",
-        onboardingCompleted: true,
-        pendingOnboardingReminder: false,
-        hasPendingReminder: false,
-        updatedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString()
-      });
-
-      // 4. Save to `students` collection across all matching document IDs (eliminates orphaned pending records)
-      for (const sId of docIdsToUpdate) {
-        try {
-          await setDoc(doc(db, "students", sId), unifiedStudentPayload, { merge: true });
-        } catch (errStudents) {
-          console.warn(`Could not save student doc ${sId}:`, errStudents);
-        }
-      }
-
-      // 5. Save to `users` collection for authenticated user
-      if (activeUser?.uid) {
-        await setDoc(doc(db, "users", activeUser.uid), unifiedStudentPayload, { merge: true });
-      }
-      if (primaryStudentId !== activeUser?.uid) {
-        try {
-          await setDoc(doc(db, "users", primaryStudentId), unifiedStudentPayload, { merge: true });
-        } catch (e) {}
-      }
-
-      // 6. PARENT RECORD CREATION (Guaranteed for `parents` and optionally `users`)
+      // 3. PARENT RECORD DISCOVERY / CREATION FIRST (To obtain valid parent UID for student doc)
       const parentEmailInput = (orangTua.parentEmail || "").trim().toLowerCase();
       const bestParentName = (
         orangTua.fatherName ||
@@ -535,11 +868,11 @@ export default function StudentOnboardingPage() {
         `${finalFullName} (Orang Tua)`
       ).trim();
 
-      if (bestParentName) {
-        let parentDocId = "";
-        let defaultPassword = "";
-        let isExisting = false;
+      let parentDocId = "";
+      let defaultPassword = "";
+      let isExisting = false;
 
+      if (bestParentName) {
         if (parentEmailInput) {
           defaultPassword = generateParentDefaultPassword(bestParentName, currentSchoolName);
           try {
@@ -557,7 +890,7 @@ export default function StudentOnboardingPage() {
                 if (!snap.empty) {
                   parentDocId = snap.docs[0].id;
                 }
-              } catch (qErr) {}
+              } catch (qErr) { }
             }
           }
         }
@@ -565,17 +898,120 @@ export default function StudentOnboardingPage() {
         if (!parentDocId) {
           parentDocId = `parent_${primaryStudentId}`;
         }
+      }
 
-        const parentRelationFormatted =
-          orangTua.relation === "Ibu"
-            ? "Ibu Kandung"
-            : orangTua.relation === "Wali"
+      // Link parent strictly to this 1 student
+      const finalParentStudentIds = [primaryStudentId];
+
+      const parentRelationFormatted =
+        orangTua.relation === "Ibu"
+          ? "Ibu Kandung"
+          : orangTua.relation === "Wali"
             ? "Wali Murid"
             : "Ayah Kandung";
 
+      // 4. Construct Unified Student Payload (clean, persistent, synchronized with Parent UID)
+      const unifiedStudentPayload = cleanFirestoreData({
+        uid: (isSelfRegistration && activeUser?.uid) ? activeUser.uid : primaryStudentId,
+        id: nisnClean || primaryStudentId,
+        nisn: nisnClean || `NISN-${Date.now().toString().slice(-6)}`,
+        nis: nisnClean || `NIS-${Date.now().toString().slice(-6)}`,
+        name: finalFullName,
+        fullName: finalFullName,
+        nickname: (pribadi.nickname || "").trim(),
+        gender: pribadi.gender || "Laki-laki",
+        birthPlace: (pribadi.birthPlace || "").trim(),
+        birthDate: pribadi.birthDate || "",
+        religion: pribadi.religion || "Islam",
+        nik: (pribadi.nik || "").trim(),
+        address: (pribadi.address || "").trim(),
+        phone: (pribadi.phone || "").trim(),
+        email: studentEmail || `${nisnClean || primaryStudentId}@quickschools.sch.id`,
+        photoUrl: finalPhotoUrl,
+        imageUrl: finalPhotoUrl,
+        pasFoto: finalPhotoUrl,
+
+        // Academic Data (Strictly synchronized with School Profile & Academic Year)
+        entryYear: activeAcademicYear || akademik.entryYear || "2025/2026",
+        level: currentStage || akademik.level || "SMA",
+        gradeLevel: akademik.gradeLevel || gradeLevels[0] || "Kelas 10",
+        educationalStage: currentStage || "SMA",
+        classId: resolvedClass,
+        className: resolvedClass,
+        class: resolvedClass,
+        kelas: resolvedClass,
+        major: resolvedMajor,
+        studentStatus: akademik.studentStatus || "Siswa Baru",
+        previousSchool: (akademik.previousSchool || "").trim(),
+        asalSekolah: (akademik.previousSchool || "").trim(),
+
+        // Parents Data & Linked Parent Keys
+        parentUid: parentDocId || "",
+        parentUserId: parentDocId || "",
+        parentId: parentDocId ? `PRT-${parentDocId.slice(0, 5).toUpperCase()}` : "",
+        parentName: bestParentName,
+        fatherName: (orangTua.fatherName || "").trim(),
+        motherName: (orangTua.motherName || "").trim(),
+        guardianName: (orangTua.guardianName || "").trim(),
+        relation: orangTua.relation || "Ayah",
+        parentRelation: parentRelationFormatted,
+        parentPhone: (orangTua.parentPhone || "").trim(),
+        parentEmail: parentEmailInput,
+        parentAddress: (orangTua.parentAddress || "").trim(),
+        parentJob: (orangTua.parentJob || "").trim(),
+        parentIncome: orangTua.parentIncome || "< 5 Juta",
+        hasLinkedParent: Boolean(parentDocId),
+
+        // Emergency Contact
+        emergencyName: (darurat.contactName || "").trim(),
+        emergencyRelation: darurat.relation || "",
+        emergencyPhone: (darurat.contactPhone || "").trim(),
+        emergencyAddress: (darurat.contactAddress || "").trim(),
+
+        // Status & Metadata
+        role: "siswa",
+        status: "Aktif",
+        onboardingCompleted: true,
+        pendingOnboardingReminder: false,
+        hasPendingReminder: false,
+        updatedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString()
+      });
+
+      // 5. Save to `students` collection across all matching document IDs (strictly formatted to adhere to schema)
+      for (const sId of docIdsToUpdate) {
+        try {
+          const compactStudentPayload: any = {
+            id: sId,
+            name: finalFullName.slice(0, 100),
+            classId: (resolvedClass || "10 IPA 1").slice(0, 50),
+            status: "Aktif",
+          };
+          if (finalPhotoUrl && !finalPhotoUrl.startsWith("data:") && finalPhotoUrl.length <= 500) {
+            compactStudentPayload.imageUrl = finalPhotoUrl;
+          }
+          await setDoc(doc(db, "students", sId), compactStudentPayload, { merge: true });
+        } catch (errStudents) {
+          console.warn(`Could not save student doc ${sId}:`, errStudents);
+        }
+      }
+
+      // 6. Save to `users` collection for authenticated user
+      if (activeUser?.uid) {
+        await setDoc(doc(db, "users", activeUser.uid), unifiedStudentPayload, { merge: true });
+      }
+      if (primaryStudentId !== activeUser?.uid) {
+        try {
+          await setDoc(doc(db, "users", primaryStudentId), unifiedStudentPayload, { merge: true });
+        } catch (e) { }
+      }
+
+      // 7. SAVE PARENT RECORD (Guaranteed for `parents` and optionally `users` collection)
+      if (parentDocId && bestParentName) {
         const parentPayload = cleanFirestoreData({
           uid: parentDocId,
           id: parentDocId,
+          userUid: parentDocId,
           parentId: `PRT-${parentDocId.slice(0, 5).toUpperCase()}`,
           name: bestParentName,
           fullName: bestParentName,
@@ -597,9 +1033,12 @@ export default function StudentOnboardingPage() {
           emergencyName: (darurat.contactName || "").trim(),
           emergencyRelation: darurat.relation || "",
           emergencyPhone: (darurat.contactPhone || "").trim(),
-          studentIds: arrayUnion(primaryStudentId, ...Array.from(docIdsToUpdate)),
-          linkedStudentIds: arrayUnion(primaryStudentId, ...Array.from(docIdsToUpdate)),
+          studentIds: finalParentStudentIds,
+          linkedStudentIds: finalParentStudentIds,
           studentId: primaryStudentId,
+          nisn: nisnClean || primaryStudentId,
+          studentName: finalFullName,
+          hasLinkedParent: true,
           source: "student_onboarding",
           passwordHint: defaultPassword || undefined,
           updatedAt: new Date().toISOString(),
@@ -613,8 +1052,8 @@ export default function StudentOnboardingPage() {
           console.warn("Could not save to parents collection:", pErr);
         }
 
-        // Save to `users` collection if email account is created
-        if (parentEmailInput) {
+        // Save to `users` collection if email account is created or already exists
+        if (parentEmailInput || isExisting) {
           try {
             await setDoc(doc(db, "users", parentDocId), parentPayload, { merge: true });
           } catch (uErr) {
@@ -627,16 +1066,42 @@ export default function StudentOnboardingPage() {
             isExisting: isExisting
           });
         }
+
+        // Run thorough bi-directional sync helper
+        try {
+          await syncParentWithStudents({
+            parentUid: parentDocId,
+            parentName: bestParentName,
+            parentEmail: parentEmailInput,
+            parentPhone: (orangTua.parentPhone || "").trim(),
+            studentId: primaryStudentId,
+            nisn: nisnClean || primaryStudentId,
+            studentIds: finalParentStudentIds,
+            studentName: finalFullName,
+          });
+        } catch (syncErr) {
+          console.warn("Bi-directional sync during onboarding warning:", syncErr);
+        }
       }
 
-      // 7. Save to LocalStorage immediately for instant local hydration
+      // 7. Save to LocalStorage immediately for instant local hydration and clear drafts
       try {
         localStorage.setItem("quick_schools_student_profile", JSON.stringify(unifiedStudentPayload));
         localStorage.setItem("onboarding_completed", "true");
+        localStorage.removeItem(getDraftStorageKey(currentUser?.uid));
+        localStorage.removeItem(getDraftStorageKey());
+        if (currentUser?.uid) {
+          updateDoc(doc(db, "users", currentUser.uid), {
+            onboardingDraft: deleteField()
+          }).catch(() => { });
+        }
       } catch (errLocal) {
         console.warn("LocalStorage save warning:", errLocal);
       }
 
+      setHasSavedDraft(false);
+      setSavedDraftInfo(null);
+      setAutoSaveStatus("idle");
       setSubmitting(false);
       setStep(6); // Selesai
       toast.showSuccess(
@@ -710,6 +1175,53 @@ export default function StudentOnboardingPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Auto-Save Indicator in Top Bar */}
+            {step >= 1 && step <= 5 && (
+              <div className="hidden sm:flex items-center gap-1.5">
+                <div className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-300",
+                  autoSaveStatus === "saving" && "bg-amber-50 text-amber-800 border-amber-200 animate-pulse",
+                  autoSaveStatus === "saved" && "bg-slate-50 text-slate-700 border-slate-200/90",
+                  autoSaveStatus === "error" && "bg-rose-50 text-rose-700 border-rose-200",
+                  autoSaveStatus === "idle" && "bg-slate-50 text-slate-500 border-slate-200/60"
+                )}>
+                  {autoSaveStatus === "saving" && (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                      <span>Menyimpan draf...</span>
+                    </>
+                  )}
+                  {autoSaveStatus === "saved" && (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Draf tersimpan {lastSavedTime ? `(${lastSavedTime})` : "otomatis"}</span>
+                    </>
+                  )}
+                  {autoSaveStatus === "error" && (
+                    <>
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Gagal simpan lokal</span>
+                    </>
+                  )}
+                  {autoSaveStatus === "idle" && (
+                    <>
+                      <Save className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Auto-save aktif</span>
+                    </>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleResetDraft}
+                  title="Hapus draf & mulai dari awal"
+                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200/60 hover:border-rose-200 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             <div className="hidden md:flex flex-col items-end mr-2">
               <span className="text-[11px] text-slate-500 font-semibold">Kemajuan Pengisian</span>
               <div className="flex items-center gap-2 mt-0.5">
@@ -759,6 +1271,47 @@ export default function StudentOnboardingPage() {
                   <a href="/register?redirect=/onboarding" className="px-3 py-1.5 bg-[#531FFF] text-white rounded-lg font-bold hover:bg-[#4314cc] text-[11px]">
                     Daftar
                   </a>
+                </div>
+              </div>
+            )}
+
+            {/* Saved Draft Recovery Card in Step 0 */}
+            {hasSavedDraft && (
+              <div className="max-w-2xl mx-auto p-5 bg-gradient-to-r from-purple-50/90 via-indigo-50/70 to-purple-50/90 border border-[#531FFF]/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 text-left shadow-sm relative z-20 animate-in fade-in duration-300">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-11 h-11 rounded-xl bg-[#531FFF] text-white flex items-center justify-center shrink-0 shadow-md shadow-[#531FFF]/25">
+                    <Save className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-extrabold text-slate-900">Draf Pendaftaran Ditemukan</h4>
+                      <span className="px-2 py-0.5 bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20 rounded-md text-[10px] font-extrabold uppercase tracking-wide">
+                        Tersimpan Otomatis
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                      {savedDraftInfo?.studentName ? (
+                        <>Atas nama <strong className="text-slate-900 font-bold">{savedDraftInfo.studentName}</strong> • </>
+                      ) : null}
+                      Terakhir tersimpan {lastSavedTime ? `pukul ${lastSavedTime}` : "sebelumnya"}. Anda dapat langsung melanjutkan dari Langkah {savedDraftInfo?.step || 1} tanpa mengulang dari awal.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={handleResetDraft}
+                    className="flex-1 sm:flex-initial px-3.5 py-2.5 bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 border border-slate-200 hover:border-rose-300 rounded-xl text-xs font-bold transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Mulai Baru
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStep(savedDraftInfo?.step || 1)}
+                    className="flex-1 sm:flex-initial px-4 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#531FFF]/20 inline-flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  >
+                    Lanjutkan Langkah {savedDraftInfo?.step || 1} <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             )}
@@ -841,12 +1394,23 @@ export default function StudentOnboardingPage() {
               </div>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              {hasSavedDraft && (
+                <button
+                  type="button"
+                  onClick={handleResetDraft}
+                  className="px-6 py-4 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 font-bold rounded-lg text-sm transition-all border border-slate-200 hover:border-rose-200 inline-flex items-center gap-2 group cursor-pointer"
+                >
+                  <RotateCcw className="w-4 h-4" /> Reset Draf Formulir
+                </button>
+              )}
               <button
-                onClick={() => setStep(1)}
+                onClick={() => setStep(hasSavedDraft && savedDraftInfo?.step ? savedDraftInfo.step : 1)}
                 className="px-9 py-4 bg-[#531FFF] hover:bg-[#4314cc] text-white font-bold rounded-lg text-sm transition-all shadow-lg shadow-[#531FFF]/25 hover:shadow-xl hover:shadow-[#531FFF]/30 inline-flex items-center gap-2.5 group cursor-pointer active:scale-95"
               >
-                Mulai Isi Data Diri Siswa <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                {hasSavedDraft
+                  ? `Lanjutkan Pengisian (Langkah ${savedDraftInfo?.step || 1})`
+                  : "Mulai Isi Data Diri Siswa"} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
           </div>
@@ -929,6 +1493,33 @@ export default function StudentOnboardingPage() {
                       style={{ width: `${progressPercent}%` }}
                     />
                   </div>
+                </div>
+
+                {/* Auto-Save Status in Left Sidebar */}
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn(
+                      "w-2 h-2 rounded-full",
+                      autoSaveStatus === "saving" && "bg-amber-500 animate-ping",
+                      autoSaveStatus === "saved" && "bg-emerald-500",
+                      autoSaveStatus === "error" && "bg-rose-500",
+                      autoSaveStatus === "idle" && "bg-slate-400"
+                    )} />
+                    <span className="text-slate-600 font-medium text-[11px]">
+                      {autoSaveStatus === "saving" && "Menyimpan draf..."}
+                      {autoSaveStatus === "saved" && `Draf aman ${lastSavedTime ? `(${lastSavedTime})` : ""}`}
+                      {autoSaveStatus === "error" && "Auto-save terhenti"}
+                      {autoSaveStatus === "idle" && "Auto-save aktif"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResetDraft}
+                    title="Hapus draf & mulai dari awal"
+                    className="text-slate-400 hover:text-rose-600 font-semibold transition-colors cursor-pointer text-[10px]"
+                  >
+                    Reset Draf
+                  </button>
                 </div>
               </div>
 
@@ -1020,7 +1611,9 @@ export default function StudentOnboardingPage() {
                     </div>
                     <div className="space-y-2.5 text-center sm:text-left flex-1">
                       <div>
-                        <p className="text-xs font-extrabold text-slate-900">Foto Profil Resmi Siswa *</p>
+                        <p className="text-xs font-extrabold text-slate-900">
+                          Foto Profil Resmi Siswa <span className="text-red-500 font-bold ml-0.5">*</span>
+                        </p>
                         <p className="text-[11px] text-slate-500 font-medium mt-0.5">
                           Format JPG/PNG (Maks 2MB). Gunakan foto pas resmi berpakaian seragam sekolah. Foto ini digunakan untuk Face Recognition Absensi Harian.
                         </p>
@@ -1033,110 +1626,134 @@ export default function StudentOnboardingPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 text-xs font-bold text-slate-900">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 text-xs font-bold text-slate-900">
                     <div className="space-y-1.5">
-                      <label className="flex items-center gap-1.5">
-                        <User className="w-3.5 h-3.5 text-slate-400" /> Nama Lengkap Siswa *
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-[#531FFF]" />
+                        <span>Nama Lengkap Siswa</span>
+                        <span className="text-red-500 font-bold ml-0.5">*</span>
                       </label>
                       <input
                         type="text"
                         value={pribadi.fullName}
                         onChange={(e) => setPribadi({ ...pribadi, fullName: e.target.value })}
                         placeholder="Nama sesuai Ijazah / Akta"
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                        className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                         required
                       />
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="flex items-center gap-1.5">
-                        <User className="w-3.5 h-3.5 text-slate-400" /> Nama Panggilan
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Nama Panggilan</span>
                       </label>
                       <input
                         type="text"
                         value={pribadi.nickname}
                         onChange={(e) => setPribadi({ ...pribadi, nickname: e.target.value })}
-                        placeholder="Nama panggilan sehari-hari"
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                        placeholder="Nama panggilan akrab"
+                        className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                       />
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="flex items-center gap-1.5">
-                        <IdCard className="w-3.5 h-3.5 text-slate-400" /> NIS / NISN *
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <IdCard className="w-3.5 h-3.5 text-[#531FFF]" />
+                        <span>NIS / NISN</span>
+                        <span className="text-red-500 font-bold ml-0.5">*</span>
                       </label>
                       <input
                         type="text"
                         value={pribadi.nisn}
                         onChange={(e) => setPribadi({ ...pribadi, nisn: e.target.value })}
                         placeholder="Contoh: 0061234567"
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                        className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                         required
                       />
                     </div>
 
                     {/* Interactive Gender Selection */}
                     <div className="space-y-1.5 sm:col-span-2 lg:col-span-3">
-                      <label className="block mb-1">Jenis Kelamin *</label>
+                      <label className="text-xs font-bold text-slate-700 flex items-center">
+                        <span>Jenis Kelamin</span>
+                        <span className="text-red-500 font-bold ml-0.5">*</span>
+                      </label>
                       <div className="grid grid-cols-2 gap-3">
                         <button
                           type="button"
                           onClick={() => setPribadi({ ...pribadi, gender: "Laki-laki" })}
                           className={cn(
-                            "p-3 rounded-lg border text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all",
+                            "h-11 px-4 rounded-xl border text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99] shadow-2xs",
                             pribadi.gender === "Laki-laki"
                               ? "bg-[#531FFF]/10 border-[#531FFF] text-[#531FFF]"
                               : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
                           )}
                         >
-                          <span className="text-base"></span> Laki-laki
+                          <span>Laki-laki</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => setPribadi({ ...pribadi, gender: "Perempuan" })}
                           className={cn(
-                            "p-3 rounded-lg border text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all",
+                            "h-11 px-4 rounded-xl border text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.99] shadow-2xs",
                             pribadi.gender === "Perempuan"
                               ? "bg-[#531FFF]/10 border-[#531FFF] text-[#531FFF]"
                               : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
                           )}
                         >
-                          <span className="text-base"></span> Perempuan
+                          <span>Perempuan</span>
                         </button>
                       </div>
                     </div>
 
+                    {/* Tempat Lahir (Dropdown Kota/Kabupaten Indonesia) */}
                     <div className="space-y-1.5">
-                      <label className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" /> Tempat Lahir
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-[#531FFF]" />
+                        <span>Tempat Lahir</span>
+                        <span className="text-red-500 font-bold ml-0.5">*</span>
                       </label>
-                      <input
-                        type="text"
+                      <select
                         value={pribadi.birthPlace}
                         onChange={(e) => setPribadi({ ...pribadi, birthPlace: e.target.value })}
-                        placeholder="Kota tempat lahir"
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
-                      />
+                        className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs cursor-pointer"
+                        required
+                      >
+                        <option value="">-- Pilih Kota / Kabupaten Lahir --</option>
+                        {INDONESIAN_CITIES_BY_REGION.map((grp) => (
+                          <optgroup key={grp.region} label={`📍 ${grp.region}`}>
+                            {grp.cities.map((city) => (
+                              <option key={city} value={city}>{city}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
                     </div>
 
+                    {/* Tanggal Lahir (Modern Date Picker) */}
                     <div className="space-y-1.5">
-                      <label className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" /> Tanggal Lahir
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-[#531FFF]" />
+                        <span>Tanggal Lahir</span>
+                        <span className="text-red-500 font-bold ml-0.5">*</span>
                       </label>
                       <input
                         type="date"
                         value={pribadi.birthDate}
+                        max={new Date().toISOString().split("T")[0]}
                         onChange={(e) => setPribadi({ ...pribadi, birthDate: e.target.value })}
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                        className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs cursor-pointer"
+                        required
                       />
                     </div>
 
                     <div className="space-y-1.5">
-                      <label>Agama</label>
+                      <label className="text-xs font-bold text-slate-700 block">Agama</label>
                       <select
                         value={pribadi.religion}
                         onChange={(e) => setPribadi({ ...pribadi, religion: e.target.value })}
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                        className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs cursor-pointer"
                       >
                         <option value="Islam">Islam</option>
                         <option value="Kristen">Kristen</option>
@@ -1148,8 +1765,9 @@ export default function StudentOnboardingPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="flex items-center gap-1.5">
-                        <IdCard className="w-3.5 h-3.5 text-slate-400" /> NIK (16 Digit)
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <IdCard className="w-3.5 h-3.5 text-slate-400" />
+                        <span>NIK (16 Digit)</span>
                       </label>
                       <input
                         type="text"
@@ -1157,47 +1775,54 @@ export default function StudentOnboardingPage() {
                         onChange={(e) => setPribadi({ ...pribadi, nik: e.target.value })}
                         placeholder="Nomor KTP / KK (16 digit)"
                         maxLength={16}
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                        className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                       />
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="flex items-center gap-1.5">
-                        <Phone className="w-3.5 h-3.5 text-slate-400" /> Nomor HP Siswa *
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-[#531FFF]" />
+                        <span>Nomor HP Siswa</span>
+                        <span className="text-red-500 font-bold ml-0.5">*</span>
                       </label>
                       <input
                         type="text"
                         value={pribadi.phone}
                         onChange={(e) => setPribadi({ ...pribadi, phone: e.target.value })}
                         placeholder="Contoh: 081234567890"
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                        className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
+                        required
                       />
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="flex items-center gap-1.5">
-                        <Mail className="w-3.5 h-3.5 text-slate-400" /> Email Siswa *
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-[#531FFF]" />
+                        <span>Email Siswa</span>
+                        <span className="text-red-500 font-bold ml-0.5">*</span>
                       </label>
                       <input
                         type="email"
                         value={pribadi.email}
                         onChange={(e) => setPribadi({ ...pribadi, email: e.target.value })}
                         placeholder="email@sekolah.id"
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                        className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                         required
                       />
                     </div>
 
                     <div className="sm:col-span-2 lg:col-span-3 space-y-1.5">
-                      <label className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" /> Alamat Lengkap Siswa *
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Alamat Lengkap Siswa</span>
+                        <span className="text-red-500 font-bold ml-0.5">*</span>
                       </label>
                       <textarea
                         rows={3}
                         value={pribadi.address}
                         onChange={(e) => setPribadi({ ...pribadi, address: e.target.value })}
                         placeholder="Alamat tempat tinggal lengkap beserta Jalan, RT/RW, Kelurahan, Kecamatan, Kota/Kabupaten"
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                        className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs resize-none"
                       />
                     </div>
                   </div>
@@ -1206,81 +1831,107 @@ export default function StudentOnboardingPage() {
 
               {/* STEP 2: DATA AKADEMIK */}
               {step === 2 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 text-xs font-bold text-slate-900">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 text-xs font-bold text-slate-900">
+                  {/* 1. Tahun Masuk Sekolah (Disabled & Automatic) */}
                   <div className="space-y-1.5">
-                    <label>Tahun Masuk Sekolah *</label>
-                    <select
-                      value={akademik.entryYear}
-                      onChange={(e) => setAkademik({ ...akademik, entryYear: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
-                    >
-                      <option value="2025/2026">2025/2026</option>
-                      <option value="2026/2027">2026/2027</option>
-                      <option value="2024/2025">2024/2025</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="flex items-center justify-between">
-                      <span>Jenjang Satuan Pendidikan *</span>
-                      <span className="text-[10px] font-bold text-[#531FFF] bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-                        {stageConfig.name} Aktif
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-[#531FFF]" />
+                        <span>Tahun Masuk Sekolah</span>
+                        <span className="text-red-500 font-bold ml-0.5">*</span>
+                      </label>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        T.A. Aktif
                       </span>
-                    </label>
-                    <select
-                      value={akademik.level}
-                      onChange={(e) => setAkademik({ ...akademik, level: e.target.value as any })}
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
-                    >
-                      <option value="SD">SD (Sekolah Dasar)</option>
-                      <option value="SMP">SMP (Sekolah Menengah Pertama)</option>
-                      <option value="SMA">SMA (Sekolah Menengah Atas)</option>
-                      <option value="SMK">SMK (Sekolah Menengah Kejuruan)</option>
-                    </select>
+                    </div>
+                    <input
+                      type="text"
+                      value={akademik.entryYear}
+                      disabled
+                      className="w-full h-11 px-3.5 bg-slate-100/90 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 cursor-not-allowed select-none shadow-2xs"
+                      title="Tahun masuk otomatis mengikuti tahun ajaran aktif sekolah"
+                    />
+                    <p className="text-[10px] text-slate-400 font-medium">Otomatis mengikuti tahun ajaran aktif sekolah.</p>
                   </div>
 
+                  {/* 2. Jenjang Satuan Pendidikan (Disabled & Synced with School Profile) */}
                   <div className="space-y-1.5">
-                    <label>Tingkat / Tingkatan Kelas *</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <GraduationCap className="w-3.5 h-3.5 text-[#531FFF]" />
+                        <span>Jenjang Pendidikan</span>
+                        <span className="text-red-500 font-bold ml-0.5">*</span>
+                      </label>
+                      <span className="text-[10px] font-bold text-[#531FFF] bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                        Terkunci
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={`${stageConfig.name} (${currentStage})`}
+                      disabled
+                      className="w-full h-11 px-3.5 bg-slate-100/90 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 cursor-not-allowed select-none shadow-2xs"
+                      title="Jenjang pendidikan diselaraskan dengan Pengaturan Sekolah"
+                    />
+                    <p className="text-[10px] text-slate-400 font-medium">Sesuai jenjang aktif pada profil sekolah.</p>
+                  </div>
+
+                  {/* 3. Tingkat / Tingkatan Kelas */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <BookOpen className="w-3.5 h-3.5 text-[#531FFF]" />
+                      <span>Tingkat / Tingkatan Kelas</span>
+                      <span className="text-red-500 font-bold ml-0.5">*</span>
+                    </label>
                     <select
                       value={akademik.gradeLevel}
                       onChange={(e) => setAkademik({ ...akademik, gradeLevel: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs cursor-pointer"
                     >
                       {gradeLevels.map((lvl) => (
                         <option key={lvl} value={lvl}>{lvl}</option>
                       ))}
                     </select>
+                    <p className="text-[10px] text-slate-400 font-medium">Tingkat kelas siswa saat ini.</p>
                   </div>
 
+                  {/* 4. Pilihan Kelas (Rombel) */}
                   <div className="space-y-1.5">
-                    <label>Pilihan Kelas (Rombel) *</label>
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-[#531FFF]" />
+                      <span>Pilihan Kelas (Rombel)</span>
+                      <span className="text-red-500 font-bold ml-0.5">*</span>
+                    </label>
                     <select
                       value={akademik.className}
                       onChange={(e) => setAkademik({ ...akademik, className: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs cursor-pointer"
                     >
+                      <option value="">-- Pilih Rombel / Kelas --</option>
                       {availableClasses.map((cls: string) => (
                         <option key={cls} value={cls}>{cls}</option>
                       ))}
                     </select>
+                    <p className="text-[10px] text-slate-400 font-medium">Rombongan belajar penempatan siswa.</p>
                   </div>
 
-                  {/* Dynamic Major Selection based on Active Stage */}
+                  {/* 5. Dynamic Major Selection based on Active Stage */}
                   {(akademik.level === "SMK" || currentStage === "SMK") ? (
                     <div className="space-y-1.5 sm:col-span-2">
                       <div className="flex items-center justify-between">
-                        <label className="flex items-center gap-1.5">
+                        <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                           <Briefcase className="w-3.5 h-3.5 text-amber-600" />
-                          Program Keahlian (Jurusan SMK) *
+                          <span>Program Keahlian (Jurusan SMK)</span>
+                          <span className="text-red-500 font-bold ml-0.5">*</span>
                         </label>
-                        <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                        <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                           {(profile.vocationalPrograms || []).length} Jurusan Tersedia
                         </span>
                       </div>
                       <select
                         value={akademik.major}
                         onChange={(e) => setAkademik({ ...akademik, major: e.target.value })}
-                        className="w-full px-3.5 py-2.5 bg-white border border-amber-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                        className="w-full h-11 px-3.5 bg-white border border-amber-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-2xs cursor-pointer"
                       >
                         {majorOptions.map((opt) => (
                           <option key={opt.value} value={opt.value}>
@@ -1288,31 +1939,34 @@ export default function StudentOnboardingPage() {
                           </option>
                         ))}
                       </select>
+                      <p className="text-[10px] text-amber-700/80 font-medium">Program keahlian/konsentrasi kejuruan siswa.</p>
                     </div>
                   ) : (akademik.level === "SMA" || currentStage === "SMA") ? (
                     <div className="space-y-1.5 sm:col-span-2">
-                      <label className="flex items-center gap-1.5">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                         <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
-                        Peminatan Akademik (SMA) *
+                        <span>Peminatan Akademik (SMA)</span>
+                        <span className="text-red-500 font-bold ml-0.5">*</span>
                       </label>
                       <select
                         value={akademik.major}
                         onChange={(e) => setAkademik({ ...akademik, major: e.target.value })}
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                        className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs cursor-pointer"
                       >
                         {majorOptions.map((opt) => (
                           <option key={opt.value} value={opt.value}>{opt.label}</option>
                         ))}
                       </select>
+                      <p className="text-[10px] text-slate-400 font-medium">Peminatan / jurusan kurikulum akademik.</p>
                     </div>
                   ) : (
                     <div className="sm:col-span-2 p-3 bg-emerald-50/60 rounded-xl border border-emerald-200 flex items-center justify-between">
                       <div>
-                        <span className="font-extrabold text-emerald-900 text-xs block flex items-center gap-1.5">
+                        <span className="font-extrabold text-emerald-900 text-xs flex items-center gap-1.5">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                           Model Kelas Reguler Terpadu ({stageConfig.name})
                         </span>
-                        <span className="text-[11px] text-emerald-700">
+                        <span className="text-[11px] text-emerald-700 block mt-0.5">
                           Jenjang {stageConfig.name} tidak menerapkan penjurusan kejuruan. Siswa ditempatkan pada kelas rombel terpadu.
                         </span>
                       </div>
@@ -1322,95 +1976,98 @@ export default function StudentOnboardingPage() {
                     </div>
                   )}
 
+                  {/* 6. Status Siswa */}
                   <div className="space-y-1.5">
-                    <label>Status Siswa *</label>
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <UserCheck className="w-3.5 h-3.5 text-[#531FFF]" />
+                      <span>Status Siswa</span>
+                      <span className="text-red-500 font-bold ml-0.5">*</span>
+                    </label>
                     <select
                       value={akademik.studentStatus}
                       onChange={(e) => setAkademik({ ...akademik, studentStatus: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs cursor-pointer"
                     >
                       <option value="Siswa Baru">Siswa Baru</option>
                       <option value="Pindahan">Siswa Pindahan</option>
                       <option value="Aktif">Aktif</option>
                     </select>
+                    <p className="text-[10px] text-slate-400 font-medium">Status penerimaan / kepesertaan siswa.</p>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5">
-                      <School className="w-3.5 h-3.5 text-slate-400" /> Asal Sekolah Sebelumnya
+                  {/* 7. Asal Sekolah Sebelumnya */}
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <School className="w-3.5 h-3.5 text-[#531FFF]" />
+                      <span>Asal Sekolah Sebelumnya</span>
                     </label>
                     <input
                       type="text"
                       value={akademik.previousSchool}
                       onChange={(e) => setAkademik({ ...akademik, previousSchool: e.target.value })}
-                      placeholder={currentStage === "SD" ? "Nama TK / PAUD Asal" : currentStage === "SMP" ? "Nama SD / MI Asal" : "Nama SMP / MTs Asal"}
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      placeholder="Contoh: SMP Negeri 1 Jakarta / MTs Negeri..."
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                     />
-                  </div>
-
-                  <div className="sm:col-span-2 lg:col-span-3 space-y-1.5">
-                    <label>Nomor Ujian / Peserta Didik Sebelumnya (Opsional)</label>
-                    <input
-                      type="text"
-                      value={akademik.previousStudentId}
-                      onChange={(e) => setAkademik({ ...akademik, previousStudentId: e.target.value })}
-                      placeholder="Nomor UN / NISN Sekolah sebelumnya"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
-                    />
+                    <p className="text-[10px] text-slate-400 font-medium">Nama sekolah pada jenjang pendidikan sebelumnya.</p>
                   </div>
                 </div>
               )}
 
               {/* STEP 3: DATA ORANG TUA / WALI */}
               {step === 3 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 text-xs font-bold text-slate-900">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5 text-xs font-bold text-slate-900">
                   <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-slate-400" /> Nama Ayah Kandung *
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-[#531FFF]" />
+                      <span>Nama Ayah Kandung</span>
+                      <span className="text-red-500 font-bold ml-0.5">*</span>
                     </label>
                     <input
                       type="text"
                       value={orangTua.fatherName}
                       onChange={(e) => setOrangTua({ ...orangTua, fatherName: e.target.value })}
                       placeholder="Nama ayah sesuai KK"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                       required
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-slate-400" /> Nama Ibu Kandung *
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-[#531FFF]" />
+                      <span>Nama Ibu Kandung</span>
+                      <span className="text-red-500 font-bold ml-0.5">*</span>
                     </label>
                     <input
                       type="text"
                       value={orangTua.motherName}
                       onChange={(e) => setOrangTua({ ...orangTua, motherName: e.target.value })}
                       placeholder="Nama ibu sesuai KK"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                       required
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-slate-400" /> Nama Wali (Opsional)
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Nama Wali (Opsional)</span>
                     </label>
                     <input
                       type="text"
                       value={orangTua.guardianName}
                       onChange={(e) => setOrangTua({ ...orangTua, guardianName: e.target.value })}
                       placeholder="Isi jika tinggal bersama wali"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label>Hubungan Wali Dengan Siswa</label>
+                    <label className="text-xs font-bold text-slate-700 block">Hubungan Wali Dengan Siswa</label>
                     <select
                       value={orangTua.relation}
                       onChange={(e) => setOrangTua({ ...orangTua, relation: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs cursor-pointer"
                     >
                       <option value="Ayah">Ayah Kandung</option>
                       <option value="Ibu">Ibu Kandung</option>
@@ -1419,26 +2076,30 @@ export default function StudentOnboardingPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5">
-                      <Phone className="w-3.5 h-3.5 text-slate-400" /> Nomor HP WhatsApp Orang Tua *
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-[#531FFF]" />
+                      <span>Nomor HP WhatsApp Orang Tua</span>
+                      <span className="text-red-500 font-bold ml-0.5">*</span>
                     </label>
                     <input
                       type="text"
                       value={orangTua.parentPhone}
                       onChange={(e) => setOrangTua({ ...orangTua, parentPhone: e.target.value })}
-                      placeholder="Nomor WhatsApp aktif"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      placeholder="Nomor WhatsApp aktif untuk info sekolah"
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                       required
                     />
                   </div>
 
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="flex items-center gap-1.5">
-                        <Mail className="w-3.5 h-3.5 text-slate-400" /> Email Orang Tua / Wali *
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-[#531FFF]" />
+                        <span>Email Orang Tua / Wali</span>
+                        <span className="text-red-500 font-bold ml-0.5">*</span>
                       </label>
                       <span className="text-[10px] font-bold text-[#531FFF] bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100 flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" /> Auto Akun Login
+                        <Sparkles className="w-3 h-3" /> Auto Akun
                       </span>
                     </div>
                     <input
@@ -1446,36 +2107,49 @@ export default function StudentOnboardingPage() {
                       value={orangTua.parentEmail}
                       onChange={(e) => setOrangTua({ ...orangTua, parentEmail: e.target.value })}
                       placeholder="email.orangtua@gmail.com"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                       required
                     />
-                    <p className="text-[10px] text-slate-500 flex items-center gap-1">
-                      <Lock className="w-3 h-3 text-slate-400 shrink-0" />
-                      Akun login ortu otomatis dibuat di Manajemen Akun. Password: <span className="font-mono font-bold text-[#531FFF]">[nama depan]-[nama sekolah]</span>
-                    </p>
+                    <div className="p-2.5 bg-slate-50 border border-slate-200/70 rounded-xl text-slate-600 space-y-1">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-800">
+                        <Lock className="w-3.5 h-3.5 text-[#531FFF] shrink-0" />
+                        <span>Akun Login Orang Tua Otomatis</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-snug">
+                        Portal akun dibuat otomatis. Sandi awal:
+                        <span className="ml-1 inline-block px-1.5 py-0.5 bg-white text-[#531FFF] font-mono font-extrabold rounded border border-purple-200 text-[10px] shadow-2xs">
+                          [nama_depan]-[nama_sekolah]
+                        </span>
+                      </p>
+                    </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5">
-                      <Briefcase className="w-3.5 h-3.5 text-slate-400" /> Pekerjaan Orang Tua
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <Briefcase className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Pekerjaan Orang Tua</span>
                     </label>
-                    <input
-                      type="text"
+                    <select
                       value={orangTua.parentJob}
                       onChange={(e) => setOrangTua({ ...orangTua, parentJob: e.target.value })}
-                      placeholder="PNS / Swasta / Wiraswasta"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
-                    />
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs cursor-pointer"
+                    >
+                      <option value="">-- Pilih Pekerjaan Orang Tua / Wali --</option>
+                      {INDONESIAN_PARENT_JOBS.map((job) => (
+                        <option key={job} value={job}>{job}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="space-y-1.5 lg:col-span-2">
-                    <label className="flex items-center gap-1.5">
-                      <DollarSign className="w-3.5 h-3.5 text-slate-400" /> Penghasilan Orang Tua (Opsional Administrasi)
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <DollarSign className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Penghasilan Orang Tua (Opsional)</span>
                     </label>
                     <select
                       value={orangTua.parentIncome}
                       onChange={(e) => setOrangTua({ ...orangTua, parentIncome: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs cursor-pointer"
                     >
                       <option value="< 2 Juta">&lt; Rp 2.000.000</option>
                       <option value="2 - 5 Juta">Rp 2.000.000 - Rp 5.000.000</option>
@@ -1485,15 +2159,16 @@ export default function StudentOnboardingPage() {
                   </div>
 
                   <div className="sm:col-span-2 lg:col-span-3 space-y-1.5">
-                    <label className="flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400" /> Alamat Orang Tua/Wali
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Alamat Orang Tua/Wali</span>
                     </label>
                     <textarea
                       rows={2}
                       value={orangTua.parentAddress}
                       onChange={(e) => setOrangTua({ ...orangTua, parentAddress: e.target.value })}
                       placeholder="Isi jika alamat berbeda dengan domisili siswa"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs resize-none"
                     />
                   </div>
                 </div>
@@ -1501,59 +2176,66 @@ export default function StudentOnboardingPage() {
 
               {/* STEP 4: DATA KONTAK DARURAT */}
               {step === 4 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-5 text-xs font-bold text-slate-900">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4 md:gap-5 text-xs font-bold text-slate-900">
                   <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-slate-400" /> Nama Kontak Darurat *
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-[#531FFF]" />
+                      <span>Nama Kontak Darurat</span>
+                      <span className="text-red-500 font-bold ml-0.5">*</span>
                     </label>
                     <input
                       type="text"
                       value={darurat.contactName}
                       onChange={(e) => setDarurat({ ...darurat, contactName: e.target.value })}
-                      placeholder="Nama kerabat / tetangga yang bisa dihubungi saat darurat"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      placeholder="Nama kerabat / keluarga terdekat"
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                       required
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5">
-                      <HeartHandshake className="w-3.5 h-3.5 text-slate-400" /> Hubungan Dengan Siswa *
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <HeartHandshake className="w-3.5 h-3.5 text-[#531FFF]" />
+                      <span>Hubungan Dengan Siswa</span>
+                      <span className="text-red-500 font-bold ml-0.5">*</span>
                     </label>
                     <input
                       type="text"
                       value={darurat.relation}
                       onChange={(e) => setDarurat({ ...darurat, relation: e.target.value })}
-                      placeholder="Contoh: Paman / Bibi / Kakak / Tetangga"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      placeholder="Contoh: Paman / Bibi / Kakak / Kakek"
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                       required
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5">
-                      <Phone className="w-3.5 h-3.5 text-slate-400" /> Nomor HP Darurat *
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-[#531FFF]" />
+                      <span>Nomor HP Darurat</span>
+                      <span className="text-red-500 font-bold ml-0.5">*</span>
                     </label>
                     <input
                       type="text"
                       value={darurat.contactPhone}
                       onChange={(e) => setDarurat({ ...darurat, contactPhone: e.target.value })}
                       placeholder="Nomor telepon darurat aktif"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                       required
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400" /> Alamat Kontak Darurat
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Alamat Kontak Darurat</span>
                     </label>
                     <input
                       type="text"
                       value={darurat.contactAddress}
                       onChange={(e) => setDarurat({ ...darurat, contactAddress: e.target.value })}
                       placeholder="Alamat domisili kontak darurat"
-                      className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                      className="w-full h-11 px-3.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs"
                     />
                   </div>
                 </div>
@@ -1581,6 +2263,7 @@ export default function StudentOnboardingPage() {
                         </div>
                         <p><span className="text-slate-500 font-medium">Nama:</span> <span className="font-bold text-slate-900 block">{pribadi.fullName || "-"}</span></p>
                         <p><span className="text-slate-500 font-medium">NISN:</span> <span className="font-bold text-slate-900 block">{pribadi.nisn || "-"}</span></p>
+                        <p><span className="text-slate-500 font-medium">Tempat & Tanggal Lahir:</span> <span className="font-bold text-slate-900 block">{pribadi.birthPlace || "-"}, {pribadi.birthDate || "-"}</span></p>
                         <p><span className="text-slate-500 font-medium">Gender / Agama:</span> <span className="font-bold text-slate-900 block">{pribadi.gender} • {pribadi.religion}</span></p>
                         <p><span className="text-slate-500 font-medium">Email / HP:</span> <span className="font-bold text-slate-900 block truncate">{pribadi.email} • {pribadi.phone}</span></p>
                       </div>
@@ -1599,6 +2282,7 @@ export default function StudentOnboardingPage() {
                         <p><span className="text-slate-500 font-medium">Jurusan:</span> <span className="font-bold text-slate-900 block">{akademik.major || "Umum / Reguler"}</span></p>
                         <p><span className="text-slate-500 font-medium">Tahun Masuk:</span> <span className="font-bold text-slate-900 block">{akademik.entryYear}</span></p>
                         <p><span className="text-slate-500 font-medium">Status Siswa:</span> <span className="font-bold text-slate-900 block">{akademik.studentStatus}</span></p>
+                        <p><span className="text-slate-500 font-medium">Asal Sekolah:</span> <span className="font-bold text-slate-900 block">{akademik.previousSchool || "-"}</span></p>
                       </div>
                     </div>
 
@@ -1641,15 +2325,15 @@ export default function StudentOnboardingPage() {
                 <button
                   onClick={() => setStep(s => Math.max(1, s - 1))}
                   disabled={step === 1}
-                  className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg text-xs hover:bg-slate-50 disabled:opacity-40 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                  className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-50 disabled:opacity-40 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs"
                 >
                   <ChevronLeft className="w-4 h-4" /> Kembali
                 </button>
 
                 {step < 5 ? (
                   <button
-                    onClick={() => setStep(s => Math.min(5, s + 1))}
-                    className="px-6 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white font-bold rounded-lg text-xs transition-all shadow-md shadow-[#531FFF]/20 flex items-center gap-2 active:scale-95 cursor-pointer"
+                    onClick={handleNextStep}
+                    className="px-6 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white font-bold rounded-xl text-xs transition-all shadow-md shadow-[#531FFF]/20 flex items-center gap-2 active:scale-95 cursor-pointer"
                   >
                     Lanjut Tahap Berikutnya <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1657,7 +2341,7 @@ export default function StudentOnboardingPage() {
                   <button
                     onClick={handleSubmitOnboarding}
                     disabled={submitting}
-                    className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2 active:scale-95 disabled:opacity-70 cursor-pointer"
+                    className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2 active:scale-95 disabled:opacity-70 cursor-pointer"
                   >
                     {submitting ? (
                       <>

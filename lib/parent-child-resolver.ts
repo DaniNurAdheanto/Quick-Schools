@@ -6,7 +6,13 @@ export interface LinkedStudentResult {
 }
 
 /**
- * Resolves the linked child student for a parent account or fallback to first student if demo/unlinked.
+ * Resolves the linked child student for a parent account (strictly 1-to-1).
+ * Uses hierarchical exact matching:
+ * 1. Parent UID on student record
+ * 2. Primary studentId / NISN
+ * 3. Verified parent phone
+ * 4. Verified parent email
+ * 5. Exact parent name on student record
  */
 export function resolveParentStudent(
   currentUser: any | null,
@@ -18,66 +24,90 @@ export function resolveParentStudent(
   }
 
   const parentUid = currentUser?.uid;
-  const parentEmail = (currentUser?.email || "").toLowerCase().trim();
+  const parentEmail = (currentUser?.email || currentUserData?.email || "").toLowerCase().trim();
   const parentPhone = (currentUserData?.phone || currentUser?.phoneNumber || "").replace(/[^0-9]/g, "");
+  const pName = (currentUserData?.name || currentUserData?.fullName || currentUser?.displayName || "").toLowerCase().trim();
+  const targetStudentName = (currentUserData?.studentName || "").toLowerCase().trim();
 
-  // Explicit IDs
-  const linkedIds: string[] = [];
-  if (currentUserData?.studentId) linkedIds.push(String(currentUserData.studentId));
-  if (currentUserData?.studentIds && Array.isArray(currentUserData.studentIds)) {
-    linkedIds.push(...currentUserData.studentIds.map(String));
+  // Primary single target ID
+  const primaryStudentId = String(
+    currentUserData?.studentId ||
+    currentUserData?.nisn ||
+    (Array.isArray(currentUserData?.studentIds) && currentUserData.studentIds.length > 0 ? currentUserData.studentIds[0] : "")
+  ).toLowerCase().trim();
+
+  let matchedStudent: any = null;
+
+  // 1. First Priority: Direct parentUid match on student record
+  if (parentUid) {
+    matchedStudent = studentsList.find((s) => {
+      const sParentUid = String(s.parentUid || s.parentUserId || "").trim();
+      return sParentUid && sParentUid === parentUid;
+    });
   }
-  if (currentUserData?.linkedStudentIds && Array.isArray(currentUserData.linkedStudentIds)) {
-    linkedIds.push(...currentUserData.linkedStudentIds.map(String));
+
+  // 2. Second Priority: Direct Student ID or NISN match
+  if (!matchedStudent && primaryStudentId) {
+    matchedStudent = studentsList.find((s) => {
+      const sDocId = String(s._firestoreId || s.docId || "").toLowerCase();
+      const sId = String(s.id || "").toLowerCase();
+      const sRawId = String(s.rawId || "").toLowerCase();
+      const sNisn = String(s.nisn || "").toLowerCase();
+      const sNis = String(s.nis || "").toLowerCase();
+      const sUid = String(s.uid || "").toLowerCase();
+      return (
+        sDocId === primaryStudentId ||
+        sId === primaryStudentId ||
+        sRawId === primaryStudentId ||
+        sNisn === primaryStudentId ||
+        sNis === primaryStudentId ||
+        sUid === primaryStudentId
+      );
+    });
   }
-  if (currentUserData?.nisn) linkedIds.push(String(currentUserData.nisn));
 
-  // Strict deduplication by unique student ID
-  const uniqueStudentsMap = new Map<string, any>();
+  // 3. Third Priority: Exact Verified Parent Phone match
+  if (!matchedStudent && parentPhone && parentPhone.length >= 8) {
+    matchedStudent = studentsList.find((s) => {
+      const sPhone = String(s.parentPhone || "").replace(/[^0-9]/g, "");
+      return sPhone && sPhone === parentPhone;
+    });
+  }
 
-  studentsList.forEach((s) => {
-    const sId = String(s.id || s._firestoreId || "");
-    const sNisn = String(s.nisn || "");
-    const sNis = String(s.nis || "");
-    const sUid = String(s.uid || "");
+  // 4. Fourth Priority: Exact Verified Parent Email match
+  if (!matchedStudent && parentEmail && parentEmail.includes("@")) {
+    matchedStudent = studentsList.find((s) => {
+      const sEmail = String(s.parentEmail || "").toLowerCase().trim();
+      return sEmail && sEmail === parentEmail;
+    });
+  }
 
-    // 1. Match explicit ID or NISN
-    const isIdMatch = linkedIds.some((lid) => lid && (lid === sId || lid === sNisn || lid === sNis || lid === sUid));
-    if (isIdMatch) {
-      uniqueStudentsMap.set(sId || sUid, s);
-      return;
-    }
+  // 5. Fifth Priority: Exact Student Name match
+  if (!matchedStudent && targetStudentName && targetStudentName.length >= 3) {
+    matchedStudent = studentsList.find((s) => {
+      const sName = String(s.name || s.fullName || "").toLowerCase().trim();
+      return sName === targetStudentName;
+    });
+  }
 
-    // 2. Match explicit parent UID
-    if (parentUid && (s.parentUid === parentUid || s.parentUserId === parentUid)) {
-      uniqueStudentsMap.set(sId || sUid, s);
-      return;
-    }
+  // 6. Sixth Priority: Exact Parent Name match
+  if (!matchedStudent && pName && pName.length >= 3) {
+    matchedStudent = studentsList.find((s) => {
+      const fName = String(s.fatherName || "").toLowerCase().trim();
+      const mName = String(s.motherName || "").toLowerCase().trim();
+      const gName = String(s.guardianName || "").toLowerCase().trim();
+      const sParent = String(s.parentName || "").toLowerCase().trim();
+      return fName === pName || mName === pName || gName === pName || sParent === pName;
+    });
+  }
 
-    // 3. Match verified phone
-    if (parentPhone && parentPhone.length >= 8 && s.parentPhone) {
-      const cleanSPhone = String(s.parentPhone).replace(/[^0-9]/g, "");
-      if (cleanSPhone && cleanSPhone === parentPhone) {
-        uniqueStudentsMap.set(sId || sUid, s);
-        return;
-      }
-    }
-
-    // 4. Match verified email
-    if (parentEmail && parentEmail.includes("@") && s.parentEmail && String(s.parentEmail).toLowerCase().trim() === parentEmail) {
-      uniqueStudentsMap.set(sId || sUid, s);
-      return;
-    }
-  });
-
-  const matched = Array.from(uniqueStudentsMap.values());
-  const activeStudent = matched.length > 0 ? matched[0] : null;
-  const classId = activeStudent?.classId || activeStudent?.className || activeStudent?.rombel || null;
-  const className = activeStudent?.className || activeStudent?.classId || activeStudent?.rombel || null;
+  const allChildren = matchedStudent ? [matchedStudent] : [];
+  const classId = matchedStudent?.classId || matchedStudent?.className || matchedStudent?.kelas || matchedStudent?.rombel || null;
+  const className = matchedStudent?.className || matchedStudent?.classId || matchedStudent?.kelas || matchedStudent?.rombel || null;
 
   return {
-    student: activeStudent,
-    allChildren: matched,
+    student: matchedStudent,
+    allChildren,
     classId,
     className,
   };

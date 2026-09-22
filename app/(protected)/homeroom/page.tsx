@@ -40,7 +40,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
-export default function HomeroomPage() {
+  export default function HomeroomPage() {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState<"classes" | "teachers">("classes");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");

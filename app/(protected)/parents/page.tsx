@@ -65,6 +65,7 @@ export interface ParentData {
   emergencyRelation?: string;
   emergencyPhone?: string;
   // Relasi Siswa & Status
+  studentId?: string;
   studentIds: string[]; // Foreign key student IDs
   status: "Aktif" | "Belum Aktivasi" | "Nonaktif" | string;
   userUid?: string; // UID of user account if linked
@@ -236,13 +237,8 @@ export default function ParentsManagementPage() {
 
     // --- PHASE 1: Populate from Registered User Accounts (Role: Orang Tua) ---
     rawUsersList.forEach((u) => {
-      const uStudentIds = Array.from(
-        new Set([
-          ...(Array.isArray(u.studentIds) ? u.studentIds.map(String) : []),
-          ...(Array.isArray(u.linkedStudentIds) ? u.linkedStudentIds.map(String) : []),
-          ...(u.studentId ? [String(u.studentId)] : [])
-        ])
-      );
+      const singleStdId = u.studentId ? String(u.studentId).trim() : (Array.isArray(u.studentIds) && u.studentIds.length > 0 ? String(u.studentIds[0]).trim() : "");
+      const uStudentIds = singleStdId ? [singleStdId] : [];
 
       const newParent: ParentData = {
         id: u.uid || u.id,
@@ -284,12 +280,8 @@ export default function ParentsManagementPage() {
         (cleanPEmail && cleanPEmail.includes("@") && byEmail.get(cleanPEmail)) ||
         (cleanPPhone && cleanPPhone.length >= 10 && byPhone.get(cleanPPhone));
 
-      const pStudentIds = Array.from(
-        new Set([
-          ...(Array.isArray(p.studentIds) ? p.studentIds.map(String) : []),
-          ...(p.studentId ? [String(p.studentId)] : [])
-        ])
-      );
+      const singlePStdId = p.studentId ? String(p.studentId).trim() : (Array.isArray(p.studentIds) && p.studentIds.length > 0 ? String(p.studentIds[0]).trim() : "");
+      const pStudentIds = singlePStdId ? [singlePStdId] : [];
 
       if (matched) {
         // Merge attributes if existing parent has missing fields
@@ -304,9 +296,9 @@ export default function ParentsManagementPage() {
         if (!matched.emergencyRelation && p.emergencyRelation) matched.emergencyRelation = p.emergencyRelation;
         if (!matched.emergencyPhone && p.emergencyPhone) matched.emergencyPhone = p.emergencyPhone;
         if (p.relationship && matched.relationship === "Wali Murid") matched.relationship = p.relationship;
-        
-        // Merge student IDs
-        matched.studentIds = Array.from(new Set([...matched.studentIds, ...pStudentIds]));
+        if (matched.studentIds.length === 0 && pStudentIds.length > 0) {
+          matched.studentIds = pStudentIds;
+        }
         registerParentIndex(matched);
       } else {
         // Create standalone parent profile
@@ -341,119 +333,59 @@ export default function ParentsManagementPage() {
       }
     });
 
-    // --- PHASE 3: Automatic Ingestion & Deduplication from Onboarding & Data Siswa ---
-    // (Relasi anak harus menggunakan ID siswa unik, bukan berdasarkan nama, dan tidak menggabungkan berdasarkan kesamaan nama orang tua)
-    unifiedStudents.forEach((student) => {
-      const studentKey = String(student.id || student._firestoreId || student.nisn || student.nis);
-      if (!studentKey) return;
-      
-      const sFather = (student.fatherName || "").trim();
-      const sMother = (student.motherName || "").trim();
-      const sGuardian = (student.guardianName || "").trim();
-      const sPhone = (student.parentPhone || "").trim();
-      const sEmail = (student.parentEmail || student.emailOrangTua || "").trim();
-      const sJob = (student.parentJob || "").trim();
-      const sIncome = (student.parentIncome || "").trim();
-      const sAddress = (student.parentAddress || student.address || "").trim();
-      const sEmergName = (student.emergencyName || "").trim();
-      const sEmergRel = (student.emergencyRelation || "").trim();
-      const sEmergPhone = (student.emergencyPhone || "").trim();
-      const sParentUid = (student.parentUid || student.linkedParentUid || "").trim();
-
-      // Only process if the student actually has parent data filled in
-      const hasParentInfo = sFather || sMother || sGuardian || sPhone || sParentUid;
-      if (!hasParentInfo) return;
-
-      const cleanPhone = normalizePhone(sPhone);
-      const cleanEmail = sEmail.toLowerCase();
-
-      // Check if student already explicitly linked to any parent by unique ID, verified phone, or verified email
-      // PENTING: Jangan mencocokkan semata-mata berdasarkan nama ayah/ibu agar tidak terjadi duplikasi/tertukar bila nama sama
-      let matched =
-        (sParentUid && byUid.get(sParentUid)) ||
-        (sParentUid && byDocId.get(sParentUid)) ||
-        (cleanPhone && cleanPhone.length >= 10 && byPhone.get(cleanPhone)) ||
-        (cleanEmail && cleanEmail.includes("@") && byEmail.get(cleanEmail));
-
-      if (matched) {
-        // Link student to this parent if not already linked (strictly unique ID)
-        if (!matched.studentIds.includes(studentKey)) {
-          matched.studentIds.push(studentKey);
-        }
-        // Fill in missing details from student onboarding data
-        if (!matched.fatherName && sFather) matched.fatherName = sFather;
-        if (!matched.motherName && sMother) matched.motherName = sMother;
-        if (!matched.guardianName && sGuardian) matched.guardianName = sGuardian;
-        if ((!matched.job || matched.job === "-") && sJob) matched.job = sJob;
-        if ((!matched.income || matched.income === "-") && sIncome) matched.income = sIncome;
-        if ((!matched.address || matched.address === "-") && sAddress) matched.address = sAddress;
-        if (!matched.emergencyName && sEmergName) matched.emergencyName = sEmergName;
-        if (!matched.emergencyRelation && sEmergRel) matched.emergencyRelation = sEmergRel;
-        if (!matched.emergencyPhone && sEmergPhone) matched.emergencyPhone = sEmergPhone;
-        if ((!matched.phone || matched.phone === "-") && sPhone) matched.phone = sPhone;
-
-        registerParentIndex(matched);
-      } else {
-        // Create a new unified parent record directly from student's onboarding data
-        const bestName = sFather || sMother || sGuardian || `Orang Tua Siswa (${student.name})`;
-        const bestRelation = sGuardian ? "Wali Murid" : sMother && !sFather ? "Ibu Kandung" : "Ayah Kandung";
-
-        // Create a unique, deterministic ID based on phone or unique student ID
-        const synthId = cleanPhone && cleanPhone.length >= 10 ? `prt_phone_${cleanPhone}` : `prt_std_${studentKey.slice(0, 10)}`;
-
-        const newParent: ParentData = {
-          id: synthId,
-          parentId: `PRT-${studentKey.slice(0, 4).toUpperCase()}`,
-          name: bestName,
-          fatherName: sFather,
-          motherName: sMother,
-          guardianName: sGuardian,
-          nik: "",
-          relationship: bestRelation,
-          phone: sPhone || "-",
-          email: sEmail || "",
-          job: sJob || "-",
-          income: sIncome || "< 2 Juta",
-          address: sAddress || "-",
-          emergencyName: sEmergName,
-          emergencyRelation: sEmergRel,
-          emergencyPhone: sEmergPhone,
-          studentIds: [studentKey],
-          status: "Aktif",
-          hasUserAccount: false,
-          source: "student_onboarding",
-          createdAt: student.createdAt || null,
-          updatedAt: student.updatedAt || null,
-        };
-
-        parentList.push(newParent);
-        registerParentIndex(newParent);
-      }
-    });
-
-    // Deduplicate and canonicalize each parent's studentIds using canonical student ID
+    // --- PHASE 3: Strict 1-to-1 Resolution with Onboarding & Data Siswa ---
     parentList.forEach((p) => {
-      const canonicalSet = new Set<string>();
-      const cleanStudentIds: string[] = [];
+      const pUid = p.userUid || p.id;
+      const pName = (p.name || p.fatherName || "").toLowerCase().trim();
+      const pPhone = normalizePhone(p.phone);
+      const pEmail = (p.email || "").toLowerCase().trim();
+      const pStudentId = String(p.studentId || (p.studentIds && p.studentIds.length > 0 ? p.studentIds[0] : "")).trim();
 
-      (p.studentIds || []).forEach((rawId) => {
-        if (!rawId) return;
-        const std = unifiedStudents.find(
-          (s) =>
-            String(s.id) === String(rawId) ||
-            String(s._firestoreId) === String(rawId) ||
-            String(s.uid) === String(rawId) ||
-            String(s.nisn) === String(rawId) ||
-            String(s.nis) === String(rawId)
-        );
-        const canonId = std ? String(std.id || std._firestoreId) : String(rawId);
-        if (!canonicalSet.has(canonId)) {
-          canonicalSet.add(canonId);
-          cleanStudentIds.push(canonId);
-        }
+      // 1. Direct parentUid match on student
+      let foundStudent = unifiedStudents.find((s) => {
+        const sParentUid = String(s.parentUid || s.parentUserId || "").trim();
+        return pUid && sParentUid && (sParentUid === pUid || sParentUid === p.id);
       });
 
-      p.studentIds = cleanStudentIds;
+      // 2. Direct studentId match
+      if (!foundStudent && pStudentId) {
+        foundStudent = unifiedStudents.find((s) => {
+          const sDocId = String(s._firestoreId || "");
+          const sId = String(s.id || "");
+          const sNisn = String(s.nisn || "");
+          const sUid = String(s.uid || "");
+          return sDocId === pStudentId || sId === pStudentId || sNisn === pStudentId || sUid === pStudentId;
+        });
+      }
+
+      // 3. Parent phone match
+      if (!foundStudent && pPhone && pPhone.length >= 8) {
+        foundStudent = unifiedStudents.find((s) => {
+          const sParentPhone = normalizePhone(s.parentPhone);
+          return sParentPhone && sParentPhone === pPhone;
+        });
+      }
+
+      // 4. Parent email match
+      if (!foundStudent && pEmail && pEmail.includes("@")) {
+        foundStudent = unifiedStudents.find((s) => {
+          const sParentEmail = (s.parentEmail || "").toLowerCase().trim();
+          return sParentEmail && sParentEmail === pEmail;
+        });
+      }
+
+      // 5. Parent name exact match
+      if (!foundStudent && pName && pName.length >= 3) {
+        foundStudent = unifiedStudents.find((s) => {
+          const sFather = (s.fatherName || "").toLowerCase().trim();
+          const sMother = (s.motherName || "").toLowerCase().trim();
+          const sGuardian = (s.guardianName || "").toLowerCase().trim();
+          const sParentName = (s.parentName || "").toLowerCase().trim();
+          return sFather === pName || sMother === pName || sGuardian === pName || sParentName === pName;
+        });
+      }
+
+      p.studentIds = foundStudent ? [String(foundStudent.id || foundStudent._firestoreId)] : [];
     });
 
     // Sort alphabetically by name

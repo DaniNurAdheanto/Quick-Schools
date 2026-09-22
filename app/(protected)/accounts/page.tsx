@@ -48,6 +48,7 @@ import {
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { useToast } from "@/context/ToastContext";
+import { syncParentWithStudents } from "@/lib/parent-student-sync";
 
 interface AccountUser {
   id: string; // doc ID
@@ -66,6 +67,7 @@ interface AccountUser {
   studentName?: string;
   studentIds?: string[];
   nisn?: string;
+  nip?: string;
 }
 
 const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; border: string; icon: any }> = {
@@ -117,7 +119,10 @@ export default function AccountManagementPage() {
   // Subscribe to students collection for interactive linking
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "students"), (snap) => {
-      setStudentsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setStudentsList(snap.docs.map(d => {
+        const data = d.data();
+        return { ...data, _firestoreId: d.id, id: d.id, rawId: data.id };
+      }));
     }, (err) => console.warn("Students listener error:", err));
     return () => unsub();
   }, []);
@@ -231,7 +236,8 @@ export default function AccountManagementPage() {
           studentId: data.studentId || null,
           studentName: data.studentName || null,
           studentIds: data.studentIds || (data.studentId ? [data.studentId] : []),
-          nisn: data.nisn || null
+          nisn: data.nisn || null,
+          nip: data.nip || null
         });
       });
 
@@ -460,16 +466,16 @@ export default function AccountManagementPage() {
         } catch (e) {}
       } else if (formRole === "orang-tua") {
         try {
-          const pSnap = await getDocs(query(collection(db, "parents"), where("userUid", "==", editModal.data.uid)));
-          for (const pDoc of pSnap.docs) {
-            await updateDoc(doc(db, "parents", pDoc.id), {
-              name: formName,
-              status: formStatus,
-              email: formEmail,
-              updatedAt: new Date().toISOString()
-            });
-          }
-        } catch (e) {}
+          await syncParentWithStudents({
+            parentUid: editModal.data.uid,
+            parentName: formName.trim(),
+            parentEmail: formEmail.trim(),
+            studentIds: selectedStudentIds.length > 0 ? selectedStudentIds : editModal.data.studentIds || [],
+            studentName: formStudentName.trim() || editModal.data.studentName || ""
+          });
+        } catch (e) {
+          console.warn("Could not sync edited parent:", e);
+        }
       }
 
       toast.showEdit(`Data akun ${formName} berhasil diperbarui.`, "Perubahan Disimpan");
@@ -564,44 +570,16 @@ export default function AccountManagementPage() {
           });
         } catch (e) {}
       } else if (formRole === "orang-tua") {
-        // Automatically create synchronized companion document in parents collection
         try {
-          await setDoc(doc(db, "parents", authResult.uid), {
-            id: authResult.uid,
-            userUid: authResult.uid,
-            parentId: `PRT-${authResult.uid.slice(0, 4).toUpperCase()}`,
-            name: formName.trim(),
-            email: formEmail.trim().toLowerCase(),
-            phone: "-",
-            relationship: "Wali Murid",
+          await syncParentWithStudents({
+            parentUid: authResult.uid,
+            parentName: formName.trim(),
+            parentEmail: formEmail.trim().toLowerCase(),
             studentIds: selectedStudentIds,
-            status: formStatus,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            studentName: formStudentName.trim()
           });
         } catch (e) {
-          console.warn("Could not sync to parents collection:", e);
-        }
-
-        // Bi-directional link: update selected student docs with parent info
-        if (selectedStudentIds.length > 0) {
-          for (const sId of selectedStudentIds) {
-            const matchStd = studentsList.find(s => (s.id || s._firestoreId) === sId);
-            if (matchStd) {
-              const docId = matchStd.id || matchStd._firestoreId;
-              try {
-                await updateDoc(doc(db, "students", docId), {
-                  parentUid: authResult.uid,
-                  parentUserId: authResult.uid,
-                  parentName: formName.trim(),
-                  parentEmail: formEmail.trim().toLowerCase(),
-                  hasLinkedParent: true
-                });
-              } catch (err) {
-                console.warn("Could not sync student with parent info:", err);
-              }
-            }
-          }
+          console.warn("Could not sync new parent with students:", e);
         }
       }
 
@@ -638,7 +616,10 @@ export default function AccountManagementPage() {
     const targetUser = deleteModal.data;
     const targetId = targetUser.id;
     const targetUid = targetUser.uid;
-    const targetEmail = targetUser.email && targetUser.email !== "-" ? targetUser.email.toLowerCase() : "";
+    const targetEmail = targetUser.email && targetUser.email !== "-" ? targetUser.email.toLowerCase().trim() : "";
+    const targetRole = (targetUser.role || "").toLowerCase();
+    const targetNip = targetUser.nip || "";
+    const targetNisn = targetUser.nisn || targetUser.studentId || "";
 
     setIsSubmitting(true);
 
@@ -646,6 +627,31 @@ export default function AccountManagementPage() {
     setUsersList((prev) => prev.filter((u) => u.id !== targetId && u.uid !== targetUid && (targetEmail ? u.email?.toLowerCase() !== targetEmail : true)));
 
     try {
+      // 1. Record in `deleted_accounts` collection so any subsequent login or token refresh is instantly rejected and purged
+      const deletedAt = new Date().toISOString();
+      const sanitizedEmail = targetEmail ? targetEmail.replace(/[^a-z0-9]/g, "_") : "";
+      const delDocPayload = {
+        uid: targetUid || targetId,
+        email: targetEmail,
+        name: targetUser.name || "",
+        role: targetRole,
+        deletedAt,
+        reason: "Account deleted via Account Management"
+      };
+
+      const delAuditPromises: Promise<any>[] = [];
+      if (targetUid) {
+        delAuditPromises.push(setDoc(doc(db, "deleted_accounts", targetUid), delDocPayload));
+      }
+      if (targetId && targetId !== targetUid) {
+        delAuditPromises.push(setDoc(doc(db, "deleted_accounts", targetId), delDocPayload));
+      }
+      if (sanitizedEmail) {
+        delAuditPromises.push(setDoc(doc(db, "deleted_accounts", sanitizedEmail), delDocPayload));
+      }
+      await Promise.allSettled(delAuditPromises);
+
+      // 2. Identify all linked documents across collections
       const userDocsToDelete = new Set<string>();
       if (targetId) userDocsToDelete.add(targetId);
       if (targetUid) userDocsToDelete.add(targetUid);
@@ -653,10 +659,16 @@ export default function AccountManagementPage() {
       const studentDocsToDelete = new Set<string>();
       if (targetId) studentDocsToDelete.add(targetId);
       if (targetUid) studentDocsToDelete.add(targetUid);
+      if (targetNisn) studentDocsToDelete.add(targetNisn);
 
       const teacherDocsToDelete = new Set<string>();
       if (targetId) teacherDocsToDelete.add(targetId);
       if (targetUid) teacherDocsToDelete.add(targetUid);
+      if (targetNip) teacherDocsToDelete.add(targetNip);
+
+      const parentDocsToDelete = new Set<string>();
+      if (targetId) parentDocsToDelete.add(targetId);
+      if (targetUid) parentDocsToDelete.add(targetUid);
 
       // Query `users` collection by email
       if (targetEmail) {
@@ -667,7 +679,7 @@ export default function AccountManagementPage() {
         } catch (e) {}
       }
 
-      // Query `students` collection by email or uid
+      // Query `students` collection by email, uid, or nisn
       if (targetEmail) {
         try {
           const qStEmail = query(collection(db, "students"), where("email", "==", targetEmail));
@@ -682,8 +694,20 @@ export default function AccountManagementPage() {
           snap.forEach(d => studentDocsToDelete.add(d.id));
         } catch (e) {}
       }
+      if (targetNisn) {
+        try {
+          const qStNisn = query(collection(db, "students"), where("nisn", "==", targetNisn));
+          const snap = await getDocs(qStNisn);
+          snap.forEach(d => studentDocsToDelete.add(d.id));
+        } catch (e) {}
+        try {
+          const qStId = query(collection(db, "students"), where("id", "==", targetNisn));
+          const snap = await getDocs(qStId);
+          snap.forEach(d => studentDocsToDelete.add(d.id));
+        } catch (e) {}
+      }
 
-      // Query `teachers` collection by email or uid
+      // Query `teachers` collection by email, uid, or nip
       if (targetEmail) {
         try {
           const qTcEmail = query(collection(db, "teachers"), where("email", "==", targetEmail));
@@ -698,11 +722,15 @@ export default function AccountManagementPage() {
           snap.forEach(d => teacherDocsToDelete.add(d.id));
         } catch (e) {}
       }
+      if (targetNip) {
+        try {
+          const qTcNip = query(collection(db, "teachers"), where("nip", "==", targetNip));
+          const snap = await getDocs(qTcNip);
+          snap.forEach(d => teacherDocsToDelete.add(d.id));
+        } catch (e) {}
+      }
 
       // Query `parents` collection by email or userUid
-      const parentDocsToDelete = new Set<string>();
-      if (targetId) parentDocsToDelete.add(targetId);
-      if (targetUid) parentDocsToDelete.add(targetUid);
       if (targetEmail) {
         try {
           const qPrEmail = query(collection(db, "parents"), where("email", "==", targetEmail));
@@ -718,28 +746,28 @@ export default function AccountManagementPage() {
         } catch (e) {}
       }
 
-      // 1. Delete from `students` collection
+      // 3. Delete from `students` collection
       for (const id of Array.from(studentDocsToDelete)) {
         try {
           await deleteDoc(doc(db, "students", id));
         } catch (e) {}
       }
 
-      // 2. Delete from `teachers` collection
+      // 4. Delete from `teachers` collection
       for (const id of Array.from(teacherDocsToDelete)) {
         try {
           await deleteDoc(doc(db, "teachers", id));
         } catch (e) {}
       }
 
-      // 3. Delete from `parents` collection
+      // 5. Delete from `parents` collection
       for (const id of Array.from(parentDocsToDelete)) {
         try {
           await deleteDoc(doc(db, "parents", id));
         } catch (e) {}
       }
 
-      // 3. Delete from `users` collection
+      // 6. Delete from `users` collection
       let usersDeleteFailed = false;
       for (const id of Array.from(userDocsToDelete)) {
         try {
@@ -752,13 +780,66 @@ export default function AccountManagementPage() {
         }
       }
 
+      // 7. Clean up cross-references/relationships
+      if (targetRole === "siswa" || targetRole === "student") {
+        try {
+          const parentsSnap = await getDocs(collection(db, "parents"));
+          const studentIdentifiers = [targetId, targetUid, targetNisn].filter(Boolean);
+          for (const pDoc of parentsSnap.docs) {
+            const pData = pDoc.data();
+            const currentStudentIds: string[] = Array.isArray(pData.studentIds) ? pData.studentIds : [];
+            const currentLinkedIds: string[] = Array.isArray(pData.linkedStudentIds) ? pData.linkedStudentIds : [];
+            
+            const hasMatch = studentIdentifiers.some(sid => 
+              currentStudentIds.includes(sid) || 
+              currentLinkedIds.includes(sid) || 
+              pData.studentId === sid || 
+              pData.nisn === sid
+            );
+
+            if (hasMatch) {
+              const newStudentIds = currentStudentIds.filter(sid => !studentIdentifiers.includes(sid));
+              const newLinkedIds = currentLinkedIds.filter(sid => !studentIdentifiers.includes(sid));
+              await updateDoc(doc(db, "parents", pDoc.id), {
+                studentIds: newStudentIds,
+                linkedStudentIds: newLinkedIds,
+                studentId: newStudentIds[0] || "",
+                nisn: newStudentIds[0] || "",
+                studentName: newStudentIds.length === 0 ? "" : (pData.studentName || "")
+              });
+            }
+          }
+        } catch (relErr) {
+          console.warn("Error cleaning up parent-student relations:", relErr);
+        }
+      } else if (targetRole === "orang-tua" || targetRole === "parent") {
+        try {
+          const studentsSnap = await getDocs(collection(db, "students"));
+          for (const sDoc of studentsSnap.docs) {
+            const sData = sDoc.data();
+            if (
+              (targetUid && sData.parentUid === targetUid) ||
+              (targetEmail && sData.parentEmail === targetEmail)
+            ) {
+              await updateDoc(doc(db, "students", sDoc.id), {
+                parentUid: "",
+                parentEmail: "",
+                parentName: ""
+              });
+            }
+          }
+        } catch (relErr) {
+          console.warn("Error cleaning up student-parent relations:", relErr);
+        }
+      }
+
       if (usersDeleteFailed) {
         toast.showWarning(
           `Data di siswa/guru telah dibersihkan. Namun dokumen users terhalang aturan Cloud Firestore. Pastikan firestore.rules sudah dipublish di Firebase Console.`,
           "Perhatian Izin Rules"
         );
       } else {
-        toast.showDelete(`Akun ${targetUser.name} telah dihapus secara permanen.`, "Akun Dihapus");
+        toast.showDelete(`Akun ${targetUser.name} telah dihapus secara permanen dari sistem dan database.`, "Akun Dihapus");
       }
 
       setDeleteModal({ open: false, data: null });

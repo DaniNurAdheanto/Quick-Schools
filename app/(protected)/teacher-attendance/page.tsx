@@ -30,6 +30,9 @@ import {
   Eye,
   Maximize2,
   ExternalLink,
+  AlertTriangle,
+  ShieldAlert,
+  XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
@@ -38,7 +41,11 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { isStudentRole } from "@/lib/roles-config";
-import { calculateDistanceMeters, formatDistance } from "@/lib/geofence-utils";
+import { formatDistance } from "@/lib/geofence-utils";
+import {
+  acquireCurrentLocation,
+  GeolocationErrorState
+} from "@/lib/geolocation-service";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import {
   useTeacherAttendance,
@@ -139,17 +146,19 @@ export default function TeacherAttendancePage() {
   // Geofence & Location State (matches Student Attendance coordinates)
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [gpsErrorState, setGpsErrorState] = useState<GeolocationErrorState | null>(null);
   const [locationData, setLocationData] = useState<{
     lat: number;
     lng: number;
     distance: number;
     inRadius: boolean;
     address: string;
+    accuracy?: number;
   }>({
     lat: -6.200000,
     lng: 106.816666,
     distance: 0,
-    inRadius: true,
+    inRadius: false,
     address: "SMART SCHOOL OS Campus - Area Utama Sekolah",
   });
 
@@ -159,49 +168,44 @@ export default function TeacherAttendancePage() {
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
-  // Live Location Tracker
-  const refreshLocation = useCallback(() => {
+  // Live Location Tracker with two-tier fallback and friendly Indonesian error messages
+  const refreshLocation = useCallback(async () => {
     setGpsLoading(true);
     setGpsError(null);
-    if (typeof window === "undefined" || !("geolocation" in navigator)) {
-      setGpsError("Perangkat tidak mendukung geolokasi GPS.");
+    setGpsErrorState(null);
+
+    const schoolLat = Number(config.geofenceCenter?.lat ?? -6.200000);
+    const schoolLng = Number(config.geofenceCenter?.lng ?? 106.816666);
+    const radius = Number(config.geofenceCenter?.radiusMeters ?? 100);
+
+    try {
+      const res = await acquireCurrentLocation(schoolLat, schoolLng, radius);
+      setLocationData({
+        lat: res.lat,
+        lng: res.lng,
+        distance: res.distanceMeters,
+        inRadius: res.inRadius,
+        address: config.geofenceCenter.address || "SMART SCHOOL OS Campus - Area Utama Sekolah",
+        accuracy: res.accuracy,
+      });
+      setGpsError(null);
+      setGpsErrorState(null);
+    } catch (err: any) {
+      console.warn("GPS Geolocation error:", err);
+      const errorMsg = err?.message || "Gagal mendeteksi lokasi GPS perangkat.";
+      setGpsError(errorMsg);
+      setGpsErrorState(err);
+
+      // Keep location data with fallback status
+      setLocationData((prev) => ({
+        ...prev,
+        distance: prev.distance || 0,
+        inRadius: !config.geofenceEnabled,
+      }));
+    } finally {
       setGpsLoading(false);
-      return;
     }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = Number(pos.coords.latitude.toFixed(6));
-        const lng = Number(pos.coords.longitude.toFixed(6));
-        const schoolLat = config.geofenceCenter.lat || -6.200000;
-        const schoolLng = config.geofenceCenter.lng || 106.816666;
-        const radius = config.geofenceCenter.radiusMeters || 100;
-        const dist = calculateDistanceMeters(lat, lng, schoolLat, schoolLng);
-        const inRadius = dist <= radius;
-
-        setLocationData({
-          lat,
-          lng,
-          distance: dist,
-          inRadius,
-          address: config.geofenceCenter.address || "SMART SCHOOL OS Campus - Area Utama Sekolah",
-        });
-        setGpsLoading(false);
-      },
-      (err) => {
-        console.warn("GPS Geolocation error:", err);
-        setGpsError(err.message || "Gagal mendeteksi lokasi GPS perangkat.");
-        // Fallback default coordinate within school
-        setLocationData((prev) => ({
-          ...prev,
-          distance: 14,
-          inRadius: true,
-        }));
-        setGpsLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-    );
-  }, [config.geofenceCenter]);
+  }, [config.geofenceCenter, config.geofenceEnabled]);
 
   // Trigger GPS refresh on mount and whenever config updates
   useEffect(() => {
@@ -747,6 +751,25 @@ export default function TeacherAttendancePage() {
       return;
     }
 
+    // Geofence Radius Validation (Strict enforcement matching Student Attendance)
+    if (config.geofenceEnabled && !locationData.inRadius) {
+      const radiusLimit = Number(config.geofenceCenter?.radiusMeters ?? 100);
+      const outsideDistance = Math.max(0, locationData.distance - radiusLimit);
+      showError(
+        `Clock In ditolak! Lokasi Anda berada ${formatDistance(locationData.distance)} dari titik sekolah (${outsideDistance}m di luar batas radius ${radiusLimit}m). Anda harus berada di dalam radius sekolah untuk melakukan absensi.`,
+        "Di Luar Radius Sekolah"
+      );
+      return;
+    }
+
+    if (config.geofenceEnabled && (gpsLoading || gpsErrorState)) {
+      showError(
+        "Lokasi GPS belum terverifikasi atau izin lokasi belum aktif. Pastikan GPS aktif dan berada di area sekolah.",
+        "GPS Belum Terverifikasi"
+      );
+      return;
+    }
+
     const targetTeacherId = currentTeacherInfo.uid || currentTeacherInfo.id || authUser?.uid || currentUser?.uid;
     if (!targetTeacherId) {
       showError("Data identitas akun guru tidak ditemukan. Silakan login kembali.");
@@ -1139,13 +1162,32 @@ export default function TeacherAttendancePage() {
               {/* Action Buttons Row */}
               <div className="pt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10">
                 {!activeTodayRecord?.clockIn ? (
-                  <button
-                    onClick={openClockInModal}
-                    className="py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-sm shadow-lg shadow-emerald-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <LogIn className="w-5 h-5" />
-                    <span>CLOCK IN (PRESENSI MASUK)</span>
-                  </button>
+                  config.geofenceEnabled && !locationData.inRadius && !gpsLoading ? (
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        onClick={openClockInModal}
+                        className="py-3.5 px-6 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black text-sm shadow-lg shadow-rose-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        title="Klik untuk melihat status lokasi GPS dan verifikasi jarak"
+                      >
+                        <ShieldAlert className="w-5 h-5 text-rose-200 animate-pulse" />
+                        <span>CLOCK IN NONAKTIF (DI LUAR RADIUS)</span>
+                      </button>
+                      <span className="text-[11px] text-rose-200 font-semibold flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                        <span>
+                          Lokasi Anda ({formatDistance(locationData.distance)}) berada di luar jangkauan sekolah (Maks. {config.geofenceCenter.radiusMeters}m).
+                        </span>
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={openClockInModal}
+                      className="py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-sm shadow-lg shadow-emerald-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <LogIn className="w-5 h-5" />
+                      <span>CLOCK IN (PRESENSI MASUK)</span>
+                    </button>
+                  )
                 ) : !activeTodayRecord?.clockOut ? (
                   <button
                     onClick={openClockOutModal}
@@ -1185,10 +1227,10 @@ export default function TeacherAttendancePage() {
                       "text-[10px] font-bold px-2 py-0.5 rounded-full border",
                       locationData.inRadius
                         ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : "bg-amber-50 text-amber-700 border-amber-200"
+                        : "bg-rose-50 text-rose-700 border-rose-200"
                     )}
                   >
-                    {locationData.inRadius ? "Dalam Radius" : "Di Luar Radius"}
+                    {locationData.inRadius ? "Dalam Radius 🟢" : "Di Luar Radius 🔴"}
                   </span>
                 </div>
 
@@ -1217,8 +1259,55 @@ export default function TeacherAttendancePage() {
                   <p className="text-[10px] text-gray-400 font-mono">
                     GPS: {locationData.lat.toFixed(5)}, {locationData.lng.toFixed(5)}
                   </p>
-                  {gpsError && (
-                    <p className="text-[10px] text-amber-600 font-medium">{gpsError}</p>
+                  {gpsErrorState ? (
+                    <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl space-y-2 text-xs animate-in fade-in">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <p className="font-bold text-amber-900 leading-tight">
+                            {gpsErrorState.title}
+                          </p>
+                          <p className="text-[11px] text-amber-800 leading-relaxed">
+                            {gpsErrorState.message}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between pt-1.5 border-t border-amber-200/60">
+                        <span className="text-[10px] text-amber-700 font-medium">
+                          {gpsErrorState.isPermissionDenied ? "Izin Lokasi Diperlukan" : "Sinyal GPS"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={refreshLocation}
+                          disabled={gpsLoading}
+                          className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-md text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        >
+                          <RefreshCw className={cn("w-3 h-3", gpsLoading && "animate-spin")} />
+                          <span>Minta Izin / Coba Lagi</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : gpsError ? (
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800 flex items-center justify-between gap-2">
+                      <span>{gpsError}</span>
+                      <button
+                        type="button"
+                        onClick={refreshLocation}
+                        className="font-bold text-[#531FFF] hover:underline shrink-0 text-xs cursor-pointer"
+                      >
+                        Coba Lagi
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between text-[10px] text-emerald-700 bg-emerald-50/70 px-2.5 py-1 rounded-md border border-emerald-100">
+                      <span className="flex items-center gap-1 font-semibold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>GPS Perangkat Terverifikasi</span>
+                      </span>
+                      <span className="font-mono text-gray-500">
+                        Akurasi: ±{locationData.accuracy ?? 10}m
+                      </span>
+                    </div>
                   )}
                 </div>
 
@@ -1878,211 +1967,302 @@ export default function TeacherAttendancePage() {
       {/* 4. MODAL: CLOCK IN CONFIRMATION WITH CAMERA & GEOFENCE                    */}
       {/* ========================================================================= */}
       {isClockInModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-lg rounded-2xl p-5 md:p-6 shadow-2xl space-y-4 my-8 animate-in zoom-in-95 duration-200">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-3xl max-h-[92vh] md:max-h-[88vh] rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col my-auto animate-in zoom-in-95 duration-200">
+            {/* Header (Compact Sticky) */}
+            <div className="px-5 py-3 border-b border-gray-100 bg-white/95 backdrop-blur-xs flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-                  <LogIn className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                  <LogIn className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-black text-base text-gray-900">Clock In (Presensi Masuk)</h3>
-                  <p className="text-[11px] text-gray-500 font-medium">Verifikasi kamera dan titik koordinat lokasi</p>
+                  <h3 className="font-black text-sm md:text-base text-gray-900 leading-tight">Clock In (Presensi Masuk)</h3>
+                  <p className="text-[10px] md:text-[11px] text-gray-500 font-medium">Verifikasi kamera dan titik koordinat radius sekolah</p>
                 </div>
               </div>
-              <button
-                onClick={closeClockInModal}
-                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Quick Teacher & Time Info */}
-            <div className="p-3 bg-gray-50 rounded-xl border border-gray-200/60 grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <span className="text-[10px] text-gray-400 uppercase font-bold block">Nama Guru</span>
-                <strong className="text-gray-900 truncate block">{currentTeacherInfo?.name}</strong>
-                <span className="text-[10px] text-gray-500">NIP: {currentTeacherInfo?.nip || "-"}</span>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] text-gray-400 uppercase font-bold block">Waktu Saat Ini</span>
-                <strong className="font-mono text-emerald-700 font-black block">{nowDate.toLocaleTimeString()} WIB</strong>
-                <span className="text-[10px] text-gray-500">Batas: {config.lateThreshold} WIB</span>
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Clock className="w-3 h-3" />
+                  <span>{nowDate.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB</span>
+                </span>
+                <button
+                  onClick={closeClockInModal}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
             </div>
 
-            {/* Live Camera Viewfinder */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-                  <Camera className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Kamera Verifikasi Wajah (Selfie)</span>
-                </label>
-                {photoPreview ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Foto Siap
-                  </span>
-                ) : cameraActive ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Kamera Aktif</span>
-                  </span>
-                ) : null}
-              </div>
-
-              {photoPreview ? (
-                <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden border-2 border-emerald-500 shadow-md bg-black flex items-center justify-center">
-                  <img src={photoPreview} alt="Selfie preview" className="w-full h-full object-cover" />
-                  <div className="absolute top-2.5 right-2.5">
-                    <button
-                      type="button"
-                      onClick={handleRetakePhoto}
-                      className="px-3 py-1.5 bg-black/70 hover:bg-black/90 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-xs transition-colors cursor-pointer"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Ambil Ulang</span>
-                    </button>
+            {/* Modal Body - 2 Column Compact Grid */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-5">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch">
+                {/* Left Column: Camera Viewfinder */}
+                <div className="md:col-span-6 flex flex-col justify-between space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                      <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Verifikasi Wajah (Selfie)</span>
+                    </label>
+                    {photoPreview ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Foto Siap 🟢
+                      </span>
+                    ) : cameraActive ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>Kamera Aktif</span>
+                      </span>
+                    ) : null}
                   </div>
-                </div>
-              ) : (
-                <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden border border-gray-300 bg-slate-900 shadow-inner flex items-center justify-center">
-                  {cameraActive ? (
-                    <>
-                      <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className="w-full h-full object-cover transform -scale-x-100"
-                      />
-                      {/* Face Target Overlay Frame */}
-                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div className="w-48 h-56 border-2 border-dashed border-emerald-400/70 rounded-3xl relative flex items-center justify-center">
-                          <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-emerald-400" />
-                          <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-emerald-400" />
-                          <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-emerald-400" />
-                          <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-emerald-400" />
-                          <ScanFace className="w-8 h-8 text-emerald-400/40" />
+
+                  {/* Camera Frame */}
+                  <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden border border-gray-200 bg-slate-950 shadow-inner flex items-center justify-center">
+                    {photoPreview ? (
+                      <div className="relative w-full h-full flex items-center justify-center bg-black">
+                        <img src={photoPreview} alt="Selfie preview" className="w-full h-full object-cover" />
+                        <div className="absolute top-2.5 right-2.5 z-10">
+                          <button
+                            type="button"
+                            onClick={handleRetakePhoto}
+                            className="px-2.5 py-1 bg-black/75 hover:bg-black/90 text-white rounded-lg text-[11px] font-bold flex items-center gap-1.5 backdrop-blur-xs transition-colors cursor-pointer"
+                          >
+                            <RotateCcw className="w-3 h-3 text-emerald-400" />
+                            <span>Ambil Ulang</span>
+                          </button>
                         </div>
                       </div>
+                    ) : cameraActive ? (
+                      <>
+                        <video
+                          ref={videoRef}
+                          autoPlay
+                          playsInline
+                          muted
+                          className="w-full h-full object-cover transform -scale-x-100"
+                        />
+                        {/* Compact Face Frame */}
+                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                          <div className="w-36 h-44 sm:w-40 sm:h-48 border-2 border-dashed border-emerald-400/80 rounded-2xl relative flex items-center justify-center">
+                            <div className="absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 border-emerald-400" />
+                            <div className="absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 border-emerald-400" />
+                            <div className="absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 border-emerald-400" />
+                            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 border-emerald-400" />
+                            <ScanFace className="w-7 h-7 text-emerald-400/50" />
+                          </div>
+                        </div>
 
-                      {/* Shutter Button */}
-                      <div className="absolute bottom-3 inset-x-0 flex items-center justify-center gap-2 px-4 z-10">
-                        <button
-                          type="button"
-                          onClick={() => handleCapturePhoto("CLOCK IN")}
-                          className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-500/40 flex items-center gap-2 cursor-pointer transition-all active:scale-95"
-                        >
-                          <Camera className="w-4 h-4" />
-                          <span>Ambil Foto Masuk</span>
-                        </button>
+                        {/* Floating Shutter Button */}
+                        <div className="absolute bottom-2.5 inset-x-0 flex items-center justify-center px-4 z-10">
+                          <button
+                            type="button"
+                            onClick={() => handleCapturePhoto("CLOCK IN")}
+                            className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-500/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>Ambil Foto Masuk</span>
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="p-4 text-center space-y-2.5">
+                        <Camera className="w-8 h-8 text-gray-400 mx-auto" />
+                        <p className="text-[11px] text-gray-300 max-w-xs mx-auto leading-tight">
+                          {cameraError || "Kamera perlu diinisialisasi atau izin peramban belum aktif."}
+                        </p>
+                        <div className="flex items-center justify-center gap-2 flex-wrap pt-1">
+                          <button
+                            type="button"
+                            onClick={startCamera}
+                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg cursor-pointer"
+                          >
+                            Nyalakan Kamera
+                          </button>
+                          <label
+                            htmlFor="clockInFileFallback"
+                            className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white font-bold text-xs rounded-lg cursor-pointer transition-colors"
+                          >
+                            Unggah File
+                          </label>
+                        </div>
                       </div>
-                    </>
-                  ) : (
-                    <div className="p-6 text-center space-y-3">
-                      <Camera className="w-10 h-10 text-gray-500 mx-auto" />
-                      <p className="text-xs text-gray-300 max-w-xs mx-auto">
-                        {cameraError || "Kamera sedang diinisialisasi atau peramban memerlukan izin akses kamera..."}
-                      </p>
-                      <div className="flex items-center justify-center gap-2 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={startCamera}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg cursor-pointer"
-                        >
-                          Nyalakan Kamera
-                        </button>
-                        <label
-                          htmlFor="clockInFileFallback"
-                          className="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white font-bold text-xs rounded-lg cursor-pointer transition-colors"
-                        >
-                          Unggah File Foto
-                        </label>
+                    )}
+                  </div>
+
+                  {/* Fallback upload text */}
+                  <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
+                    <span>Posisi wajah di tengah bingkai</span>
+                    <label
+                      htmlFor="clockInFileFallback"
+                      className="text-emerald-600 hover:underline font-semibold cursor-pointer"
+                    >
+                      Unggah Foto dari Galeri
+                    </label>
+                  </div>
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="user"
+                    id="clockInFileFallback"
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                  />
+                </div>
+
+                {/* Right Column: Identity, Geofence, Notes, & Actions */}
+                <div className="md:col-span-6 flex flex-col justify-between space-y-2.5">
+                  {/* Quick Teacher & Shift Bar */}
+                  <div className="p-2.5 bg-gray-50/90 rounded-xl border border-gray-200/60 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="text-[9px] text-gray-400 uppercase font-extrabold block">Identitas Guru</span>
+                      <strong className="text-gray-900 truncate block text-xs">{currentTeacherInfo?.name}</strong>
+                      <span className="text-[10px] text-gray-500">NIP: {currentTeacherInfo?.nip || "-"}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[9px] text-gray-400 uppercase font-extrabold block">Waktu Saat Ini</span>
+                      <strong className="font-mono text-emerald-700 font-black block text-xs">
+                        {nowDate.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} WIB
+                      </strong>
+                      <span className="text-[10px] text-gray-500">Batas: {config.lateThreshold} WIB</span>
+                    </div>
+                  </div>
+
+                  {/* Geofence & GPS Box */}
+                  <div className="p-2.5 bg-gray-50/90 rounded-xl border border-gray-200/60 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-[#531FFF]" />
+                        <span className="font-bold text-gray-800 text-[11px]">Radius & Lokasi GPS</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={refreshLocation}
+                        disabled={gpsLoading}
+                        className="text-[10px] text-[#531FFF] hover:underline flex items-center gap-1 font-bold cursor-pointer"
+                      >
+                        <RefreshCw className={cn("w-3 h-3", gpsLoading && "animate-spin")} />
+                        <span>{gpsLoading ? "Mengecek..." : "Perbarui GPS"}</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-gray-200/50">
+                      <span className="text-gray-600">
+                        Jarak: <strong className="text-gray-900">{formatDistance(locationData.distance)}</strong>{" "}
+                        <span className="text-gray-400 text-[10px]">(Maks {config.geofenceCenter.radiusMeters}m)</span>
+                      </span>
+                      <span
+                        className={cn(
+                          "text-[10px] font-bold px-2 py-0.5 rounded-full border",
+                          locationData.inRadius
+                            ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                            : "bg-rose-100 text-rose-800 border-rose-200"
+                        )}
+                      >
+                        {locationData.inRadius ? "Dalam Radius 🟢" : "Di Luar Radius 🔴"}
+                      </span>
+                    </div>
+
+                    <p className="text-[10px] text-gray-400 font-mono truncate" title={config.geofenceCenter.address}>
+                      {config.geofenceCenter.address} ({locationData.lat.toFixed(4)}, {locationData.lng.toFixed(4)})
+                    </p>
+
+                    {gpsErrorState && (
+                      <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] space-y-1">
+                        <div className="flex items-start gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold text-amber-900 text-[10px]">{gpsErrorState.title}</p>
+                            <p className="text-[10px] text-amber-800">{gpsErrorState.message}</p>
+                          </div>
+                        </div>
+                        <div className="pt-0.5 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={refreshLocation}
+                            disabled={gpsLoading}
+                            className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[9px] font-bold transition-colors cursor-pointer"
+                          >
+                            Minta Ulang Izin
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Warning Alert if outside radius */}
+                  {config.geofenceEnabled && !locationData.inRadius && !gpsLoading && (
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800 animate-in fade-in">
+                      <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <span className="font-bold block text-rose-900 text-[11px]">
+                          Lokasi di Luar Jangkauan Sekolah
+                        </span>
+                        <p className="text-rose-800 text-[10px] leading-snug">
+                          Anda berjarak <strong>{formatDistance(locationData.distance)}</strong> ({Math.max(0, locationData.distance - (config.geofenceCenter?.radiusMeters ?? 100))}m di luar batas). Tombol Clock In dinonaktifkan.
+                        </p>
                       </div>
                     </div>
                   )}
+
+                  {/* Notes textarea */}
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-gray-700">Catatan Masuk (Opsional)</label>
+                    <textarea
+                      value={actionNotes}
+                      onChange={(e) => setActionNotes(e.target.value)}
+                      placeholder="Rencana kegiatan mengajar hari ini atau catatan kehadiran..."
+                      rows={2}
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] resize-none"
+                    />
+                  </div>
+
+                  {/* Footer Actions */}
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={closeClockInModal}
+                      className="px-3.5 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer transition-colors"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExecuteClockIn}
+                      disabled={submitting || (config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState))}
+                      className={cn(
+                        "px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5",
+                        submitting || (config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState))
+                          ? "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none border border-gray-300"
+                          : "text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 cursor-pointer"
+                      )}
+                    >
+                      {submitting ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Memproses...</span>
+                        </>
+                      ) : config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState) ? (
+                        <>
+                          <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                          <span>
+                            {gpsLoading
+                              ? "Menunggu GPS..."
+                              : gpsErrorState
+                              ? "GPS Bermasalah"
+                              : "Di Luar Radius Sekolah"}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Konfirmasi Masuk (Clock In)</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-              )}
-
-              <input
-                type="file"
-                accept="image/*"
-                capture="user"
-                id="clockInFileFallback"
-                onChange={handlePhotoUpload}
-                className="hidden"
-              />
-            </div>
-
-            {/* GPS Geofence Real-time Verification Box */}
-            <div className="p-3 bg-gray-50 rounded-xl border border-gray-200/60 space-y-1.5 text-xs">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-[#531FFF]" />
-                  <span className="font-bold text-gray-800">Koordinat Lokasi & Radius</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={refreshLocation}
-                  disabled={gpsLoading}
-                  className="text-[10px] text-[#531FFF] hover:underline flex items-center gap-1 font-bold cursor-pointer"
-                >
-                  <RefreshCw className={cn("w-3 h-3", gpsLoading && "animate-spin")} />
-                  <span>{gpsLoading ? "Mengecek GPS..." : "Perbarui GPS"}</span>
-                </button>
               </div>
-
-              <div className="flex items-center justify-between text-[11px] pt-1 border-t border-gray-200/40">
-                <span className="text-gray-500">
-                  Jarak dari Titik Sekolah: <strong className="text-gray-900">{formatDistance(locationData.distance)}</strong>
-                </span>
-                <span
-                  className={cn(
-                    "text-[10px] font-bold px-2 py-0.5 rounded-full border",
-                    locationData.inRadius
-                      ? "bg-emerald-100 text-emerald-800 border-emerald-200"
-                      : "bg-amber-100 text-amber-800 border-amber-200"
-                  )}
-                >
-                  {locationData.inRadius ? "Dalam Radius (Valid)" : "Di Luar Radius"}
-                </span>
-              </div>
-              <p className="text-[10px] text-gray-400 font-mono">
-                Pusat: {config.geofenceCenter.address} (GPS: {locationData.lat.toFixed(5)}, {locationData.lng.toFixed(5)})
-              </p>
-            </div>
-
-            {/* Notes textarea */}
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-gray-700">Catatan Masuk (Opsional)</label>
-              <textarea
-                value={actionNotes}
-                onChange={(e) => setActionNotes(e.target.value)}
-                placeholder="Rencana kegiatan mengajar hari ini atau catatan kehadiran..."
-                rows={2}
-                className="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={closeClockInModal}
-                className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={handleExecuteClockIn}
-                disabled={submitting}
-                className="px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md shadow-emerald-600/20 cursor-pointer transition-all flex items-center gap-1.5"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{submitting ? "Memproses..." : "Konfirmasi Masuk (Clock In)"}</span>
-              </button>
             </div>
           </div>
         </div>
@@ -2092,213 +2272,264 @@ export default function TeacherAttendancePage() {
       {/* 5. MODAL: CLOCK OUT CONFIRMATION WITH CAMERA & GEOFENCE                   */}
       {/* ========================================================================= */}
       {isClockOutModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-lg rounded-2xl p-5 md:p-6 shadow-2xl space-y-4 my-8 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-3xl max-h-[92vh] md:max-h-[88vh] rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col my-auto animate-in zoom-in-95 duration-200">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div className="px-5 py-3 border-b border-gray-100 bg-white/95 backdrop-blur-xs flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-                  <LogOut className="w-5 h-5" />
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                  <LogOut className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-black text-base text-gray-900">Clock Out (Presensi Pulang)</h3>
-                  <p className="text-[11px] text-gray-500 font-medium">Verifikasi kamera dan waktu penyelesaian tugas kerja</p>
+                  <h3 className="font-black text-sm md:text-base text-gray-900 leading-tight">Clock Out (Presensi Pulang)</h3>
+                  <p className="text-[10px] md:text-[11px] text-gray-500 font-medium">Verifikasi kamera dan waktu penyelesaian tugas kerja</p>
                 </div>
               </div>
-              <button
-                onClick={closeClockOutModal}
-                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Shift & Time Summary */}
-            <div className="p-3 bg-gray-50 rounded-xl border border-gray-200/60 grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <span className="text-[10px] text-gray-400 uppercase font-bold block">Jam Masuk Tercatat</span>
-                <strong className="font-mono text-emerald-700 font-bold block">
-                  {(activeTodayRecord || todayTeacherRecord)?.clockIn?.time || "--:--:--"} WIB
-                </strong>
-                <span className="text-[10px] text-gray-500">Guru: {currentTeacherInfo?.name}</span>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] text-gray-400 uppercase font-bold block">Waktu Pulang Sekarang</span>
-                <strong className="font-mono text-indigo-700 font-black block">{nowDate.toLocaleTimeString()} WIB</strong>
-                <span className="text-[10px] text-gray-500">Standar: {config.standardClockOut} WIB</span>
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  <Clock className="w-3 h-3" />
+                  <span>{nowDate.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB</span>
+                </span>
+                <button
+                  onClick={closeClockOutModal}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
             </div>
 
-            {/* Live Camera Viewfinder */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-                  <Camera className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Kamera Verifikasi Pulang (Selfie)</span>
-                </label>
-                {photoPreview ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                    Foto Siap
-                  </span>
-                ) : cameraActive ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Kamera Aktif</span>
-                  </span>
-                ) : null}
-              </div>
+            {/* Modal Body - 2 Column Grid */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-5">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch">
+                {/* Left Column: Camera Viewfinder */}
+                <div className="md:col-span-6 flex flex-col justify-between space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                      <Camera className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Verifikasi Pulang (Selfie)</span>
+                    </label>
+                    {photoPreview ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        Foto Siap 🟢
+                      </span>
+                    ) : cameraActive ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                        <span>Kamera Aktif</span>
+                      </span>
+                    ) : null}
+                  </div>
 
-              {photoPreview ? (
-                <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden border-2 border-indigo-500 shadow-md bg-black flex items-center justify-center">
-                  <img src={photoPreview} alt="Selfie preview" className="w-full h-full object-cover" />
-                  <div className="absolute top-2.5 right-2.5">
+                  {/* Camera Frame */}
+                  <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden border border-gray-200 bg-slate-950 shadow-inner flex items-center justify-center">
+                    {photoPreview ? (
+                      <div className="relative w-full h-full flex items-center justify-center bg-black">
+                        <img src={photoPreview} alt="Selfie preview" className="w-full h-full object-cover" />
+                        <div className="absolute top-2.5 right-2.5 z-10">
+                          <button
+                            type="button"
+                            onClick={handleRetakePhoto}
+                            className="px-2.5 py-1 bg-black/75 hover:bg-black/90 text-white rounded-lg text-[11px] font-bold flex items-center gap-1.5 backdrop-blur-xs transition-colors cursor-pointer"
+                          >
+                            <RotateCcw className="w-3 h-3 text-indigo-400" />
+                            <span>Ambil Ulang</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : cameraActive ? (
+                      <>
+                        <video
+                          ref={videoRef}
+                          autoPlay
+                          playsInline
+                          muted
+                          className="w-full h-full object-cover transform -scale-x-100"
+                        />
+                        {/* Compact Face Frame */}
+                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                          <div className="w-36 h-44 sm:w-40 sm:h-48 border-2 border-dashed border-indigo-400/80 rounded-2xl relative flex items-center justify-center">
+                            <div className="absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 border-indigo-400" />
+                            <div className="absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 border-indigo-400" />
+                            <div className="absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 border-indigo-400" />
+                            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 border-indigo-400" />
+                            <ScanFace className="w-7 h-7 text-indigo-400/50" />
+                          </div>
+                        </div>
+
+                        {/* Floating Shutter Button */}
+                        <div className="absolute bottom-2.5 inset-x-0 flex items-center justify-center px-4 z-10">
+                          <button
+                            type="button"
+                            onClick={() => handleCapturePhoto("CLOCK OUT")}
+                            className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-500/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>Ambil Foto Pulang</span>
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="p-4 text-center space-y-2.5">
+                        <Camera className="w-8 h-8 text-gray-400 mx-auto" />
+                        <p className="text-[11px] text-gray-300 max-w-xs mx-auto leading-tight">
+                          {cameraError || "Kamera perlu diinisialisasi atau izin peramban belum aktif."}
+                        </p>
+                        <div className="flex items-center justify-center gap-2 flex-wrap pt-1">
+                          <button
+                            type="button"
+                            onClick={startCamera}
+                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg cursor-pointer"
+                          >
+                            Nyalakan Kamera
+                          </button>
+                          <label
+                            htmlFor="clockOutFileFallback"
+                            className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white font-bold text-xs rounded-lg cursor-pointer transition-colors"
+                          >
+                            Unggah File
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Fallback upload text */}
+                  <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
+                    <span>Posisi wajah di tengah bingkai</span>
+                    <label
+                      htmlFor="clockOutFileFallback"
+                      className="text-indigo-600 hover:underline font-semibold cursor-pointer"
+                    >
+                      Unggah Foto dari Galeri
+                    </label>
+                  </div>
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="user"
+                    id="clockOutFileFallback"
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                  />
+                </div>
+
+                {/* Right Column: Identity, Geofence, Notes, & Actions */}
+                <div className="md:col-span-6 flex flex-col justify-between space-y-2.5">
+                  {/* Shift & Time Summary */}
+                  <div className="p-2.5 bg-gray-50/90 rounded-xl border border-gray-200/60 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="text-[9px] text-gray-400 uppercase font-extrabold block">Jam Masuk Tercatat</span>
+                      <strong className="font-mono text-emerald-700 font-bold block text-xs">
+                        {(activeTodayRecord || todayTeacherRecord)?.clockIn?.time || "--:--:--"} WIB
+                      </strong>
+                      <span className="text-[10px] text-gray-500 truncate block max-w-[140px]">{currentTeacherInfo?.name}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[9px] text-gray-400 uppercase font-extrabold block">Waktu Pulang</span>
+                      <strong className="font-mono text-indigo-700 font-black block text-xs">
+                        {nowDate.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} WIB
+                      </strong>
+                      <span className="text-[10px] text-gray-500">Standar: {config.standardClockOut} WIB</span>
+                    </div>
+                  </div>
+
+                  {/* Geofence & GPS Verification Box */}
+                  <div className="p-2.5 bg-gray-50/90 rounded-xl border border-gray-200/60 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-[#531FFF]" />
+                        <span className="font-bold text-gray-800 text-[11px]">Radius & Lokasi GPS</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={refreshLocation}
+                        disabled={gpsLoading}
+                        className="text-[10px] text-[#531FFF] hover:underline flex items-center gap-1 font-bold cursor-pointer"
+                      >
+                        <RefreshCw className={cn("w-3 h-3", gpsLoading && "animate-spin")} />
+                        <span>{gpsLoading ? "Mengecek..." : "Perbarui GPS"}</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-gray-200/50">
+                      <span className="text-gray-600">
+                        Jarak: <strong className="text-gray-900">{formatDistance(locationData.distance)}</strong>{" "}
+                        <span className="text-gray-400 text-[10px]">(Maks {config.geofenceCenter.radiusMeters}m)</span>
+                      </span>
+                      <span
+                        className={cn(
+                          "text-[10px] font-bold px-2 py-0.5 rounded-full border",
+                          locationData.inRadius
+                            ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                            : "bg-amber-100 text-amber-800 border-amber-200"
+                        )}
+                      >
+                        {locationData.inRadius ? "Dalam Radius 🟢" : "Di Luar Radius"}
+                      </span>
+                    </div>
+
+                    <p className="text-[10px] text-gray-400 font-mono truncate" title={config.geofenceCenter.address}>
+                      {config.geofenceCenter.address} ({locationData.lat.toFixed(4)}, {locationData.lng.toFixed(4)})
+                    </p>
+
+                    {gpsErrorState && (
+                      <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] space-y-1">
+                        <div className="flex items-start gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold text-amber-900 text-[10px]">{gpsErrorState.title}</p>
+                            <p className="text-[10px] text-amber-800">{gpsErrorState.message}</p>
+                          </div>
+                        </div>
+                        <div className="pt-0.5 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={refreshLocation}
+                            disabled={gpsLoading}
+                            className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[9px] font-bold transition-colors cursor-pointer"
+                          >
+                            Minta Ulang Izin
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Notes textarea */}
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold text-gray-700">Laporan Kegiatan / Catatan Pulang (Opsional)</label>
+                    <textarea
+                      value={actionNotes}
+                      onChange={(e) => setActionNotes(e.target.value)}
+                      placeholder="Materi ajar yang telah diselesaikan, penugasan, atau catatan kelas..."
+                      rows={2}
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] resize-none"
+                    />
+                  </div>
+
+                  {/* Footer Actions */}
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
                     <button
                       type="button"
-                      onClick={handleRetakePhoto}
-                      className="px-3 py-1.5 bg-black/70 hover:bg-black/90 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-xs transition-colors cursor-pointer"
+                      onClick={closeClockOutModal}
+                      className="px-3.5 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer transition-colors"
                     >
-                      <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Ambil Ulang</span>
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExecuteClockOut}
+                      disabled={submitting}
+                      className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/20 cursor-pointer transition-all flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>{submitting ? "Memproses..." : "Konfirmasi Pulang (Clock Out)"}</span>
                     </button>
                   </div>
                 </div>
-              ) : (
-                <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden border border-gray-300 bg-slate-900 shadow-inner flex items-center justify-center">
-                  {cameraActive ? (
-                    <>
-                      <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className="w-full h-full object-cover transform -scale-x-100"
-                      />
-                      {/* Face Target Overlay Frame */}
-                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div className="w-48 h-56 border-2 border-dashed border-indigo-400/70 rounded-3xl relative flex items-center justify-center">
-                          <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-indigo-400" />
-                          <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-indigo-400" />
-                          <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-indigo-400" />
-                          <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-indigo-400" />
-                          <ScanFace className="w-8 h-8 text-indigo-400/40" />
-                        </div>
-                      </div>
-
-                      {/* Shutter Button */}
-                      <div className="absolute bottom-3 inset-x-0 flex items-center justify-center gap-2 px-4 z-10">
-                        <button
-                          type="button"
-                          onClick={() => handleCapturePhoto("CLOCK OUT")}
-                          className="px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-black text-xs rounded-xl shadow-lg shadow-indigo-500/40 flex items-center gap-2 cursor-pointer transition-all active:scale-95"
-                        >
-                          <Camera className="w-4 h-4" />
-                          <span>Ambil Foto Pulang</span>
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="p-6 text-center space-y-3">
-                      <Camera className="w-10 h-10 text-gray-500 mx-auto" />
-                      <p className="text-xs text-gray-300 max-w-xs mx-auto">
-                        {cameraError || "Kamera sedang diinisialisasi atau peramban memerlukan izin akses kamera..."}
-                      </p>
-                      <div className="flex items-center justify-center gap-2 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={startCamera}
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg cursor-pointer"
-                        >
-                          Nyalakan Kamera
-                        </button>
-                        <label
-                          htmlFor="clockOutFileFallback"
-                          className="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white font-bold text-xs rounded-lg cursor-pointer transition-colors"
-                        >
-                          Unggah File Foto
-                        </label>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <input
-                type="file"
-                accept="image/*"
-                capture="user"
-                id="clockOutFileFallback"
-                onChange={handlePhotoUpload}
-                className="hidden"
-              />
-            </div>
-
-            {/* GPS Geofence Real-time Verification Box */}
-            <div className="p-3 bg-gray-50 rounded-xl border border-gray-200/60 space-y-1.5 text-xs">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-[#531FFF]" />
-                  <span className="font-bold text-gray-800">Koordinat Lokasi & Radius</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={refreshLocation}
-                  disabled={gpsLoading}
-                  className="text-[10px] text-[#531FFF] hover:underline flex items-center gap-1 font-bold cursor-pointer"
-                >
-                  <RefreshCw className={cn("w-3 h-3", gpsLoading && "animate-spin")} />
-                  <span>{gpsLoading ? "Mengecek GPS..." : "Perbarui GPS"}</span>
-                </button>
               </div>
-
-              <div className="flex items-center justify-between text-[11px] pt-1 border-t border-gray-200/40">
-                <span className="text-gray-500">
-                  Jarak dari Titik Sekolah: <strong className="text-gray-900">{formatDistance(locationData.distance)}</strong>
-                </span>
-                <span
-                  className={cn(
-                    "text-[10px] font-bold px-2 py-0.5 rounded-full border",
-                    locationData.inRadius
-                      ? "bg-emerald-100 text-emerald-800 border-emerald-200"
-                      : "bg-amber-100 text-amber-800 border-amber-200"
-                  )}
-                >
-                  {locationData.inRadius ? "Dalam Radius (Valid)" : "Di Luar Radius"}
-                </span>
-              </div>
-              <p className="text-[10px] text-gray-400 font-mono">
-                Pusat: {config.geofenceCenter.address} (GPS: {locationData.lat.toFixed(5)}, {locationData.lng.toFixed(5)})
-              </p>
-            </div>
-
-            {/* Notes textarea */}
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-gray-700">Laporan Kegiatan Mengajar / Catatan Pulang (Opsional)</label>
-              <textarea
-                value={actionNotes}
-                onChange={(e) => setActionNotes(e.target.value)}
-                placeholder="Materi ajar yang telah diselesaikan, penugasan siswa, atau catatan kelas..."
-                rows={2}
-                className="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={closeClockOutModal}
-                className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={handleExecuteClockOut}
-                disabled={submitting}
-                className="px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/20 cursor-pointer transition-all flex items-center gap-1.5"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{submitting ? "Memproses..." : "Konfirmasi Pulang (Clock Out)"}</span>
-              </button>
             </div>
           </div>
         </div>

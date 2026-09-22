@@ -9,10 +9,16 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ShieldAlert, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { AuthRequiredState } from "@/components/ui/auth-required-state";
+import { LogoutLoadingState } from "@/components/ui/logout-loading-state";
 
 function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
-  const { user, isAuthLoading, role, isSuperAdmin, isStudent, isParent } = useAuth();
+  const { user, isAuthLoading, isLoggingOut, role, isSuperAdmin, isStudent, isParent } = useAuth();
   const pathname = usePathname();
+
+  // 0. Logout state: NEVER render empty state or previous content while logging out
+  if (isLoggingOut) {
+    return <LogoutLoadingState />;
+  }
 
   // Route protection rules (URL without role prefixes)
   const isAccountsRoute = pathname === "/accounts" || pathname?.startsWith("/accounts/");

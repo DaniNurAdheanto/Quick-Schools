@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react";
-import { User, onAuthStateChanged, signOut } from "firebase/auth";
+import { User, onAuthStateChanged, signOut, deleteUser } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { 
@@ -44,7 +44,8 @@ interface AuthContextType {
   userAvatar: string;
   isAuthLoading: boolean;
   isRoleReady: boolean;
-  userRole: UserRole | string;
+  isLoggingOut: boolean;
+  userRole: string;
   rolePermissions: Record<string, ModulePermission>;
   isSuperAdmin: boolean;
   isAdmin: boolean;
@@ -53,19 +54,18 @@ interface AuthContextType {
   isParent: boolean;
   isKepalaSekolah: boolean;
   refreshUserData: () => Promise<void>;
-  logout: () => Promise<void>;
+  logout: (redirectTo?: string) => Promise<void>;
 }
 
-const AUTH_CACHE_KEY = "qs_auth_role_cache_v1";
+const AUTH_CACHE_KEY = "quick_schools_auth_session";
 
-function normalizeRole(rawRole?: string | null): UserRole {
-  if (!rawRole) return "admin";
-  const r = rawRole.toLowerCase().trim().replace(/[-_ ]/g, "");
-  if (r === "superadmin") return "super-admin";
-  if (r === "guru" || r === "teacher") return "guru";
-  if (r === "siswa" || r === "student") return "siswa";
-  if (r === "orangtua" || r === "parent" || r === "walimurid") return "orang-tua";
-  if (r === "kepalasekolah" || r === "principal") return "kepala-sekolah";
+function normalizeRole(roleStr: string = ""): UserRole {
+  const r = (roleStr || "").toLowerCase().trim();
+  if (r === "super-admin" || r === "superadmin" || r === "owner" || r === "developer") return "super-admin";
+  if (r === "guru" || r === "teacher" || r === "pengajar") return "guru";
+  if (r === "siswa" || r === "student" || r === "murid") return "siswa";
+  if (r === "orang-tua" || r === "orang tua" || r === "wali" || r === "wali-murid" || r === "parent") return "orang-tua";
+  if (r === "kepala-sekolah" || r === "kepsek" || r === "principal") return "kepala-sekolah";
   return "admin";
 }
 
@@ -79,6 +79,7 @@ const AuthContext = createContext<AuthContextType>({
   userAvatar: "",
   isAuthLoading: true,
   isRoleReady: false,
+  isLoggingOut: false,
   userRole: "",
   rolePermissions: {},
   isSuperAdmin: false,
@@ -107,55 +108,138 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<UserRole | null>(initialCached?.role ? normalizeRole(initialCached.role) : null);
   const [rawRole, setRawRole] = useState<string>(initialCached?.rawRole || "");
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+  const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
   const [rolePermissions, setRolePermissions] = useState<Record<string, ModulePermission>>(
     initialCached?.role ? (DEFAULT_PERMISSIONS[normalizeRole(initialCached.role)] || {}) : {}
   );
 
   const fetchUserData = useCallback(async (firebaseUser: User) => {
     try {
-      const userRef = doc(db, "users", firebaseUser.uid);
-      const userSnap = await getDoc(userRef);
+      const cleanEmail = (firebaseUser.email || "").toLowerCase().trim();
+      const sanitizedEmail = cleanEmail.replace(/[^a-z0-9]/g, "_");
 
-      if (userSnap.exists()) {
-        const data = userSnap.data() as UserProfileData;
-        const uRawRole = data.role || "admin";
-        const normalized = normalizeRole(uRawRole);
+      let delDocExists = false;
+      try {
+        const delByUid = await getDoc(doc(db, "deleted_accounts", firebaseUser.uid));
+        if (delByUid.exists()) delDocExists = true;
+      } catch (e) {}
 
-        setUserData(data);
-        setRawRole(uRawRole);
-        setRole(normalized);
-
-        // Fetch custom role permissions from roles/{normalized} or fallback
-        let perms = DEFAULT_PERMISSIONS[normalized] || DEFAULT_PERMISSIONS["admin"] || {};
+      if (!delDocExists && sanitizedEmail) {
         try {
-          const roleDocRef = doc(db, "roles", normalized);
-          const roleSnap = await getDoc(roleDocRef);
-          if (roleSnap.exists() && roleSnap.data().modules) {
-            perms = roleSnap.data().modules;
-          }
-        } catch (err) {}
-        setRolePermissions(perms);
-
-        // Update local cache
-        try {
-          localStorage.setItem(
-            AUTH_CACHE_KEY,
-            JSON.stringify({
-              uid: firebaseUser.uid,
-              role: normalized,
-              rawRole: uRawRole,
-              userData: data,
-            })
-          );
+          const delByEmail = await getDoc(doc(db, "deleted_accounts", sanitizedEmail));
+          if (delByEmail.exists()) delDocExists = true;
         } catch (e) {}
-      } else {
-        // Fallback for user record not in firestore yet
-        const defaultRole = "admin";
-        setRawRole(defaultRole);
-        setRole(defaultRole);
-        setUserData({ uid: firebaseUser.uid, email: firebaseUser.email || "", role: defaultRole });
-        setRolePermissions(DEFAULT_PERMISSIONS[defaultRole]);
       }
+
+      let userSnap = await getDoc(doc(db, "users", firebaseUser.uid));
+      // If user document is not found, wait briefly to avoid registration race condition before checking again
+      if (!userSnap.exists() && !delDocExists) {
+        await new Promise((r) => setTimeout(r, 600));
+        userSnap = await getDoc(doc(db, "users", firebaseUser.uid));
+      }
+
+      const isDeleted = delDocExists || !userSnap.exists();
+
+      if (isDeleted) {
+        console.warn("Deleted or unauthorized account detected:", firebaseUser.uid);
+        try {
+          await deleteUser(firebaseUser);
+        } catch (e) {}
+        try {
+          await signOut(auth);
+        } catch (e) {}
+        setUser(null);
+        setUserData(null);
+        setRole(null);
+        setRawRole("");
+        setRolePermissions({});
+        try {
+          localStorage.removeItem(AUTH_CACHE_KEY);
+        } catch (e) {}
+        setIsAuthLoading(false);
+        return;
+      }
+
+      let data = userSnap.data() as UserProfileData;
+
+      // Check for inactive / disabled status
+      if (data.status === "Nonaktif" || data.status === "deleted" || data.isDeleted === true) {
+        console.warn("Inactive account detected:", firebaseUser.uid);
+        try {
+          await signOut(auth);
+        } catch (e) {}
+        setUser(null);
+        setUserData(null);
+        setRole(null);
+        setRawRole("");
+        setRolePermissions({});
+        try {
+          localStorage.removeItem(AUTH_CACHE_KEY);
+        } catch (e) {}
+        setIsAuthLoading(false);
+        return;
+      }
+
+      const uRawRole = data.role || "admin";
+      const normalized = normalizeRole(uRawRole);
+
+      // If parent role, merge data from parents collection to ensure complete student links
+      if (normalized === "orang-tua") {
+        try {
+          const parentRef = doc(db, "parents", firebaseUser.uid);
+          const parentSnap = await getDoc(parentRef);
+          if (parentSnap.exists()) {
+            const pData = parentSnap.data() as any;
+            const toSafeArray = (v: any): string[] => {
+              if (!v) return [];
+              if (Array.isArray(v)) return v.map(String).filter(Boolean);
+              if (typeof v === "string") return v.includes(",") ? v.split(",").map(s => s.trim()).filter(Boolean) : [v.trim()];
+              if (typeof v === "object") return Object.values(v).map(String).filter(Boolean);
+              return [String(v)];
+            };
+            const mergedStudentIds = Array.from(new Set([...toSafeArray(data.studentIds), ...toSafeArray(pData.studentIds)]));
+            const mergedLinkedIds = Array.from(new Set([...toSafeArray(data.linkedStudentIds), ...toSafeArray(pData.linkedStudentIds), ...mergedStudentIds]));
+
+            data = {
+              ...pData,
+              ...data,
+              studentIds: mergedStudentIds,
+              linkedStudentIds: mergedLinkedIds,
+              studentId: data.studentId || pData.studentId || data.nisn || pData.nisn || "",
+              studentName: data.studentName || pData.studentName || "",
+              nisn: data.nisn || pData.nisn || data.studentId || pData.studentId || "",
+            };
+          }
+        } catch (pe) {}
+      }
+
+      setUserData(data);
+      setRawRole(uRawRole);
+      setRole(normalized);
+
+      // Fetch custom role permissions from roles/{normalized} or fallback
+      let perms = DEFAULT_PERMISSIONS[normalized] || DEFAULT_PERMISSIONS["admin"] || {};
+      try {
+        const roleDocRef = doc(db, "roles", normalized);
+        const roleSnap = await getDoc(roleDocRef);
+        if (roleSnap.exists() && roleSnap.data().modules) {
+          perms = roleSnap.data().modules;
+        }
+      } catch (err) {}
+      setRolePermissions(perms);
+
+      // Update local cache
+      try {
+        localStorage.setItem(
+          AUTH_CACHE_KEY,
+          JSON.stringify({
+            uid: firebaseUser.uid,
+            role: normalized,
+            rawRole: uRawRole,
+            userData: data,
+          })
+        );
+      } catch (e) {}
     } catch (error) {
       console.error("AuthContext fetchUserData error:", error);
     } finally {
@@ -191,17 +275,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchUserData]);
 
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (redirectTo: string = "/login") => {
     try {
+      setIsLoggingOut(true);
+
+      // Clean local tokens and session data immediately
+      try {
+        localStorage.removeItem(AUTH_CACHE_KEY);
+        localStorage.removeItem("quick_schools_student_profile");
+        localStorage.removeItem("onboarding_completed");
+        sessionStorage.clear();
+      } catch (e) {}
+
+      // Sign out from Firebase
       await signOut(auth);
+
       setUser(null);
       setUserData(null);
       setRole(null);
       setRawRole("");
       setRolePermissions({});
-      localStorage.removeItem(AUTH_CACHE_KEY);
+
+      // Keep isLoggingOut true during transition and perform clean redirect
+      if (typeof window !== "undefined") {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        window.location.replace(redirectTo);
+      }
     } catch (err) {
       console.error("Logout error:", err);
+      if (typeof window !== "undefined") {
+        window.location.replace(redirectTo);
+      }
     }
   }, []);
 
@@ -243,6 +347,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userAvatar,
       isAuthLoading,
       isRoleReady,
+      isLoggingOut,
       userRole,
       rolePermissions,
       isSuperAdmin,
@@ -264,6 +369,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userAvatar,
       isAuthLoading,
       isRoleReady,
+      isLoggingOut,
       userRole,
       rolePermissions,
       isSuperAdmin,

@@ -33,8 +33,9 @@ import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
-import { isStudentInClass } from "@/lib/class-relations";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { isStudentInClass } from "@/lib/class-relations";
+import { autoLinkStudentWithParent } from "@/lib/parent-student-sync";
 
 // Helper to clean undefined fields before saving to Firestore
 function cleanFirestoreData<T>(obj: T): T {
@@ -123,6 +124,7 @@ export default function DataSiswaPage() {
       unsubTeachers();
     };
   }, []);
+
 
   // Determine if logged in user is Guru and their assigned Homeroom Class (Wali Kelas)
   const isGuru = userRole === "guru" || userRole === "teacher";
@@ -604,6 +606,23 @@ export default function DataSiswaPage() {
           id: newUid,
           role: "siswa"
         });
+
+        // Automatically link student with parent account (e.g. father/mother/guardian name, email, phone)
+        try {
+          const rawN = newStudentData as any;
+          await autoLinkStudentWithParent({
+            studentDocId: newUid,
+            studentUid: newUid,
+            studentName: rawN.name || rawN.fullName,
+            fatherName: rawN.fatherName || rawN.namaAyah,
+            motherName: rawN.motherName || rawN.namaIbu,
+            guardianName: rawN.guardianName || rawN.namaWali,
+            parentPhone: rawN.parentPhone || rawN.phone,
+            parentEmail: rawN.parentEmail,
+          });
+        } catch (e) {
+          console.warn("Auto-link student with parent error:", e);
+        }
       } else if (crudState.mode === "edit") {
         const original = crudState.data || {};
         const mergedData = { ...original, ...data };
@@ -761,6 +780,23 @@ export default function DataSiswaPage() {
           } catch (err) {
             console.warn("Update users collection warning:", uDocId, err);
           }
+        }
+
+        // Automatically sync with parent
+        try {
+          const rawU = userPayload as any;
+          await autoLinkStudentWithParent({
+            studentDocId: Array.from(targetStudentDocIds)[0],
+            studentUid: Array.from(targetUserDocIds)[0],
+            studentName: studentName || rawU.fullName,
+            fatherName: rawU.fatherName || rawU.namaAyah,
+            motherName: rawU.motherName || rawU.namaIbu,
+            guardianName: rawU.guardianName || rawU.namaWali,
+            parentPhone: rawU.parentPhone || rawU.phone,
+            parentEmail: rawU.parentEmail,
+          });
+        } catch (e) {
+          console.warn("Auto-link edited student error:", e);
         }
 
         // 4. Optimistically update local state immediately

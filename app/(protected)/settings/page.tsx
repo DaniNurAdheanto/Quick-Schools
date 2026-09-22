@@ -56,6 +56,7 @@ import { useToast } from "@/context/ToastContext";
 import { db, auth } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
+import { acquireCurrentLocation } from "@/lib/geolocation-service";
 import { useTimePresets, TimePreset } from "@/lib/time-presets";
 import SPPPaymentSettings from "@/components/settings/spp-payment-settings";
 import { useSchoolProfile, DEFAULT_SCHOOL_PROFILE, SchoolProfile } from "@/context/SchoolProfileContext";
@@ -755,52 +756,78 @@ export default function SettingsPage() {
     reader.readAsDataURL(file);
   };
 
-  // Detect current admin geolocation
-  const handleDetectCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = Number(pos.coords.latitude.toFixed(6));
-          const lng = Number(pos.coords.longitude.toFixed(6));
-          setProfile((prev) => ({
-            ...prev,
-            latitude: lat,
-            longitude: lng,
-          }));
-          setAttendance((prev) => ({
-            ...prev,
-            schoolCenterLat: lat,
-            schoolCenterLng: lng,
-            schoolLat: lat,
-            schoolLng: lng,
-          }));
-          if (showSuccess) showSuccess(`Titik sekolah disesuaikan dengan koordinat GPS Anda: ${lat}, ${lng}`, "Lokasi GPS Terdeteksi");
-        },
-        (err) => {
-          if (showError) showError("Gagal mengambil lokasi GPS: " + err.message, "GPS Gagal");
-        },
-        { enableHighAccuracy: true }
-      );
-    } else {
-      if (showError) showError("Geolocation tidak didukung browser Anda.", "Tidak Didukung");
+  // Detect current admin geolocation with two-tier fallback
+  const handleDetectCurrentLocation = async () => {
+    try {
+      const res = await acquireCurrentLocation();
+      const lat = res.lat;
+      const lng = res.lng;
+      setProfile((prev) => ({
+        ...prev,
+        latitude: lat,
+        longitude: lng,
+      }));
+      setAttendance((prev) => ({
+        ...prev,
+        schoolCenterLat: lat,
+        schoolCenterLng: lng,
+        schoolLat: lat,
+        schoolLng: lng,
+      }));
+      if (showSuccess) showSuccess(`Titik sekolah disesuaikan dengan koordinat GPS Anda: ${lat}, ${lng}`, "Lokasi GPS Terdeteksi");
+    } catch (err: any) {
+      const errMsg = err?.message || "Gagal mengambil lokasi GPS dari perangkat.";
+      if (showError) showError(`${errMsg} ${err?.instruction || ""}`, err?.title || "GPS Gagal");
     }
   };
 
   // Dedicated Save Handler for School Profile as Single Source of Truth
   const handleSaveProfileOnly = async () => {
     setSavingProfile(true);
+    const targetLat = Number(profile.latitude ?? attendance.schoolCenterLat ?? -6.200000);
+    const targetLng = Number(profile.longitude ?? attendance.schoolCenterLng ?? 106.816666);
+    const targetRadius = Number(profile.radiusMeters ?? attendance.geofenceRadiusMeters ?? 100);
+
     const profilePayload: SchoolProfile = {
       ...profile,
       educationalStage: profile.educationalStage || currentStage,
       vocationalPrograms: profile.vocationalPrograms || globalSchoolProfile?.vocationalPrograms || [],
-      latitude: Number(profile.latitude || attendance.schoolCenterLat || -6.200000),
-      longitude: Number(profile.longitude || attendance.schoolCenterLng || 106.816666),
-      radiusMeters: Number(profile.radiusMeters || attendance.geofenceRadiusMeters || 100),
+      latitude: targetLat,
+      longitude: targetLng,
+      radiusMeters: targetRadius,
     };
+
+    setProfile((prev) => ({ ...prev, latitude: targetLat, longitude: targetLng, radiusMeters: targetRadius }));
+    setAttendance((prev) => ({
+      ...prev,
+      schoolCenterLat: targetLat,
+      schoolCenterLng: targetLng,
+      schoolLat: targetLat,
+      schoolLng: targetLng,
+      geofenceRadiusMeters: targetRadius,
+      gpsRadiusMeter: targetRadius,
+    }));
 
     try {
       const res = await saveGlobalSchoolProfile(profilePayload);
       if (res.success) {
+        // Also ensure attendance_config in roles collection is updated
+        try {
+          await setDoc(
+            doc(db, "roles", "attendance_config"),
+            {
+              schoolCenterLat: targetLat,
+              schoolCenterLng: targetLng,
+              schoolLat: targetLat,
+              schoolLng: targetLng,
+              geofenceRadiusMeters: targetRadius,
+              gpsRadiusMeter: targetRadius,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+        } catch (e) {}
+
         if (showSuccess) showSuccess("Profil & identitas sekolah serta titik koordinat tersimpan ke database!", "Profil Berhasil Disimpan");
       } else {
         if (showError) showError(res.error || "Gagal menyimpan profil sekolah", "Error");
@@ -817,11 +844,34 @@ export default function SettingsPage() {
     if (e) e.preventDefault();
     setSavingAttendance(true);
 
+    // Prioritize coordinates from attendance (which user just modified on the map/inputs in this tab)
+    const targetLat = Number(
+      attendance.schoolCenterLat ?? 
+      attendance.schoolLat ?? 
+      profile.latitude ?? 
+      -6.200000
+    );
+    const targetLng = Number(
+      attendance.schoolCenterLng ?? 
+      attendance.schoolLng ?? 
+      profile.longitude ?? 
+      106.816666
+    );
+    const targetRadius = Number(
+      attendance.geofenceRadiusMeters ?? 
+      attendance.gpsRadiusMeter ?? 
+      profile.radiusMeters ?? 
+      100
+    );
+
     const payload = {
       ...attendance,
-      schoolCenterLat: Number(profile.latitude || attendance.schoolCenterLat || attendance.schoolLat || -6.200000),
-      schoolCenterLng: Number(profile.longitude || attendance.schoolCenterLng || attendance.schoolLng || 106.816666),
-      geofenceRadiusMeters: Number(profile.radiusMeters || attendance.geofenceRadiusMeters || attendance.gpsRadiusMeter || 100),
+      schoolCenterLat: targetLat,
+      schoolCenterLng: targetLng,
+      schoolLat: targetLat,
+      schoolLng: targetLng,
+      geofenceRadiusMeters: targetRadius,
+      gpsRadiusMeter: targetRadius,
       schoolStartTime: attendance.schoolStartTime || attendance.checkInStart || "07:00",
       lateToleranceMinutes: Number(attendance.lateToleranceMinutes || attendance.lateToleranceMin || 15),
       absentThresholdTime: attendance.absentThresholdTime || attendance.autoAbsentTime || "09:00",
@@ -830,16 +880,28 @@ export default function SettingsPage() {
       updatedBy: auth.currentUser?.email || "Admin",
     };
 
-    try {
-      // 1. Also update profile location in global store
-      await saveGlobalSchoolProfile({
-        latitude: payload.schoolCenterLat,
-        longitude: payload.schoolCenterLng,
-        radiusMeters: payload.geofenceRadiusMeters,
-      });
+    // Keep both local states in sync immediately so UI does not revert
+    setAttendance((prev) => ({
+      ...prev,
+      ...payload,
+    }));
+    setProfile((prev) => ({
+      ...prev,
+      latitude: targetLat,
+      longitude: targetLng,
+      radiusMeters: targetRadius,
+    }));
 
-      // 2. Primary allowed store in Firestore
+    try {
+      // 1. Primary allowed store in Firestore (roles/attendance_config)
       await setDoc(doc(db, "roles", "attendance_config"), payload, { merge: true });
+
+      // 2. Also update profile location in global store (roles/school_profile & settings/school_profile)
+      await saveGlobalSchoolProfile({
+        latitude: targetLat,
+        longitude: targetLng,
+        radiusMeters: targetRadius,
+      });
 
       // 3. Client-side localStorage persistence
       try {
@@ -849,6 +911,23 @@ export default function SettingsPage() {
       // 4. Background attempt to attendance_config/general
       try {
         await setDoc(doc(db, "attendance_config", "general"), payload, { merge: true });
+      } catch (e) {}
+
+      // 5. Also sync to teacher attendance config
+      try {
+        await setDoc(
+          doc(db, "roles", "teacher_attendance_config"),
+          {
+            geofenceCenter: {
+              lat: targetLat,
+              lng: targetLng,
+              radiusMeters: targetRadius,
+              address: profile.address || profile.locationAddress || "Area Utama Sekolah",
+            },
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
       } catch (e) {}
 
       if (showSuccess) showSuccess("Pengaturan absensi & geofence GPS berhasil diperbarui!", "Pengaturan Tersimpan");
@@ -868,23 +947,42 @@ export default function SettingsPage() {
   // Save All Settings Handler
   const handleSaveSettings = async () => {
     setSaving(true);
+    const targetLat = Number(
+      attendance.schoolCenterLat ?? 
+      attendance.schoolLat ?? 
+      profile.latitude ?? 
+      -6.200000
+    );
+    const targetLng = Number(
+      attendance.schoolCenterLng ?? 
+      attendance.schoolLng ?? 
+      profile.longitude ?? 
+      106.816666
+    );
+    const targetRadius = Number(
+      attendance.geofenceRadiusMeters ?? 
+      attendance.gpsRadiusMeter ?? 
+      profile.radiusMeters ?? 
+      100
+    );
+
     const profilePayload: SchoolProfile = {
       ...profile,
       educationalStage: profile.educationalStage || currentStage,
       vocationalPrograms: profile.vocationalPrograms || globalSchoolProfile?.vocationalPrograms || [],
-      latitude: Number(profile.latitude || attendance.schoolCenterLat || -6.200000),
-      longitude: Number(profile.longitude || attendance.schoolCenterLng || 106.816666),
-      radiusMeters: Number(profile.radiusMeters || attendance.geofenceRadiusMeters || 100),
+      latitude: targetLat,
+      longitude: targetLng,
+      radiusMeters: targetRadius,
     };
 
     const attendancePayload = {
       ...attendance,
-      schoolCenterLat: profilePayload.latitude,
-      schoolCenterLng: profilePayload.longitude,
-      geofenceRadiusMeters: profilePayload.radiusMeters,
-      schoolLat: profilePayload.latitude,
-      schoolLng: profilePayload.longitude,
-      gpsRadiusMeter: profilePayload.radiusMeters,
+      schoolCenterLat: targetLat,
+      schoolCenterLng: targetLng,
+      geofenceRadiusMeters: targetRadius,
+      schoolLat: targetLat,
+      schoolLng: targetLng,
+      gpsRadiusMeter: targetRadius,
       schoolStartTime: attendance.schoolStartTime || attendance.checkInStart || "07:00",
       lateToleranceMinutes: Number(attendance.lateToleranceMinutes || attendance.lateToleranceMin || 15),
       absentThresholdTime: attendance.absentThresholdTime || attendance.autoAbsentTime || "09:00",
@@ -2692,6 +2790,11 @@ export default function SettingsPage() {
                         schoolLat: lat,
                         schoolLng: lng,
                       }));
+                      setProfile((prev) => ({
+                        ...prev,
+                        latitude: lat,
+                        longitude: lng,
+                      }));
                     }}
                     height="400px"
                   />
@@ -2708,11 +2811,17 @@ export default function SettingsPage() {
                           <button
                             key={val}
                             type="button"
-                            onClick={() => setAttendance((prev) => ({
-                              ...prev,
-                              geofenceRadiusMeters: val,
-                              gpsRadiusMeter: val,
-                            }))}
+                            onClick={() => {
+                              setAttendance((prev) => ({
+                                ...prev,
+                                geofenceRadiusMeters: val,
+                                gpsRadiusMeter: val,
+                              }));
+                              setProfile((prev) => ({
+                                ...prev,
+                                radiusMeters: val,
+                              }));
+                            }}
                             className={cn(
                               "px-2.5 py-1 text-[11px] font-bold rounded-md transition-all border cursor-pointer",
                               (attendance.geofenceRadiusMeters || attendance.gpsRadiusMeter) === val
@@ -2736,6 +2845,7 @@ export default function SettingsPage() {
                         onChange={(e) => {
                           const v = Number(e.target.value);
                           setAttendance((prev) => ({ ...prev, geofenceRadiusMeters: v, gpsRadiusMeter: v }));
+                          setProfile((prev) => ({ ...prev, radiusMeters: v }));
                         }}
                         className="w-full accent-[#531FFF] cursor-pointer"
                       />
@@ -2748,6 +2858,7 @@ export default function SettingsPage() {
                           onChange={(e) => {
                             const v = Number(e.target.value);
                             setAttendance((prev) => ({ ...prev, geofenceRadiusMeters: v, gpsRadiusMeter: v }));
+                            setProfile((prev) => ({ ...prev, radiusMeters: v }));
                           }}
                           className="w-20 px-2.5 py-1.5 border border-gray-200 rounded-lg font-bold text-gray-900 text-center text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
                         />
@@ -2768,6 +2879,7 @@ export default function SettingsPage() {
                         onChange={(e) => {
                           const v = Number(e.target.value);
                           setAttendance((prev) => ({ ...prev, schoolCenterLat: v, schoolLat: v }));
+                          setProfile((prev) => ({ ...prev, latitude: v }));
                         }}
                         className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-mono text-gray-900 text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
                       />
@@ -2783,6 +2895,7 @@ export default function SettingsPage() {
                         onChange={(e) => {
                           const v = Number(e.target.value);
                           setAttendance((prev) => ({ ...prev, schoolCenterLng: v, schoolLng: v }));
+                          setProfile((prev) => ({ ...prev, longitude: v }));
                         }}
                         className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-mono text-gray-900 text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
                       />

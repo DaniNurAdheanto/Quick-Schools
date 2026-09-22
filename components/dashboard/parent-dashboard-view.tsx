@@ -35,12 +35,13 @@ import {
   Cell,
   ReferenceLine
 } from "recharts";
-import { collection, onSnapshot, doc, getDoc, query, where, getDocs } from "firebase/firestore";
+import { collection, onSnapshot, doc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { formatRupiah } from "@/lib/spp-payments";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { useAuth } from "@/context/AuthContext";
 
 export interface ParentDashboardViewProps {
   userName: string;
@@ -50,6 +51,14 @@ export interface ParentDashboardViewProps {
   currentDay: string;
 }
 
+const toSafeArray = (val: any): any[] => {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string") return val.includes(",") ? val.split(",").map(s => s.trim()).filter(Boolean) : [val.trim()];
+  if (typeof val === "object") return Object.values(val);
+  return [val];
+};
+
 export function ParentDashboardView({
   userName,
   greeting,
@@ -58,10 +67,11 @@ export function ParentDashboardView({
   currentDay
 }: ParentDashboardViewProps) {
   const { profile: schoolProfile } = useSchoolProfile();
+  const { user: authUser, userData: authUserData } = useAuth();
 
   // Current authenticated user state
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [parentData, setParentData] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(authUser || null);
+  const [parentData, setParentData] = useState<any>(authUserData || null);
 
   // Raw Database Collections
   const [studentsList, setStudentsList] = useState<any[]>([]);
@@ -90,49 +100,83 @@ export function ParentDashboardView({
     return () => clearInterval(timer);
   }, []);
 
-  // 1. Auth & Parent Identity Fetching
+  // Sync with useAuth when available
   useEffect(() => {
+    if (authUser) setCurrentUser(authUser);
+    if (authUserData) {
+      setParentData((prev: any) => ({ ...prev, ...authUserData }));
+    }
+  }, [authUser, authUserData]);
+
+  // 1. Auth & Parent Identity Realtime Fetching
+  useEffect(() => {
+    let unsubUserDoc: (() => void) | null = null;
+    let unsubParentDoc: (() => void) | null = null;
+
     const unsubAuth = onAuthStateChanged(auth, async (u) => {
       if (u) {
         setCurrentUser(u);
-        try {
-          const userSnap = await getDoc(doc(db, "users", u.uid));
-          let pData = userSnap.exists() ? userSnap.data() : {};
 
-          // Check parents collection as well (direct doc ID or userUid / email query)
-          try {
-            const parentSnap = await getDoc(doc(db, "parents", u.uid));
-            if (parentSnap.exists()) {
-              pData = { ...pData, ...parentSnap.data() };
-            } else {
-              const qUid = query(collection(db, "parents"), where("userUid", "==", u.uid));
-              const qUidSnap = await getDocs(qUid);
-              if (!qUidSnap.empty) {
-                pData = { ...pData, ...qUidSnap.docs[0].data() };
-              } else if (u.email) {
-                const qEmail = query(collection(db, "parents"), where("email", "==", u.email.toLowerCase().trim()));
-                const qEmailSnap = await getDocs(qEmail);
-                if (!qEmailSnap.empty) {
-                  pData = { ...pData, ...qEmailSnap.docs[0].data() };
-                }
-              }
-            }
-          } catch (pe) {}
+        // Realtime listener on users doc
+        unsubUserDoc = onSnapshot(doc(db, "users", u.uid), (snap) => {
+          if (snap.exists()) {
+            const uData = snap.data();
+            setParentData((prev: any) => ({
+              ...prev,
+              ...uData,
+              studentIds: toSafeArray(uData.studentIds || prev?.studentIds),
+              linkedStudentIds: toSafeArray(uData.linkedStudentIds || prev?.linkedStudentIds || uData.studentIds || prev?.studentIds),
+              studentId: uData.studentId || prev?.studentId || uData.nisn || prev?.nisn || "",
+              studentName: uData.studentName || prev?.studentName || "",
+              nisn: uData.nisn || prev?.nisn || uData.studentId || prev?.studentId || "",
+            }));
+          }
+        });
 
-          setParentData(pData);
-        } catch (e) {
-          console.error("Parent profile fetch error:", e);
-        }
+        // Realtime listener on parents doc
+        unsubParentDoc = onSnapshot(doc(db, "parents", u.uid), (snap) => {
+          if (snap.exists()) {
+            const pData = snap.data();
+            setParentData((prev: any) => ({
+              ...prev,
+              ...pData,
+              studentIds: toSafeArray(pData.studentIds || prev?.studentIds),
+              linkedStudentIds: toSafeArray(pData.linkedStudentIds || prev?.linkedStudentIds || pData.studentIds || prev?.studentIds),
+              studentId: pData.studentId || prev?.studentId || pData.nisn || prev?.nisn || "",
+              studentName: pData.studentName || prev?.studentName || "",
+              nisn: pData.nisn || prev?.nisn || pData.studentId || prev?.studentId || "",
+            }));
+          }
+        });
       }
     });
-    return () => unsubAuth();
+
+    return () => {
+      unsubAuth();
+      if (unsubUserDoc) unsubUserDoc();
+      if (unsubParentDoc) unsubParentDoc();
+    };
   }, []);
 
   // 2. Realtime Subscriptions
   useEffect(() => {
     const unsubStudents = onSnapshot(collection(db, "students"), (snap) => {
-      setStudentsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Students listener warning:", err));
+      const list = snap.docs.map(d => {
+        const data = d.data();
+        return {
+          ...data,
+          _firestoreId: d.id,
+          docId: d.id,
+          id: data.id || d.id,
+          rawId: data.id || "",
+          nisn: data.nisn || data.nis || data.id || "",
+          uid: data.uid || data.userId || ""
+        };
+      });
+      setStudentsList(list);
+    }, (err) => {
+      console.warn("Students listener warning:", err);
+    });
 
     const unsubAttendance = onSnapshot(collection(db, "attendance"), (snap) => {
       setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -174,74 +218,114 @@ export function ParentDashboardView({
     };
   }, []);
 
-  // 3. Resolve Connected Child / Children (strictly based on unique student IDs, NO name-based matching)
+  // 3. Resolve Connected Child (Strict 1-to-1 Matching)
   const connectedChildren = useMemo(() => {
     if (!studentsList || studentsList.length === 0) return [];
 
-    const parentUid = currentUser?.uid;
-    const parentEmail = (currentUser?.email || "").toLowerCase().trim();
-    const parentPhone = (parentData?.phone || currentUser?.phoneNumber || "").replace(/[^0-9]/g, "");
+    const parentUid = currentUser?.uid || authUser?.uid;
+    const parentEmail = (currentUser?.email || authUser?.email || parentData?.email || authUserData?.email || "").toLowerCase().trim();
+    const parentPhone = (parentData?.phone || authUserData?.phone || currentUser?.phoneNumber || "").replace(/[^0-9]/g, "");
+    const pParentName = (parentData?.name || authUserData?.name || parentData?.fullName || authUserData?.fullName || "").toLowerCase().trim();
+    const targetStudentName = (parentData?.studentName || authUserData?.studentName || "").toLowerCase().trim();
+    const specificStudentId = String(parentData?.studentId || authUserData?.studentId || parentData?.nisn || authUserData?.nisn || "").trim();
 
-    // Specific linked ID fields from registered parent data
-    const linkedIds = new Set<string>();
-    if (parentData?.studentId) linkedIds.add(String(parentData.studentId));
-    if (parentData?.studentIds && Array.isArray(parentData.studentIds)) {
-      parentData.studentIds.forEach((id: any) => id && linkedIds.add(String(id)));
+    // 1. First Priority: Direct parentUid match on student record
+    if (parentUid) {
+      const matchByUid = studentsList.find(s => {
+        const sParentUid = String(s.parentUid || s.parentUserId || "").trim();
+        return sParentUid && sParentUid === parentUid;
+      });
+      if (matchByUid) return [matchByUid];
     }
-    if (parentData?.linkedStudentIds && Array.isArray(parentData.linkedStudentIds)) {
-      parentData.linkedStudentIds.forEach((id: any) => id && linkedIds.add(String(id)));
+
+    // 2. Second Priority: Direct Student ID or NISN match
+    if (specificStudentId) {
+      const matchById = studentsList.find(s => {
+        const sDocId = String(s._firestoreId || s.docId || "");
+        const sId = String(s.id || "");
+        const sRawId = String(s.rawId || "");
+        const sNisn = String(s.nisn || "");
+        const sNis = String(s.nis || "");
+        const sUid = String(s.uid || "");
+        const cId = specificStudentId.toLowerCase();
+        return (
+          sDocId.toLowerCase() === cId ||
+          sId.toLowerCase() === cId ||
+          sRawId.toLowerCase() === cId ||
+          sNisn.toLowerCase() === cId ||
+          sNis.toLowerCase() === cId ||
+          sUid.toLowerCase() === cId
+        );
+      });
+      if (matchById) return [matchById];
     }
-    if (parentData?.nisn) linkedIds.add(String(parentData.nisn));
 
-    // Deduplicate students strictly by unique student ID (Map prevents any duplicate students)
-    const matchedMap = new Map<string, any>();
+    // 3. Third Priority: Exact Parent Phone match
+    if (parentPhone && parentPhone.length >= 8) {
+      const matchByPhone = studentsList.find(s => {
+        const sPhone = String(s.parentPhone || "").replace(/[^0-9]/g, "");
+        return sPhone && sPhone === parentPhone;
+      });
+      if (matchByPhone) return [matchByPhone];
+    }
 
-    studentsList.forEach(s => {
-      const sId = String(s.id || s._firestoreId || "");
-      const sNisn = String(s.nisn || "");
-      const sNis = String(s.nis || "");
-      const sUid = String(s.uid || "");
+    // 4. Fourth Priority: Exact Parent Email match
+    if (parentEmail && parentEmail.includes("@")) {
+      const matchByEmail = studentsList.find(s => {
+        const sEmail = String(s.parentEmail || "").toLowerCase().trim();
+        return sEmail && sEmail === parentEmail;
+      });
+      if (matchByEmail) return [matchByEmail];
+    }
 
-      // 1. Direct Unique Student ID or NISN match with registered linked IDs
-      const isLinkedById = Array.from(linkedIds).some(
-        lid => lid && (lid === sId || lid === sNisn || lid === sNis || lid === sUid)
-      );
-      if (isLinkedById) {
-        matchedMap.set(sId || sUid, s);
-        return;
+    // 5. Fifth Priority: Exact Student Name match
+    if (targetStudentName && targetStudentName.length >= 3) {
+      const matchByStudentName = studentsList.find(s => {
+        const sName = String(s.name || s.fullName || "").toLowerCase().trim();
+        return sName === targetStudentName;
+      });
+      if (matchByStudentName) return [matchByStudentName];
+    }
+
+    // 6. Sixth Priority: Exact Father / Mother / Guardian / Parent Name match
+    if (pParentName && pParentName.length >= 3) {
+      const matchByParentName = studentsList.find(s => {
+        const fName = String(s.fatherName || "").toLowerCase().trim();
+        const mName = String(s.motherName || "").toLowerCase().trim();
+        const gName = String(s.guardianName || "").toLowerCase().trim();
+        const sParent = String(s.parentName || "").toLowerCase().trim();
+        return (
+          (fName && fName === pParentName) ||
+          (mName && mName === pParentName) ||
+          (gName && gName === pParentName) ||
+          (sParent && sParent === pParentName)
+        );
+      });
+      if (matchByParentName) return [matchByParentName];
+    }
+
+    // 7. Fallback: Check parentData.studentIds array (take first match only)
+    const rawIds = toSafeArray(parentData?.studentIds || authUserData?.studentIds);
+    if (rawIds.length > 0) {
+      for (const rId of rawIds) {
+        const strId = String(rId).toLowerCase().trim();
+        const found = studentsList.find(s => {
+          const sDocId = String(s._firestoreId || s.docId || "").toLowerCase();
+          const sId = String(s.id || "").toLowerCase();
+          const sNisn = String(s.nisn || "").toLowerCase();
+          return sDocId === strId || sId === strId || sNisn === strId;
+        });
+        if (found) return [found];
       }
+    }
 
-      // 2. Direct parent UID match on student record
-      if (parentUid && (s.parentUid === parentUid || s.parentUserId === parentUid)) {
-        matchedMap.set(sId || sUid, s);
-        return;
-      }
-
-      // 3. Verified parent phone match (exact)
-      if (parentPhone && parentPhone.length >= 8 && s.parentPhone) {
-        const cleanSPhone = String(s.parentPhone).replace(/[^0-9]/g, "");
-        if (cleanSPhone && cleanSPhone === parentPhone) {
-          matchedMap.set(sId || sUid, s);
-          return;
-        }
-      }
-
-      // 4. Verified parent email match (exact)
-      if (parentEmail && parentEmail.includes("@") && s.parentEmail) {
-        if (String(s.parentEmail).toLowerCase().trim() === parentEmail) {
-          matchedMap.set(sId || sUid, s);
-          return;
-        }
-      }
-    });
-
-    return Array.from(matchedMap.values());
-  }, [studentsList, currentUser, parentData]);
+    return [];
+  }, [studentsList, currentUser, authUser, parentData, authUserData]);
 
   // Auto select first child if none selected yet
   useEffect(() => {
     if (connectedChildren.length > 0 && !selectedChildId) {
-      setSelectedChildId(connectedChildren[0].id);
+      setSelectedChildId(connectedChildren[0]._firestoreId || connectedChildren[0].id);
     }
   }, [connectedChildren, selectedChildId]);
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { Bell, ChevronDown, ChevronRight, Home, Calendar, User, LogOut, Loader2 } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import React, { useEffect, useState, useRef } from 'react';
 import { useAcademicYear } from "@/context/AcademicYearContext";
@@ -11,7 +11,6 @@ import { useAuth } from "@/context/AuthContext";
 
 export function Header() {
   const pathname = usePathname();
-  const router = useRouter();
   const {
     userName,
     userRole,
@@ -48,12 +47,10 @@ export function Header() {
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
-      await logout();
       setShowLogoutConfirm(false);
-      router.push("/login");
+      await logout("/login");
     } catch (error) {
       console.error("Error signing out:", error);
-    } finally {
       setIsLoggingOut(false);
     }
   };

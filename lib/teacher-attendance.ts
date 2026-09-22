@@ -213,13 +213,34 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
   });
 
   const [config, setConfig] = useState<TeacherAttendanceConfig>(() => {
+    let base = DEFAULT_TEACHER_ATTENDANCE_CONFIG;
     if (typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem(STORAGE_KEY_CONFIG);
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+          base = { ...base, ...JSON.parse(saved) };
+        }
+        const schoolSaved = localStorage.getItem("quick_schools_attendance_config");
+        if (schoolSaved) {
+          const s = JSON.parse(schoolSaved);
+          const sLat = Number(s.schoolCenterLat ?? s.schoolLat);
+          const sLng = Number(s.schoolCenterLng ?? s.schoolLng);
+          const sRadius = Number(s.geofenceRadiusMeters ?? s.gpsRadiusMeter);
+          if (!isNaN(sLat) && !isNaN(sLng) && sLat !== 0 && sLng !== 0) {
+            base = {
+              ...base,
+              geofenceCenter: {
+                ...base.geofenceCenter,
+                lat: sLat,
+                lng: sLng,
+                radiusMeters: !isNaN(sRadius) && sRadius > 0 ? sRadius : base.geofenceCenter.radiusMeters,
+              },
+            };
+          }
+        }
       } catch (e) {}
     }
-    return DEFAULT_TEACHER_ATTENDANCE_CONFIG;
+    return base;
   });
 
   const [loading, setLoading] = useState(true);
@@ -309,7 +330,24 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
       (docSnap) => {
         if (!isMounted) return;
         if (docSnap.exists()) {
-          saveConfigCache({ ...DEFAULT_TEACHER_ATTENDANCE_CONFIG, ...docSnap.data() });
+          const d = docSnap.data();
+          setConfig((prev) => {
+            const merged: TeacherAttendanceConfig = {
+              ...prev,
+              ...d,
+              geofenceCenter: {
+                ...prev.geofenceCenter,
+                ...(d.geofenceCenter || {}),
+                lat: Number(d.geofenceCenter?.lat ?? prev.geofenceCenter.lat),
+                lng: Number(d.geofenceCenter?.lng ?? prev.geofenceCenter.lng),
+                radiusMeters: Number(d.geofenceCenter?.radiusMeters ?? prev.geofenceCenter.radiusMeters),
+              },
+            };
+            try {
+              localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(merged));
+            } catch (e) {}
+            return merged;
+          });
         }
       },
       (err) => {
@@ -324,15 +362,22 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
         if (!isMounted) return;
         if (docSnap.exists()) {
           const d = docSnap.data();
-          setConfig((prev) => ({
-            ...prev,
-            geofenceCenter: {
-              ...prev.geofenceCenter,
-              lat: Number(d.schoolCenterLat ?? prev.geofenceCenter.lat),
-              lng: Number(d.schoolCenterLng ?? prev.geofenceCenter.lng),
-              radiusMeters: Number(d.geofenceRadiusMeters ?? prev.geofenceCenter.radiusMeters),
-            },
-          }));
+          setConfig((prev) => {
+            const merged: TeacherAttendanceConfig = {
+              ...prev,
+              geofenceEnabled: d.requireRadius !== undefined ? Boolean(d.requireRadius) : prev.geofenceEnabled,
+              geofenceCenter: {
+                ...prev.geofenceCenter,
+                lat: Number(d.schoolCenterLat ?? d.schoolLat ?? prev.geofenceCenter.lat),
+                lng: Number(d.schoolCenterLng ?? d.schoolLng ?? prev.geofenceCenter.lng),
+                radiusMeters: Number(d.geofenceRadiusMeters ?? d.gpsRadiusMeter ?? prev.geofenceCenter.radiusMeters),
+              },
+            };
+            try {
+              localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(merged));
+            } catch (e) {}
+            return merged;
+          });
         }
       },
       (err) => {
@@ -418,6 +463,16 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
         throw err;
       }
     }
+
+    // 3. Geofence validation: reject if teacher is outside allowed radius
+    if (config.geofenceEnabled && location && !location.inRadius) {
+      const maxRadius = config.geofenceCenter?.radiusMeters || 100;
+      const currentDist = location.distanceMeters ?? 0;
+      throw new Error(
+        `Presensi masuk (Clock In) ditolak karena Anda berada di luar radius sekolah (${currentDist}m dari titik sekolah, batas maksimal ${maxRadius}m). Silakan berada di area sekolah untuk melakukan presensi.`
+      );
+    }
+
     const timeNow = getCurrentTimeString();
     const isoNow = new Date().toISOString();
     const { status: inStatus, lateMinutes } = determineClockInStatus(

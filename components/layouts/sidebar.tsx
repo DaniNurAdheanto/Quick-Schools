@@ -25,7 +25,8 @@ import {
   PanelLeftOpen,
   UserCog,
   PenLine,
-  UserCheck
+  UserCheck,
+  Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isSuperAdminRole, isStudentRole, isParentRole } from "@/lib/roles-config";
@@ -101,7 +102,8 @@ function NavGroup({
   isCollapsed, 
   userPermissions, 
   userRole = "admin", 
-  isFooter = false 
+  isFooter = false,
+  onLogoutClick
 }: { 
   title: string; 
   items: any[]; 
@@ -109,7 +111,8 @@ function NavGroup({
   isCollapsed: boolean; 
   userPermissions: Record<string, { read: boolean; write: boolean; delete: boolean }>;
   userRole?: string;
-  isFooter?: boolean 
+  isFooter?: boolean;
+  onLogoutClick?: () => void;
 }) {
   const isSuperAdmin = isSuperAdminRole(userRole) || (userRole || "").toLowerCase() === "admin";
   const isParent = isParentRole(userRole) || (userRole || "").toLowerCase() === "orang-tua";
@@ -188,34 +191,45 @@ function NavGroup({
           if (isCollapsed) {
             return (
               <div key={item.label} className="relative flex justify-center group my-0.5">
-                <Link
-                  href={item.href}
-                  className={cn(
-                    "w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 relative cursor-pointer active:scale-95",
-                    isActive
-                      ? "bg-white text-[#531FFF] shadow-md shadow-[#531FFF]/10 border border-[#531FFF]/25 font-bold"
-                      : item.isDanger
-                        ? "text-rose-500 hover:bg-rose-50 hover:text-rose-600"
+                {item.isDanger ? (
+                  <button
+                    type="button"
+                    onClick={() => onLogoutClick?.()}
+                    className={cn(
+                      "w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 relative cursor-pointer active:scale-95 text-rose-500 hover:bg-rose-50 hover:text-rose-600"
+                    )}
+                    title={item.label}
+                  >
+                    <Icon className="w-5 h-5 transition-transform duration-200 group-hover:scale-110 text-rose-500" />
+                  </button>
+                ) : (
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      "w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 relative cursor-pointer active:scale-95",
+                      isActive
+                        ? "bg-white text-[#531FFF] shadow-md shadow-[#531FFF]/10 border border-[#531FFF]/25 font-bold"
                         : "text-[#4B5563] hover:bg-white hover:text-gray-900 hover:shadow-xs"
-                  )}
-                >
-                  {/* Left Active Accent Indicator */}
-                  {isActive && (
-                    <span className="absolute -left-2 top-2.5 bottom-2.5 w-1 bg-[#531FFF] rounded-r-full shadow-xs" />
-                  )}
+                    )}
+                  >
+                    {/* Left Active Accent Indicator */}
+                    {isActive && (
+                      <span className="absolute -left-2 top-2.5 bottom-2.5 w-1 bg-[#531FFF] rounded-r-full shadow-xs" />
+                    )}
 
-                  <Icon className={cn(
-                    "w-5 h-5 transition-transform duration-200 group-hover:scale-110",
-                    isActive ? "text-[#531FFF]" : item.isDanger ? "text-rose-500" : "text-[#4B5563]"
-                  )} />
+                    <Icon className={cn(
+                      "w-5 h-5 transition-transform duration-200 group-hover:scale-110",
+                      isActive ? "text-[#531FFF]" : "text-[#4B5563]"
+                    )} />
 
-                  {/* Notification Badge / Pill in Collapsed View */}
-                  {item.badge && (
-                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#531FFF] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-xs border-2 border-[#F9FAFB] animate-in zoom-in-75 duration-200">
-                      {item.badge > 99 ? "99+" : item.badge}
-                    </span>
-                  )}
-                </Link>
+                    {/* Notification Badge / Pill in Collapsed View */}
+                    {item.badge && (
+                      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#531FFF] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-xs border-2 border-[#F9FAFB] animate-in zoom-in-75 duration-200">
+                        {item.badge > 99 ? "99+" : item.badge}
+                      </span>
+                    )}
+                  </Link>
+                )}
 
                 {/* Instant Floating Tooltip */}
                 <div className="absolute left-[calc(100%+12px)] top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-2 px-3 py-1.5 bg-gray-900 text-white text-xs font-bold rounded-xl shadow-2xl z-50 whitespace-nowrap pointer-events-none transition-all duration-150 animate-in fade-in zoom-in-95">
@@ -233,6 +247,22 @@ function NavGroup({
           }
 
           // Expanded / Open Mode View
+          if (item.isDanger) {
+            return (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => onLogoutClick?.()}
+                className="w-[calc(100%-2rem)] mx-4 flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all relative group cursor-pointer text-rose-500 hover:text-rose-600 rounded-xl hover:bg-rose-50 font-semibold text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <Icon className="w-4 h-4 transition-colors text-rose-500" />
+                  <span className="text-[13px]">{item.label}</span>
+                </div>
+              </button>
+            );
+          }
+
           return (
             <Link
               key={item.label}
@@ -241,15 +271,13 @@ function NavGroup({
                 "flex items-center justify-between mx-4 px-3.5 py-2.5 rounded-xl transition-all relative group cursor-pointer",
                 isActive
                   ? "bg-white text-[#531FFF] rounded-xl shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] border border-gray-100 font-bold"
-                  : item.isDanger 
-                     ? "text-rose-500 hover:text-rose-600 rounded-xl hover:bg-rose-50 font-semibold" 
-                     : "text-[#4B5563] hover:bg-gray-100/80 hover:text-gray-900 rounded-xl font-semibold"
+                  : "text-[#4B5563] hover:bg-gray-100/80 hover:text-gray-900 rounded-xl font-semibold"
               )}
             >
               <div className="flex items-center gap-3">
                 <Icon className={cn(
                   "w-4 h-4 transition-colors", 
-                  isActive ? "text-[#531FFF]" : item.isDanger ? "text-rose-500" : "text-[#4B5563]"
+                  isActive ? "text-[#531FFF]" : "text-[#4B5563]"
                 )} />
                 <span className="text-[13px]">{item.label}</span>
               </div>
@@ -272,8 +300,21 @@ function NavGroup({
 export function Sidebar() {
   const pathname = usePathname();
   const { profile } = useSchoolProfile();
-  const { role, rawRole, rolePermissions, isAuthLoading, isRoleReady } = useAuth();
+  const { role, rawRole, rolePermissions, isAuthLoading, isRoleReady, logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleSidebarLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      setShowLogoutConfirm(false);
+      await logout("/login");
+    } catch (err) {
+      console.error("Sidebar logout error:", err);
+      setIsLoggingOut(false);
+    }
+  };
 
   // Derive active normalized role for navigation filtering
   const effectiveUserRole = (rawRole || role || "").toLowerCase();
@@ -398,6 +439,7 @@ export function Sidebar() {
               userPermissions={rolePermissions} 
               userRole={effectiveUserRole} 
               isFooter={true} 
+              onLogoutClick={() => setShowLogoutConfirm(true)}
             />
           </div>
         </>
@@ -437,6 +479,46 @@ export function Sidebar() {
             </button>
           )}
         </div>
+
+      {/* LOGOUT CONFIRMATION DIALOG FOR SIDEBAR */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl border border-gray-100 p-6 space-y-4 animate-in zoom-in-95 duration-200 text-left">
+            <div className="w-14 h-14 rounded-lg bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-xs">
+              <LogOut className="w-7 h-7" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg font-black text-gray-900 tracking-tight">
+                Keluar dari Sistem?
+              </h3>
+              <p className="text-xs font-medium text-gray-500 leading-relaxed">
+                Apakah Anda yakin ingin keluar dari akun Anda?
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                disabled={isLoggingOut}
+                className="flex-1 py-2.5 rounded-lg text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleSidebarLogout}
+                disabled={isLoggingOut}
+                className="flex-1 py-2.5 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
+              >
+                {isLoggingOut && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Keluar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </aside>
   );

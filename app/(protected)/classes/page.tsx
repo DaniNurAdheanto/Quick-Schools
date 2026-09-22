@@ -36,8 +36,7 @@ import {
   addDoc, 
   setDoc,
   deleteDoc, 
-  doc, 
-  writeBatch 
+  doc 
 } from "firebase/firestore";
 import { useToast } from "@/context/ToastContext";
 import { cn } from "@/lib/utils";
@@ -45,6 +44,7 @@ import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { isStudentInClass, cascadeUpdateClassRelations } from "@/lib/class-relations";
+import { useUnifiedStudents } from "@/hooks/use-unified-students";
 
 // Standard Class Presets for Quick Creation
 const STANDARD_CLASS_PRESETS = [
@@ -62,9 +62,10 @@ const STANDARD_CLASS_PRESETS = [
 
 export default function ClassesPage() {
   const [classes, setClasses] = useState<any[]>([]);
-  const [students, setStudents] = useState<any[]>([]);
+  const { students, loading: studentsLoading } = useUnifiedStudents();
   const [teachers, setTeachers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [classesLoading, setClassesLoading] = useState(true);
+  const loading = classesLoading || studentsLoading;
 
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState("");
@@ -111,32 +112,23 @@ export default function ClassesPage() {
     mode: "create"
   });
 
-  // Real-time synchronization for classes, students, and teachers
+  // Real-time synchronization for classes and teachers
   useEffect(() => {
     // 1. Classes
     const qClasses = query(collection(db, "classes"));
     const unsubClasses = onSnapshot(qClasses, (snapshot) => {
-      const cls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const cls = snapshot.docs.map(doc => ({ _firestoreId: doc.id, id: doc.id, ...doc.data() }));
       setClasses(cls);
-      setLoading(false);
+      setClassesLoading(false);
     }, (error) => {
       console.error("Classes listener error:", error);
-      setLoading(false);
+      setClassesLoading(false);
     });
 
-    // 2. Students
-    const qStudents = query(collection(db, "students"));
-    const unsubStudents = onSnapshot(qStudents, (snapshot) => {
-      const stds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setStudents(stds);
-    }, (error) => {
-      console.error("Students listener error:", error);
-    });
-
-    // 3. Teachers
+    // 2. Teachers
     const qTeachers = query(collection(db, "teachers"));
     const unsubTeachers = onSnapshot(qTeachers, (snapshot) => {
-      const tchs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const tchs = snapshot.docs.map(doc => ({ _firestoreId: doc.id, id: doc.id, ...doc.data() }));
       setTeachers(tchs);
     }, (error) => {
       console.error("Teachers listener error:", error);
@@ -144,7 +136,6 @@ export default function ClassesPage() {
     
     return () => {
       unsubClasses();
-      unsubStudents();
       unsubTeachers();
     };
   }, []);
@@ -333,24 +324,21 @@ export default function ClassesPage() {
       toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
-    if (!student?._firestoreId) return;
+    const studentId = student?._firestoreId || student?.id || student?.uid;
+    if (!studentId) return;
 
     try {
       setIsProcessingStudent(true);
-      const studentId = student._firestoreId;
       const studentName = (student.fullName || student.name || "Siswa").trim();
       const studentStatus = student.status || "Aktif";
       const payload: any = {
         id: studentId,
         name: studentName.slice(0, 100),
         classId: "-",
-        className: "-",
-        class: "-",
-        kelas: "-",
-        classDocId: "-",
         status: studentStatus,
       };
-      if (student.imageUrl) payload.imageUrl = student.imageUrl.slice(0, 500);
+      const validImg = student.imageUrl && !student.imageUrl.startsWith("data:") && student.imageUrl.length <= 500 ? student.imageUrl : undefined;
+      if (validImg) payload.imageUrl = validImg;
 
       await setDoc(doc(db, "students", studentId), payload, { merge: true });
 
@@ -384,11 +372,11 @@ export default function ClassesPage() {
       toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
-    if (!student?._firestoreId || !managingClass?.name) return;
+    const studentId = student?._firestoreId || student?.id || student?.uid;
+    if (!studentId || !managingClass?.name) return;
 
     try {
       setIsProcessingStudent(true);
-      const studentId = student._firestoreId;
       const targetClass = managingClass.name;
       const targetDocId = managingClass._firestoreId || managingClass.id || "";
       const studentName = (student.fullName || student.name || "Siswa").trim();
@@ -397,13 +385,10 @@ export default function ClassesPage() {
         id: studentId,
         name: studentName.slice(0, 100),
         classId: targetClass.slice(0, 50),
-        className: targetClass,
-        class: targetClass,
-        kelas: targetClass,
-        classDocId: targetDocId,
         status: studentStatus,
       };
-      if (student.imageUrl) payload.imageUrl = student.imageUrl.slice(0, 500);
+      const validImg = student.imageUrl && !student.imageUrl.startsWith("data:") && student.imageUrl.length <= 500 ? student.imageUrl : undefined;
+      if (validImg) payload.imageUrl = validImg;
 
       await setDoc(doc(db, "students", studentId), payload, { merge: true });
 
@@ -441,34 +426,39 @@ export default function ClassesPage() {
 
     try {
       setIsProcessingStudent(true);
-      const batch = writeBatch(db);
       const targetDocId = managingClass._firestoreId || managingClass.id || "";
+      const targetClass = managingClass.name;
 
-      selectedStudentIdsToAdd.forEach((docId) => {
-        const studentRef = doc(db, "students", docId);
-        batch.update(studentRef, {
-          classId: managingClass.name,
-          className: managingClass.name,
-          class: managingClass.name,
-          kelas: managingClass.name,
-          classDocId: targetDocId,
-          updatedAt: new Date().toISOString()
-        });
+      for (const docId of selectedStudentIdsToAdd) {
+        const studentObj = students.find(s => s._firestoreId === docId || s.id === docId || s.uid === docId);
+        const studentId = studentObj?._firestoreId || docId;
+        const studentName = (studentObj?.fullName || studentObj?.name || "Siswa").trim();
+        const studentStatus = studentObj?.status || "Aktif";
+        const validImg = studentObj?.imageUrl && !studentObj.imageUrl.startsWith("data:") && studentObj.imageUrl.length <= 500 ? studentObj.imageUrl : undefined;
 
-        const studentObj = students.find(s => s._firestoreId === docId || s.id === docId);
-        const userUid = studentObj?.uid || docId;
-        const userRef = doc(db, "users", userUid);
-        batch.update(userRef, {
-          classId: managingClass.name,
-          className: managingClass.name,
-          class: managingClass.name,
-          kelas: managingClass.name,
-          classDocId: targetDocId,
-          updatedAt: new Date().toISOString()
-        });
-      });
+        const payload: any = {
+          id: studentId,
+          name: studentName.slice(0, 100),
+          classId: targetClass.slice(0, 50),
+          status: studentStatus,
+        };
+        if (validImg) payload.imageUrl = validImg;
 
-      await batch.commit();
+        await setDoc(doc(db, "students", studentId), payload, { merge: true });
+
+        const userUid = studentObj?.uid || studentId;
+        try {
+          await setDoc(doc(db, "users", userUid), {
+            classId: targetClass,
+            className: targetClass,
+            class: targetClass,
+            kelas: targetClass,
+            classDocId: targetDocId,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        } catch (uErr) {}
+      }
+
       toast.showSuccess(`Berhasil menambahkan ${selectedStudentIdsToAdd.length} siswa ke kelas ${managingClass.name}!`, "Siswa Ditambahkan");
       setSelectedStudentIdsToAdd([]);
       setManageTab("enrolled");
@@ -507,17 +497,16 @@ export default function ClassesPage() {
       const studentName = newStudentForm.name.trim();
 
       // 1. Strictly structured for students collection
-      await setDoc(doc(db, "students", newStudentUid), {
+      const payload: any = {
         id: newStudentUid,
         name: studentName.slice(0, 100),
         classId: managingClass.name.slice(0, 50),
-        className: managingClass.name,
-        class: managingClass.name,
-        kelas: managingClass.name,
-        classDocId: targetDocId,
         status: "Aktif",
-        imageUrl: randomAvatar.slice(0, 500)
-      });
+      };
+      if (randomAvatar && randomAvatar.length <= 500) {
+        payload.imageUrl = randomAvatar.slice(0, 500);
+      }
+      await setDoc(doc(db, "students", newStudentUid), payload);
 
       // 2. Full user profile for users collection
       await setDoc(doc(db, "users", newStudentUid), {
@@ -559,11 +548,11 @@ export default function ClassesPage() {
       toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
-    if (!transferringStudent?._firestoreId || !targetClassId) return;
+    const studentId = transferringStudent?._firestoreId || transferringStudent?.id || transferringStudent?.uid;
+    if (!studentId || !targetClassId) return;
 
     try {
       setIsProcessingStudent(true);
-      const studentId = transferringStudent._firestoreId;
       const targetClassObj = classes.find(c => c.name === targetClassId || c._firestoreId === targetClassId || c.id === targetClassId);
       const resolvedTargetName = targetClassObj?.name || targetClassId;
       const targetDocId = targetClassObj?._firestoreId || targetClassObj?.id || "";
@@ -574,13 +563,10 @@ export default function ClassesPage() {
         id: studentId,
         name: studentName.slice(0, 100),
         classId: resolvedTargetName.slice(0, 50),
-        className: resolvedTargetName,
-        class: resolvedTargetName,
-        kelas: resolvedTargetName,
-        classDocId: targetDocId,
         status: studentStatus,
       };
-      if (transferringStudent.imageUrl) payload.imageUrl = transferringStudent.imageUrl.slice(0, 500);
+      const validImg = transferringStudent.imageUrl && !transferringStudent.imageUrl.startsWith("data:") && transferringStudent.imageUrl.length <= 500 ? transferringStudent.imageUrl : undefined;
+      if (validImg) payload.imageUrl = validImg;
 
       await setDoc(doc(db, "students", studentId), payload, { merge: true });
 
@@ -730,7 +716,7 @@ export default function ClassesPage() {
         status: currentUserData.status || "Aktif",
         imageUrl: currentUserData.imageUrl || "",
         isMe: true
-      });
+      } as any);
     }
 
     return list;

@@ -10,15 +10,17 @@ import {
   AlertTriangle,
   RotateCcw,
   ShieldAlert,
-  Building2,
   Map as MapIcon,
-  Eye
+  Clock,
+  MapPin,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc, getDoc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/context/ToastContext";
-import { calculateDistanceMeters, formatDistance } from "@/lib/geofence-utils";
+import { formatDistance } from "@/lib/geofence-utils";
+import { acquireCurrentLocation, type GeolocationErrorState } from "@/lib/geolocation-service";
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
 
 interface AttendanceConfig {
@@ -76,6 +78,7 @@ export function QuickAttendanceModal({
   // Geolocation state
   const [gpsLoading, setGpsLoading] = useState(true);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [gpsErrorState, setGpsErrorState] = useState<GeolocationErrorState | null>(null);
   const [locationData, setLocationData] = useState<{
     lat: number;
     lng: number;
@@ -90,6 +93,15 @@ export function QuickAttendanceModal({
 
   // Active view tab inside modal: "camera" | "map"
   const [activeTab, setActiveTab] = useState<"camera" | "map">("camera");
+
+  // Real-time live clock
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  useEffect(() => {
+    if (!isOpen) return;
+    setCurrentTime(new Date());
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, [isOpen]);
 
   // Step state: "input" | "processing" | "success"
   const [step, setStep] = useState<"input" | "processing" | "success">("input");
@@ -143,50 +155,34 @@ export function QuickAttendanceModal({
     return () => unsubConfig();
   }, [isOpen]);
 
-  // 2. Fetch high-accuracy GPS coordinates of the student
-  const refreshLocation = useCallback(() => {
+  // 2. Fetch high-accuracy GPS coordinates of the student using two-tier fallback
+  const refreshLocation = useCallback(async () => {
     setGpsLoading(true);
     setGpsError(null);
+    setGpsErrorState(null);
 
-    if (!("geolocation" in navigator)) {
-      setGpsError("Perangkat tidak mendukung GPS Geolocation.");
+    try {
+      const res = await acquireCurrentLocation(
+        config.schoolCenterLat,
+        config.schoolCenterLng,
+        config.geofenceRadiusMeters
+      );
+
+      setLocationData({
+        lat: res.lat,
+        lng: res.lng,
+        distance: res.distanceMeters,
+        inRadius: res.inRadius,
+      });
+      setGpsError(null);
+      setGpsErrorState(null);
+    } catch (err: any) {
+      console.warn("GPS Geolocation error:", err);
+      setGpsError(err?.message || "Gagal mendeteksi lokasi GPS perangkat.");
+      setGpsErrorState(err);
+    } finally {
       setGpsLoading(false);
-      return;
     }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const studentLat = Number(pos.coords.latitude.toFixed(6));
-        const studentLng = Number(pos.coords.longitude.toFixed(6));
-
-        const dist = calculateDistanceMeters(
-          studentLat,
-          studentLng,
-          config.schoolCenterLat,
-          config.schoolCenterLng
-        );
-
-        const inRadius = dist <= config.geofenceRadiusMeters;
-
-        setLocationData({
-          lat: studentLat,
-          lng: studentLng,
-          distance: dist,
-          inRadius,
-        });
-        setGpsLoading(false);
-      },
-      (err) => {
-        console.warn("GPS Geolocation error:", err);
-        setGpsError(err.message || "Gagal mendeteksi lokasi GPS perangkat.");
-        setGpsLoading(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
-    );
   }, [config.schoolCenterLat, config.schoolCenterLng, config.geofenceRadiusMeters]);
 
   useEffect(() => {
@@ -473,204 +469,119 @@ export function QuickAttendanceModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
+      <div className="fixed inset-0 bg-gray-900/65 backdrop-blur-xs transition-opacity" onClick={onClose} />
 
       {/* Modal Dialog */}
-      <div className="relative w-full max-w-xl bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200 z-10 flex flex-col max-h-[92vh]">
+      <div className="relative w-full max-w-3xl max-h-[92vh] md:max-h-[88vh] bg-white rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200 z-10 flex flex-col my-auto">
         
         {/* Header Bar */}
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-950 via-[#1E1035] to-gray-900 text-white shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#531FFF] flex items-center justify-center text-white shadow-md shadow-[#531FFF]/40">
-              <ScanFace className="w-5 h-5" />
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-950 via-[#1E1035] to-gray-900 text-white shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[#531FFF] flex items-center justify-center text-white shadow-md shadow-[#531FFF]/40">
+              <ScanFace className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-extrabold tracking-tight">Presensi Foto & Geofence GPS</h3>
-                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-extrabold rounded-full">
+                <h3 className="text-sm md:text-base font-black tracking-tight leading-tight">Presensi Absensi Siswa</h3>
+                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[9px] font-extrabold rounded-full">
                   Real-Time
                 </span>
               </div>
-              <p className="text-[11px] text-gray-300 font-medium">
-                {userName} ({studentId}) · Kelas {studentClass}
+              <p className="text-[10px] md:text-[11px] text-gray-300 font-medium truncate max-w-[200px] sm:max-w-xs">
+                {userName} ({studentId}) · {studentClass}
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
-          >
-            <XCircle className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* View Switcher Tabs (Camera vs Interactive Map) */}
-        {step === "input" && (
-          <>
-            {alreadyAttendedToday && (
-              <div className="mx-6 mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2.5 text-emerald-900">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                <div className="text-xs">
-                  <span className="font-extrabold block text-emerald-950">Sudah Absen Hari Ini</span>
-                  <span className="text-[11px] text-emerald-800 font-medium">
-                    Anda telah melakukan presensi hari ini. Tombol absensi dinonaktifkan untuk mencegah duplikasi data.
-                  </span>
-                </div>
-              </div>
-            )}
-            <div className="px-6 pt-3 bg-gray-50/70 border-b border-gray-200/80 flex items-center justify-between gap-2 shrink-0">
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveTab("camera")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-t-xl text-xs font-bold transition-all border-b-2 cursor-pointer",
-                  activeTab === "camera"
-                    ? "bg-white text-[#531FFF] border-[#531FFF] shadow-xs"
-                    : "text-gray-500 hover:text-gray-900 border-transparent"
-                )}
-              >
-                <Camera className="w-3.5 h-3.5" />
-                <span>Foto Kamera ({capturedPhoto ? "Tersedia ✅" : "Belum"})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab("map")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-t-xl text-xs font-bold transition-all border-b-2 cursor-pointer",
-                  activeTab === "map"
-                    ? "bg-white text-[#531FFF] border-[#531FFF] shadow-xs"
-                    : "text-gray-500 hover:text-gray-900 border-transparent"
-                )}
-              >
-                <MapIcon className="w-3.5 h-3.5" />
-                <span>Peta Radius Sekolah ({formatDistance(locationData.distance)})</span>
-              </button>
-            </div>
-
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-white/10 text-cyan-300 border border-white/20">
+              <Clock className="w-3 h-3 text-cyan-400" />
+              <span>{currentTime.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB</span>
+            </span>
             <button
               type="button"
-              onClick={refreshLocation}
-              disabled={gpsLoading}
-              className="text-[11px] text-[#531FFF] hover:text-[#4317CC] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50 py-1"
-              title="Refresh sinyal GPS"
+              onClick={onClose}
+              className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
             >
-              <RefreshCw className={cn("w-3 h-3", gpsLoading && "animate-spin")} />
-              <span>Refresh GPS</span>
+              <X className="w-5 h-5" />
             </button>
           </div>
-        </>
-      )}
+        </div>
 
-        {/* Modal Body Container */}
-        <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
+        {/* Already Attended Banner (if applicable) */}
+        {alreadyAttendedToday && step === "input" && (
+          <div className="mx-4 mt-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-xs text-emerald-900 shrink-0">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <div className="text-[11px] leading-tight">
+              <span className="font-extrabold text-emerald-950">Sudah Absen Hari Ini: </span>
+              <span className="text-emerald-800">Presensi hanya dilakukan 1x per hari. Tombol absensi dinonaktifkan.</span>
+            </div>
+          </div>
+        )}
 
-          {/* ------------------------------------------------------------- */}
-          {/* STEP 1: INPUT MODE (Camera & GPS Live Verification)           */}
-          {/* ------------------------------------------------------------- */}
+        {/* Modal Body */}
+        <div className="p-4 md:p-5 overflow-y-auto flex-1">
           {step === "input" && (
-            <>
-              {/* GPS Geofence Status Card Banner */}
-              <div className={cn(
-                "p-3.5 rounded-lg border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs",
-                gpsLoading
-                  ? "bg-gray-50 border-gray-200 text-gray-700"
-                  : locationData.inRadius
-                    ? "bg-emerald-50/90 border-emerald-200 text-emerald-900"
-                    : "bg-rose-50 border-rose-200 text-rose-900"
-              )}>
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-10 h-10 rounded-lg flex items-center justify-center shrink-0 border shadow-xs",
-                    gpsLoading
-                      ? "bg-gray-100 border-gray-300 text-gray-500"
-                      : locationData.inRadius
-                        ? "bg-emerald-100 border-emerald-300 text-emerald-700"
-                        : "bg-rose-100 border-rose-300 text-rose-700"
-                  )}>
-                    {gpsLoading ? (
-                      <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />
-                    ) : locationData.inRadius ? (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                    ) : (
-                      <AlertTriangle className="w-5 h-5 text-rose-600" />
-                    )}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch">
+              {/* Left Column: Camera / Map Viewport */}
+              <div className="md:col-span-6 flex flex-col justify-between space-y-2">
+                {/* Switcher & Badges */}
+                <div className="flex items-center justify-between">
+                  {/* View tabs pills */}
+                  <div className="flex items-center p-0.5 bg-gray-100 rounded-lg border border-gray-200/60">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("camera")}
+                      className={cn(
+                        "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-extrabold transition-all cursor-pointer",
+                        activeTab === "camera"
+                          ? "bg-white text-[#531FFF] shadow-xs"
+                          : "text-gray-500 hover:text-gray-900"
+                      )}
+                    >
+                      <Camera className="w-3 h-3" />
+                      <span>Kamera</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("map")}
+                      className={cn(
+                        "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-extrabold transition-all cursor-pointer",
+                        activeTab === "map"
+                          ? "bg-white text-[#531FFF] shadow-xs"
+                          : "text-gray-500 hover:text-gray-900"
+                      )}
+                    >
+                      <MapIcon className="w-3 h-3" />
+                      <span>Peta Radius</span>
+                    </button>
                   </div>
 
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-extrabold text-xs sm:text-sm">
-                        {gpsLoading ? (
-                          "Mencari titik koordinat GPS saat ini..."
-                        ) : locationData.inRadius ? (
-                          "Di Dalam Radius Absensi Sekolah"
-                        ) : (
-                          "Di Luar Radius Absensi Sekolah"
-                        )}
-                      </p>
-                      <span className={cn(
-                        "px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border",
-                        locationData.inRadius
-                          ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                          : "bg-rose-100 text-rose-800 border-rose-300"
-                      )}>
-                        {locationData.inRadius ? "Valid 🟢" : "Tidak Valid 🔴"}
+                  {/* Camera status badge */}
+                  {activeTab === "camera" ? (
+                    capturedPhoto ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Foto Siap 🟢
                       </span>
-                    </div>
-
-                    <p className="text-xs mt-0.5 text-gray-600">
-                      Jarak GPS Anda:{" "}
-                      <span className="font-bold text-gray-900">{formatDistance(locationData.distance)}</span>{" "}
-                      (Batas toleransi radius: <span className="font-bold text-gray-900">{config.geofenceRadiusMeters}m</span>)
-                    </p>
-                  </div>
-                </div>
-
-                {!locationData.inRadius && !gpsLoading && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("map")}
-                    className="text-[11px] font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg border border-rose-300 transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>Lihat di Peta</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Warning Alert if GPS error or outside radius */}
-              {gpsError && (
-                <div className="p-3 bg-amber-500/10 border border-amber-300/80 rounded-lg flex items-start gap-2.5 text-xs text-amber-900 animate-in fade-in">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold block">Kendala Sinyal GPS</span>
-                    <span>{gpsError}. Pastikan izin lokasi aktif pada peramban/HP Anda.</span>
-                  </div>
-                </div>
-              )}
-
-              {!locationData.inRadius && !gpsLoading && (
-                <div className="p-3 bg-rose-500/10 border border-rose-300/80 rounded-lg flex items-start gap-2.5 text-xs text-rose-800 animate-in fade-in">
-                  <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold block">Peringatan: Verifikasi Lokasi Gagal</span>
-                    <span>
-                      Anda terdeteksi berjarak <strong>{formatDistance(locationData.distance)}</strong> dari titik sekolah ({locationData.distance - config.geofenceRadiusMeters}m di luar batas radius). Absensi tidak dapat dicatat sampai Anda berada di area sekolah.
+                    ) : cameraActive ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>Kamera Aktif</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-medium text-gray-400">Kamera Belum Aktif</span>
+                    )
+                  ) : (
+                    <span className="text-[10px] font-bold text-[#531FFF] bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-md">
+                      Radius {config.geofenceRadiusMeters}m
                     </span>
-                  </div>
+                  )}
                 </div>
-              )}
 
-              {/* TAB CONTENT: CAMERA VIEW */}
-              {activeTab === "camera" && (
-                <div className="space-y-4">
-                  {/* Video / Photo Frame Box */}
-                  <div className="relative aspect-[4/3] w-full rounded-lg overflow-hidden bg-gray-950 border-2 border-[#531FFF]/40 shadow-xl flex items-center justify-center">
-                    
-                    {/* Live Video Element */}
+                {/* Viewport Box (Camera or Map) */}
+                {activeTab === "camera" ? (
+                  <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden bg-slate-950 border border-gray-200 shadow-inner flex items-center justify-center">
+                    {/* Live Video */}
                     {!capturedPhoto && (
                       <video
                         ref={videoRef}
@@ -692,57 +603,55 @@ export function QuickAttendanceModal({
 
                     {/* Captured Photo Preview */}
                     {capturedPhoto && (
-                      <div className="relative w-full h-full">
+                      <div className="relative w-full h-full flex items-center justify-center bg-black">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={capturedPhoto}
                           alt="Foto Absensi"
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute top-3 left-3 bg-emerald-600 text-white px-3 py-1 rounded-lg text-xs font-bold shadow-md flex items-center gap-1.5 backdrop-blur-md">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Foto Siap Digunakan</span>
+                        <div className="absolute top-2.5 right-2.5 z-10">
+                          <button
+                            type="button"
+                            onClick={handleRetakePhoto}
+                            className="px-2.5 py-1 bg-black/75 hover:bg-black/90 text-white rounded-lg text-[11px] font-bold flex items-center gap-1.5 backdrop-blur-xs transition-colors cursor-pointer"
+                          >
+                            <RotateCcw className="w-3 h-3 text-emerald-400" />
+                            <span>Ambil Ulang</span>
+                          </button>
                         </div>
                       </div>
                     )}
 
                     {/* Inactive / Camera Error Fallback */}
                     {!cameraActive && !capturedPhoto && (
-                      <div className="absolute inset-0 bg-gradient-to-b from-gray-900 via-[#1E1035] to-gray-950 flex flex-col items-center justify-center p-6 text-center text-white">
-                        <div className="w-20 h-20 rounded-full border-4 border-[#531FFF]/50 flex items-center justify-center bg-[#531FFF]/10 shadow-2xl mb-3">
-                          <ScanFace className="w-10 h-10 text-[#531FFF] animate-pulse" />
+                      <div className="absolute inset-0 bg-gradient-to-b from-gray-900 via-[#1E1035] to-gray-950 flex flex-col items-center justify-center p-4 text-center text-white">
+                        <div className="w-12 h-12 rounded-2xl border-2 border-[#531FFF]/50 flex items-center justify-center bg-[#531FFF]/10 shadow-lg mb-2">
+                          <ScanFace className="w-6 h-6 text-[#531FFF] animate-pulse" />
                         </div>
-                        <h4 className="font-extrabold text-sm mb-1">Kamera Belum Aktif</h4>
-                        <p className="text-xs text-gray-400 max-w-xs mb-4">
-                          {cameraError || "Aktifkan kamera live untuk mengambil foto wajah absensi."}
+                        <h4 className="font-extrabold text-xs mb-0.5">Kamera Belum Aktif</h4>
+                        <p className="text-[10px] text-gray-400 max-w-xs mb-3 leading-tight">
+                          {cameraError || "Aktifkan kamera live untuk mengambil foto wajah presensi siswa."}
                         </p>
 
-                        <div className="flex flex-wrap items-center justify-center gap-2.5">
+                        <div className="flex flex-wrap items-center justify-center gap-2">
                           <button
                             type="button"
                             onClick={startCamera}
-                            className="px-4 py-2.5 bg-[#531FFF] hover:bg-[#4317CC] text-white rounded-lg text-xs font-bold shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                            className="px-3 py-1.5 bg-[#531FFF] hover:bg-[#4317CC] text-white rounded-lg text-xs font-bold shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                           >
-                            <Camera className="w-4 h-4" />
-                            <span>Aktifkan Kamera Live</span>
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>Aktifkan Kamera</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border border-white/20"
+                            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-white/20"
                           >
-                            <Camera className="w-4 h-4" />
-                            <span>Buka Kamera HP</span>
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>Kamera HP</span>
                           </button>
-                          <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            capture="user"
-                            onChange={handleFileUpload}
-                            className="hidden"
-                          />
                         </div>
                       </div>
                     )}
@@ -750,142 +659,224 @@ export function QuickAttendanceModal({
                     {/* HUD Bounding Box Overlay (while camera is live) */}
                     {!capturedPhoto && cameraActive && (
                       <>
-                        <div className="absolute inset-8 border-2 border-dashed border-cyan-400/60 rounded-xl pointer-events-none flex flex-col justify-between p-3">
-                          <div className="flex justify-between">
-                            <div className="w-6 h-6 border-t-4 border-l-4 border-cyan-400 rounded-tl-lg" />
-                            <div className="w-6 h-6 border-t-4 border-r-4 border-cyan-400 rounded-tr-lg" />
-                          </div>
-
-                          <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_#22d3ee] animate-bounce" />
-
-                          <div className="flex justify-between">
-                            <div className="w-6 h-6 border-b-4 border-l-4 border-cyan-400 rounded-bl-lg" />
-                            <div className="w-6 h-6 border-b-4 border-r-4 border-cyan-400 rounded-br-lg" />
+                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                          <div className="w-36 h-44 sm:w-40 sm:h-48 border-2 border-dashed border-cyan-400/70 rounded-2xl relative flex items-center justify-center">
+                            <div className="absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 border-cyan-400" />
+                            <div className="absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 border-cyan-400" />
+                            <div className="absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 border-cyan-400" />
+                            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 border-cyan-400" />
+                            <ScanFace className="w-7 h-7 text-cyan-400/40" />
                           </div>
                         </div>
 
-                        {/* Top Overlay Badges */}
-                        <div className="absolute top-3 inset-x-3 flex items-center justify-between pointer-events-none">
-                          <span className="px-2.5 py-1 bg-black/70 text-cyan-300 rounded-md backdrop-blur-md text-[10px] font-mono font-bold flex items-center gap-1.5 shadow-md">
-                            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                            KAMERA LIVE AKTIF
-                          </span>
-
-                          <span className="px-2.5 py-1 bg-black/70 text-white rounded-md backdrop-blur-md text-[10px] font-bold shadow-md">
-                            {locationData.inRadius ? "🟢 GEOFENCE VALID" : "🔴 LUAR RADIUS"}
-                          </span>
-                        </div>
-
-                        {/* Bottom Instructions */}
-                        <div className="absolute bottom-3 inset-x-3 bg-gray-950/80 backdrop-blur-md p-2 rounded-lg text-center text-white text-[11px] font-semibold border border-white/10">
-                          Posisikan wajah di tengah bingkai, lalu tekan tombol Ambil Foto di bawah.
+                        {/* Floating Shutter Button inside camera */}
+                        <div className="absolute bottom-2.5 inset-x-0 flex items-center justify-center px-4 z-10">
+                          <button
+                            type="button"
+                            onClick={handleCapturePhoto}
+                            className="px-4 py-2 bg-gradient-to-r from-[#531FFF] via-[#6E3BFF] to-[#8F94FB] text-white font-extrabold text-xs rounded-xl shadow-lg shadow-[#531FFF]/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>Ambil Foto Absensi</span>
+                          </button>
                         </div>
                       </>
                     )}
                   </div>
+                ) : (
+                  /* Map view */
+                  <div className="w-full rounded-2xl overflow-hidden border border-gray-200 bg-gray-50 flex flex-col">
+                    <AttendanceGeofenceMap
+                      centerLat={config.schoolCenterLat}
+                      centerLng={config.schoolCenterLng}
+                      radius={config.geofenceRadiusMeters}
+                      interactive={false}
+                      studentLocation={{
+                        lat: locationData.lat,
+                        lng: locationData.lng,
+                        distance: locationData.distance,
+                        inRadius: locationData.inRadius,
+                        label: `Posisi (${userName})`,
+                      }}
+                      height="230px"
+                    />
+                    <div className="p-2 bg-gray-50 border-t border-gray-200 flex items-center justify-between text-[10px] text-gray-600">
+                      <span>Radius: {config.geofenceRadiusMeters}m</span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("camera")}
+                        className="text-[#531FFF] font-bold hover:underline"
+                      >
+                        Kembali ke Kamera
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-                  {/* Camera Control Action Buttons */}
-                  <div className="flex items-center gap-3">
-                    {!capturedPhoto && cameraActive ? (
-                      <button
-                        type="button"
-                        onClick={handleCapturePhoto}
-                        className="flex-1 py-3.5 bg-gradient-to-r from-[#531FFF] via-[#6E3BFF] to-[#8F94FB] text-white rounded-lg font-extrabold text-sm shadow-lg shadow-[#531FFF]/25 hover:shadow-[#531FFF]/40 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer border border-white/20"
-                      >
-                        <Camera className="w-5 h-5" />
-                        <span>Ambil Foto Absensi Sekarang</span>
-                      </button>
-                    ) : capturedPhoto ? (
-                      <button
-                        type="button"
-                        onClick={handleRetakePhoto}
-                        className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer border border-gray-300"
-                      >
-                        <RotateCcw className="w-4 h-4 text-gray-600" />
-                        <span>Foto Ulang / Ganti Foto</span>
-                      </button>
-                    ) : null}
+                {/* Sub-bar Helper */}
+                <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
+                  <span>Posisikan wajah di tengah bingkai</span>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-[#531FFF] hover:underline font-semibold cursor-pointer"
+                  >
+                    Unggah dari HP / Galeri
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="user"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+
+              {/* Right Column: Details, Geofence, & Actions */}
+              <div className="md:col-span-6 flex flex-col justify-between space-y-2.5">
+                {/* Identity & Shift Bar */}
+                <div className="p-2.5 bg-gray-50/90 rounded-xl border border-gray-200/60 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-[9px] text-gray-400 uppercase font-extrabold block">Data Siswa</span>
+                    <strong className="text-gray-900 truncate block text-xs">{userName}</strong>
+                    <span className="text-[10px] text-gray-500">NISN: {studentId} · Kelas {studentClass}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[9px] text-gray-400 uppercase font-extrabold block">Waktu Presensi</span>
+                    <strong className="font-mono text-emerald-700 font-black block text-xs">
+                      {currentTime.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} WIB
+                    </strong>
+                    <span className="text-[10px] text-gray-500">Masuk: {config.schoolStartTime} WIB</span>
                   </div>
                 </div>
-              )}
 
-              {/* TAB CONTENT: INTERACTIVE MAP VIEW */}
-              {activeTab === "map" && (
-                <div className="space-y-3">
-                  <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <Building2 className="w-4 h-4 text-[#531FFF]" />
-                      <span>
-                        Pusat Sekolah: <strong>{config.schoolCenterLat.toFixed(5)}, {config.schoolCenterLng.toFixed(5)}</strong>
-                      </span>
+                {/* Geofence & GPS Verification Box */}
+                <div className="p-2.5 bg-gray-50/90 rounded-xl border border-gray-200/60 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-[#531FFF]" />
+                      <span className="font-bold text-gray-800 text-[11px]">Radius & Titik GPS Sekolah</span>
                     </div>
-                    <span className="font-bold text-[#531FFF] bg-purple-100 px-2.5 py-1 rounded-md">
-                      Radius: {config.geofenceRadiusMeters}m
+                    <button
+                      type="button"
+                      onClick={refreshLocation}
+                      disabled={gpsLoading}
+                      className="text-[10px] text-[#531FFF] hover:underline flex items-center gap-1 font-bold cursor-pointer"
+                    >
+                      <RefreshCw className={cn("w-3 h-3", gpsLoading && "animate-spin")} />
+                      <span>{gpsLoading ? "Mengecek..." : "Perbarui GPS"}</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-gray-200/50">
+                    <span className="text-gray-600">
+                      Jarak GPS: <strong className="text-gray-900">{formatDistance(locationData.distance)}</strong>{" "}
+                      <span className="text-gray-400 text-[10px]">(Maks {config.geofenceRadiusMeters}m)</span>
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[10px] font-bold px-2 py-0.5 rounded-full border",
+                        locationData.inRadius
+                          ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                          : "bg-rose-100 text-rose-800 border-rose-200"
+                      )}
+                    >
+                      {locationData.inRadius ? "Dalam Radius 🟢" : "Di Luar Radius 🔴"}
                     </span>
                   </div>
 
-                  <AttendanceGeofenceMap
-                    centerLat={config.schoolCenterLat}
-                    centerLng={config.schoolCenterLng}
-                    radius={config.geofenceRadiusMeters}
-                    interactive={false}
-                    studentLocation={{
-                      lat: locationData.lat,
-                      lng: locationData.lng,
-                      distance: locationData.distance,
-                      inRadius: locationData.inRadius,
-                      label: `Posisi Anda (${userName})`,
-                    }}
-                    height="320px"
-                  />
-                  <p className="text-[11px] text-gray-500 text-center font-medium">
-                    Peta menampilkan posisi real-time Anda terhadap batas lingkaran radius sekolah ({config.geofenceRadiusMeters}m).
+                  <p className="text-[10px] text-gray-400 font-mono">
+                    GPS: {locationData.lat.toFixed(5)}, {locationData.lng.toFixed(5)}
                   </p>
-                </div>
-              )}
 
-              {/* Final Submit / Recording Button */}
-              <div className="pt-2 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={handleSubmitAttendance}
-                  disabled={!canSubmit}
-                  className={cn(
-                    "w-full py-4 rounded-lg font-extrabold text-sm transition-all flex items-center justify-center gap-2.5 shadow-lg",
-                    canSubmit
-                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/30 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
-                      : "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none"
-                  )}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                      <span>Memverifikasi & Menyimpan Absensi...</span>
-                    </>
-                  ) : alreadyAttendedToday ? (
-                    <>
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                      <span>Sudah Absen Hari Ini (Presensi Nonaktif)</span>
-                    </>
-                  ) : !capturedPhoto ? (
-                    <>
-                      <Camera className="w-5 h-5 text-gray-400" />
-                      <span>1. Silakan Ambil Foto Terlebih Dahulu</span>
-                    </>
-                  ) : !locationData.inRadius ? (
-                    <>
-                      <XCircle className="w-5 h-5 text-rose-500" />
-                      <span>2. Tidak Dapat Absen (Di Luar Radius Sekolah)</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-5 h-5 text-emerald-300" />
-                      <span>Kirim & Catat Absensi Sekarang</span>
-                    </>
-                  )}
-                </button>
+                  {/* Warning Alert if GPS error */}
+                  {gpsErrorState ? (
+                    <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] space-y-1">
+                      <div className="flex items-start gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold text-amber-900 text-[10px]">{gpsErrorState.title}</p>
+                          <p className="text-[10px] text-amber-800">{gpsErrorState.message}</p>
+                        </div>
+                      </div>
+                      <div className="pt-0.5 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={refreshLocation}
+                          disabled={gpsLoading}
+                          className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[9px] font-bold transition-colors cursor-pointer"
+                        >
+                          Coba Lagi
+                        </button>
+                      </div>
+                    </div>
+                  ) : gpsError ? (
+                    <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-900">
+                      Kendala GPS: {gpsError}. Pastikan izin lokasi aktif.
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Outside Radius Alert */}
+                {!locationData.inRadius && !gpsLoading && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800 animate-in fade-in">
+                    <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <span className="font-bold block text-rose-900 text-[11px]">
+                        Lokasi di Luar Jangkauan Sekolah
+                      </span>
+                      <p className="text-rose-800 text-[10px] leading-snug">
+                        Anda berjarak <strong>{formatDistance(locationData.distance)}</strong> ({Math.max(0, locationData.distance - config.geofenceRadiusMeters)}m di luar batas radius {config.geofenceRadiusMeters}m). Tombol absensi dinonaktifkan.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Final Submit Button */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleSubmitAttendance}
+                    disabled={!canSubmit}
+                    className={cn(
+                      "w-full py-3 px-4 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-2 shadow-md",
+                      canSubmit
+                        ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/30 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                        : "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none border border-gray-300"
+                    )}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Memverifikasi & Menyimpan...</span>
+                      </>
+                    ) : alreadyAttendedToday ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>Sudah Absen Hari Ini (Presensi Nonaktif)</span>
+                      </>
+                    ) : !capturedPhoto ? (
+                      <>
+                        <Camera className="w-4 h-4 text-gray-400" />
+                        <span>1. Silakan Ambil Foto Terlebih Dahulu</span>
+                      </>
+                    ) : !locationData.inRadius ? (
+                      <>
+                        <XCircle className="w-4 h-4 text-rose-500" />
+                        <span>2. Tidak Dapat Absen (Di Luar Radius)</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                        <span>Kirim & Catat Absensi Sekarang</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-            </>
+            </div>
           )}
 
           {/* ------------------------------------------------------------- */}
