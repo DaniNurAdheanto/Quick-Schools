@@ -47,6 +47,7 @@ import {
 import { db } from "@/lib/firebase";
 import { useToast } from "@/context/ToastContext";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { isTeacherAssignedToSubject, getSubjectsForTeacher } from "@/lib/subject-teacher-relations";
@@ -69,6 +70,7 @@ export default function GradesPage() {
   // Firestore Realtime Collections
   const [grades, setGrades] = useState<any[]>([]);
   const { students, getStudentByIdOrName } = useUnifiedStudents();
+  const { teachers: unifiedTeachers } = useUnifiedTeachers();
   const [classes, setClasses] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
@@ -449,10 +451,6 @@ export default function GradesPage() {
       setSubjects(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
     });
 
-    const unsubTeachers = onSnapshot(collection(db, "teachers"), (snap) => {
-      setTeachers(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
-    });
-
     const unsubSchedules = onSnapshot(collection(db, "schedules"), (snap) => {
       setSchedules(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
     });
@@ -475,11 +473,14 @@ export default function GradesPage() {
       unsubGrades();
       unsubClasses();
       unsubSubjects();
-      unsubTeachers();
       unsubSchedules();
       unsubSettings();
     };
   }, []);
+
+  useEffect(() => {
+    setTeachers(unifiedTeachers);
+  }, [unifiedTeachers]);
 
   // Synchronize KKM from subject / settings set by Super Admin
   useEffect(() => {

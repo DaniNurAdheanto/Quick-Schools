@@ -978,19 +978,10 @@ export default function StudentOnboardingPage() {
         createdAt: new Date().toISOString()
       });
 
-      // 5. Save to `students` collection across all matching document IDs (strictly formatted to adhere to schema)
+      // 5. Save to `students` collection across all matching document IDs (eliminates orphaned pending records)
       for (const sId of docIdsToUpdate) {
         try {
-          const compactStudentPayload: any = {
-            id: sId,
-            name: finalFullName.slice(0, 100),
-            classId: (resolvedClass || "10 IPA 1").slice(0, 50),
-            status: "Aktif",
-          };
-          if (finalPhotoUrl && !finalPhotoUrl.startsWith("data:") && finalPhotoUrl.length <= 500) {
-            compactStudentPayload.imageUrl = finalPhotoUrl;
-          }
-          await setDoc(doc(db, "students", sId), compactStudentPayload, { merge: true });
+          await setDoc(doc(db, "students", sId), unifiedStudentPayload, { merge: true });
         } catch (errStudents) {
           console.warn(`Could not save student doc ${sId}:`, errStudents);
         }

@@ -30,6 +30,7 @@ import { db, storage } from "@/lib/firebase";
 import { collection, query, onSnapshot, setDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
@@ -104,6 +105,7 @@ export default function DataSiswaPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const { students, setStudents, loading, rawStudents, rawUsers } = useUnifiedStudents();
   const [classes, setClasses] = useState<any[]>([]);
+  const { teachers: unifiedTeachers } = useUnifiedTeachers();
   const [teachers, setTeachers] = useState<any[]>([]);
   const [cleaning, setCleaning] = useState(false);
 
@@ -114,16 +116,8 @@ export default function DataSiswaPage() {
   const userRole = rawR === "teacher" ? "guru" : rawR;
 
   useEffect(() => {
-    const unsubTeachers = onSnapshot(collection(db, "teachers"), (snap) => {
-      setTeachers(snap.docs.map(d => ({ _firestoreId: d.id, ...d.data() })));
-    }, (err) => {
-      console.error("Fetch teachers error:", err);
-    });
-
-    return () => {
-      unsubTeachers();
-    };
-  }, []);
+    setTeachers(unifiedTeachers);
+  }, [unifiedTeachers]);
 
 
   // Determine if logged in user is Guru and their assigned Homeroom Class (Wali Kelas)

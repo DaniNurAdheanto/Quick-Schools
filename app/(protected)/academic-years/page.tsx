@@ -13,11 +13,13 @@ import { useAcademicYear } from "@/context/AcademicYearContext";
 import { AlertBox, AlertType } from "@/components/ui/alert-box";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
+import { useUnifiedStudents } from "@/hooks/use-unified-students";
 
 export default function AcademicYearsPage() {
   const { activeAcademicYear, activeSemester, setActiveAcademicYear, setActiveSemester } = useAcademicYear();
   const { role: authRole, rawRole: authRawRole, isAuthLoading, isRoleReady } = useAuth();
 
+  const { students: unifiedStudents } = useUnifiedStudents();
   const [students, setStudents] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [dbYears, setDbYears] = useState<any[]>([]);
@@ -53,20 +55,19 @@ export default function AcademicYearsPage() {
       setDbYears(list);
     });
 
-    const unsubStudents = onSnapshot(collection(db, "students"), (snap) => {
-      setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
     const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
       setClasses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
     return () => {
       unsubYears();
-      unsubStudents();
       unsubClasses();
     };
   }, []);
+
+  useEffect(() => {
+    setStudents(unifiedStudents);
+  }, [unifiedStudents]);
 
   // Combined Academic Years list with fallbacks
   const yearsList = useMemo(() => {

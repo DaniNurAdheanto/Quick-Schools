@@ -124,6 +124,10 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
     }
+    match /subject_groups/{groupId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
     match /calendar_events/{eventId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();

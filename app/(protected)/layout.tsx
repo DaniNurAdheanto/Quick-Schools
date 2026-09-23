@@ -10,6 +10,7 @@ import { ShieldAlert, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { AuthRequiredState } from "@/components/ui/auth-required-state";
 import { LogoutLoadingState } from "@/components/ui/logout-loading-state";
+import { IdleTimeoutManager } from "@/components/auth/idle-timeout-manager";
 
 function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
   const { user, isAuthLoading, isLoggingOut, role, isSuperAdmin, isStudent, isParent } = useAuth();
@@ -224,6 +225,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   return (
     <AuthProvider>
       <AcademicYearProvider>
+        <IdleTimeoutManager />
         <ProtectedContentGuard>{children}</ProtectedContentGuard>
       </AcademicYearProvider>
     </AuthProvider>

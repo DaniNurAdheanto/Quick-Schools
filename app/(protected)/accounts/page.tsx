@@ -42,13 +42,14 @@ import {
   setDoc, 
   query,
   getDocs,
-  where,
-  addDoc
+  where
 } from "firebase/firestore";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { useToast } from "@/context/ToastContext";
 import { syncParentWithStudents } from "@/lib/parent-student-sync";
+import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { syncStudentRecord, syncTeacherRecord } from "@/lib/unified-sync-service";
 
 interface AccountUser {
   id: string; // doc ID
@@ -58,16 +59,12 @@ interface AccountUser {
   role: string;
   status: "Aktif" | "Nonaktif" | "Belum Onboarding" | string;
   onboardingCompleted?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-  phone?: string;
-  pendingOnboardingReminder?: boolean;
-  reminderSentAt?: string | null;
-  studentId?: string;
-  studentName?: string;
-  studentIds?: string[];
-  nisn?: string;
   nip?: string;
+  nisn?: string;
+  className?: string;
+  classId?: string;
+  subject?: string;
+  [key: string]: any;
 }
 
 const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; border: string; icon: any }> = {
@@ -108,22 +105,23 @@ export default function AccountManagementPage() {
   const [formStatus, setFormStatus] = useState("Aktif");
   const [formNip, setFormNip] = useState("");
   const [formSubject, setFormSubject] = useState("");
+  const [formClass, setFormClass] = useState("");
   const [formStudentName, setFormStudentName] = useState("");
   const [formStudentId, setFormStudentId] = useState("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
   const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false);
-  const [studentsList, setStudentsList] = useState<any[]>([]);
+  const [classesList, setClassesList] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Subscribe to students collection for interactive linking
+  // Unified students collection for interactive linking
+  const { students: studentsList } = useUnifiedStudents();
+
+  // Subscribe to classes for dynamic class selection
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "students"), (snap) => {
-      setStudentsList(snap.docs.map(d => {
-        const data = d.data();
-        return { ...data, _firestoreId: d.id, id: d.id, rawId: data.id };
-      }));
-    }, (err) => console.warn("Students listener error:", err));
+    const unsub = onSnapshot(collection(db, "classes"), (snap) => {
+      setClassesList(snap.docs.map(d => ({ _firestoreId: d.id, id: d.id, ...d.data() })));
+    });
     return () => unsub();
   }, []);
 
@@ -312,22 +310,21 @@ export default function AccountManagementPage() {
         updatedAt: new Date().toISOString()
       });
 
-      // Also update matching student document if any
-      try {
-        const studentSnap = await getDocs(query(collection(db, "students"), where("uid", "==", user.uid)));
-        for (const stDoc of studentSnap.docs) {
-          await updateDoc(doc(db, "students", stDoc.id), { status: nextStatus });
-        }
-      } catch (e) {}
-
-      // Also update matching teacher document if role is guru
-      if (user.role === "guru") {
-        try {
-          const teacherSnap = await getDocs(query(collection(db, "teachers"), where("uid", "==", user.uid)));
-          for (const tDoc of teacherSnap.docs) {
-            await updateDoc(doc(db, "teachers", tDoc.id), { status: nextStatus });
-          }
-        } catch (e) {}
+      // Synchronize to matching student or teacher collection
+      if (user.role === "siswa" || user.role === "student") {
+        await syncStudentRecord(db, {
+          uid: user.uid || user.id,
+          _firestoreId: user.id,
+          id: user.nip || (user as any).nisn || user.id,
+          status: nextStatus
+        });
+      } else if (user.role === "guru" || user.role === "teacher") {
+        await syncTeacherRecord(db, {
+          uid: user.uid || user.id,
+          _firestoreId: user.id,
+          id: user.nip || user.id,
+          status: nextStatus
+        });
       }
 
       toast.showSuccess(
@@ -359,21 +356,16 @@ export default function AccountManagementPage() {
       // Also update in students collection if document exists
       try {
         const snap = await getDocs(query(collection(db, "students"), where("uid", "==", user.uid)));
-        for (const d of snap.docs) {
-          await updateDoc(doc(db, "students", d.id), {
+        for (const stDoc of snap.docs) {
+          await updateDoc(doc(db, "students", stDoc.id), {
             pendingOnboardingReminder: true,
             reminderSentAt: now
           });
         }
       } catch (e) {}
 
-      setUsersList(prev => prev.map(u => u.id === user.id ? {
-        ...u,
-        pendingOnboardingReminder: true,
-        reminderSentAt: now
-      } : u));
-
-      toast.showSuccess(`Pengingat onboarding berhasil dikirim ke akun ${user.name} (${user.email}).`, "Pengingat Terkirim");
+      setUsersList(prev => prev.map(u => u.id === user.id ? { ...u, pendingOnboardingReminder: true, reminderSentAt: now } : u));
+      toast.showSuccess(`Pengingat onboarding berhasil dikirim ke ${user.name} (${user.email}).`, "Pengingat Terkirim");
     } catch (err: any) {
       console.error("Reminder error:", err);
       toast.showError("Gagal mengirim pengingat onboarding.", "Gagal");
@@ -420,6 +412,9 @@ export default function AccountManagementPage() {
     setFormEmail(user.email);
     setFormRole(user.role);
     setFormStatus(user.status);
+    setFormNip(user.nip || (user as any).nisn || "");
+    setFormClass((user as any).className || (user as any).classId || "");
+    setFormSubject((user as any).subject || (user as any).role || "");
   };
 
   // Save Edit
@@ -446,24 +441,38 @@ export default function AccountManagementPage() {
         role: formRole,
         status: formStatus,
         onboardingCompleted: formStatus === "Belum Onboarding" ? false : true,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        ...(formRole === "guru" ? { nip: formNip.trim(), subject: formSubject.trim() } : {}),
+        ...(formRole === "siswa" ? { nisn: formNip.trim(), className: formClass.trim(), classId: formClass.trim() } : {})
       });
 
-      // Also sync to matching student or teacher doc if exists
+      // Synchronize to companion collection using unified sync service
       if (formRole === "siswa") {
-        try {
-          const sSnap = await getDocs(query(collection(db, "students"), where("uid", "==", editModal.data.uid)));
-          for (const sDoc of sSnap.docs) {
-            await updateDoc(doc(db, "students", sDoc.id), { name: formName, status: formStatus });
-          }
-        } catch (e) {}
+        await syncStudentRecord(db, {
+          uid: editModal.data.uid || targetId,
+          _firestoreId: targetId,
+          id: formNip.trim() || editModal.data.nip || editModal.data.nisn || targetId,
+          nisn: formNip.trim() || editModal.data.nip || editModal.data.nisn || "-",
+          name: formName.trim(),
+          fullName: formName.trim(),
+          email: formEmail.trim().toLowerCase(),
+          status: formStatus,
+          className: formClass.trim() || editModal.data.className || "10 MIPA 1",
+          classId: formClass.trim() || editModal.data.className || "10 MIPA 1",
+        });
       } else if (formRole === "guru") {
-        try {
-          const tSnap = await getDocs(query(collection(db, "teachers"), where("uid", "==", editModal.data.uid)));
-          for (const tDoc of tSnap.docs) {
-            await updateDoc(doc(db, "teachers", tDoc.id), { name: formName, status: formStatus });
-          }
-        } catch (e) {}
+        await syncTeacherRecord(db, {
+          uid: editModal.data.uid || targetId,
+          _firestoreId: targetId,
+          id: formNip.trim() || editModal.data.nip || targetId,
+          nip: formNip.trim() || editModal.data.nip || "-",
+          name: formName.trim(),
+          fullName: formName.trim(),
+          email: formEmail.trim().toLowerCase(),
+          status: formStatus,
+          subject: formSubject.trim() || editModal.data.subject || "Guru Pengajar",
+          role: formSubject.trim() || editModal.data.subject || "Guru Pengajar",
+        });
       } else if (formRole === "orang-tua") {
         try {
           await syncParentWithStudents({
@@ -478,7 +487,7 @@ export default function AccountManagementPage() {
         }
       }
 
-      toast.showEdit(`Data akun ${formName} berhasil diperbarui.`, "Perubahan Disimpan");
+      toast.showEdit(`Data akun ${formName} berhasil diperbarui dan disinkronkan.`, "Perubahan Disimpan");
       setEditModal({ open: false, data: null });
     } catch (err: any) {
       console.error("Save edit error:", err);
@@ -531,6 +540,16 @@ export default function AccountManagementPage() {
       if (formRole === "guru") {
         if (formNip.trim()) userPayload.nip = formNip.trim();
         if (formSubject.trim()) userPayload.subject = formSubject.trim();
+      } else if (formRole === "siswa") {
+        const studentClass = formClass.trim() || (classesList.length > 0 ? (classesList[0].name || classesList[0].id) : "10 MIPA 1");
+        userPayload.className = studentClass;
+        userPayload.classId = studentClass;
+        userPayload.kelas = studentClass;
+        userPayload.class = studentClass;
+        if (formNip.trim()) {
+          userPayload.nisn = formNip.trim();
+          userPayload.id = formNip.trim();
+        }
       } else if (formRole === "orang-tua") {
         if (formStudentName.trim()) userPayload.studentName = formStudentName.trim();
         if (formStudentId.trim()) {
@@ -546,29 +565,34 @@ export default function AccountManagementPage() {
       // 3. Save to Firestore users collection
       await setDoc(doc(db, "users", authResult.uid), userPayload);
 
-      // 4. Companion document synchronization
+      // 4. Companion document synchronization using unified services
       if (formRole === "guru") {
-        try {
-          await addDoc(collection(db, "teachers"), {
-            id: formNip.trim() || authResult.uid,
-            uid: authResult.uid,
-            nip: formNip.trim() || "-",
-            name: formName.trim(),
-            role: formSubject.trim() || "Guru Pengajar",
-            subject: formSubject.trim() || "Mata Pelajaran Umum",
-            status: formStatus === "Nonaktif" ? "Nonaktif" : "Aktif"
-          });
-        } catch (e) {}
+        await syncTeacherRecord(db, {
+          uid: authResult.uid,
+          id: formNip.trim() || authResult.uid,
+          nip: formNip.trim() || "-",
+          name: formName.trim(),
+          fullName: formName.trim(),
+          email: formEmail.trim().toLowerCase(),
+          role: formSubject.trim() || "Guru Pengajar",
+          subject: formSubject.trim() || "Mata Pelajaran Umum",
+          status: formStatus === "Nonaktif" ? "Nonaktif" : "Aktif",
+          createdAt: new Date().toISOString()
+        });
       } else if (formRole === "siswa") {
-        try {
-          await addDoc(collection(db, "students"), {
-            id: String(Math.floor(100000 + Math.random() * 900000)),
-            uid: authResult.uid,
-            name: formName.trim(),
-            classId: "10 MIPA 1",
-            status: formStatus === "Nonaktif" ? "Nonaktif" : "Aktif"
-          });
-        } catch (e) {}
+        const studentClass = formClass.trim() || (classesList.length > 0 ? (classesList[0].name || classesList[0].id) : "10 MIPA 1");
+        await syncStudentRecord(db, {
+          uid: authResult.uid,
+          id: formNip.trim() || authResult.uid,
+          nisn: formNip.trim() || "-",
+          name: formName.trim(),
+          fullName: formName.trim(),
+          email: formEmail.trim().toLowerCase(),
+          className: studentClass,
+          classId: studentClass,
+          status: formStatus === "Nonaktif" ? "Nonaktif" : "Aktif",
+          createdAt: new Date().toISOString()
+        });
       } else if (formRole === "orang-tua") {
         try {
           await syncParentWithStudents({
@@ -1402,6 +1426,62 @@ export default function AccountManagementPage() {
                 </select>
               </div>
 
+              {/* Conditional Fields based on Role in Edit Modal */}
+              {formRole === "siswa" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-3.5 bg-blue-50/40 rounded-lg border border-blue-100 animate-in fade-in duration-150">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">NISN / NIS</label>
+                    <input
+                      type="text"
+                      placeholder="Nomor Induk Siswa"
+                      value={formNip}
+                      onChange={(e) => setFormNip(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-medium bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Kelas</label>
+                    <select
+                      value={formClass}
+                      onChange={(e) => setFormClass(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-medium bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none text-xs cursor-pointer"
+                    >
+                      <option value="">Pilih Kelas...</option>
+                      {classesList.map((c) => (
+                        <option key={c.id || c._firestoreId} value={c.name || c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {formRole === "guru" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-3.5 bg-emerald-50/40 rounded-lg border border-emerald-100 animate-in fade-in duration-150">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">NIP Guru</label>
+                    <input
+                      type="text"
+                      placeholder="Nomor Induk Pegawai"
+                      value={formNip}
+                      onChange={(e) => setFormNip(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-medium bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Mata Pelajaran</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Matematika"
+                      value={formSubject}
+                      onChange={(e) => setFormSubject(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-medium bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 focus:outline-none text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-gray-100">
                 <button
                   type="button"
@@ -1545,6 +1625,36 @@ export default function AccountManagementPage() {
               </div>
 
               {/* Conditional Fields based on Role */}
+              {formRole === "siswa" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-3.5 bg-blue-50/40 rounded-lg border border-blue-100 animate-in fade-in duration-150">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">NISN / NIS Siswa</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: 0081234567"
+                      value={formNip}
+                      onChange={(e) => setFormNip(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-medium bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Pilih Kelas Siswa</label>
+                    <select
+                      value={formClass}
+                      onChange={(e) => setFormClass(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-medium bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none text-xs cursor-pointer"
+                    >
+                      <option value="">Pilih Kelas...</option>
+                      {classesList.map((c) => (
+                        <option key={c.id || c._firestoreId} value={c.name || c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
               {formRole === "guru" && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-3.5 bg-emerald-50/40 rounded-lg border border-emerald-100 animate-in fade-in duration-150">
                   <div>

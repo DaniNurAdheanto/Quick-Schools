@@ -36,8 +36,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
-import { db } from "@/lib/firebase";
-import { collection, onSnapshot } from "firebase/firestore";
+
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { isStudentRole } from "@/lib/roles-config";
@@ -54,6 +53,7 @@ import {
   formatDurationMinutes,
   getTodayDateString,
 } from "@/lib/teacher-attendance";
+import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 
 export default function TeacherAttendancePage() {
   const { showSuccess, showError } = useToast();
@@ -72,6 +72,7 @@ export default function TeacherAttendancePage() {
   // Auth & Role
   const currentUser = authUserData;
   const resolvedRole = (authRawRole || authRole || "").toLowerCase();
+  const { teachers: unifiedTeachers } = useUnifiedTeachers();
   const [teachersList, setTeachersList] = useState<any[]>([]);
 
   // Determine whether current authenticated user is a teacher
@@ -417,107 +418,10 @@ export default function TeacherAttendancePage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Subscribe to real teachers from database (both teachers collection and users with role guru)
+  // Synchronize teachers from unified database source
   useEffect(() => {
-    let rawTeachers: any[] = [];
-    let rawUsers: any[] = [];
-
-    const syncCombinedTeachers = () => {
-      const map = new Map<string, any>();
-      rawTeachers.forEach((t) => {
-        const key = t.uid || t.id;
-        map.set(key, t);
-      });
-      rawUsers.forEach((u) => {
-        const r = (u.role || "").toLowerCase();
-        if (r === "guru" || r === "teacher") {
-          const uEmail = (u.email || "").toLowerCase().trim();
-          const uNip = (u.nip || "").trim();
-          const uName = (u.fullName || u.name || "").toLowerCase().trim();
-          const uId = u.id || u.uid;
-
-          // Find if already exists in map
-          let existingKey: string | undefined;
-          for (const [k, v] of map.entries()) {
-            if (
-              k === uId ||
-              v.uid === uId ||
-              v.id === uId ||
-              (uEmail && v.email && v.email.toLowerCase().trim() === uEmail) ||
-              (uNip && uNip !== "-" && v.nip && v.nip.trim() === uNip) ||
-              (uName && v.name && v.name.toLowerCase().trim() === uName)
-            ) {
-              existingKey = k;
-              break;
-            }
-          }
-
-          if (existingKey) {
-            const cur = map.get(existingKey)!;
-            map.set(existingKey, {
-              ...cur,
-              uid: uId || cur.uid,
-              name: cur.name || u.fullName || u.name || "Guru",
-              email: cur.email || u.email || "",
-              nip: cur.nip && cur.nip !== "-" ? cur.nip : u.nip || "-",
-              phone: cur.phone || u.phone || "",
-              subject: cur.subject && cur.subject !== "Tenaga Pendidik" ? cur.subject : u.subject || cur.subject || "Guru Pengajar",
-            });
-          } else {
-            map.set(uId, {
-              id: uId,
-              _firestoreId: u._firestoreId || uId,
-              uid: uId,
-              name: u.fullName || u.name || "Guru",
-              nip: u.nip || "-",
-              subject: u.subject || "Guru Pengajar",
-              email: u.email || "",
-              phone: u.phone || "",
-              status: u.status || "Aktif",
-            });
-          }
-        }
-      });
-
-      setTeachersList(Array.from(map.values()));
-    };
-
-    const unsubTeachers = onSnapshot(
-      collection(db, "teachers"),
-      (snap) => {
-        rawTeachers = snap.docs.map((d) => {
-          const raw = d.data();
-          return {
-            id: d.id,
-            _firestoreId: d.id,
-            uid: raw.uid || d.id,
-            name: raw.name || raw.fullName || "Guru",
-            nip: raw.nip || raw.id || "-",
-            subject: raw.subject || raw.role || "Tenaga Pendidik",
-            email: raw.email || "",
-            phone: raw.phone || raw.contact || "",
-            status: raw.status || "Aktif",
-          };
-        });
-        syncCombinedTeachers();
-      },
-      (err) => console.warn("Teachers listener error:", err)
-    );
-
-    const unsubUsers = onSnapshot(
-      collection(db, "users"),
-      (snap) => {
-        rawUsers = snap.docs.map((d) => ({ _firestoreId: d.id, id: d.id, ...d.data() }));
-        syncCombinedTeachers();
-      },
-      (err) => console.warn("Users listener error in teacher attendance:", err)
-    );
-
-    return () => {
-      unsubTeachers();
-      unsubUsers();
-    };
-  }, []);
+    setTeachersList(unifiedTeachers);
+  }, [unifiedTeachers]);
 
   // Identify current teacher info directly from active authenticated user & database
   const currentTeacherInfo = useMemo(() => {
@@ -544,6 +448,7 @@ export default function TeacherAttendancePage() {
         subject: matched.subject || activeSubject || "Tenaga Pendidik",
         email: matched.email || activeEmail,
         phone: matched.phone || authUserData?.phone || "",
+        imageUrl: matched.imageUrl || matched.photoUrl || authUserData?.imageUrl || authUserData?.photoUrl || "",
       };
     }
 
@@ -557,6 +462,7 @@ export default function TeacherAttendancePage() {
         subject: activeSubject || "Tenaga Pendidik",
         email: activeEmail,
         phone: authUserData?.phone || "",
+        imageUrl: authUserData?.imageUrl || authUserData?.photoUrl || "",
       };
     }
 
@@ -751,6 +657,15 @@ export default function TeacherAttendancePage() {
       return;
     }
 
+    // Strict Photo Enforcement: Guru wajib melakukan foto terlebih dahulu
+    if (!photoPreview) {
+      showError(
+        "Foto selfie kehadiran wajib diambil terlebih dahulu sebelum melakukan konfirmasi absensi masuk.",
+        "Foto Belum Diambil"
+      );
+      return;
+    }
+
     // Geofence Radius Validation (Strict enforcement matching Student Attendance)
     if (config.geofenceEnabled && !locationData.inRadius) {
       const radiusLimit = Number(config.geofenceCenter?.radiusMeters ?? 100);
@@ -814,6 +729,35 @@ export default function TeacherAttendancePage() {
       showError("Data Clock In hari ini tidak ditemukan untuk akun ini.");
       return;
     }
+
+    // Strict Photo Enforcement: Guru wajib melakukan foto kepulangan terlebih dahulu
+    if (!photoPreview) {
+      showError(
+        "Foto selfie kepulangan wajib diambil terlebih dahulu sebelum melakukan konfirmasi absensi pulang.",
+        "Foto Belum Diambil"
+      );
+      return;
+    }
+
+    // Geofence Radius Validation (Strict enforcement matching Clock In)
+    if (config.geofenceEnabled && !locationData.inRadius) {
+      const radiusLimit = Number(config.geofenceCenter?.radiusMeters ?? 100);
+      const outsideDistance = Math.max(0, locationData.distance - radiusLimit);
+      showError(
+        `Clock Out ditolak! Lokasi Anda berada ${formatDistance(locationData.distance)} dari titik sekolah (${outsideDistance}m di luar batas radius ${radiusLimit}m). Anda harus berada di dalam radius sekolah untuk melakukan absensi pulang.`,
+        "Di Luar Radius Sekolah"
+      );
+      return;
+    }
+
+    if (config.geofenceEnabled && (gpsLoading || gpsErrorState)) {
+      showError(
+        "Lokasi GPS belum terverifikasi atau izin lokasi belum aktif. Pastikan GPS aktif dan berada di area sekolah.",
+        "GPS Belum Terverifikasi"
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
       await clockOut({
@@ -2205,6 +2149,37 @@ export default function TeacherAttendancePage() {
                     </div>
                   )}
 
+                  {/* Mandatory Photo Alert / Status Badge */}
+                  {!photoPreview ? (
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-xs text-amber-800 animate-in fade-in">
+                      <Camera className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <span className="font-bold block text-amber-900 text-[11px]">
+                          Wajib Foto Selfie Masuk
+                        </span>
+                        <p className="text-amber-800 text-[10px] leading-snug">
+                          Silakan ambil foto wajah Anda melalui bingkai kamera di sebelah kiri untuk mengaktifkan tombol Konfirmasi Masuk.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-800 animate-in fade-in">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="font-bold text-[11px] text-emerald-900">
+                          Foto Masuk Berhasil Diambil & Tervalidasi ✓
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRetakePhoto}
+                        className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                      >
+                        Ambil Ulang
+                      </button>
+                    </div>
+                  )}
+
                   {/* Notes textarea */}
                   <div className="space-y-1">
                     <label className="block text-[11px] font-bold text-gray-700">Catatan Masuk (Opsional)</label>
@@ -2229,11 +2204,11 @@ export default function TeacherAttendancePage() {
                     <button
                       type="button"
                       onClick={handleExecuteClockIn}
-                      disabled={submitting || (config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState))}
+                      disabled={submitting || !photoPreview || (config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState))}
                       className={cn(
                         "px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5",
-                        submitting || (config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState))
-                          ? "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none border border-gray-300"
+                        submitting || !photoPreview || (config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState))
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none border border-gray-200"
                           : "text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 cursor-pointer"
                       )}
                     >
@@ -2241,6 +2216,11 @@ export default function TeacherAttendancePage() {
                         <>
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                           <span>Memproses...</span>
+                        </>
+                      ) : !photoPreview ? (
+                        <>
+                          <Camera className="w-3.5 h-3.5 text-gray-400" />
+                          <span>Ambil Foto Terlebih Dahulu</span>
                         </>
                       ) : config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState) ? (
                         <>
@@ -2463,10 +2443,10 @@ export default function TeacherAttendancePage() {
                           "text-[10px] font-bold px-2 py-0.5 rounded-full border",
                           locationData.inRadius
                             ? "bg-emerald-100 text-emerald-800 border-emerald-200"
-                            : "bg-amber-100 text-amber-800 border-amber-200"
+                            : "bg-rose-100 text-rose-800 border-rose-200"
                         )}
                       >
-                        {locationData.inRadius ? "Dalam Radius 🟢" : "Di Luar Radius"}
+                        {locationData.inRadius ? "Dalam Radius 🟢" : "Di Luar Radius 🔴"}
                       </span>
                     </div>
 
@@ -2497,6 +2477,52 @@ export default function TeacherAttendancePage() {
                     )}
                   </div>
 
+                  {/* Warning Alert if outside radius */}
+                  {config.geofenceEnabled && !locationData.inRadius && !gpsLoading && (
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800 animate-in fade-in">
+                      <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <span className="font-bold block text-rose-900 text-[11px]">
+                          Lokasi di Luar Jangkauan Sekolah
+                        </span>
+                        <p className="text-rose-800 text-[10px] leading-snug">
+                          Anda berjarak <strong>{formatDistance(locationData.distance)}</strong> ({Math.max(0, locationData.distance - (config.geofenceCenter?.radiusMeters ?? 100))}m di luar batas). Tombol Clock Out dinonaktifkan.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mandatory Photo Alert / Status Badge */}
+                  {!photoPreview ? (
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-xs text-amber-800 animate-in fade-in">
+                      <Camera className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <span className="font-bold block text-amber-900 text-[11px]">
+                          Wajib Foto Selfie Pulang
+                        </span>
+                        <p className="text-amber-800 text-[10px] leading-snug">
+                          Silakan ambil foto wajah Anda melalui bingkai kamera di sebelah kiri untuk mengaktifkan tombol Konfirmasi Pulang.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-800 animate-in fade-in">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="font-bold text-[11px] text-emerald-900">
+                          Foto Pulang Berhasil Diambil & Tervalidasi ✓
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRetakePhoto}
+                        className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                      >
+                        Ambil Ulang
+                      </button>
+                    </div>
+                  )}
+
                   {/* Notes textarea */}
                   <div className="space-y-1">
                     <label className="block text-[11px] font-bold text-gray-700">Laporan Kegiatan / Catatan Pulang (Opsional)</label>
@@ -2521,11 +2547,41 @@ export default function TeacherAttendancePage() {
                     <button
                       type="button"
                       onClick={handleExecuteClockOut}
-                      disabled={submitting}
-                      className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/20 cursor-pointer transition-all flex items-center gap-1.5"
+                      disabled={submitting || !photoPreview || (config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState))}
+                      className={cn(
+                        "px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5",
+                        submitting || !photoPreview || (config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState))
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none border border-gray-200"
+                          : "text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 cursor-pointer"
+                      )}
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>{submitting ? "Memproses..." : "Konfirmasi Pulang (Clock Out)"}</span>
+                      {submitting ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Memproses...</span>
+                        </>
+                      ) : !photoPreview ? (
+                        <>
+                          <Camera className="w-3.5 h-3.5 text-gray-400" />
+                          <span>Ambil Foto Terlebih Dahulu</span>
+                        </>
+                      ) : config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState) ? (
+                        <>
+                          <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                          <span>
+                            {gpsLoading
+                              ? "Menunggu GPS..."
+                              : gpsErrorState
+                              ? "GPS Bermasalah"
+                              : "Di Luar Radius Sekolah"}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Konfirmasi Pulang (Clock Out)</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>

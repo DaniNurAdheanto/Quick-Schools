@@ -41,6 +41,8 @@ import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { formatRupiah } from "@/lib/spp-payments";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 
 interface AdminDashboardViewProps {
   userName: string;
@@ -104,6 +106,8 @@ export function AdminDashboardView({
   setPreviewRole
 }: AdminDashboardViewProps) {
   const { profile: schoolProfile } = useSchoolProfile();
+  const { students: unifiedStudents } = useUnifiedStudents();
+  const { teachers: unifiedTeachers } = useUnifiedTeachers();
   // ─── Realtime Database States ─────────────────────────────────────────────
   const [students, setStudents] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
@@ -116,17 +120,16 @@ export function AdminDashboardView({
   const [activities, setActivities] = useState<any[]>([]);
   const [teacherAttendance, setTeacherAttendance] = useState<any[]>([]);
 
+  useEffect(() => {
+    setStudents(unifiedStudents);
+  }, [unifiedStudents]);
+
+  useEffect(() => {
+    setTeachers(unifiedTeachers);
+  }, [unifiedTeachers]);
+
   // ─── Firestore Subscriptions ──────────────────────────────────────────────
   useEffect(() => {
-    // 1. Students
-    const unsubStudents = onSnapshot(collection(db, "students"), (snap) => {
-      setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Students unsub error:", err));
-
-    // 2. Teachers
-    const unsubTeachers = onSnapshot(collection(db, "teachers"), (snap) => {
-      setTeachers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Teachers unsub error:", err));
 
     // 3. Classes
     const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
@@ -211,8 +214,6 @@ export function AdminDashboardView({
     }, (err) => console.warn("Teacher attendance unsub error:", err));
 
     return () => {
-      unsubStudents();
-      unsubTeachers();
       unsubClasses();
       unsubAttendance();
       unsubRolesAtt();

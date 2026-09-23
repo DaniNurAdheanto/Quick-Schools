@@ -43,6 +43,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useUnifiedStudents, UnifiedStudent } from "@/hooks/use-unified-students";
+import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
@@ -91,6 +92,7 @@ const INCOME_OPTIONS = [
 export default function ParentsManagementPage() {
   const toast = useToast();
   const { students: unifiedStudents, loading: studentsLoading } = useUnifiedStudents();
+  const { teachers: unifiedTeachers } = useUnifiedTeachers();
   
   const [parentsList, setParentsList] = useState<ParentData[]>([]);
   const [rawUsersList, setRawUsersList] = useState<any[]>([]);
@@ -169,10 +171,6 @@ export default function ParentsManagementPage() {
       setClassesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (err) => console.warn("Classes listener in parents page error:", err));
 
-    const unsubTeachers = onSnapshot(collection(db, "teachers"), (snap) => {
-      setTeachersList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Teachers listener in parents page error:", err));
-
     const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
       const filtered = snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
@@ -188,11 +186,14 @@ export default function ParentsManagementPage() {
     return () => {
       unsubAuth();
       unsubClasses();
-      unsubTeachers();
       unsubUsers();
       unsubParents();
     };
   }, []);
+
+  useEffect(() => {
+    setTeachersList(unifiedTeachers);
+  }, [unifiedTeachers]);
 
   // 2. Normalization Helpers for Smart Deduplication
   const normalizePhone = useCallback((phoneStr?: string) => {

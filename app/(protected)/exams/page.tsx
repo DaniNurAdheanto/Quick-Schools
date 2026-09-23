@@ -23,6 +23,8 @@ import { isParentRole } from "@/lib/roles-config";
 import { resolveParentStudent } from "@/lib/parent-child-resolver";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
+import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 
 // ==========================================
 // TYPES & INTERFACES
@@ -93,6 +95,8 @@ export default function ExamSchedulePage() {
   const [examSchedulesList, setExamSchedulesList] = useState<ExamScheduleItem[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
+  const { teachers: unifiedTeachers } = useUnifiedTeachers();
+  const { students: unifiedStudents } = useUnifiedStudents();
   const [teachers, setTeachers] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
 
@@ -267,22 +271,20 @@ export default function ExamSchedulePage() {
       setSubjects(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    const unsubTeachers = onSnapshot(collection(db, "teachers"), (snap) => {
-      setTeachers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    const unsubStudents = onSnapshot(collection(db, "students"), (snap) => {
-      setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
     return () => {
       unsubExams();
       unsubClasses();
       unsubSubjects();
-      unsubTeachers();
-      unsubStudents();
     };
   }, []);
+
+  useEffect(() => {
+    setTeachers(unifiedTeachers);
+  }, [unifiedTeachers]);
+
+  useEffect(() => {
+    setStudents(unifiedStudents);
+  }, [unifiedStudents]);
 
   // Match student class fallback
   useEffect(() => {

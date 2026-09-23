@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { AlertBox, AlertType } from "@/components/ui/alert-box";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { isParentRole } from "@/lib/roles-config";
 import { resolveParentStudent } from "@/lib/parent-child-resolver";
@@ -96,6 +97,7 @@ export default function ReportCardsPage() {
   const [classes, setClasses] = useState<any[]>([]);
   const [grades, setGrades] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
+  const { teachers: unifiedTeachers } = useUnifiedTeachers();
   const [teachers, setTeachers] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
@@ -259,10 +261,6 @@ export default function ReportCardsPage() {
       setSubjects(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    const unsubTeachers = onSnapshot(collection(db, "teachers"), (snap) => {
-      setTeachers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
     const unsubSchedules = onSnapshot(collection(db, "schedules"), (snap) => {
       setSchedules(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
@@ -284,12 +282,15 @@ export default function ReportCardsPage() {
       unsubClasses();
       unsubGrades();
       unsubSubjects();
-      unsubTeachers();
       unsubSchedules();
       unsubAttendance();
       unsubReportCards();
     };
   }, []);
+
+  useEffect(() => {
+    setTeachers(unifiedTeachers);
+  }, [unifiedTeachers]);
 
   // Initialize selectedStudentId when students load
   useEffect(() => {

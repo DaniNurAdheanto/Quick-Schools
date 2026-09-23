@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
 import { db, storage } from "@/lib/firebase";
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
+import { collection, query, onSnapshot } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useToast } from "@/context/ToastContext";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
@@ -32,6 +32,8 @@ import {
   getSubjectsForTeacher, 
   syncTeacherSubjectRelations 
 } from "@/lib/subject-teacher-relations";
+import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
+import { syncTeacherRecord, deleteTeacherRecord } from "@/lib/unified-sync-service";
 
 // Helper to compress uploaded photo into lightweight Base64 JPEG data URL (~15KB)
 async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0.7): Promise<string> {
@@ -77,9 +79,8 @@ async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0
 export default function TeachersPage() {
   const toast = useToast();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [teachers, setTeachers] = useState<any[]>([]);
+  const { teachers, setTeachers, loading } = useUnifiedTeachers();
   const [subjectsList, setSubjectsList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
 
   // Centralized useAuth
   const { role: authRole, rawRole: authRawRole, isAuthLoading, isRoleReady } = useAuth();
@@ -97,43 +98,12 @@ export default function TeachersPage() {
   });
 
   useEffect(() => {
-    const qTeachers = query(collection(db, "teachers"));
-    const unsubscribeTeachers = onSnapshot(qTeachers, (snapshot) => {
-      const teachersData = snapshot.docs.map(doc => {
-        const raw = doc.data();
-        const nip = raw.id || raw.nip || "";
-        const role = raw.role || raw.subject || "";
-        const contact = raw.contact || raw.phone || "";
-        const subjectIds = Array.isArray(raw.subjectIds) ? raw.subjectIds : [];
-        const subjects = Array.isArray(raw.subjects) ? raw.subjects : (role ? [role] : []);
-        return {
-          _firestoreId: doc.id,
-          ...raw,
-          id: nip,
-          nip: nip,
-          role: role,
-          subject: role,
-          subjectIds: subjectIds,
-          subjects: subjects,
-          contact: contact,
-          phone: contact,
-          status: raw.status || "Aktif",
-        };
-      });
-      setTeachers(teachersData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching teachers:", error);
-      setLoading(false);
-    });
-
     const qSubjects = query(collection(db, "subjects"));
     const unsubscribeSubjects = onSnapshot(qSubjects, (snapshot) => {
       setSubjectsList(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
     });
 
     return () => {
-      unsubscribeTeachers();
       unsubscribeSubjects();
     };
   }, []);
@@ -262,10 +232,11 @@ export default function TeachersPage() {
       const contactValue = data.contact || data.phone || "";
 
       if (crudState.mode === "create") {
-        const docRef = await addDoc(collection(db, "teachers"), {
+        await syncTeacherRecord(db, {
           id: nipValue,
           nip: nipValue,
           name: data.name || "",
+          fullName: data.name || "",
           role: subjectString,
           subject: subjectString,
           subjectIds: subjectIds,
@@ -274,24 +245,27 @@ export default function TeachersPage() {
           phone: contactValue,
           status: data.status || "Aktif",
           imageUrl: imageUrl,
+          photoUrl: imageUrl,
           createdAt: new Date().toISOString()
         });
 
-        await syncTeacherSubjectRelations(db, docRef.id, subjectIds, subjectsList, {
+        await syncTeacherSubjectRelations(db, nipValue, subjectIds, subjectsList, {
           id: nipValue,
           name: data.name || "",
           nip: nipValue
         });
       } else if (crudState.mode === "edit") {
         const targetId = data._firestoreId || crudState.data?._firestoreId || data.uid || crudState.data?.uid || data.id;
-        if (!targetId) {
-          throw new Error("ID Guru tidak ditemukan untuk diperbarui.");
-        }
+        const targetUid = data.uid || crudState.data?.uid;
 
-        const payload: any = {
+        const updatePayload: any = {
+          _firestoreId: targetId,
+          _allDocIds: data._allDocIds || crudState.data?._allDocIds,
+          uid: targetUid,
           id: nipValue,
           nip: nipValue,
           name: data.name || "",
+          fullName: data.name || "",
           role: subjectString,
           subject: subjectString,
           subjectIds: subjectIds,
@@ -300,38 +274,10 @@ export default function TeachersPage() {
           phone: contactValue,
           status: data.status || "Aktif",
           updatedAt: new Date().toISOString(),
-          ...(imageUrl ? { imageUrl } : {})
+          ...(imageUrl ? { imageUrl, photoUrl: imageUrl } : {})
         };
 
-        try {
-          await updateDoc(doc(db, "teachers", targetId), payload);
-        } catch (err) {
-          console.warn("Update teachers collection warning:", err);
-          try {
-            await setDoc(doc(db, "teachers", targetId), payload, { merge: true });
-          } catch (innerErr) {
-            console.error("SetDoc teachers warning:", innerErr);
-          }
-        }
-
-        const userUid = data.uid || crudState.data?.uid || (targetId.length > 20 ? targetId : null);
-        if (userUid) {
-          try {
-            await updateDoc(doc(db, "users", userUid), {
-              name: data.name || "",
-              nip: nipValue,
-              subject: subjectString,
-              subjectIds: subjectIds,
-              subjects: subjectsNames,
-              phone: contactValue,
-              status: data.status || "Aktif",
-              updatedAt: new Date().toISOString(),
-              ...(imageUrl ? { imageUrl, photoUrl: imageUrl } : {})
-            });
-          } catch (err) {
-            console.warn("Update users collection warning:", err);
-          }
-        }
+        await syncTeacherRecord(db, updatePayload);
 
         await syncTeacherSubjectRelations(db, targetId, subjectIds, subjectsList, {
           id: nipValue,
@@ -340,26 +286,16 @@ export default function TeachersPage() {
         });
 
         setTeachers((prev) =>
-          prev.map((t) => (t._firestoreId === targetId || (userUid && t.uid === userUid) ? { ...t, ...payload } : t))
+          prev.map((t) => (t._firestoreId === targetId || (targetUid && t.uid === targetUid) ? { ...t, ...updatePayload } : t))
         );
       } else if (crudState.mode === "delete" && (data._firestoreId || data.id || data.uid)) {
-        const targetIds = Array.from(
-          new Set([data._firestoreId, data.uid, data.id].filter(Boolean))
-        );
-
-        for (const targetId of targetIds) {
-          try {
-            await deleteDoc(doc(db, "teachers", targetId as string));
-          } catch (err) {
-            console.warn("Could not delete from teachers collection:", err);
-          }
-
-          try {
-            await deleteDoc(doc(db, "users", targetId as string));
-          } catch (err) {
-            console.warn("Could not delete from users collection:", err);
-          }
-        }
+        await deleteTeacherRecord(db, {
+          _firestoreId: data._firestoreId,
+          uid: data.uid,
+          id: data.id,
+          nip: data.nip,
+          _allDocIds: data._allDocIds
+        });
 
         setTeachers((prev) =>
           prev.filter(

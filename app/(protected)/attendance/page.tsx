@@ -57,6 +57,8 @@ import { isParentRole } from "@/lib/roles-config";
 import { resolveParentStudent } from "@/lib/parent-child-resolver";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
+import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 
 // -------------------------------------------------------------
 // Types & Defaults
@@ -190,6 +192,8 @@ export default function AttendancePage() {
     }
     return base;
   }, [userData, authUser, dbStudentInfo]);
+  const { students: unifiedStudents } = useUnifiedStudents();
+  const { teachers: unifiedTeachers } = useUnifiedTeachers();
   const [teachersList, setTeachersList] = useState<any[]>([]);
   const [previewAsGuru, setPreviewAsGuru] = useState(false);
 
@@ -203,6 +207,33 @@ export default function AttendancePage() {
   const [studentsList, setStudentsList] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [config, setConfig] = useState<AttendanceConfig>(DEFAULT_CONFIG);
+
+  useEffect(() => {
+    setStudentsList(unifiedStudents);
+    const cUser = auth.currentUser;
+    if (cUser && unifiedStudents.length > 0) {
+      const matched = unifiedStudents.find((s) => 
+        (s.email && s.email.toLowerCase() === cUser.email?.toLowerCase()) || 
+        s.id === cUser.uid ||
+        s.uid === cUser.uid ||
+        (s.name && cUser.displayName && s.name.toLowerCase() === cUser.displayName.toLowerCase())
+      );
+      if (matched) {
+        setDbStudentInfo((prev: any) => ({
+          ...prev,
+          id: matched.uid || matched.id || cUser.uid,
+          name: matched.name || matched.fullName || prev?.name,
+          nisn: matched.nisn || matched.id || prev?.nisn,
+          className: matched.className || matched.classId || prev?.className || "10 MIPA 1",
+          avatar: matched.imageUrl || matched.photoUrl || prev?.avatar
+        }));
+      }
+    }
+  }, [unifiedStudents]);
+
+  useEffect(() => {
+    setTeachersList(unifiedTeachers);
+  }, [unifiedTeachers]);
 
   // Tab 1: Daily Class Attendance State
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
@@ -255,49 +286,6 @@ export default function AttendancePage() {
         { id: "c3", name: "11 MIPA 1" },
         { id: "c4", name: "12 MIPA 1" }
       ]);
-    });
-
-    // 3. Fetch Students from Firestore
-    const unsubStudents = onSnapshot(collection(db, "students"), (snap) => {
-      const list: any[] = [];
-      snap.forEach((d) => {
-        list.push({ id: d.id, ...d.data() });
-      });
-      list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-      setStudentsList(list);
-
-      // Match current student if logged in
-      const cUser = auth.currentUser;
-      if (cUser) {
-        const matched = list.find((s) => 
-          (s.email && s.email.toLowerCase() === cUser.email?.toLowerCase()) || 
-          s.id === cUser.uid ||
-          (s.name && cUser.displayName && s.name.toLowerCase() === cUser.displayName.toLowerCase())
-        );
-        if (matched) {
-          setDbStudentInfo((prev: any) => ({
-            ...prev,
-            id: matched.id || cUser.uid,
-            name: matched.name || prev?.name,
-            nisn: matched.nisn || matched.id || prev?.nisn,
-            className: matched.classId || matched.className || prev?.className || "10 MIPA 1",
-            avatar: matched.imageUrl || matched.avatar || prev?.avatar
-          }));
-        }
-      }
-    }, (err) => {
-      console.warn("Students snapshot error:", err);
-    });
-
-    // 3b. Fetch Teachers from Firestore for Homeroom (Wali Kelas) identification
-    const unsubTeachers = onSnapshot(collection(db, "teachers"), (snap) => {
-      const list: any[] = [];
-      snap.forEach((d) => {
-        list.push({ _firestoreId: d.id, id: d.id, ...d.data() });
-      });
-      setTeachersList(list);
-    }, (err) => {
-      console.warn("Teachers snapshot error in attendance:", err);
     });
 
     // 4. Fetch Attendance Records from localStorage, roles collection, and attendance collection (strictly real records only)
@@ -426,8 +414,6 @@ export default function AttendancePage() {
 
     return () => {
       unsubClasses();
-      unsubStudents();
-      unsubTeachers();
       unsubRolesAtt();
       unsubAttendance();
       unsubConfig();
@@ -1081,7 +1067,7 @@ export default function AttendancePage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto w-full space-y-6 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full space-y-3.5 sm:space-y-4 animate-in fade-in duration-300">
       
       {/* Quick Attendance Scan Camera Modal */}
       <QuickAttendanceModal
@@ -1110,19 +1096,19 @@ export default function AttendancePage() {
       {/* Dynamic View: Personal Student View vs Admin/Teacher Management */}
       {/* ------------------------------------------------------------- */}
       {isStudentRole ? (
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-3.5">
           {previewAsStudent && (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-200/80 rounded-lg text-xs shadow-xs">
-              <div className="flex items-center gap-2.5 text-purple-900 font-bold">
-                <div className="w-6 h-6 rounded-md bg-[#531FFF] text-white flex items-center justify-center shrink-0">
-                  <Eye className="w-3.5 h-3.5" />
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-2.5 sm:p-3 bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-200/80 rounded-lg text-xs shadow-2xs">
+              <div className="flex items-center gap-2 text-purple-900 font-bold">
+                <div className="w-5 h-5 rounded bg-[#531FFF] text-white flex items-center justify-center shrink-0">
+                  <Eye className="w-3 h-3" />
                 </div>
                 <span>Mode Pratinjau Siswa Aktif — Menampilkan portal presensi mandiri dengan isolasi data personal siswa.</span>
               </div>
               <button
                 type="button"
                 onClick={() => setPreviewAsStudent(false)}
-                className="px-3.5 py-1.5 bg-[#531FFF] hover:bg-[#4215cb] text-white font-extrabold text-xs rounded-lg shadow-xs transition-all cursor-pointer shrink-0"
+                className="px-3 py-1 bg-[#531FFF] hover:bg-[#4215cb] text-white font-extrabold text-xs rounded-lg shadow-2xs transition-all cursor-pointer shrink-0"
               >
                 Kembali ke Mode Admin
               </button>
@@ -1290,88 +1276,88 @@ export default function AttendancePage() {
       {/* ------------------------------------------------------------- */}
       {/* 2. Real-Time KPI Cards (Ringkasan Kehadiran Hari Ini) */}
       {/* ------------------------------------------------------------- */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
         {/* Tingkat Kehadiran */}
-        <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-[#531FFF]/30 transition-all flex flex-col justify-between">
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-[#531FFF]/30 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between text-gray-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Tingkat Hadir</span>
-            <div className="w-7 h-7 rounded-md bg-purple-50 text-[#531FFF] flex items-center justify-center">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Tingkat Hadir</span>
+            <div className="w-6.5 h-6.5 rounded-md bg-purple-50 text-[#531FFF] flex items-center justify-center">
               <Sparkles className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-2">
-            <h3 className="text-2xl font-black text-gray-900 tracking-tight">{statsToday.attendanceRate}%</h3>
-            <p className="text-[11px] text-emerald-600 font-bold mt-0.5">Persentase Hari Ini</p>
+          <div className="mt-1.5">
+            <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">{statsToday.attendanceRate}%</h3>
+            <p className="text-[10px] text-emerald-600 font-bold mt-0.5">Persentase Hari Ini</p>
           </div>
         </div>
 
         {/* Total Siswa */}
-        <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-gray-200 transition-all flex flex-col justify-between">
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between text-gray-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Total Siswa</span>
-            <div className="w-7 h-7 rounded-md bg-gray-100 text-gray-600 flex items-center justify-center">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Total Siswa</span>
+            <div className="w-6.5 h-6.5 rounded-md bg-gray-100 text-gray-600 flex items-center justify-center">
               <Users className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-2">
-            <h3 className="text-2xl font-black text-gray-900 tracking-tight">{statsToday.total}</h3>
-            <p className="text-[11px] text-gray-400 font-medium mt-0.5">Terjadwal</p>
+          <div className="mt-1.5">
+            <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">{statsToday.total}</h3>
+            <p className="text-[10px] text-gray-400 font-medium mt-0.5">Terjadwal</p>
           </div>
         </div>
 
         {/* Hadir Tepat */}
-        <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-emerald-200 transition-all flex flex-col justify-between">
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-emerald-200 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between text-gray-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Hadir Tepat</span>
-            <div className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Hadir Tepat</span>
+            <div className="w-6.5 h-6.5 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <CheckCircle2 className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-2">
-            <h3 className="text-2xl font-black text-emerald-600 tracking-tight">{statsToday.hadir}</h3>
-            <p className="text-[11px] text-gray-400 font-medium mt-0.5">Siswa Hadir</p>
+          <div className="mt-1.5">
+            <h3 className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight">{statsToday.hadir}</h3>
+            <p className="text-[10px] text-gray-400 font-medium mt-0.5">Siswa Hadir</p>
           </div>
         </div>
 
         {/* Terlambat */}
-        <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-amber-200 transition-all flex flex-col justify-between">
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-amber-200 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between text-gray-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Terlambat</span>
-            <div className="w-7 h-7 rounded-md bg-amber-50 text-amber-600 flex items-center justify-center">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Terlambat</span>
+            <div className="w-6.5 h-6.5 rounded-md bg-amber-50 text-amber-600 flex items-center justify-center">
               <Clock className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-2">
-            <h3 className="text-2xl font-black text-amber-600 tracking-tight">{statsToday.terlambat}</h3>
-            <p className="text-[11px] text-gray-400 font-medium mt-0.5">Lewat jam masuk</p>
+          <div className="mt-1.5">
+            <h3 className="text-xl sm:text-2xl font-black text-amber-600 tracking-tight">{statsToday.terlambat}</h3>
+            <p className="text-[10px] text-gray-400 font-medium mt-0.5">Lewat jam masuk</p>
           </div>
         </div>
 
         {/* Sakit & Izin */}
-        <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-blue-200 transition-all flex flex-col justify-between">
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-blue-200 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between text-gray-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Sakit / Izin</span>
-            <div className="w-7 h-7 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Sakit / Izin</span>
+            <div className="w-6.5 h-6.5 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
               <Info className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-2">
-            <h3 className="text-2xl font-black text-blue-600 tracking-tight">{statsToday.sakit + statsToday.izin}</h3>
-            <p className="text-[11px] text-gray-400 font-medium mt-0.5">Dengan Keterangan</p>
+          <div className="mt-1.5">
+            <h3 className="text-xl sm:text-2xl font-black text-blue-600 tracking-tight">{statsToday.sakit + statsToday.izin}</h3>
+            <p className="text-[10px] text-gray-400 font-medium mt-0.5">Dengan Keterangan</p>
           </div>
         </div>
 
         {/* Alpa / Tanpa Keterangan */}
-        <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:border-rose-200 transition-all flex flex-col justify-between">
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-rose-200 transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between text-gray-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Alpa</span>
-            <div className="w-7 h-7 rounded-md bg-rose-50 text-rose-600 flex items-center justify-center">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Alpa</span>
+            <div className="w-6.5 h-6.5 rounded-md bg-rose-50 text-rose-600 flex items-center justify-center">
               <AlertTriangle className="w-3.5 h-3.5" />
             </div>
           </div>
-          <div className="mt-2">
-            <h3 className="text-2xl font-black text-rose-600 tracking-tight">{statsToday.alpa}</h3>
-            <p className="text-[11px] text-gray-400 font-medium mt-0.5">Tanpa Keterangan</p>
+          <div className="mt-1.5">
+            <h3 className="text-xl sm:text-2xl font-black text-rose-600 tracking-tight">{statsToday.alpa}</h3>
+            <p className="text-[10px] text-gray-400 font-medium mt-0.5">Tanpa Keterangan</p>
           </div>
         </div>
       </div>

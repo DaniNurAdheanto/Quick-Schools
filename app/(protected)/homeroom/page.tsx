@@ -39,6 +39,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
+import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 
   export default function HomeroomPage() {
   const toast = useToast();
@@ -46,6 +47,7 @@ import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   
   const [classes, setClasses] = useState<any[]>([]);
+  const { teachers: unifiedTeachers } = useUnifiedTeachers();
   const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { role: authRole, rawRole: authRawRole, isAuthLoading: isUserAuthLoading, isRoleReady } = useAuth();
@@ -117,37 +119,11 @@ import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
           setLoading(false);
         });
 
-        const qTeachers = query(collection(db, "teachers"));
-        const unsubTeachers = onSnapshot(qTeachers, (snapshot) => {
-          const teachersData = snapshot.docs.map(doc => {
-            const raw = doc.data();
-            const nip = raw.id || raw.nip || "";
-            const role = raw.role || raw.subject || "Guru Pengajar";
-            const contact = raw.contact || raw.phone || "";
-            return {
-              _firestoreId: doc.id,
-              ...raw,
-              id: nip,
-              nip: nip,
-              role: role,
-              subject: role,
-              contact: contact,
-              phone: contact,
-              status: raw.status || "Aktif",
-            };
-          });
-          setTeachers(teachersData);
-        }, (error) => {
-          console.error("Error fetching teachers:", error);
-        });
-        
         return () => {
           unsubClasses();
-          unsubTeachers();
         };
       } else {
         setClasses([]);
-        setTeachers([]);
         setUserRole("admin");
         setLoading(false);
       }
@@ -155,6 +131,10 @@ import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 
     return () => unsubscribeAuth();
   }, []);
+
+  useEffect(() => {
+    setTeachers(unifiedTeachers);
+  }, [unifiedTeachers]);
 
   // Map of which teacher is assigned to which class
   // Key: teacher's normalized name (lowercase) -> class info

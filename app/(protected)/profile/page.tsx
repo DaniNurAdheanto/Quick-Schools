@@ -37,6 +37,7 @@ import {
   serverTimestamp 
 } from "firebase/firestore";
 import { ROLES } from "@/lib/roles-config";
+import { syncStudentRecord, syncTeacherRecord } from "@/lib/unified-sync-service";
 
 type ProfileTab = "biodata" | "security";
 
@@ -236,54 +237,33 @@ export default function ProfilePage() {
         });
       }
 
-      // 3. If Guru, synchronize teachers collection
+      // 3. Synchronize cross-collection (teachers/students)
       if (profileData.role === "guru") {
-        try {
-          const tDoc = await getDoc(doc(db, "teachers", currentUid));
-          if (tDoc.exists()) {
-            await updateDoc(doc(db, "teachers", currentUid), {
-              imageUrl: compressed,
-              photoUrl: compressed
-            });
-          } else {
-            const tSnap = await getDocs(query(collection(db, "teachers"), where("name", "==", profileData.name)));
-            for (const d of tSnap.docs) {
-              await updateDoc(doc(db, "teachers", d.id), {
-                imageUrl: compressed,
-                photoUrl: compressed
-              });
-            }
-          }
-        } catch (tErr) {
-          console.warn("Could not sync teacher photo:", tErr);
-        }
+        await syncTeacherRecord(db, {
+          uid: currentUid,
+          name: profileData.name,
+          email: profileData.email,
+          imageUrl: compressed,
+          photoUrl: compressed,
+          nip: profileData.nip,
+          subject: profileData.subject,
+          status: profileData.status
+        });
+      } else if (profileData.role === "siswa" || profileData.role === "student") {
+        await syncStudentRecord(db, {
+          uid: currentUid,
+          name: profileData.name,
+          email: profileData.email,
+          imageUrl: compressed,
+          photoUrl: compressed,
+          nisn: profileData.nisn,
+          className: profileData.className || profileData.class,
+          status: profileData.status
+        });
       }
 
-      // 4. If Siswa, synchronize students collection
-      if (profileData.role === "siswa" || profileData.role === "student") {
-        try {
-          const sDoc = await getDoc(doc(db, "students", currentUid));
-          if (sDoc.exists()) {
-            await updateDoc(doc(db, "students", currentUid), {
-              imageUrl: compressed,
-              photoUrl: compressed
-            });
-          } else {
-            const sSnap = await getDocs(query(collection(db, "students"), where("name", "==", profileData.name)));
-            for (const d of sSnap.docs) {
-              await updateDoc(doc(db, "students", d.id), {
-                imageUrl: compressed,
-                photoUrl: compressed
-              });
-            }
-          }
-        } catch (sErr) {
-          console.warn("Could not sync student photo:", sErr);
-        }
-      }
-
-      setProfileData((prev: any) => ({ ...prev, imageUrl: compressed }));
-      setFormData((prev: any) => ({ ...prev, imageUrl: compressed }));
+      setProfileData((prev: any) => ({ ...prev, imageUrl: compressed, photoUrl: compressed }));
+      setFormData((prev: any) => ({ ...prev, imageUrl: compressed, photoUrl: compressed }));
       toast.showSuccess("Foto profil berhasil diperbarui dan diselaraskan ke semua menu!", "Foto Tersimpan");
     } catch (err: any) {
       console.error("Error uploading profile photo:", err);
@@ -311,9 +291,33 @@ export default function ProfilePage() {
       if (profileData.role === "guru") {
         payload.nip = formData.nip || "";
         payload.subject = formData.subject || "";
+        await syncTeacherRecord(db, {
+          uid: currentUid,
+          name: payload.name,
+          email: profileData.email,
+          phone: payload.phone,
+          address: payload.address,
+          gender: payload.gender,
+          nip: payload.nip,
+          subject: payload.subject,
+          imageUrl: profileData.imageUrl
+        });
+      } else if (profileData.role === "siswa" || profileData.role === "student") {
+        if (formData.nisn) payload.nisn = formData.nisn;
+        await syncStudentRecord(db, {
+          uid: currentUid,
+          name: payload.name,
+          email: profileData.email,
+          phone: payload.phone,
+          address: payload.address,
+          gender: payload.gender,
+          nisn: formData.nisn || profileData.nisn,
+          className: profileData.className || profileData.class,
+          imageUrl: profileData.imageUrl
+        });
+      } else {
+        await updateDoc(doc(db, "users", currentUid), payload);
       }
-
-      await updateDoc(doc(db, "users", currentUid), payload);
 
       if (auth.currentUser && formData.name) {
         await updateProfile(auth.currentUser, {
@@ -323,7 +327,7 @@ export default function ProfilePage() {
 
       setProfileData((prev: any) => ({ ...prev, ...payload }));
       setIsEditing(false);
-      toast.showSuccess("Informasi profil Anda berhasil diperbarui.", "Profil Tersimpan");
+      toast.showSuccess("Informasi profil Anda berhasil diperbarui dan diselaraskan di seluruh sistem.", "Profil Tersimpan");
     } catch (error: any) {
       console.error("Error updating profile:", error);
       toast.showError(error?.message || "Gagal memperbarui profil.", "Gagal");

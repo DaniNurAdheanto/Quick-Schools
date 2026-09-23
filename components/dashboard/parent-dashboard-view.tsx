@@ -35,13 +35,14 @@ import {
   Cell,
   ReferenceLine
 } from "recharts";
-import { collection, onSnapshot, doc } from "firebase/firestore";
+import { collection, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { formatRupiah } from "@/lib/spp-payments";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { useAuth } from "@/context/AuthContext";
+import { useUnifiedStudents } from "@/hooks/use-unified-students";
 
 export interface ParentDashboardViewProps {
   userName: string;
@@ -72,6 +73,12 @@ export function ParentDashboardView({
   // Current authenticated user state
   const [currentUser, setCurrentUser] = useState<any>(authUser || null);
   const [parentData, setParentData] = useState<any>(authUserData || null);
+
+  // Unified Students collection (merging students + users role siswa)
+  const { students: unifiedStudentsList } = useUnifiedStudents();
+
+  // Direct child document fallback (for immediate resolution if studentId is present)
+  const [directChild, setDirectChild] = useState<any>(null);
 
   // Raw Database Collections
   const [studentsList, setStudentsList] = useState<any[]>([]);
@@ -160,24 +167,6 @@ export function ParentDashboardView({
 
   // 2. Realtime Subscriptions
   useEffect(() => {
-    const unsubStudents = onSnapshot(collection(db, "students"), (snap) => {
-      const list = snap.docs.map(d => {
-        const data = d.data();
-        return {
-          ...data,
-          _firestoreId: d.id,
-          docId: d.id,
-          id: data.id || d.id,
-          rawId: data.id || "",
-          nisn: data.nisn || data.nis || data.id || "",
-          uid: data.uid || data.userId || ""
-        };
-      });
-      setStudentsList(list);
-    }, (err) => {
-      console.warn("Students listener warning:", err);
-    });
-
     const unsubAttendance = onSnapshot(collection(db, "attendance"), (snap) => {
       setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (err) => console.warn("Attendance listener warning:", err));
@@ -207,7 +196,6 @@ export function ParentDashboardView({
     }, (err) => console.warn("Classes listener warning:", err));
 
     return () => {
-      unsubStudents();
       unsubAttendance();
       unsubGrades();
       unsubSchedules();
@@ -218,9 +206,99 @@ export function ParentDashboardView({
     };
   }, []);
 
-  // 3. Resolve Connected Child (Strict 1-to-1 Matching)
+  useEffect(() => {
+    setStudentsList(unifiedStudentsList);
+  }, [unifiedStudentsList]);
+
+  // Direct child document fallback (for immediate resolution if studentId is present)
+  useEffect(() => {
+    const targetStudentId = parentData?.studentId || parentData?.studentIds?.[0] || parentData?.linkedStudentIds?.[0];
+    if (!targetStudentId) return;
+
+    let isMounted = true;
+    const fetchDirectChild = async () => {
+      try {
+        const userSnap = await getDoc(doc(db, "users", targetStudentId));
+        if (userSnap.exists() && isMounted) {
+          const data = userSnap.data();
+          setDirectChild({
+            ...data,
+            _firestoreId: userSnap.id,
+            docId: userSnap.id,
+            id: data.nisn || data.id || userSnap.id,
+            rawId: data.id || "",
+            nisn: data.nisn || data.nis || "",
+            uid: data.uid || userSnap.id,
+            name: data.fullName || data.name || "",
+            fullName: data.fullName || data.name || "",
+            className: data.className || data.classId || data.kelas || "",
+            classId: data.classId || data.className || data.kelas || "",
+          });
+          return;
+        }
+
+        const studentSnap = await getDoc(doc(db, "students", targetStudentId));
+        if (studentSnap.exists() && isMounted) {
+          const data = studentSnap.data();
+          setDirectChild({
+            ...data,
+            _firestoreId: studentSnap.id,
+            docId: studentSnap.id,
+            id: data.id || studentSnap.id,
+            rawId: data.id || "",
+            nisn: data.nisn || data.nis || data.id || "",
+            uid: data.uid || studentSnap.id,
+            name: data.name || data.fullName || "",
+            fullName: data.name || data.fullName || "",
+            className: data.classId || data.className || "",
+            classId: data.classId || data.className || "",
+          });
+        }
+      } catch (err) {
+        console.warn("Direct child lookup fallback warning:", err);
+      }
+    };
+
+    fetchDirectChild();
+    return () => {
+      isMounted = false;
+    };
+  }, [parentData?.studentId, parentData?.studentIds, parentData?.linkedStudentIds]);
+
+  // Combine unifiedStudentsList (which includes users role siswa) with raw students listener and direct child fallback
+  const allAvailableStudents = useMemo(() => {
+    const map = new Map<string, any>();
+
+    // 1. From Unified Students (users role siswa + students docs)
+    if (unifiedStudentsList && unifiedStudentsList.length > 0) {
+      unifiedStudentsList.forEach(s => {
+        const key = s._firestoreId || s.uid || s.id;
+        if (key) map.set(key, s);
+      });
+    }
+
+    // 2. From raw students listener
+    if (studentsList && studentsList.length > 0) {
+      studentsList.forEach(s => {
+        const key = s._firestoreId || s.uid || s.id;
+        if (key && !map.has(key)) map.set(key, s);
+      });
+    }
+
+    // 3. From direct child fallback
+    if (directChild) {
+      const key = directChild._firestoreId || directChild.uid || directChild.id;
+      if (key && !map.has(key)) map.set(key, directChild);
+    }
+
+    return Array.from(map.values());
+  }, [unifiedStudentsList, studentsList, directChild]);
+
+  // 3. Resolve Connected Child (Strict 1-to-1 Matching or Registered Siblings)
   const connectedChildren = useMemo(() => {
-    if (!studentsList || studentsList.length === 0) return [];
+    if (!allAvailableStudents || allAvailableStudents.length === 0) {
+      return directChild ? [directChild] : [];
+    }
 
     const parentUid = currentUser?.uid || authUser?.uid;
     const parentEmail = (currentUser?.email || authUser?.email || parentData?.email || authUserData?.email || "").toLowerCase().trim();
@@ -228,68 +306,94 @@ export function ParentDashboardView({
     const pParentName = (parentData?.name || authUserData?.name || parentData?.fullName || authUserData?.fullName || "").toLowerCase().trim();
     const targetStudentName = (parentData?.studentName || authUserData?.studentName || "").toLowerCase().trim();
     const specificStudentId = String(parentData?.studentId || authUserData?.studentId || parentData?.nisn || authUserData?.nisn || "").trim();
+    const rawIds = toSafeArray(parentData?.studentIds || authUserData?.studentIds || parentData?.linkedStudentIds);
+
+    const matches: any[] = [];
+    const seenIds = new Set<string>();
+
+    const addIfNew = (s: any) => {
+      const key = s._firestoreId || s.uid || s.id;
+      if (key && !seenIds.has(key)) {
+        seenIds.add(key);
+        matches.push(s);
+      }
+    };
 
     // 1. First Priority: Direct parentUid match on student record
     if (parentUid) {
-      const matchByUid = studentsList.find(s => {
+      allAvailableStudents.forEach(s => {
         const sParentUid = String(s.parentUid || s.parentUserId || "").trim();
-        return sParentUid && sParentUid === parentUid;
+        if (sParentUid && sParentUid === parentUid) addIfNew(s);
       });
-      if (matchByUid) return [matchByUid];
     }
 
-    // 2. Second Priority: Direct Student ID or NISN match
+    // 2. Second Priority: Direct target studentIds / linkedStudentIds
+    if (rawIds.length > 0) {
+      for (const rId of rawIds) {
+        const strId = String(rId).toLowerCase().trim();
+        const found = allAvailableStudents.find(s => {
+          const sDocId = String(s._firestoreId || s.docId || "").toLowerCase();
+          const sId = String(s.id || "").toLowerCase();
+          const sNisn = String(s.nisn || "").toLowerCase();
+          const sUid = String(s.uid || "").toLowerCase();
+          return sDocId === strId || sId === strId || sNisn === strId || sUid === strId;
+        });
+        if (found) addIfNew(found);
+      }
+    }
+
+    // 3. Third Priority: Direct specific Student ID or NISN match
     if (specificStudentId) {
-      const matchById = studentsList.find(s => {
-        const sDocId = String(s._firestoreId || s.docId || "");
-        const sId = String(s.id || "");
-        const sRawId = String(s.rawId || "");
-        const sNisn = String(s.nisn || "");
-        const sNis = String(s.nis || "");
-        const sUid = String(s.uid || "");
-        const cId = specificStudentId.toLowerCase();
+      const cId = specificStudentId.toLowerCase();
+      const matchById = allAvailableStudents.find(s => {
+        const sDocId = String(s._firestoreId || s.docId || "").toLowerCase();
+        const sId = String(s.id || "").toLowerCase();
+        const sRawId = String(s.rawId || "").toLowerCase();
+        const sNisn = String(s.nisn || "").toLowerCase();
+        const sNis = String(s.nis || "").toLowerCase();
+        const sUid = String(s.uid || "").toLowerCase();
         return (
-          sDocId.toLowerCase() === cId ||
-          sId.toLowerCase() === cId ||
-          sRawId.toLowerCase() === cId ||
-          sNisn.toLowerCase() === cId ||
-          sNis.toLowerCase() === cId ||
-          sUid.toLowerCase() === cId
+          sDocId === cId ||
+          sId === cId ||
+          sRawId === cId ||
+          sNisn === cId ||
+          sNis === cId ||
+          sUid === cId
         );
       });
-      if (matchById) return [matchById];
+      if (matchById) addIfNew(matchById);
     }
 
-    // 3. Third Priority: Exact Parent Phone match
-    if (parentPhone && parentPhone.length >= 8) {
-      const matchByPhone = studentsList.find(s => {
+    // 4. Fourth Priority: Exact Parent Phone match
+    if (matches.length === 0 && parentPhone && parentPhone.length >= 8) {
+      const matchByPhone = allAvailableStudents.find(s => {
         const sPhone = String(s.parentPhone || "").replace(/[^0-9]/g, "");
         return sPhone && sPhone === parentPhone;
       });
-      if (matchByPhone) return [matchByPhone];
+      if (matchByPhone) addIfNew(matchByPhone);
     }
 
-    // 4. Fourth Priority: Exact Parent Email match
-    if (parentEmail && parentEmail.includes("@")) {
-      const matchByEmail = studentsList.find(s => {
+    // 5. Fifth Priority: Exact Parent Email match
+    if (matches.length === 0 && parentEmail && parentEmail.includes("@")) {
+      const matchByEmail = allAvailableStudents.find(s => {
         const sEmail = String(s.parentEmail || "").toLowerCase().trim();
         return sEmail && sEmail === parentEmail;
       });
-      if (matchByEmail) return [matchByEmail];
+      if (matchByEmail) addIfNew(matchByEmail);
     }
 
-    // 5. Fifth Priority: Exact Student Name match
-    if (targetStudentName && targetStudentName.length >= 3) {
-      const matchByStudentName = studentsList.find(s => {
+    // 6. Sixth Priority: Exact Student Name match
+    if (matches.length === 0 && targetStudentName && targetStudentName.length >= 3) {
+      const matchByStudentName = allAvailableStudents.find(s => {
         const sName = String(s.name || s.fullName || "").toLowerCase().trim();
         return sName === targetStudentName;
       });
-      if (matchByStudentName) return [matchByStudentName];
+      if (matchByStudentName) addIfNew(matchByStudentName);
     }
 
-    // 6. Sixth Priority: Exact Father / Mother / Guardian / Parent Name match
-    if (pParentName && pParentName.length >= 3) {
-      const matchByParentName = studentsList.find(s => {
+    // 7. Seventh Priority: Exact Father / Mother / Guardian / Parent Name match
+    if (matches.length === 0 && pParentName && pParentName.length >= 3) {
+      const matchByParentName = allAvailableStudents.find(s => {
         const fName = String(s.fatherName || "").toLowerCase().trim();
         const mName = String(s.motherName || "").toLowerCase().trim();
         const gName = String(s.guardianName || "").toLowerCase().trim();
@@ -301,31 +405,17 @@ export function ParentDashboardView({
           (sParent && sParent === pParentName)
         );
       });
-      if (matchByParentName) return [matchByParentName];
+      if (matchByParentName) addIfNew(matchByParentName);
     }
 
-    // 7. Fallback: Check parentData.studentIds array (take first match only)
-    const rawIds = toSafeArray(parentData?.studentIds || authUserData?.studentIds);
-    if (rawIds.length > 0) {
-      for (const rId of rawIds) {
-        const strId = String(rId).toLowerCase().trim();
-        const found = studentsList.find(s => {
-          const sDocId = String(s._firestoreId || s.docId || "").toLowerCase();
-          const sId = String(s.id || "").toLowerCase();
-          const sNisn = String(s.nisn || "").toLowerCase();
-          return sDocId === strId || sId === strId || sNisn === strId;
-        });
-        if (found) return [found];
-      }
-    }
-
-    return [];
-  }, [studentsList, currentUser, authUser, parentData, authUserData]);
+    if (matches.length > 0) return matches;
+    return directChild ? [directChild] : [];
+  }, [allAvailableStudents, directChild, currentUser, authUser, parentData, authUserData]);
 
   // Auto select first child if none selected yet
   useEffect(() => {
     if (connectedChildren.length > 0 && !selectedChildId) {
-      setSelectedChildId(connectedChildren[0]._firestoreId || connectedChildren[0].id);
+      setSelectedChildId(connectedChildren[0]._firestoreId || connectedChildren[0].id || connectedChildren[0].uid);
     }
   }, [connectedChildren, selectedChildId]);
 
@@ -333,7 +423,13 @@ export function ParentDashboardView({
   const activeChild = useMemo(() => {
     if (connectedChildren.length === 0) return null;
     if (!selectedChildId) return connectedChildren[0];
-    const found = connectedChildren.find(c => c.id === selectedChildId);
+    const found = connectedChildren.find(c => 
+      c.id === selectedChildId || 
+      c._firestoreId === selectedChildId || 
+      c.uid === selectedChildId || 
+      c.docId === selectedChildId || 
+      c.nisn === selectedChildId
+    );
     return found || connectedChildren[0];
   }, [selectedChildId, connectedChildren]);
 
@@ -775,23 +871,32 @@ export function ParentDashboardView({
             {/* If parent has multiple registered children (siblings), provide clean tab switcher */}
             {connectedChildren.length > 1 ? (
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                {connectedChildren.map((child) => (
-                  <button
-                    key={child.id}
-                    onClick={() => setSelectedChildId(child.id)}
-                    className={cn(
-                      "px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
-                      child.id === activeChild?.id
-                        ? "bg-[#531FFF] text-white shadow-xs"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                    )}
-                  >
-                    <span>{child.fullName || child.name}</span>
-                    <span className={cn("text-[10px]", child.id === activeChild?.id ? "text-purple-200" : "text-gray-400")}>
-                      ({child.className || child.classId || "Siswa"})
-                    </span>
-                  </button>
-                ))}
+                {connectedChildren.map((child) => {
+                  const childKey = child._firestoreId || child.id || child.uid;
+                  const isActive = (
+                    childKey === selectedChildId ||
+                    child.id === activeChild?.id ||
+                    child._firestoreId === activeChild?._firestoreId ||
+                    child.uid === activeChild?.uid
+                  );
+                  return (
+                    <button
+                      key={childKey}
+                      onClick={() => setSelectedChildId(childKey)}
+                      className={cn(
+                        "px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                        isActive
+                          ? "bg-[#531FFF] text-white shadow-xs"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      )}
+                    >
+                      <span>{child.fullName || child.name}</span>
+                      <span className={cn("text-[10px]", isActive ? "text-purple-200" : "text-gray-400")}>
+                        ({child.className || child.classId || "Siswa"})
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               <h2 className="text-sm font-extrabold text-gray-900 mt-0.5">

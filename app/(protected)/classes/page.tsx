@@ -45,6 +45,7 @@ import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { isStudentInClass, cascadeUpdateClassRelations } from "@/lib/class-relations";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 
 // Standard Class Presets for Quick Creation
 const STANDARD_CLASS_PRESETS = [
@@ -63,6 +64,7 @@ const STANDARD_CLASS_PRESETS = [
 export default function ClassesPage() {
   const [classes, setClasses] = useState<any[]>([]);
   const { students, loading: studentsLoading } = useUnifiedStudents();
+  const { teachers: unifiedTeachers } = useUnifiedTeachers();
   const [teachers, setTeachers] = useState<any[]>([]);
   const [classesLoading, setClassesLoading] = useState(true);
   const loading = classesLoading || studentsLoading;
@@ -125,20 +127,14 @@ export default function ClassesPage() {
       setClassesLoading(false);
     });
 
-    // 2. Teachers
-    const qTeachers = query(collection(db, "teachers"));
-    const unsubTeachers = onSnapshot(qTeachers, (snapshot) => {
-      const tchs = snapshot.docs.map(doc => ({ _firestoreId: doc.id, id: doc.id, ...doc.data() }));
-      setTeachers(tchs);
-    }, (error) => {
-      console.error("Teachers listener error:", error);
-    });
-    
     return () => {
       unsubClasses();
-      unsubTeachers();
     };
   }, []);
+
+  useEffect(() => {
+    setTeachers(unifiedTeachers);
+  }, [unifiedTeachers]);
 
   // Map real-time students count to each class using robust relational matching
   const classStudentsMap = useMemo(() => {

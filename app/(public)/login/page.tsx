@@ -1,25 +1,38 @@
 'use client';
 
-import { Mail, Lock, EyeOff, Eye, BarChart3, ShieldCheck, Zap, Building2, Loader2 } from "lucide-react";
+import { Mail, Lock, EyeOff, Eye, BarChart3, ShieldCheck, Zap, Building2, Loader2, Clock } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { signInWithEmailAndPassword, deleteUser } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { useToast } from "@/context/ToastContext";
 
 function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const toast = useToast();
   const { profile } = useSchoolProfile();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const isSessionExpired = searchParams.get("session_expired") === "1" || searchParams.get("reason") === "session_expired";
+
+  useEffect(() => {
+    if (isSessionExpired) {
+      toast.showWarning(
+        "Sesi Anda telah berakhir secara otomatis karena tidak ada aktivitas selama 30 menit. Silakan masuk kembali.",
+        "Sesi Telah Berakhir"
+      );
+    }
+  }, [isSessionExpired, toast]);
 
   const redirectParam = searchParams.get("redirect");
   const targetRedirect = redirectParam ? decodeURIComponent(redirectParam) : "/dashboard";
@@ -106,7 +119,10 @@ function LoginFormContent() {
       <div className="w-full lg:w-[45%] xl:w-[40%] bg-[#F8F9FE] p-10 lg:p-16 flex flex-col relative min-h-screen justify-center overflow-hidden border-r border-gray-100">
           {/* Logo */}
           <div className="flex items-center gap-3 mb-10">
-            <div className="w-11 h-11 rounded-xl bg-[#531FFF] flex items-center justify-center shadow-sm overflow-hidden relative p-1 border border-white/20">
+            <div 
+              className="w-11 h-11 rounded-xl bg-[#531FFF] flex items-center justify-center shadow-sm overflow-hidden relative p-1 border border-white/20 shrink-0"
+              style={{ width: "44px", height: "44px", minWidth: "44px", minHeight: "44px", position: "relative" }}
+            >
               {profile.logoUrl ? (
                 <Image 
                   src={profile.logoUrl} 
@@ -217,6 +233,20 @@ function LoginFormContent() {
               Selamat datang kembali <span className="text-2xl">👋</span>
             </h2>
             <p className="text-gray-500 text-sm mb-8">Masuk ke akun Quick Schools Anda</p>
+
+            {isSessionExpired && (
+              <div className="mb-6 p-4 bg-amber-50/90 border border-amber-200/90 rounded-2xl flex items-start gap-3.5 shadow-sm text-amber-900 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-200/80 flex items-center justify-center shrink-0 mt-0.5 text-amber-700">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-bold text-amber-900">Sesi Login Telah Berakhir</h4>
+                  <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                    Demi keamanan akun Anda, sistem secara otomatis mengakhiri sesi karena tidak ada aktivitas selama 30 menit. Silakan masukkan kredensial Anda kembali untuk melanjutkan.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl">

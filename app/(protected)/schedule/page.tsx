@@ -17,6 +17,8 @@ import { resolveParentStudent } from "@/lib/parent-child-resolver";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { getTeachersForSubject } from "@/lib/subject-teacher-relations";
+import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
@@ -45,6 +47,8 @@ export default function SchedulePage() {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
+  const { teachers: unifiedTeachers } = useUnifiedTeachers();
+  const { students: unifiedStudents } = useUnifiedStudents();
   const [teachers, setTeachers] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,22 +127,20 @@ export default function SchedulePage() {
       setClasses(classData);
     });
 
-    const unsubTeachers = onSnapshot(query(collection(db, "teachers")), (snapshot) => {
-      setTeachers(snapshot.docs.map(d => ({ _firestoreId: d.id, ...d.data() })));
-    });
-
-    const unsubStudents = onSnapshot(query(collection(db, "students")), (snapshot) => {
-      setStudents(snapshot.docs.map(d => ({ _firestoreId: d.id, ...d.data() })));
-    });
-
     return () => {
       unsubscribe();
       unsubSubjects();
       unsubClasses();
-      unsubTeachers();
-      unsubStudents();
     };
   }, []);
+
+  useEffect(() => {
+    setTeachers(unifiedTeachers);
+  }, [unifiedTeachers]);
+
+  useEffect(() => {
+    setStudents(unifiedStudents);
+  }, [unifiedStudents]);
 
   // Helper to open modal pre-filled
   const handleOpenAddModal = (presetDay?: string, presetClass?: string, presetStart?: string, presetEnd?: string) => {

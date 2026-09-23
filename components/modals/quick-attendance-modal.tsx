@@ -314,7 +314,7 @@ export function QuickAttendanceModal({
   const canSubmit = Boolean(
     capturedPhoto &&
     !gpsLoading &&
-    locationData.inRadius &&
+    (!config.requireRadius || locationData.inRadius) &&
     !isSubmitting &&
     !alreadyAttendedToday
   );
@@ -326,9 +326,9 @@ export function QuickAttendanceModal({
       return;
     }
 
-    // Strict enforcement
-    if (!capturedPhoto) {
-      if (showError) showError("Silakan ambil foto wajah melalui kamera terlebih dahulu.", "Foto Diperlukan");
+    // Strict enforcement: Siswa wajib melakukan foto terlebih dahulu
+    if (!capturedPhoto || capturedPhoto.trim() === "") {
+      if (showError) showError("Foto selfie kehadiran siswa wajib diambil terlebih dahulu sebelum melakukan konfirmasi absensi.", "Foto Wajib");
       return;
     }
 
@@ -359,12 +359,17 @@ export function QuickAttendanceModal({
     const isLate = currentTotalMinutes > startTotalMinutes;
 
     const user = auth.currentUser;
+    const studentUid = user?.uid || "";
+    const cleanStudentId = studentId && studentId !== "-" ? studentId : (studentUid || "siswa");
     // Deterministic doc ID: one per student per day — prevents duplicates at database level
-    const recordDocId = `att_${studentId}_${dateStr}`;
+    const recordDocId = `att_${cleanStudentId}_${dateStr}`;
     const recordPayload = {
       id: recordDocId,
       type: "attendance_record",
-      studentId,
+      studentId: cleanStudentId,
+      studentUid,
+      uid: studentUid,
+      nisn: studentId && studentId !== "-" ? studentId : "",
       studentName: userName,
       studentEmail: user?.email || "",
       className: studentClass,
@@ -411,24 +416,32 @@ export function QuickAttendanceModal({
         } catch (e) {}
       }
 
-      // 1. Primary write to Firestore allowed collection: 'roles'
-      await setDoc(doc(db, "roles", recordDocId), recordPayload);
+      // 1. Primary write to 'attendance' collection
+      try {
+        await setDoc(doc(db, "attendance", recordDocId), recordPayload);
+      } catch (attErr) {
+        console.warn("Direct attendance collection write warning, falling back to roles:", attErr);
+      }
 
-      // 2. Also save to localStorage for client-side persistence & fast access
+      // 2. Also write to Firestore allowed collection: 'roles'
+      try {
+        await setDoc(doc(db, "roles", recordDocId), recordPayload);
+      } catch (roleErr) {
+        console.warn("Roles collection write warning:", roleErr);
+      }
+
+      // 3. Also save to localStorage for client-side persistence & fast access
       try {
         const stored = localStorage.getItem("quick_schools_attendance_records");
         const list = stored ? JSON.parse(stored) : [];
-        // Remove any existing record for same student+date before adding
         const filtered = list.filter((r: any) => r.id !== recordDocId);
         filtered.unshift(recordPayload);
         localStorage.setItem("quick_schools_attendance_records", JSON.stringify(filtered.slice(0, 100)));
       } catch (e) {}
 
-      // 3. Try saving to 'attendance' collection (silent if cloud rules deny)
-      try {
-        await setDoc(doc(db, "attendance", recordDocId), recordPayload);
-      } catch (e) {
-        console.warn("Direct attendance collection restricted, record saved to roles:", e);
+      // 4. Dispatch custom event for instant cross-component reactivity
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("attendance_updated", { detail: recordPayload }));
       }
 
       if (showSuccess) {
@@ -834,6 +847,37 @@ export function QuickAttendanceModal({
                   </div>
                 )}
 
+                {/* Mandatory Photo Alert / Status Badge */}
+                {!capturedPhoto ? (
+                  <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-xs text-amber-800 animate-in fade-in">
+                    <Camera className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <span className="font-bold block text-amber-900 text-[11px]">
+                        Wajib Foto Selfie Siswa
+                      </span>
+                      <p className="text-amber-800 text-[10px] leading-snug">
+                        Silakan ambil foto wajah Anda melalui bingkai kamera di sebelah kiri untuk mengaktifkan tombol Konfirmasi Absensi.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-800 animate-in fade-in">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="font-bold text-[11px] text-emerald-900">
+                        Foto Siswa Berhasil Diambil & Tervalidasi ✓
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRetakePhoto}
+                      className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                    >
+                      Ambil Ulang
+                    </button>
+                  </div>
+                )}
+
                 {/* Final Submit Button */}
                 <div className="pt-1">
                   <button
@@ -844,7 +888,7 @@ export function QuickAttendanceModal({
                       "w-full py-3 px-4 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-2 shadow-md",
                       canSubmit
                         ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/30 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
-                        : "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none border border-gray-300"
+                        : "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none border border-gray-200"
                     )}
                   >
                     {isSubmitting ? (
@@ -860,17 +904,17 @@ export function QuickAttendanceModal({
                     ) : !capturedPhoto ? (
                       <>
                         <Camera className="w-4 h-4 text-gray-400" />
-                        <span>1. Silakan Ambil Foto Terlebih Dahulu</span>
+                        <span>Ambil Foto Terlebih Dahulu</span>
                       </>
                     ) : !locationData.inRadius ? (
                       <>
                         <XCircle className="w-4 h-4 text-rose-500" />
-                        <span>2. Tidak Dapat Absen (Di Luar Radius)</span>
+                        <span>Tidak Dapat Absen (Di Luar Radius)</span>
                       </>
                     ) : (
                       <>
                         <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-                        <span>Kirim & Catat Absensi Sekarang</span>
+                        <span>Konfirmasi Presensi Sekarang</span>
                       </>
                     )}
                   </button>

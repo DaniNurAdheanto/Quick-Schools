@@ -46,6 +46,7 @@ import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useTeacherAttendance } from "@/lib/teacher-attendance";
 import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal";
+import { useUnifiedStudents } from "@/hooks/use-unified-students";
 
 interface TeacherDashboardViewProps {
   userName: string;
@@ -102,6 +103,7 @@ export function TeacherDashboardView({
   // Realtime Collections from Firestore
   const [schedules, setSchedules] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
+  const { students: unifiedStudents } = useUnifiedStudents();
   const [students, setStudents] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
   const [grades, setGrades] = useState<any[]>([]);
@@ -268,10 +270,6 @@ export function TeacherDashboardView({
       setClasses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    const unsubStudents = onSnapshot(collection(db, "students"), (snap) => {
-      setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
     const unsubAttendance = onSnapshot(collection(db, "attendance"), (snap) => {
       setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
@@ -296,13 +294,16 @@ export function TeacherDashboardView({
     return () => {
       unsubSchedules();
       unsubClasses();
-      unsubStudents();
       unsubAttendance();
       unsubGrades();
       unsubAnnounce();
       unsubSettings();
     };
   }, []);
+
+  useEffect(() => {
+    setStudents(unifiedStudents);
+  }, [unifiedStudents]);
 
   // 4. Resolve Homeroom Class dynamically if not set on user profile
   const resolvedHomeroomClass = useMemo(() => {

@@ -53,6 +53,7 @@ import Link from "next/link";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import { isStudentRole, isTeacherRole, isSuperAdminRole, isParentRole } from "@/lib/roles-config";
 import { resolveParentStudent } from "@/lib/parent-child-resolver";
 import Image from "next/image";
@@ -95,6 +96,7 @@ export default function PaymentsPage() {
   } = useSPPPayments();
 
   const { students } = useUnifiedStudents();
+  const { teachers: unifiedTeachers } = useUnifiedTeachers();
   const { profile: schoolProfile } = useSchoolProfile();
 
   // Auth & Role from central AuthContext
@@ -246,14 +248,14 @@ export default function PaymentsPage() {
     const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
       setClassesList(snap.docs.map((d) => ({ _firestoreId: d.id, ...d.data() })));
     });
-    const unsubTeachers = onSnapshot(collection(db, "teachers"), (snap) => {
-      setTeachersList(snap.docs.map((d) => ({ _firestoreId: d.id, ...d.data() })));
-    });
     return () => {
       unsubClasses();
-      unsubTeachers();
     };
   }, []);
+
+  useEffect(() => {
+    setTeachersList(unifiedTeachers);
+  }, [unifiedTeachers]);
 
   // Resolve Teacher Homeroom Classes (Wali Kelas)
   const teacherHomeroomClasses = useMemo(() => {

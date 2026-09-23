@@ -464,7 +464,14 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
       }
     }
 
-    // 3. Geofence validation: reject if teacher is outside allowed radius
+    // 3. Strict Photo enforcement: Guru wajib melakukan foto terlebih dahulu
+    if (!photoUrl || photoUrl.trim() === "") {
+      throw new Error(
+        "Foto selfie kehadiran guru wajib diambil terlebih dahulu sebelum melakukan konfirmasi presensi masuk (Clock In)."
+      );
+    }
+
+    // 4. Geofence validation: reject if teacher is outside allowed radius
     if (config.geofenceEnabled && location && !location.inRadius) {
       const maxRadius = config.geofenceCenter?.radiusMeters || 100;
       const currentDist = location.distanceMeters ?? 0;
@@ -575,6 +582,22 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
 
     if (!existing || !existing.clockIn) {
       throw new Error("Data Clock In tidak ditemukan untuk presensi ini.");
+    }
+
+    // Strict Photo enforcement: Guru wajib melakukan foto kepulangan terlebih dahulu
+    if (!photoUrl || photoUrl.trim() === "") {
+      throw new Error(
+        "Foto selfie kepulangan guru wajib diambil terlebih dahulu sebelum melakukan konfirmasi presensi pulang (Clock Out)."
+      );
+    }
+
+    // Geofence validation: reject if teacher is outside allowed radius
+    if (config.geofenceEnabled && location && !location.inRadius) {
+      const maxRadius = config.geofenceCenter?.radiusMeters || 100;
+      const currentDist = location.distanceMeters ?? 0;
+      throw new Error(
+        `Presensi pulang (Clock Out) ditolak karena Anda berada di luar radius sekolah (${currentDist}m dari titik sekolah, batas maksimal ${maxRadius}m). Silakan berada di area sekolah untuk melakukan presensi pulang.`
+      );
     }
 
     const timeNow = getCurrentTimeString();
