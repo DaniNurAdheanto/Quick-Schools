@@ -46,7 +46,8 @@ import {
   fetchSubjectGroupsFromDb, 
   saveSubjectGroupToDb, 
   deleteSubjectGroupFromDb, 
-  batchSaveSubjectGroups 
+  batchSaveSubjectGroups,
+  syncSmaCurriculumStructureToDb
 } from "@/lib/subject-groups";
 import { SubjectGroupModal } from "@/components/subjects/subject-group-modal";
 import { AssignGroupSubjectsModal } from "@/components/subjects/assign-group-subjects-modal";
@@ -525,6 +526,24 @@ export default function SubjectsPage() {
     } catch (err: any) {
       console.error("Error assigning subjects to group:", err);
       toast.showError("Gagal menugaskan mata pelajaran ke kelompok.", "Gagal");
+    }
+  };
+
+  const [isSyncingSmaCurriculum, setIsSyncingSmaCurriculum] = useState(false);
+
+  const handleSyncSmaStructure = async () => {
+    setIsSyncingSmaCurriculum(true);
+    try {
+      const res = await syncSmaCurriculumStructureToDb();
+      toast.showSuccess(
+        `Berhasil menyusun & menyelaraskan Kurikulum SMA: ${res.groupsCount} Kelompok Mata Pelajaran (Umum, MIPA, IPS, Bahasa) & ${res.subjectsCount} Mata Pelajaran telah terhubung dengan Jurusan masing-masing!`,
+        "Kurikulum SMA Selaras"
+      );
+    } catch (err: any) {
+      console.error("Error syncing SMA curriculum structure:", err);
+      toast.showError("Gagal menyelaraskan struktur kurikulum SMA.", "Gagal");
+    } finally {
+      setIsSyncingSmaCurriculum(false);
     }
   };
 
@@ -1193,6 +1212,24 @@ export default function SubjectsPage() {
           <div className="flex flex-wrap items-center gap-2.5">
             {activeTab === "subjects" ? (
               <>
+                {/* SMA Automatic Full Curriculum Setup */}
+                {currentStage === "SMA" && (
+                  <button
+                    type="button"
+                    onClick={handleSyncSmaStructure}
+                    disabled={isSyncingSmaCurriculum}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/80 rounded-lg text-[13px] font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-50"
+                    title="Susun dan selaraskan otomatis seluruh mata pelajaran SMA ke Kelompok Umum, MIPA, IPS, dan Bahasa"
+                  >
+                    {isSyncingSmaCurriculum ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-emerald-700" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 text-emerald-700" />
+                    )}
+                    <span>Susun Kurikulum SMA Lengkap</span>
+                  </button>
+                )}
+
                 {/* Batch Add Preset Button */}
                 <button
                   type="button"
@@ -1219,6 +1256,24 @@ export default function SubjectsPage() {
               </>
             ) : (
               <>
+                {/* SMA Automatic Full Curriculum Setup */}
+                {currentStage === "SMA" && (
+                  <button
+                    type="button"
+                    onClick={handleSyncSmaStructure}
+                    disabled={isSyncingSmaCurriculum}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/80 rounded-lg text-[13px] font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-50"
+                    title="Susun dan selaraskan otomatis seluruh kelompok mata pelajaran SMA beserta mata pelajaran anggotanya"
+                  >
+                    {isSyncingSmaCurriculum ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-emerald-700" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 text-emerald-700" />
+                    )}
+                    <span>Susun Kurikulum SMA Lengkap</span>
+                  </button>
+                )}
+
                 {/* Load Preset Groups */}
                 <button
                   type="button"

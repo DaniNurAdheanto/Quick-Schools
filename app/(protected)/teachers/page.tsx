@@ -17,7 +17,8 @@ import {
   CheckCircle2,
   BookOpen,
   UserCheck,
-  Eye
+  Eye,
+  GraduationCap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
@@ -34,6 +35,13 @@ import {
 } from "@/lib/subject-teacher-relations";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import { syncTeacherRecord, deleteTeacherRecord } from "@/lib/unified-sync-service";
+import {
+  findAssignedClassForTeacher,
+  syncClassOnTeacherUpdate,
+  syncClassOnTeacherDelete,
+  assignHomeroomTeacher,
+  unassignHomeroomTeacher
+} from "@/lib/homeroom-sync-service";
 
 // Helper to compress uploaded photo into lightweight Base64 JPEG data URL (~15KB)
 async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0.7): Promise<string> {
@@ -82,6 +90,8 @@ export default function TeachersPage() {
   const { teachers, setTeachers, loading } = useUnifiedTeachers();
   const [subjectsList, setSubjectsList] = useState<any[]>([]);
 
+  const [classesList, setClassesList] = useState<any[]>([]);
+
   // Centralized useAuth
   const { role: authRole, rawRole: authRawRole, isAuthLoading, isRoleReady } = useAuth();
   const rawR = (authRawRole || authRole || "").toLowerCase();
@@ -103,8 +113,14 @@ export default function TeachersPage() {
       setSubjectsList(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
     });
 
+    const qClasses = query(collection(db, "classes"));
+    const unsubscribeClasses = onSnapshot(qClasses, (snapshot) => {
+      setClassesList(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
+    });
+
     return () => {
       unsubscribeSubjects();
+      unsubscribeClasses();
     };
   }, []);
 
@@ -122,6 +138,20 @@ export default function TeachersPage() {
         value: s._firestoreId || s.id || s.code,
         sublabel: `${s.code || "MAPEL"}${s.category ? ` • ${s.category}` : ""}${s.level ? ` • ${s.level}` : ""}`
       }))
+    },
+    {
+      name: "homeroomClass",
+      label: "Penugasan Wali Kelas (Opsional)",
+      type: "select",
+      placeholder: "Pilih Kelas Binaan / Bebas Tugas",
+      helperText: "Menetapkan guru ini sebagai wali kelas. Data otomatis tersinkronisasi dua arah ke menu Manajemen Wali Kelas.",
+      options: [
+        { label: "Bebas Tugas (Bukan Wali Kelas)", value: "" },
+        ...classesList.map(c => ({
+          label: `${c.name} (${c.level || "Kelas"})${c.homeroom ? ` • Wali saat ini: ${c.homeroom}` : " • Belum berwali"}`,
+          value: c.name
+        }))
+      ]
     },
     { name: "contact", label: "Nomor Kontak / WhatsApp", placeholder: "08..." },
     { 
@@ -151,7 +181,8 @@ export default function TeachersPage() {
         data: {
           status: "Aktif",
           subjectIds: [],
-          subjects: []
+          subjects: [],
+          homeroomClass: ""
         }
       });
       return;
@@ -165,12 +196,15 @@ export default function TeachersPage() {
       resolvedSubjectIds = matched.map(s => s._firestoreId || s.id || s.code).filter((id): id is string => Boolean(id));
     }
 
+    const assignedCls = findAssignedClassForTeacher(item, classesList);
+
     setCrudState({
       open: true,
       mode,
       data: {
         ...item,
-        subjectIds: resolvedSubjectIds
+        subjectIds: resolvedSubjectIds,
+        homeroomClass: assignedCls ? assignedCls.name : (item.homeroomClass || "")
       }
     });
   };
@@ -232,7 +266,7 @@ export default function TeachersPage() {
       const contactValue = data.contact || data.phone || "";
 
       if (crudState.mode === "create") {
-        await syncTeacherRecord(db, {
+        const createPayload = {
           id: nipValue,
           nip: nipValue,
           name: data.name || "",
@@ -244,19 +278,31 @@ export default function TeachersPage() {
           contact: contactValue,
           phone: contactValue,
           status: data.status || "Aktif",
+          homeroomClass: data.homeroomClass || "",
           imageUrl: imageUrl,
           photoUrl: imageUrl,
           createdAt: new Date().toISOString()
-        });
+        };
+
+        await syncTeacherRecord(db, createPayload);
 
         await syncTeacherSubjectRelations(db, nipValue, subjectIds, subjectsList, {
           id: nipValue,
           name: data.name || "",
           nip: nipValue
         });
+
+        // Two-way sync to class if homeroomClass was selected
+        if (data.homeroomClass) {
+          const targetClass = classesList.find(c => c.name === data.homeroomClass);
+          if (targetClass) {
+            await assignHomeroomTeacher(db, createPayload, targetClass, classesList, teachers);
+          }
+        }
       } else if (crudState.mode === "edit") {
         const targetId = data._firestoreId || crudState.data?._firestoreId || data.uid || crudState.data?.uid || data.id;
         const targetUid = data.uid || crudState.data?.uid;
+        const previousAssignedClass = findAssignedClassForTeacher(crudState.data, classesList);
 
         const updatePayload: any = {
           _firestoreId: targetId,
@@ -273,6 +319,7 @@ export default function TeachersPage() {
           contact: contactValue,
           phone: contactValue,
           status: data.status || "Aktif",
+          homeroomClass: data.homeroomClass || "",
           updatedAt: new Date().toISOString(),
           ...(imageUrl ? { imageUrl, photoUrl: imageUrl } : {})
         };
@@ -285,10 +332,43 @@ export default function TeachersPage() {
           nip: nipValue
         });
 
-        setTeachers((prev) =>
-          prev.map((t) => (t._firestoreId === targetId || (targetUid && t.uid === targetUid) ? { ...t, ...updatePayload } : t))
-        );
+        // Two-way sync to classes: handle assignment change or updates
+        const prevClassName = previousAssignedClass ? previousAssignedClass.name : "";
+        const newClassName = data.homeroomClass || "";
+
+        if (newClassName !== prevClassName) {
+          if (newClassName) {
+            const targetClass = classesList.find(c => c.name === newClassName);
+            if (targetClass) {
+              await assignHomeroomTeacher(db, updatePayload, targetClass, classesList, teachers);
+            }
+          } else if (previousAssignedClass) {
+            await unassignHomeroomTeacher(db, previousAssignedClass, teachers);
+          }
+        } else if (previousAssignedClass) {
+          // If teacher name/contact was updated, sync directly to class
+          await syncClassOnTeacherUpdate(db, updatePayload, classesList);
+        }
+
+        setTeachers((prev) => {
+          const updated = prev.map((t) =>
+            (t._firestoreId === targetId || (targetUid && t.uid === targetUid) || (nipValue && t.nip && t.nip !== "-" && t.nip === nipValue) || (t.name && data.name && t.name.toLowerCase().trim() === data.name.toLowerCase().trim()))
+              ? { ...t, ...updatePayload }
+              : t
+          );
+          const seen = new Set<string>();
+          return updated.filter(t => {
+            const key = (t.name || t.fullName || "").toLowerCase().trim();
+            if (!key) return true;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        });
       } else if (crudState.mode === "delete" && (data._firestoreId || data.id || data.uid)) {
+        // Clear class assignment if this teacher was a homeroom teacher
+        await syncClassOnTeacherDelete(db, data, classesList);
+
         await deleteTeacherRecord(db, {
           _firestoreId: data._firestoreId,
           uid: data.uid,
@@ -314,7 +394,17 @@ export default function TeachersPage() {
   // Filtered Teachers List
   const filteredTeachers = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return teachers.filter(teacher => {
+    const seen = new Set<string>();
+    const uniqueTeachers = teachers.filter(teacher => {
+      const key = (teacher.name || teacher.fullName || "").toLowerCase().trim();
+      const nipKey = (!teacher.nip || teacher.nip === "-") ? "" : teacher.nip.trim();
+      const combinedKey = nipKey ? `${key}_${nipKey}` : key;
+      if (combinedKey && seen.has(combinedKey)) return false;
+      if (combinedKey) seen.add(combinedKey);
+      return true;
+    });
+
+    return uniqueTeachers.filter(teacher => {
       const assignedSubjects = getSubjectsForTeacher(teacher, subjectsList);
       const subjectNames = assignedSubjects.map(s => s.name).join(" ").toLowerCase();
 
@@ -578,6 +668,7 @@ export default function TeachersPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
               {filteredTeachers.map((teacher, i) => {
                 const assignedSubjects = getSubjectsForTeacher(teacher, subjectsList);
+                const assignedClass = findAssignedClassForTeacher(teacher, classesList);
                 return (
                   <div 
                     key={teacher._firestoreId || i} 
@@ -662,6 +753,16 @@ export default function TeachersPage() {
                           )}
                         </div>
 
+                        {/* Homeroom Assignment Badge */}
+                        {assignedClass && (
+                          <div className="pt-1">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20 text-[10.5px] font-extrabold w-full shadow-2xs">
+                              <GraduationCap className="w-3.5 h-3.5 shrink-0 text-[#531FFF]" />
+                              <span className="truncate">Wali Kelas: {assignedClass.name}</span>
+                            </span>
+                          </div>
+                        )}
+
                         {teacher.contact && (
                           <p className="text-[11px] font-medium text-gray-500 truncate pt-1">
                             Kontak: {teacher.contact}
@@ -728,6 +829,7 @@ export default function TeachersPage() {
                   <tbody className="divide-y divide-gray-100">
                     {filteredTeachers.map((teacher, i) => {
                       const assignedSubjects = getSubjectsForTeacher(teacher, subjectsList);
+                      const assignedClass = findAssignedClassForTeacher(teacher, classesList);
                       return (
                         <tr key={teacher._firestoreId || i} className="hover:bg-purple-50/20 transition-colors group">
                           <td className="py-3.5 px-6">
@@ -749,6 +851,12 @@ export default function TeachersPage() {
                                 <span className="text-[11px] text-gray-400 font-medium">
                                   NIP: {teacher.nip || teacher.id || "-"}
                                 </span>
+                                {assignedClass && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20 text-[10px] font-extrabold block w-fit mt-1">
+                                    <GraduationCap className="w-3 h-3 text-[#531FFF]" />
+                                    Wali {assignedClass.name}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </td>

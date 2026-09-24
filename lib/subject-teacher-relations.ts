@@ -371,27 +371,30 @@ export async function syncSubjectTeacherRelations(
       }
 
       if (changed) {
-        const teacherRef = doc(db, "teachers", tDocId);
         const roleString = currentSubjects.join(", ") || teacher.role || teacher.subject || "";
-        batch.update(teacherRef, {
-          subjectIds: currentSubjectIds,
-          subjects: currentSubjects,
-          role: roleString,
-          subject: roleString,
-          updatedAt: new Date().toISOString()
-        });
+        const allDocIdsToUpdate = Array.from(new Set([tDocId, ...(teacher._allDocIds || [])])).filter(Boolean);
+        for (const docIdToSync of allDocIdsToUpdate) {
+          const teacherRef = doc(db, "teachers", docIdToSync);
+          batch.set(teacherRef, {
+            subjectIds: currentSubjectIds,
+            subjects: currentSubjects,
+            role: roleString,
+            subject: roleString,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        }
 
         // Also update users/{uid} if teacher has linked uid
-        const userUid = teacher.uid || (tDocId.length > 20 ? tDocId : null);
-        if (userUid) {
+        const userUid = teacher.uid;
+        if (userUid && typeof userUid === "string" && userUid.length >= 10) {
           try {
             const userRef = doc(db, "users", userUid);
-            batch.update(userRef, {
+            batch.set(userRef, {
               subjectIds: currentSubjectIds,
               subjects: currentSubjects,
               subject: roleString,
               updatedAt: new Date().toISOString()
-            });
+            }, { merge: true });
           } catch {
             // Ignore if users doc doesn't exist
           }

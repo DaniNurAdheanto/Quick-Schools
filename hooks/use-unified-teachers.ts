@@ -44,10 +44,61 @@ export function useUnifiedTeachers() {
 
     const isDocId = (val: any) => typeof val === "string" && val.length >= 20 && !/^\d+$/.test(val);
 
+    const normalizeName = (name: string) => {
+      if (!name) return "";
+      return name
+        .toLowerCase()
+        .replace(/,\s*(s\.pd|m\.pd|s\.kom|m\.kom|s\.t|m\.t|s\.si|m\.si|dr|dra|drs|lc|m\.a|s\.ag|m\.ag)[^,]*/gi, "")
+        .replace(/\b(dr|dra|drs|ustadz|kyai|ir)\.?\s+/gi, "")
+        .replace(/[^a-z0-9]/g, "")
+        .trim();
+    };
+
+    const findExistingKey = (
+      uid?: string,
+      email?: string,
+      nip?: string,
+      name?: string,
+      docId?: string
+    ): string | undefined => {
+      const cleanEmail = email ? email.toLowerCase().trim() : "";
+      const cleanN = normalizeName(name || "");
+      const cleanNip = (!isDocId(nip) && nip && nip !== "-") ? String(nip).trim() : "";
+
+      for (const [k, existing] of teacherMap.entries()) {
+        // 1. Match by UID
+        if (uid && (k === uid || existing.uid === uid || existing._firestoreId === uid || existing._allDocIds?.includes(uid))) {
+          return k;
+        }
+        // 2. Match by Firestore docId
+        if (docId && (k === docId || existing._firestoreId === docId || existing._allDocIds?.includes(docId))) {
+          return k;
+        }
+        // 3. Match by clean NIP (must be valid, at least 3 chars)
+        if (cleanNip && cleanNip.length >= 3) {
+          const exNip = (!isDocId(existing.nip) && existing.nip && existing.nip !== "-") ? String(existing.nip).trim() : "";
+          const exId = (!isDocId(existing.id) && existing.id && existing.id !== "-") ? String(existing.id).trim() : "";
+          if (cleanNip === exNip || cleanNip === exId) {
+            return k;
+          }
+        }
+        // 4. Match by Email
+        if (cleanEmail && existing.email && cleanEmail === existing.email.toLowerCase().trim()) {
+          return k;
+        }
+        // 5. Match by Normalized Name (if name has at least 3 characters)
+        if (cleanN && cleanN.length >= 3) {
+          const exNameNorm = normalizeName(existing.name || existing.fullName || "");
+          if (cleanN === exNameNorm) {
+            return k;
+          }
+        }
+      }
+      return undefined;
+    };
+
     // 1. Process items from `teachers` collection
     rawTeachersRef.current.forEach((item) => {
-      const key = item.uid || (item.email ? item.email.toLowerCase().trim() : "") || item.nip || item.id || item._firestoreId;
-      
       const cleanNip = (!isDocId(item.nip) && item.nip && item.nip !== "-") ? String(item.nip).trim()
         : (!isDocId(item.id) && item.id && item.id !== "-") ? String(item.id).trim()
         : "";
@@ -60,32 +111,72 @@ export function useUnifiedTeachers() {
       const primarySubject = item.subject || item.role || (rawSubjects.length > 0 ? rawSubjects[0] : "Mata Pelajaran Umum");
 
       const phone = item.contact || item.phone || "";
+      const email = (item.email || "").toLowerCase().trim();
+      const itemUid = item.uid || (isDocId(item._firestoreId) ? item._firestoreId : "");
+      const itemName = item.name || item.fullName || "Guru Pengajar";
 
-      teacherMap.set(key, {
-        ...item,
-        _firestoreId: item._firestoreId,
-        _allDocIds: [item._firestoreId],
-        uid: item.uid || (isDocId(item._firestoreId) ? item._firestoreId : ""),
-        id: cleanNip || item.id || item._firestoreId,
-        nip: cleanNip || "-",
-        name: item.name || item.fullName || "Guru Pengajar",
-        fullName: item.fullName || item.name || "Guru Pengajar",
-        email: (item.email || "").toLowerCase().trim(),
-        phone: phone,
-        contact: phone,
-        role: primarySubject,
-        subject: primarySubject,
-        subjectIds: rawSubjectIds,
-        subjects: rawSubjects,
-        homeroomClass: item.homeroomClass || item.className || item.class || "",
-        status: item.status || "Aktif",
-        imageUrl: validPhoto,
-        photoUrl: validPhoto,
-        gender: item.gender || "Laki-laki",
-        address: item.address || "",
-        createdAt: item.createdAt || "",
-        updatedAt: item.updatedAt || "",
-      });
+      const existingKey = findExistingKey(itemUid, email, cleanNip, itemName, item._firestoreId);
+
+      if (existingKey) {
+        const existing = teacherMap.get(existingKey)!;
+        if (item._firestoreId && !existing._allDocIds.includes(item._firestoreId)) {
+          existing._allDocIds.push(item._firestoreId);
+        }
+        if (!existing.uid && itemUid) existing.uid = itemUid;
+        if (!existing.email && email) existing.email = email;
+        if ((!existing.nip || existing.nip === "-") && cleanNip) {
+          existing.nip = cleanNip;
+          existing.id = cleanNip;
+        }
+        if ((!existing.phone || existing.phone === "-") && phone) {
+          existing.phone = phone;
+          existing.contact = phone;
+        }
+        if (item.homeroomClass && !existing.homeroomClass) {
+          existing.homeroomClass = item.homeroomClass;
+        }
+        if (validPhoto && !existing.imageUrl) {
+          existing.imageUrl = validPhoto;
+          existing.photoUrl = validPhoto;
+        }
+        if (rawSubjectIds.length > 0) {
+          existing.subjectIds = Array.from(new Set([...existing.subjectIds, ...rawSubjectIds]));
+        }
+        if (rawSubjects.length > 0) {
+          existing.subjects = Array.from(new Set([...existing.subjects, ...rawSubjects]));
+        }
+        if (primarySubject && (!existing.subject || existing.subject === "Guru Pengajar" || existing.subject === "Mata Pelajaran Umum")) {
+          existing.subject = primarySubject;
+          existing.role = primarySubject;
+        }
+      } else {
+        const key = itemUid || (cleanNip && cleanNip.length >= 3 ? cleanNip : "") || email || item._firestoreId;
+        teacherMap.set(key, {
+          ...item,
+          _firestoreId: item._firestoreId,
+          _allDocIds: [item._firestoreId],
+          uid: itemUid,
+          id: cleanNip || item.id || item._firestoreId,
+          nip: cleanNip || "-",
+          name: itemName,
+          fullName: item.fullName || itemName,
+          email: email,
+          phone: phone,
+          contact: phone,
+          role: primarySubject,
+          subject: primarySubject,
+          subjectIds: rawSubjectIds,
+          subjects: rawSubjects,
+          homeroomClass: item.homeroomClass || item.className || item.class || "",
+          status: item.status || "Aktif",
+          imageUrl: validPhoto,
+          photoUrl: validPhoto,
+          gender: item.gender || "Laki-laki",
+          address: item.address || "",
+          createdAt: item.createdAt || "",
+          updatedAt: item.updatedAt || "",
+        });
+      }
     });
 
     // 2. Merge items from `users` collection where role is `guru` or `teacher`
@@ -97,19 +188,10 @@ export function useUnifiedTeachers() {
         const uNip = (!isDocId(u.nip) && u.nip && u.nip !== "-") ? String(u.nip).trim()
           : (!isDocId(u.id) && u.id && u.id !== "-") ? String(u.id).trim()
           : "";
+        const uName = u.name || u.fullName || "Guru Pengajar";
 
-        // Find existing record in teacherMap by UID, Email, or NIP
-        let existingKey: string | undefined;
-        for (const [k, v] of teacherMap.entries()) {
-          if (
-            (uUid && (k === uUid || v.uid === uUid || v._firestoreId === uUid)) ||
-            (uEmail && v.email?.toLowerCase() === uEmail) ||
-            (uNip && (v.nip === uNip || v.id === uNip))
-          ) {
-            existingKey = k;
-            break;
-          }
-        }
+        // Find existing record in teacherMap by UID, DocID, Email, NIP, or Name
+        const existingKey = findExistingKey(uUid, uEmail, uNip, uName, u._firestoreId);
 
         const rawUPhoto = u.photoUrl || u.imageUrl || "";
         const validUPhoto = (typeof rawUPhoto === "string" && !rawUPhoto.startsWith("blob:")) ? rawUPhoto : "";
@@ -140,7 +222,6 @@ export function useUnifiedTeachers() {
           if (u.gender) existing.gender = u.gender;
           if (u.address) existing.address = u.address;
 
-          // If user doc has valid photo, update existing photo
           if (validUPhoto) {
             existing.imageUrl = validUPhoto;
             existing.photoUrl = validUPhoto;
@@ -153,13 +234,13 @@ export function useUnifiedTeachers() {
           if (Array.isArray(u.subjects) && u.subjects.length > 0) {
             existing.subjects = Array.from(new Set([...existing.subjects, ...u.subjects]));
           }
-          if (u.subject && (!existing.subject || existing.subject === "Guru Pengajar")) {
+          if (u.subject && (!existing.subject || existing.subject === "Guru Pengajar" || existing.subject === "Mata Pelajaran Umum")) {
             existing.subject = u.subject;
             existing.role = u.subject;
           }
         } else {
           // Add as new unified teacher from users collection
-          const newKey = uUid || uEmail || uNip || u._firestoreId;
+          const newKey = uUid || (uNip && uNip.length >= 3 ? uNip : "") || uEmail || u._firestoreId;
           const phone = u.contact || u.phone || "";
           const rawSubjectIds = Array.isArray(u.subjectIds) ? u.subjectIds : [];
           const rawSubjects = Array.isArray(u.subjects) ? u.subjects : (u.subject || u.role ? [u.subject || u.role] : []);
@@ -172,8 +253,8 @@ export function useUnifiedTeachers() {
             uid: uUid,
             id: uNip || uUid || u._firestoreId,
             nip: uNip || "-",
-            name: u.name || u.fullName || "Guru Pengajar",
-            fullName: u.fullName || u.name || "Guru Pengajar",
+            name: uName,
+            fullName: u.fullName || uName,
             email: uEmail,
             phone: phone,
             contact: phone,

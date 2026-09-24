@@ -227,35 +227,19 @@ export async function syncTeacherRecord(db: Firestore, data: TeacherSyncPayload)
 
   const now = new Date().toISOString();
 
-  const teacherDocIds = new Set<string>();
-  const userDocIds = new Set<string>();
-
-  if (data._firestoreId) {
-    teacherDocIds.add(data._firestoreId);
-    userDocIds.add(data._firestoreId);
-  }
-  if (data.uid) {
-    userDocIds.add(data.uid);
-    teacherDocIds.add(data.uid);
-  }
-  if (Array.isArray(data._allDocIds)) {
-    data._allDocIds.forEach((id) => {
-      if (id) {
-        teacherDocIds.add(id);
-        userDocIds.add(id);
-      }
-    });
-  }
-  if (cleanNip) {
-    teacherDocIds.add(cleanNip);
-  }
+  // Determine the SINGLE canonical document ID for `teachers` collection
+  const canonicalTeacherId = (data._firestoreId && data._firestoreId.trim())
+    ? data._firestoreId.trim()
+    : (cleanNip && cleanNip.length >= 3)
+      ? cleanNip
+      : (data.uid || data.id || `T${Date.now()}`);
 
   // 1. Prepare clean document for `teachers` collection
   const teacherDoc = sanitizePayload({
     name: teacherName,
     fullName: teacherName,
     nip: cleanNip || "-",
-    id: cleanNip || data.id || data.uid || "-",
+    id: cleanNip || data.id || data.uid || canonicalTeacherId,
     role: primarySubject,
     subject: primarySubject,
     subjectIds: rawSubjectIds,
@@ -295,23 +279,34 @@ export async function syncTeacherRecord(db: Firestore, data: TeacherSyncPayload)
     updatedAt: now,
   });
 
-  // Write to `teachers` collection
-  for (const tId of Array.from(teacherDocIds)) {
-    if (!tId) continue;
+  // 1. Write to ONE canonical document in `teachers` collection
+  if (canonicalTeacherId) {
     try {
-      await setDoc(doc(db, "teachers", tId), { id: tId, ...teacherDoc }, { merge: true });
+      await setDoc(doc(db, "teachers", canonicalTeacherId), { id: canonicalTeacherId, ...teacherDoc }, { merge: true });
     } catch (e) {
-      console.warn(`Sync to teachers/${tId} warning:`, e);
+      console.warn(`Sync to teachers/${canonicalTeacherId} warning:`, e);
     }
   }
 
-  // Write to `users` collection
-  for (const uId of Array.from(userDocIds)) {
-    if (!uId) continue;
+  // 2. Clean up any extra ghost duplicate documents in `teachers` collection
+  if (Array.isArray(data._allDocIds)) {
+    for (const extraId of data._allDocIds) {
+      if (extraId && extraId !== canonicalTeacherId && (!data.uid || extraId !== data.uid)) {
+        try {
+          await deleteDoc(doc(db, "teachers", extraId));
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+  }
+
+  // 3. Write to `users` collection ONLY if data.uid exists and is a valid UID
+  if (data.uid && typeof data.uid === "string" && data.uid.length >= 10) {
     try {
-      await setDoc(doc(db, "users", uId), { uid: uId, ...userDoc }, { merge: true });
+      await setDoc(doc(db, "users", data.uid), { uid: data.uid, ...userDoc }, { merge: true });
     } catch (e) {
-      console.warn(`Sync to users/${uId} warning:`, e);
+      console.warn(`Sync to users/${data.uid} warning:`, e);
     }
   }
 }

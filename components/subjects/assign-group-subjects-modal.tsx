@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { 
-  X, 
-  Search, 
-  FolderKanban, 
-  Save 
+import {
+  X,
+  Search,
+  FolderKanban,
+  Save
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SubjectGroup } from "@/lib/subject-groups";
@@ -50,20 +50,43 @@ export function AssignGroupSubjectsModal({
     );
   });
 
-  const handleToggle = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+  const isSubChecked = (sub: any) => {
+    return (
+      (sub._firestoreId && selectedIds.includes(sub._firestoreId)) ||
+      (sub.code && selectedIds.includes(sub.code)) ||
+      (sub.id && selectedIds.includes(sub.id))
     );
   };
 
+  const handleToggleSubject = (sub: any) => {
+    const checked = isSubChecked(sub);
+    const keysToRemove = new Set([sub._firestoreId, sub.code, sub.id].filter(Boolean));
+    if (checked) {
+      setSelectedIds((prev) => prev.filter((id) => !keysToRemove.has(id)));
+    } else {
+      const keysToAdd = [sub._firestoreId, sub.id, sub.code].filter(Boolean);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...keysToAdd])));
+    }
+  };
+
   const handleSelectAll = () => {
-    const allFilteredIds = filteredSubjects.map((s) => s._firestoreId || s.code);
-    setSelectedIds((prev) => Array.from(new Set([...prev, ...allFilteredIds])));
+    const allFilteredKeys: string[] = [];
+    filteredSubjects.forEach((s) => {
+      if (s._firestoreId) allFilteredKeys.push(s._firestoreId);
+      if (s.id) allFilteredKeys.push(s.id);
+      if (s.code) allFilteredKeys.push(s.code);
+    });
+    setSelectedIds((prev) => Array.from(new Set([...prev, ...allFilteredKeys])));
   };
 
   const handleDeselectAll = () => {
-    const allFilteredIds = new Set(filteredSubjects.map((s) => s._firestoreId || s.code));
-    setSelectedIds((prev) => prev.filter((id) => !allFilteredIds.has(id)));
+    const keysToRemove = new Set<string>();
+    filteredSubjects.forEach((s) => {
+      if (s._firestoreId) keysToRemove.add(s._firestoreId);
+      if (s.id) keysToRemove.add(s.id);
+      if (s.code) keysToRemove.add(s.code);
+    });
+    setSelectedIds((prev) => prev.filter((id) => !keysToRemove.has(id)));
   };
 
   const handleSave = async () => {
@@ -146,11 +169,11 @@ export function AssignGroupSubjectsModal({
         <div className="flex-1 overflow-y-auto p-4 divide-y divide-gray-100 custom-scrollbar">
           {filteredSubjects.length > 0 ? (
             filteredSubjects.map((sub) => {
-              const subId = sub._firestoreId || sub.code;
-              const isChecked = selectedIds.includes(subId);
+              const subKey = sub._firestoreId || sub.code || sub.id;
+              const isChecked = isSubChecked(sub);
               return (
                 <label
-                  key={subId}
+                  key={subKey}
                   className={cn(
                     "flex items-center justify-between py-2.5 px-3 rounded-xl cursor-pointer transition-all",
                     isChecked ? "bg-purple-50/80 text-[#531FFF]" : "hover:bg-gray-50 text-gray-800"
@@ -160,7 +183,7 @@ export function AssignGroupSubjectsModal({
                     <input
                       type="checkbox"
                       checked={isChecked}
-                      onChange={() => handleToggle(subId)}
+                      onChange={() => handleToggleSubject(sub)}
                       className="rounded border-gray-300 text-[#531FFF] focus:ring-[#531FFF] cursor-pointer"
                     />
                     <div className="min-w-0">

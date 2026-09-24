@@ -31,17 +31,22 @@ import {
   collection, 
   query, 
   onSnapshot, 
-  updateDoc, 
   doc, 
-  serverTimestamp,
   getDoc 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
+import {
+  findAssignedClassForTeacher,
+  findAssignedTeacherForClass,
+  assignHomeroomTeacher,
+  unassignHomeroomTeacher,
+  reconcileAllHomeroomData
+} from "@/lib/homeroom-sync-service";
 
-  export default function HomeroomPage() {
+export default function HomeroomPage() {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState<"classes" | "teachers">("classes");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -50,6 +55,7 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
   const { teachers: unifiedTeachers } = useUnifiedTeachers();
   const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isReconciling, setIsReconciling] = useState(false);
   const { role: authRole, rawRole: authRawRole, isAuthLoading: isUserAuthLoading, isRoleReady } = useAuth();
   const [userRole, setUserRole] = useState<string>("");
 
@@ -136,29 +142,16 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
     setTeachers(unifiedTeachers);
   }, [unifiedTeachers]);
 
-  // Map of which teacher is assigned to which class
-  // Key: teacher's normalized name (lowercase) -> class info
-  const teacherHomeroomMap = useMemo(() => {
-    const map = new Map<string, any>();
-    classes.forEach(c => {
-      if (c.homeroom && String(c.homeroom).trim() !== "") {
-        const normName = String(c.homeroom).trim().toLowerCase();
-        map.set(normName, c);
-      }
-    });
-    return map;
-  }, [classes]);
-
   // Statistics
   const totalClasses = classes.length;
   const filledHomerooms = classes.filter(c => c.homeroom && String(c.homeroom).trim() !== "").length;
   const emptyHomerooms = totalClasses - filledHomerooms;
   const assignmentPercentage = totalClasses > 0 ? Math.round((filledHomerooms / totalClasses) * 100) : 0;
   
-  // Teachers allocation statistics
+  // Teachers allocation statistics (using two-way resolution)
   const availableTeachers = useMemo(() => {
-    return teachers.filter(t => !teacherHomeroomMap.has(String(t.name).trim().toLowerCase()));
-  }, [teachers, teacherHomeroomMap]);
+    return teachers.filter(t => !findAssignedClassForTeacher(t, classes));
+  }, [teachers, classes]);
 
   // Filtered Classes List
   const filteredClasses = useMemo(() => {
@@ -189,7 +182,7 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
         (t.role && t.role.toLowerCase().includes(teacherSearch.toLowerCase())) ||
         (t.contact && t.contact.toLowerCase().includes(teacherSearch.toLowerCase()));
 
-      const isAssigned = teacherHomeroomMap.has(String(t.name).trim().toLowerCase());
+      const isAssigned = Boolean(findAssignedClassForTeacher(t, classes));
       const matchFilter = 
         teacherFilterStatus === "all" ||
         (teacherFilterStatus === "available" && !isAssigned) ||
@@ -197,7 +190,7 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 
       return matchSearch && matchFilter;
     });
-  }, [teachers, teacherSearch, teacherFilterStatus, teacherHomeroomMap]);
+  }, [teachers, teacherSearch, teacherFilterStatus, classes]);
 
   // Level options
   const levelOptions = useMemo(() => {
@@ -208,10 +201,10 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
   // Open assign modal for a specific class
   const handleOpenAssignModal = (cls: any) => {
     if (isGuru) return;
-    const currentTeacher = teachers.find(
+    const currentTeacher = findAssignedTeacherForClass(cls, teachers) || teachers.find(
       t => String(t.name).trim().toLowerCase() === String(cls.homeroom).trim().toLowerCase()
     );
-    setSelectedTeacherId(currentTeacher?._firestoreId || "");
+    setSelectedTeacherId(currentTeacher?._firestoreId || currentTeacher?.id || "");
     setModalSearch("");
     setModalFilter("available");
     setAssignModal({
@@ -224,7 +217,7 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
   // Open assign modal for a teacher to choose a class
   const handleAssignTeacherToClass = (teacher: any) => {
     if (isGuru) return;
-    setSelectedTeacherId(teacher._firestoreId);
+    setSelectedTeacherId(teacher._firestoreId || teacher.id || "");
     setModalSearch("");
     setModalFilter("all");
     // Pick the first empty class if available
@@ -236,7 +229,7 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
     });
   };
 
-  // Execute assignment
+  // Execute two-way unified assignment
   const handleSaveAssignment = async () => {
     if (isGuru) {
       toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
@@ -250,72 +243,19 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 
     try {
       setIsSaving(true);
-      const selectedTeacher = teachers.find(t => t._firestoreId === selectedTeacherId || t.id === selectedTeacherId);
+      const selectedTeacher = teachers.find(
+        t => t._firestoreId === selectedTeacherId || t.id === selectedTeacherId || t.uid === selectedTeacherId
+      ) || null;
 
-      const targetDocId = assignModal.targetClass._firestoreId;
-      const targetClassName = assignModal.targetClass.name;
-      const prevTeacherName = assignModal.targetClass.homeroom;
-      const newHomeroomName = selectedTeacher ? selectedTeacher.name : "";
-      const newHomeroomNip = selectedTeacher ? (selectedTeacher.nip || selectedTeacher.id || "") : "";
-      const newHomeroomContact = selectedTeacher ? (selectedTeacher.contact || selectedTeacher.phone || "") : "";
+      const targetClass = assignModal.targetClass;
+      const targetClassName = targetClass.name;
 
-      // 1. Update class document
-      await updateDoc(doc(db, "classes", targetDocId), {
-        homeroom: newHomeroomName,
-        homeroomNip: newHomeroomNip,
-        homeroomContact: newHomeroomContact,
-        homeroomId: selectedTeacher ? (selectedTeacher._firestoreId || selectedTeacher.id || "") : "",
-        updatedAt: serverTimestamp()
-      });
+      // Centralized two-way sync across classes, teachers, and users
+      await assignHomeroomTeacher(db, selectedTeacher, targetClass, classes, teachers);
 
-      // 2. Synchronize teacher document in teachers collection
-      if (selectedTeacher && selectedTeacher._firestoreId) {
-        try {
-          await updateDoc(doc(db, "teachers", selectedTeacher._firestoreId), {
-            homeroomClass: targetClassName,
-            homeroom: targetClassName,
-            waliKelas: targetClassName,
-            classDocId: targetDocId,
-            updatedAt: new Date().toISOString()
-          });
-        } catch (tErr) {
-          console.warn("Sync to selected teacher warning:", tErr);
-        }
-      }
-
-      // 3. Clear previous teacher if replaced
-      if (prevTeacherName && prevTeacherName !== newHomeroomName) {
-        const prevTeacherDoc = teachers.find(t => t.name === prevTeacherName);
-        if (prevTeacherDoc && prevTeacherDoc._firestoreId) {
-          try {
-            await updateDoc(doc(db, "teachers", prevTeacherDoc._firestoreId), {
-              homeroomClass: "",
-              homeroom: "",
-              waliKelas: "",
-              updatedAt: new Date().toISOString()
-            });
-          } catch (pErr) {
-            console.warn("Clear prev teacher warning:", pErr);
-          }
-        }
-      }
-
-      // Optimistic update
-      setClasses(prev => prev.map(c => {
-        if (c._firestoreId === targetDocId) {
-          return {
-            ...c,
-            homeroom: newHomeroomName,
-            homeroomNip: newHomeroomNip,
-            homeroomContact: newHomeroomContact
-          };
-        }
-        return c;
-      }));
-
-      if (newHomeroomName) {
+      if (selectedTeacher) {
         toast.showSuccess(
-          `${newHomeroomName} berhasil ditetapkan sebagai wali kelas ${targetClassName}. Data guru dan kelas tersinkronisasi.`,
+          `${selectedTeacher.name} berhasil ditetapkan sebagai wali kelas ${targetClassName}. Data guru dan kelas tersinkronisasi.`,
           "Wali Kelas Ditetapkan"
         );
       } else {
@@ -334,7 +274,7 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
     }
   };
 
-  // Execute unassign
+  // Execute two-way unassign
   const handleConfirmUnassign = async () => {
     if (isGuru) {
       toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
@@ -345,43 +285,10 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 
     try {
       setIsSaving(true);
-      const targetDocId = unassignModal.targetClass._firestoreId;
-      const prevTeacherName = unassignModal.targetClass.homeroom;
-
-      await updateDoc(doc(db, "classes", targetDocId), {
-        homeroom: "",
-        homeroomNip: "",
-        homeroomContact: "",
-        homeroomId: "",
-        updatedAt: serverTimestamp()
-      });
-
-      // Clear teacher's homeroomClass reference
-      if (prevTeacherName) {
-        const prevTeacherDoc = teachers.find(t => t.name === prevTeacherName);
-        if (prevTeacherDoc && prevTeacherDoc._firestoreId) {
-          try {
-            await updateDoc(doc(db, "teachers", prevTeacherDoc._firestoreId), {
-              homeroomClass: "",
-              homeroom: "",
-              waliKelas: "",
-              updatedAt: new Date().toISOString()
-            });
-          } catch (pErr) {
-            console.warn("Clear prev teacher warning:", pErr);
-          }
-        }
-      }
-
-      setClasses(prev => prev.map(c => {
-        if (c._firestoreId === targetDocId) {
-          return { ...c, homeroom: "", homeroomNip: "", homeroomContact: "" };
-        }
-        return c;
-      }));
+      await unassignHomeroomTeacher(db, unassignModal.targetClass, teachers);
 
       toast.showEdit(
-        `Penugasan ${prevTeacherName || "guru"} pada kelas ${unassignModal.targetClass.name} berhasil dilepas dan disinkronkan.`,
+        `Penugasan wali kelas pada ${unassignModal.targetClass.name} berhasil dilepas dan disinkronkan ke data guru.`,
         "Wali Kelas Dilepas"
       );
       setUnassignModal({ open: false });
@@ -393,13 +300,40 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
     }
   };
 
+  // One-click Reconcile Database Handler
+  const handleReconcileDatabase = async () => {
+    if (isGuru) return;
+    try {
+      setIsReconciling(true);
+      const res = await reconcileAllHomeroomData(db, classes, teachers);
+      if (res.reconciledCount > 0) {
+        toast.showSuccess(
+          `Berhasil menyelaraskan ${res.reconciledCount} data relasi kelas & guru.`,
+          "Sinkronisasi Berhasil"
+        );
+      } else {
+        toast.showSuccess(
+          "Seluruh data Guru dan Wali Kelas sudah selaras sempurna!",
+          "Data Tersinkronisasi"
+        );
+      }
+    } catch (err: any) {
+      console.error("Reconcile error:", err);
+      toast.showError("Gagal melakukan penyelarasan data database.", "Gagal");
+    } finally {
+      setIsReconciling(false);
+    }
+  };
+
   // CSV Export Handler
   const handleExportCSV = () => {
     if (filteredClasses.length === 0) return;
     const headers = ["Nama Kelas", "Tingkat", "Jurusan", "Total Siswa", "Nama Wali Kelas", "NIP Wali", "Kontak Wali", "Status"];
     const rows = filteredClasses.map(c => {
       const isFilled = Boolean(c.homeroom && String(c.homeroom).trim() !== "");
-      const teacherMatch = teachers.find(t => String(t.name).trim().toLowerCase() === String(c.homeroom).trim().toLowerCase());
+      const teacherMatch = findAssignedTeacherForClass(c, teachers) || teachers.find(
+        t => String(t.name).trim().toLowerCase() === String(c.homeroom).trim().toLowerCase()
+      );
       const nip = c.homeroomNip || teacherMatch?.nip || "-";
       const contact = c.homeroomContact || teacherMatch?.contact || "-";
 
@@ -432,7 +366,7 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
     setSelectedStatus("All");
   };
 
-  // Modal teacher filter list
+  // Modal teacher filter list (using two-way lookup)
   const modalFilteredTeachers = useMemo(() => {
     return teachers.filter(t => {
       const matchSearch = !modalSearch ||
@@ -440,7 +374,7 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
         (t.nip && t.nip.toLowerCase().includes(modalSearch.toLowerCase())) ||
         (t.role && t.role.toLowerCase().includes(modalSearch.toLowerCase()));
 
-      const assignedClass = teacherHomeroomMap.get(String(t.name).trim().toLowerCase());
+      const assignedClass = findAssignedClassForTeacher(t, classes);
       const isAssigned = Boolean(assignedClass);
       const isAssignedToThisClass = assignedClass?._firestoreId === assignModal.targetClass?._firestoreId;
 
@@ -452,7 +386,7 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
       }
       return matchSearch;
     });
-  }, [teachers, modalSearch, modalFilter, teacherHomeroomMap, assignModal.targetClass]);
+  }, [teachers, modalSearch, modalFilter, classes, assignModal.targetClass]);
 
   if (isUserAuthLoading || !isRoleReady || loading) {
     return <PageContentSkeleton />;
@@ -489,6 +423,18 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
         </div>
 
         <div className="flex items-center gap-3 relative z-10">
+          {!isGuru && (
+            <button 
+              onClick={handleReconcileDatabase}
+              disabled={isReconciling || loading}
+              className="flex items-center justify-center gap-2 bg-[#531FFF]/10 hover:bg-[#531FFF]/20 text-[#531FFF] px-4 py-2.5 rounded-lg text-sm font-bold border border-[#531FFF]/20 shadow-xs transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+              title="Periksa dan selaraskan relasi data kelas dan guru di seluruh database"
+            >
+              <RefreshCw className={cn("w-4 h-4", isReconciling && "animate-spin")} />
+              <span>{isReconciling ? "Menyelaraskan..." : "Sinkronkan Database"}</span>
+            </button>
+          )}
+
           <button 
             onClick={handleExportCSV}
             disabled={filteredClasses.length === 0}
@@ -764,9 +710,9 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
                   {filteredClasses.map((item, i) => {
                     const hasHomeroom = Boolean(item.homeroom && String(item.homeroom).trim() !== "");
                     const teacherMatch = hasHomeroom 
-                      ? teachers.find(t => String(t.name).trim().toLowerCase() === String(item.homeroom).trim().toLowerCase()) 
+                      ? (findAssignedTeacherForClass(item, teachers) || teachers.find(t => String(t.name).trim().toLowerCase() === String(item.homeroom).trim().toLowerCase()))
                       : null;
-                    const teacherPhoto = teacherMatch?.imageUrl || "";
+                    const teacherPhoto = teacherMatch?.imageUrl || teacherMatch?.photoUrl || "";
                     const teacherRole = teacherMatch?.role || teacherMatch?.subject || "Guru Pengajar";
                     const teacherNip = item.homeroomNip || teacherMatch?.nip || teacherMatch?.id || "-";
                     const teacherPhone = item.homeroomContact || teacherMatch?.contact || teacherMatch?.phone || "";
@@ -942,7 +888,7 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
                         {filteredClasses.map((item, i) => {
                           const hasHomeroom = Boolean(item.homeroom && String(item.homeroom).trim() !== "");
                           const teacherMatch = hasHomeroom 
-                            ? teachers.find(t => String(t.name).trim().toLowerCase() === String(item.homeroom).trim().toLowerCase()) 
+                            ? (findAssignedTeacherForClass(item, teachers) || teachers.find(t => String(t.name).trim().toLowerCase() === String(item.homeroom).trim().toLowerCase())) 
                             : null;
                           const teacherPhone = item.homeroomContact || teacherMatch?.contact || teacherMatch?.phone || "";
 
@@ -1141,7 +1087,7 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
           {/* Teachers Matrix Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {filteredTeachers.map((teacher, i) => {
-              const assignedClass = teacherHomeroomMap.get(String(teacher.name).trim().toLowerCase());
+              const assignedClass = findAssignedClassForTeacher(teacher, classes);
               const isAssigned = Boolean(assignedClass);
 
               return (
@@ -1388,7 +1334,7 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
               {/* Teachers List */}
               {modalFilteredTeachers.map((t) => {
                 const isSelected = selectedTeacherId === t._firestoreId;
-                const assignedClass = teacherHomeroomMap.get(String(t.name).trim().toLowerCase());
+                const assignedClass = findAssignedClassForTeacher(t, classes);
                 const isAssigned = Boolean(assignedClass);
                 const isCurrentlyThisClass = assignedClass?._firestoreId === assignModal.targetClass?._firestoreId;
 

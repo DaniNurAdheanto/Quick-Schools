@@ -4,10 +4,12 @@ import {
   getDocs, 
   doc, 
   setDoc, 
+  addDoc,
   deleteDoc, 
   getDoc,
   query,
-  orderBy
+  orderBy,
+  serverTimestamp
 } from "firebase/firestore";
 import type { EducationalStage } from "@/lib/school-level-config";
 
@@ -145,12 +147,12 @@ export function getPresetSubjectGroups(stage: EducationalStage, activeMajors: { 
       {
         id: "sg_sma_wajib_umum",
         code: "A-UMUM",
-        name: "Kelompok Mata Pelajaran Umum (Wajib)",
+        name: "Kelompok Mata Pelajaran Umum",
         category: "Wajib",
         major: "Semua Jurusan / Umum",
         level: "Semua Tingkat",
-        description: "Mata pelajaran wajib kurikulum nasional untuk seluruh rombel peminatan.",
-        subjectIds: [],
+        description: "Pendidikan Agama dan Budi Pekerti, Pendidikan Pancasila, Bahasa Indonesia, Matematika, Bahasa Inggris, PJOK, dan Sejarah.",
+        subjectIds: ["PAI", "PKN", "BIN", "MAT", "BIG", "PJK", "SEJ"],
         order: 1,
         status: "Aktif",
         createdAt: now,
@@ -159,12 +161,12 @@ export function getPresetSubjectGroups(stage: EducationalStage, activeMajors: { 
       {
         id: "sg_sma_peminatan_mipa",
         code: "C-MIPA",
-        name: "Kelompok Peminatan Matematika & IPA (MIPA)",
+        name: "Kelompok MIPA",
         category: "Peminatan",
         major: "IPA",
         level: "Kelas 10-12",
-        description: "Mata pelajaran peminatan sains (Fisika, Kimia, Biologi, Matematika Peminatan).",
-        subjectIds: [],
+        description: "Biologi, Fisika, Kimia, dan Matematika Tingkat Lanjut.",
+        subjectIds: ["BIO", "FIS", "KIM", "MTL"],
         order: 2,
         status: "Aktif",
         createdAt: now,
@@ -173,12 +175,12 @@ export function getPresetSubjectGroups(stage: EducationalStage, activeMajors: { 
       {
         id: "sg_sma_peminatan_ips",
         code: "C-IPS",
-        name: "Kelompok Peminatan Ilmu Pengetahuan Sosial (IPS)",
+        name: "Kelompok IPS",
         category: "Peminatan",
         major: "IPS",
         level: "Kelas 10-12",
-        description: "Mata pelajaran peminatan sosial humaniora (Ekonomi, Sosiologi, Geografi, Sejarah Peminatan).",
-        subjectIds: [],
+        description: "Ekonomi, Geografi, Sosiologi, dan Sejarah Tingkat Lanjut.",
+        subjectIds: ["EKO", "GEO", "SOS", "SJL"],
         order: 3,
         status: "Aktif",
         createdAt: now,
@@ -187,12 +189,12 @@ export function getPresetSubjectGroups(stage: EducationalStage, activeMajors: { 
       {
         id: "sg_sma_peminatan_bahasa",
         code: "C-BHS",
-        name: "Kelompok Peminatan Bahasa & Budaya",
+        name: "Kelompok Bahasa",
         category: "Peminatan",
         major: "Bahasa",
         level: "Kelas 10-12",
-        description: "Mata pelajaran sastra dan bahasa asing pilihan.",
-        subjectIds: [],
+        description: "Bahasa dan Sastra Indonesia, Bahasa dan Sastra Inggris, Bahasa Asing Pilihan, dan Antropologi.",
+        subjectIds: ["BSI", "BSE", "BSA", "ANT"],
         order: 4,
         status: "Aktif",
         createdAt: now,
@@ -201,12 +203,12 @@ export function getPresetSubjectGroups(stage: EducationalStage, activeMajors: { 
       {
         id: "sg_sma_mulok",
         code: "MULOK",
-        name: "Muatan Lokal & Lintas Minat",
+        name: "Muatan Lokal & Pilihan",
         category: "Muatan Lokal",
         major: "Semua Jurusan / Umum",
         level: "Semua Tingkat",
-        description: "Kearifan lokal daerah dan mata pelajaran lintas minat.",
-        subjectIds: [],
+        description: "Kearifan lokal daerah dan mata pelajaran keterampilan pilihan.",
+        subjectIds: ["BHD", "PLH"],
         order: 5,
         status: "Aktif",
         createdAt: now,
@@ -396,4 +398,323 @@ export async function batchSaveSubjectGroups(groups: SubjectGroup[]): Promise<vo
     }, { merge: true });
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(groups));
   } catch (e) {}
+}
+
+export interface StandardPresetSubject {
+  code: string;
+  name: string;
+  groupId: string;
+  groupName: string;
+  category: "Wajib" | "Peminatan" | "Muatan Lokal";
+  major: string;
+  kkm: number;
+  creditHours: string;
+  description: string;
+}
+
+/**
+ * Standard Subject Definitions for SMA curriculum organized by Group & Major
+ */
+export const SMA_STANDARD_SUBJECTS: StandardPresetSubject[] = [
+  // 1. Kelompok Mata Pelajaran Umum (Semua Jurusan)
+  {
+    code: "PAI",
+    name: "Pendidikan Agama dan Budi Pekerti",
+    groupId: "sg_sma_wajib_umum",
+    groupName: "Kelompok Mata Pelajaran Umum",
+    category: "Wajib",
+    major: "Semua Jurusan / Umum",
+    kkm: 75,
+    creditHours: "3 JP",
+    description: "Mata pelajaran wajib pengembangan iman, takwa, dan akhlak mulia."
+  },
+  {
+    code: "PKN",
+    name: "Pendidikan Pancasila",
+    groupId: "sg_sma_wajib_umum",
+    groupName: "Kelompok Mata Pelajaran Umum",
+    category: "Wajib",
+    major: "Semua Jurusan / Umum",
+    kkm: 75,
+    creditHours: "2 JP",
+    description: "Mata pelajaran wajib nilai-nilai luhur Pancasila dan kewarganegaraan."
+  },
+  {
+    code: "BIN",
+    name: "Bahasa Indonesia",
+    groupId: "sg_sma_wajib_umum",
+    groupName: "Kelompok Mata Pelajaran Umum",
+    category: "Wajib",
+    major: "Semua Jurusan / Umum",
+    kkm: 75,
+    creditHours: "4 JP",
+    description: "Mata pelajaran wajib literasi, penalaran teks, dan komunikasi nasional."
+  },
+  {
+    code: "MAT",
+    name: "Matematika",
+    groupId: "sg_sma_wajib_umum",
+    groupName: "Kelompok Mata Pelajaran Umum",
+    category: "Wajib",
+    major: "Semua Jurusan / Umum",
+    kkm: 75,
+    creditHours: "4 JP",
+    description: "Mata pelajaran wajib logika, penalaran kuantitatif, dan pemecahan masalah."
+  },
+  {
+    code: "BIG",
+    name: "Bahasa Inggris",
+    groupId: "sg_sma_wajib_umum",
+    groupName: "Kelompok Mata Pelajaran Umum",
+    category: "Wajib",
+    major: "Semua Jurusan / Umum",
+    kkm: 75,
+    creditHours: "3 JP",
+    description: "Mata pelajaran wajib kemahiran bahasa dan komunikasi global."
+  },
+  {
+    code: "PJK",
+    name: "PJOK",
+    groupId: "sg_sma_wajib_umum",
+    groupName: "Kelompok Mata Pelajaran Umum",
+    category: "Wajib",
+    major: "Semua Jurusan / Umum",
+    kkm: 75,
+    creditHours: "3 JP",
+    description: "Pendidikan Jasmani, Olahraga, dan Kesehatan untuk kebugaran fisik dan sportivitas."
+  },
+  {
+    code: "SEJ",
+    name: "Sejarah",
+    groupId: "sg_sma_wajib_umum",
+    groupName: "Kelompok Mata Pelajaran Umum",
+    category: "Wajib",
+    major: "Semua Jurusan / Umum",
+    kkm: 75,
+    creditHours: "2 JP",
+    description: "Mata pelajaran wajib perjalanan sejarah bangsa Indonesia dan wawasan kebangsaan."
+  },
+
+  // 2. Kelompok MIPA (Jurusan IPA)
+  {
+    code: "BIO",
+    name: "Biologi",
+    groupId: "sg_sma_peminatan_mipa",
+    groupName: "Kelompok MIPA",
+    category: "Peminatan",
+    major: "IPA",
+    kkm: 75,
+    creditHours: "5 JP",
+    description: "Mata pelajaran peminatan sains tentang biosfer, bioteknologi, dan sistem kehidupan."
+  },
+  {
+    code: "FIS",
+    name: "Fisika",
+    groupId: "sg_sma_peminatan_mipa",
+    groupName: "Kelompok MIPA",
+    category: "Peminatan",
+    major: "IPA",
+    kkm: 75,
+    creditHours: "5 JP",
+    description: "Mata pelajaran peminatan sains tentang mekanika, gelombang, termodinamika, dan energi."
+  },
+  {
+    code: "KIM",
+    name: "Kimia",
+    groupId: "sg_sma_peminatan_mipa",
+    groupName: "Kelompok MIPA",
+    category: "Peminatan",
+    major: "IPA",
+    kkm: 75,
+    creditHours: "5 JP",
+    description: "Mata pelajaran peminatan sains tentang ikatan kimia, reaksi, larutan, dan stoikiometri."
+  },
+  {
+    code: "MTL",
+    name: "Matematika Tingkat Lanjut",
+    groupId: "sg_sma_peminatan_mipa",
+    groupName: "Kelompok MIPA",
+    category: "Peminatan",
+    major: "IPA",
+    kkm: 75,
+    creditHours: "5 JP",
+    description: "Mata pelajaran peminatan trigonometri lanjutan, kalkulus, dan matriks vektor."
+  },
+
+  // 3. Kelompok IPS (Jurusan IPS)
+  {
+    code: "EKO",
+    name: "Ekonomi",
+    groupId: "sg_sma_peminatan_ips",
+    groupName: "Kelompok IPS",
+    category: "Peminatan",
+    major: "IPS",
+    kkm: 75,
+    creditHours: "5 JP",
+    description: "Mata pelajaran peminatan sosial tentang pasar, moneter, akuntansi, dan kebijakan fiskal."
+  },
+  {
+    code: "GEO",
+    name: "Geografi",
+    groupId: "sg_sma_peminatan_ips",
+    groupName: "Kelompok IPS",
+    category: "Peminatan",
+    major: "IPS",
+    kkm: 75,
+    creditHours: "5 JP",
+    description: "Mata pelajaran peminatan sosial tentang geosfer, pemetaan, dan dinamika lingkungan."
+  },
+  {
+    code: "SOS",
+    name: "Sosiologi",
+    groupId: "sg_sma_peminatan_ips",
+    groupName: "Kelompok IPS",
+    category: "Peminatan",
+    major: "IPS",
+    kkm: 75,
+    creditHours: "5 JP",
+    description: "Mata pelajaran peminatan sosial tentang interaksi sosial, diferensiasi, dan perubahan sosial."
+  },
+  {
+    code: "SJL",
+    name: "Sejarah Tingkat Lanjut",
+    groupId: "sg_sma_peminatan_ips",
+    groupName: "Kelompok IPS",
+    category: "Peminatan",
+    major: "IPS",
+    kkm: 75,
+    creditHours: "5 JP",
+    description: "Mata pelajaran peminatan sejarah peradaban dunia dan metodologi penelitian sejarah."
+  },
+
+  // 4. Kelompok Bahasa (Jurusan Bahasa)
+  {
+    code: "BSI",
+    name: "Bahasa dan Sastra Indonesia",
+    groupId: "sg_sma_peminatan_bahasa",
+    groupName: "Kelompok Bahasa",
+    category: "Peminatan",
+    major: "Bahasa",
+    kkm: 75,
+    creditHours: "5 JP",
+    description: "Mata pelajaran peminatan linguistik dan sastra Indonesia mendalam."
+  },
+  {
+    code: "BSE",
+    name: "Bahasa dan Sastra Inggris",
+    groupId: "sg_sma_peminatan_bahasa",
+    groupName: "Kelompok Bahasa",
+    category: "Peminatan",
+    major: "Bahasa",
+    kkm: 75,
+    creditHours: "5 JP",
+    description: "Mata pelajaran peminatan kemahiran literatur dan ekspresi bahasa Inggris."
+  },
+  {
+    code: "BSA",
+    name: "Bahasa Asing Pilihan",
+    groupId: "sg_sma_peminatan_bahasa",
+    groupName: "Kelompok Bahasa",
+    category: "Peminatan",
+    major: "Bahasa",
+    kkm: 75,
+    creditHours: "5 JP",
+    description: "Mata pelajaran peminatan kemahiran bahasa asing pilihan (Jepang / Jerman / Arab / Mandarin / Prancis)."
+  },
+  {
+    code: "ANT",
+    name: "Antropologi",
+    groupId: "sg_sma_peminatan_bahasa",
+    groupName: "Kelompok Bahasa",
+    category: "Peminatan",
+    major: "Bahasa",
+    kkm: 75,
+    creditHours: "5 JP",
+    description: "Mata pelajaran peminatan studi kebudayaan, etnografi, dan ragam manusia."
+  }
+];
+
+/**
+ * Synchronize full SMA Curriculum Structure (Groups and Subjects) into Firestore
+ */
+export async function syncSmaCurriculumStructureToDb(): Promise<{
+  groupsCount: number;
+  subjectsCount: number;
+}> {
+  const groups = getPresetSubjectGroups("SMA");
+
+  // Ambil daftar mata pelajaran yang ada di Firestore subjects
+  let existingSubjects: any[] = [];
+  try {
+    const snap = await getDocs(collection(db, "subjects"));
+    existingSubjects = snap.docs.map(d => ({ _docId: d.id, ...d.data() }));
+  } catch (err) {
+    console.warn("Could not fetch existing subjects for sync:", err);
+  }
+
+  let syncedSubjects = 0;
+  const groupSubjectIdsMap: Record<string, string[]> = {
+    sg_sma_wajib_umum: ["PAI", "PKN", "BIN", "MAT", "BIG", "PJK", "SEJ"],
+    sg_sma_peminatan_mipa: ["BIO", "FIS", "KIM", "MTL"],
+    sg_sma_peminatan_ips: ["EKO", "GEO", "SOS", "SJL"],
+    sg_sma_peminatan_bahasa: ["BSI", "BSE", "BSA", "ANT"],
+    sg_sma_mulok: ["BHD", "PLH"]
+  };
+
+  for (const std of SMA_STANDARD_SUBJECTS) {
+    // Cari dokumen yang cocok berdasarkan kode atau nama
+    const match = existingSubjects.find((s: any) => 
+      (s.code && String(s.code).toUpperCase().trim() === std.code.toUpperCase().trim()) ||
+      (s.name && s.name.toLowerCase().trim() === std.name.toLowerCase().trim())
+    );
+
+    const payload = {
+      code: std.code,
+      name: std.name,
+      groupId: std.groupId,
+      groupName: std.groupName,
+      category: std.category,
+      major: std.major,
+      kkm: std.kkm,
+      creditHours: std.creditHours,
+      description: std.description,
+      status: "Aktif",
+      level: "Semua Tingkat",
+      updatedAt: serverTimestamp()
+    };
+
+    let docId = match?._docId;
+
+    if (match && docId) {
+      await setDoc(doc(db, "subjects", docId), payload, { merge: true });
+    } else {
+      const docRef = await addDoc(collection(db, "subjects"), {
+        ...payload,
+        icon: std.category === "Wajib" ? "📚" : "🔬",
+        createdAt: serverTimestamp()
+      });
+      docId = docRef.id;
+    }
+
+    if (docId && std.groupId && groupSubjectIdsMap[std.groupId]) {
+      if (!groupSubjectIdsMap[std.groupId].includes(docId)) {
+        groupSubjectIdsMap[std.groupId].push(docId);
+      }
+    }
+
+    syncedSubjects++;
+  }
+
+  // Update subject groups with both subject codes and document IDs
+  const updatedGroups = groups.map(g => ({
+    ...g,
+    subjectIds: groupSubjectIdsMap[g.id] || g.subjectIds || []
+  }));
+
+  await batchSaveSubjectGroups(updatedGroups);
+
+  return {
+    groupsCount: updatedGroups.length,
+    subjectsCount: syncedSubjects
+  };
 }
