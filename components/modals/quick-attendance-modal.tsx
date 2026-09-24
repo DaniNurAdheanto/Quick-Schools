@@ -346,8 +346,12 @@ export function QuickAttendanceModal({
     setStep("processing");
 
     const now = new Date();
-    const timeStr =
-      now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " WIB";
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    const seconds = String(now.getSeconds()).padStart(2, "0");
+    const cleanTimeHM = `${hours}:${minutes}`;
+    const cleanTimeHMS = `${hours}:${minutes}:${seconds}`;
+    const timeStr = `${cleanTimeHMS} WIB`;
     const dateStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
     const readableDate = now.toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
     setVerifiedTime(timeStr);
@@ -376,6 +380,8 @@ export function QuickAttendanceModal({
       date: dateStr,
       readableDate,
       timestamp: timeStr,
+      time: cleanTimeHM,
+      jamMasuk: cleanTimeHM,
       status: isLate ? "Terlambat" : "Hadir",
       capturedImage: capturedPhoto,
       location: {

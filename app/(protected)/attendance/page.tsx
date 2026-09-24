@@ -72,6 +72,11 @@ export interface AttendanceRecord {
   className: string;
   date: string; // YYYY-MM-DD
   timestamp: string; // HH:mm:ss
+  time?: string; // HH:mm
+  jamMasuk?: string; // HH:mm
+  studentUid?: string;
+  uid?: string;
+  nisn?: string;
   status: AttendanceStatus;
   notes?: string;
   faceVerified?: boolean;
@@ -106,6 +111,78 @@ export interface StudentDailyAttendance {
     inRadius: boolean;
   };
   record?: AttendanceRecord;
+}
+
+/**
+ * Normalizes any timestamp, date string, or locale time into a strictly valid HTML5 "HH:mm" time string.
+ * Handles:
+ * - "07:25" -> "07:25"
+ * - "07:25:30" -> "07:25"
+ * - "07.25.30 WIB" -> "07:25"
+ * - "07.25 WIB" -> "07:25"
+ * - "07.25" -> "07:25"
+ * - ISO string "2026-09-24T07:25:30.000Z" -> local HH:mm
+ * - Firestore Timestamp { seconds: ... } -> local HH:mm
+ */
+function extractValidTimeHM(rawTime: any, rawCreatedAt?: any): string {
+  const parseTimeString = (str: string): string | null => {
+    if (!str || typeof str !== "string") return null;
+    const trimmed = str.trim();
+    if (!trimmed || trimmed === "-") return null;
+
+    // Check for HH:mm or HH.mm pattern (handles 07:15, 7:15, 07.15.30 WIB, etc.)
+    const match = trimmed.match(/(\d{1,2})[.:](\d{2})/);
+    if (match) {
+      const h = match[1].padStart(2, "0");
+      const m = match[2];
+      const hNum = parseInt(h, 10);
+      const mNum = parseInt(m, 10);
+      if (hNum >= 0 && hNum <= 23 && mNum >= 0 && mNum <= 59) {
+        return `${h}:${m}`;
+      }
+    }
+    return null;
+  };
+
+  if (rawTime) {
+    if (typeof rawTime === "string") {
+      const parsed = parseTimeString(rawTime);
+      if (parsed) return parsed;
+    } else if (rawTime instanceof Date && !isNaN(rawTime.getTime())) {
+      const h = String(rawTime.getHours()).padStart(2, "0");
+      const m = String(rawTime.getMinutes()).padStart(2, "0");
+      return `${h}:${m}`;
+    } else if (typeof rawTime === "object" && typeof rawTime.seconds === "number") {
+      const d = new Date(rawTime.seconds * 1000);
+      const h = String(d.getHours()).padStart(2, "0");
+      const m = String(d.getMinutes()).padStart(2, "0");
+      return `${h}:${m}`;
+    }
+  }
+
+  if (rawCreatedAt) {
+    if (typeof rawCreatedAt === "string") {
+      const d = new Date(rawCreatedAt);
+      if (!isNaN(d.getTime())) {
+        const h = String(d.getHours()).padStart(2, "0");
+        const m = String(d.getMinutes()).padStart(2, "0");
+        return `${h}:${m}`;
+      }
+      const parsed = parseTimeString(rawCreatedAt);
+      if (parsed) return parsed;
+    } else if (rawCreatedAt instanceof Date && !isNaN(rawCreatedAt.getTime())) {
+      const h = String(rawCreatedAt.getHours()).padStart(2, "0");
+      const m = String(rawCreatedAt.getMinutes()).padStart(2, "0");
+      return `${h}:${m}`;
+    } else if (typeof rawCreatedAt === "object" && typeof rawCreatedAt.seconds === "number") {
+      const d = new Date(rawCreatedAt.seconds * 1000);
+      const h = String(d.getHours()).padStart(2, "0");
+      const m = String(d.getMinutes()).padStart(2, "0");
+      return `${h}:${m}`;
+    }
+  }
+
+  return "07:00";
 }
 
 const mergeAttendanceRecords = (base: AttendanceRecord[], incoming: AttendanceRecord[]): AttendanceRecord[] => {
@@ -317,13 +394,19 @@ export default function AttendancePage() {
           snap.forEach((d) => {
             if (d.id?.startsWith("ATT-100") || d.id?.startsWith("MOCK")) return;
             const data = d.data();
+            const cleanTimeHM = extractValidTimeHM(data.time || data.jamMasuk || data.timestamp, data.createdAt);
             list.push({
               id: d.id,
               studentId: data.studentId || d.id,
+              studentUid: data.studentUid || data.uid || "",
+              uid: data.uid || data.studentUid || "",
+              nisn: data.nisn || "",
               studentName: data.studentName || "Siswa",
               className: data.className || data.classId || "10 MIPA 1",
               date: data.date || new Date().toISOString().split("T")[0],
-              timestamp: data.timestamp || "07:00:00",
+              timestamp: data.timestamp || cleanTimeHM,
+              time: cleanTimeHM,
+              jamMasuk: cleanTimeHM,
               status: data.status || "Hadir",
               notes: data.notes || "",
               faceVerified: data.faceVerified ?? true,
@@ -358,13 +441,19 @@ export default function AttendancePage() {
           snap.forEach((d) => {
             if (d.id?.startsWith("ATT-100") || d.id?.startsWith("MOCK")) return;
             const data = d.data();
+            const cleanTimeHM = extractValidTimeHM(data.time || data.jamMasuk || data.timestamp, data.createdAt);
             list.push({
               id: d.id,
               studentId: data.studentId || d.id,
+              studentUid: data.studentUid || data.uid || "",
+              uid: data.uid || data.studentUid || "",
+              nisn: data.nisn || "",
               studentName: data.studentName || "Siswa",
               className: data.className || data.classId || "10 MIPA 1",
               date: data.date || new Date().toISOString().split("T")[0],
-              timestamp: data.timestamp || "07:00:00",
+              timestamp: data.timestamp || cleanTimeHM,
+              time: cleanTimeHM,
+              jamMasuk: cleanTimeHM,
               status: data.status || "Hadir",
               notes: data.notes || "",
               faceVerified: data.faceVerified ?? true,
@@ -595,17 +684,33 @@ export default function AttendancePage() {
 
     classStudents.forEach((student) => {
       // Check if there is an existing record for this student on this date
-      const existing = attendanceRecords.find(
-        (r) =>
-          r.date === selectedDate &&
-          (r.studentId === student.id || r.studentName.toLowerCase() === (student.name || "").toLowerCase())
-      );
+      const existing = attendanceRecords.find((r) => {
+        if (r.date !== selectedDate) return false;
+        // 1. Direct studentId match
+        if (r.studentId && r.studentId === student.id) return true;
+        // 2. NISN match
+        if (student.nisn && (r.studentId === student.nisn || (r as any).nisn === student.nisn)) return true;
+        // 3. NIS match
+        if (student.nis && (r.studentId === student.nis || (r as any).nis === student.nis)) return true;
+        // 4. UID match
+        if (student.uid && (r.studentId === student.uid || (r as any).studentUid === student.uid || (r as any).uid === student.uid)) return true;
+        // 5. Name match (case-insensitive & trimmed)
+        if (r.studentName && student.name && r.studentName.toLowerCase().trim() === student.name.toLowerCase().trim()) return true;
+        // 6. Doc ID contains student id
+        if (r.id && student.id && r.id.includes(student.id)) return true;
+        return false;
+      });
 
       if (existing) {
+        const resolvedTime = extractValidTimeHM(
+          (existing as any).time || (existing as any).jamMasuk || existing.timestamp,
+          existing.createdAt
+        );
+
         map[student.id] = {
           status: existing.status,
           notes: existing.notes || "",
-          time: existing.timestamp || "07:00",
+          time: resolvedTime,
           isRecorded: true,
           source: existing.source,
           faceVerified: existing.faceVerified,
@@ -773,7 +878,7 @@ export default function AttendancePage() {
       for (const student of classStudents) {
         const att = classAttendanceMap[student.id] || { status: "Belum Absen", notes: "", time: "-", isRecorded: false };
         const effectiveStatus: AttendanceStatus = att.status === "Belum Absen" ? "Alpa" : att.status;
-        const effectiveTime = att.time === "-" ? (config.schoolStartTime || "07:00:00") : att.time;
+        const effectiveTime = att.time === "-" ? (config.schoolStartTime || "07:00") : extractValidTimeHM(att.time);
         const effectiveNotes = att.notes || (att.status === "Belum Absen" ? "Tanpa Keterangan (Belum Absen)" : "");
         const studentClassName = student.classId || student.className || student.class || (selectedClass !== "Semua Kelas" ? selectedClass : "Umum");
 
@@ -786,6 +891,8 @@ export default function AttendancePage() {
           className: studentClassName,
           date: selectedDate,
           timestamp: effectiveTime,
+          time: effectiveTime,
+          jamMasuk: effectiveTime,
           status: effectiveStatus,
           notes: effectiveNotes,
           source: att.source || "manual",
@@ -1943,7 +2050,7 @@ export default function AttendancePage() {
                                 <Clock className="w-3.5 h-3.5 text-gray-400" />
                                 <input
                                   type="time"
-                                  value={att.time === "-" ? "07:00" : att.time}
+                                  value={extractValidTimeHM(att.time, att.record?.createdAt)}
                                   onChange={(e) => {
                                     const newTime = e.target.value;
                                     setClassAttendanceMap((prev) => ({
