@@ -43,6 +43,7 @@ import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
+import { isAnnouncementVisibleForRole } from "@/lib/announcements-helper";
 import { useAuth } from "@/context/AuthContext";
 import { useTeacherAttendance } from "@/lib/teacher-attendance";
 import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal";
@@ -1542,26 +1543,30 @@ export function TeacherDashboardView({
             </div>
 
             <div className="space-y-3">
-              {announcements.slice(0, 3).map((ann, i) => (
-                <div key={ann.id || i} className="p-3 rounded-lg bg-gray-50 border border-gray-100 space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-blue-100 text-blue-800">
-                      {ann.category || "Info"}
-                    </span>
-                    <span className="text-[10px] text-gray-400">{ann.date || "Hari Ini"}</span>
+              {announcements
+                .filter((a) => isAnnouncementVisibleForRole(a.target, "guru", false, false))
+                .slice(0, 3)
+                .map((ann, i) => (
+                  <div key={ann.id || i} className="p-3 rounded-lg bg-gray-50 border border-gray-100 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-blue-100 text-blue-800">
+                        {ann.tag || ann.category || "Info"}
+                      </span>
+                      <span className="text-[10px] text-gray-400">{ann.date || "Hari Ini"}</span>
+                    </div>
+                    <h5 className="text-xs font-bold text-gray-900 line-clamp-1">{ann.title || "Pengumuman Sekolah"}</h5>
+                    <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">
+                      {ann.desc || ann.content || ann.description || "Informasi terkait kegiatan belajar mengajar."}
+                    </p>
                   </div>
-                  <h5 className="text-xs font-bold text-gray-900 line-clamp-1">{ann.title || "Pengumuman Sekolah"}</h5>
-                  <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">
-                    {ann.content || ann.description || "Informasi terkait kegiatan belajar mengajar."}
-                  </p>
-                </div>
-              ))}
-              {announcements.length === 0 && (
+                ))}
+              {announcements.filter((a) => isAnnouncementVisibleForRole(a.target, "guru", false, false)).length === 0 && (
                 <div className="p-4 text-center text-xs text-gray-400 bg-gray-50 rounded-lg">
-                  Belum ada pengumuman terbaru.
+                  Belum ada pengumuman terbaru untuk guru.
                 </div>
               )}
             </div>
+
           </div>
 
         </div>

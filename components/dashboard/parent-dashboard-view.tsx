@@ -40,6 +40,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { formatRupiah } from "@/lib/spp-payments";
+import { isAnnouncementVisibleForRole } from "@/lib/announcements-helper";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { useAuth } from "@/context/AuthContext";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
@@ -819,11 +820,12 @@ export function ParentDashboardView({
   // 9. Computed School Announcements for Parents
   const parentAnnouncements = useMemo(() => {
     const valid = announcementsList
-      .filter(a => {
-        const target = (a.target || "").toLowerCase();
-        return !target || target === "semua" || target === "orang-tua" || target === "parent" || target.includes("wali");
+      .filter((a) => {
+        const target = a.target || a.targetAudience || a.audience || "Semua";
+        return isAnnouncementVisibleForRole(target, "orang-tua", false, false);
       })
       .slice(0, 3);
+
 
     if (valid.length === 0) {
       return [

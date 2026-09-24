@@ -39,6 +39,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, collection, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+import { isAnnouncementVisibleForRole } from "@/lib/announcements-helper";
 import { cn } from "@/lib/utils";
 import { formatRupiah } from "@/lib/spp-payments";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
@@ -689,13 +690,14 @@ export function StudentDashboardView({
   // ── 8. COMPUTED ANNOUNCEMENTS (Targeted to Siswa & All) ────────────────────
   const announcementsData = useMemo(() => {
     const filtered = announcementsList.filter((a) => {
-      const aud = (a.targetAudience || a.audience || a.target || "all").toLowerCase();
-      return aud === "all" || aud === "siswa" || aud === "student";
+      const target = a.target || a.targetAudience || a.audience || "Semua";
+      return isAnnouncementVisibleForRole(target, "siswa", false, false);
     });
 
     filtered.sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
     return filtered.slice(0, 4);
   }, [announcementsList]);
+
 
   // ── 9. COMBINED RECENT ACTIVITY STREAM ────────────────────────────────────
   const recentActivities = useMemo(() => {

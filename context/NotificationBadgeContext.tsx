@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { collection, doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
+import { isAnnouncementVisibleForRole } from "@/lib/announcements-helper";
 
 export interface MenuReadState {
   lastReadAt: Record<string, string>;
@@ -106,7 +107,8 @@ export function formatNotificationTime(timestampMillis: number): string {
 
 export function NotificationBadgeProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, userData, isSuperAdmin, isAdmin, isGuru, isStudent, isParent } = useAuth();
+  const { user, userData, role, rawRole, isSuperAdmin, isAdmin, isGuru, isStudent, isParent } = useAuth();
+  const userRole = (rawRole || role || "").toLowerCase();
   const uid = user?.uid;
 
   const [readState, setReadState] = useState<MenuReadState>(() => {
@@ -278,16 +280,8 @@ export function NotificationBadgeProvider({ children }: { children: React.ReactN
         if (a.status === "Arsip") return;
         if (readIds.has(a.id)) return;
 
-        // Role targeting check
-        const target = (a.target || "Semua").toLowerCase();
-        let matchesRole = target === "semua";
-        if (isGuru && (target.includes("guru") || target.includes("pengajar"))) matchesRole = true;
-        if (isStudent && (target.includes("siswa") || target.includes("murid"))) matchesRole = true;
-        if (isParent && (target.includes("orang tua") || target.includes("wali"))) matchesRole = true;
-        if ((isAdmin || isSuperAdmin) && (target.includes("admin") || target.includes("staf"))) matchesRole = true;
-        if (isSuperAdmin) matchesRole = true;
-
-        if (!matchesRole) return;
+        // Role targeting check with unified helper
+        if (!isAnnouncementVisibleForRole(a.target, userRole, isSuperAdmin, isAdmin)) return;
 
         const docTime = parseDocTimestamp(a.createdAt || a.date);
         if (docTime > baseline) {
@@ -637,14 +631,8 @@ export function NotificationBadgeProvider({ children }: { children: React.ReactN
     const readAnnIds = new Set(readState.readItemIds?.["/announcements"] || []);
     announcementsData.forEach((a) => {
       if (a.status === "Arsip") return;
-      const target = (a.target || "Semua").toLowerCase();
-      let matchesRole = target === "semua";
-      if (isGuru && (target.includes("guru") || target.includes("pengajar"))) matchesRole = true;
-      if (isStudent && (target.includes("siswa") || target.includes("murid"))) matchesRole = true;
-      if (isParent && (target.includes("orang tua") || target.includes("wali"))) matchesRole = true;
-      if ((isAdmin || isSuperAdmin) && (target.includes("admin") || target.includes("staf"))) matchesRole = true;
-      if (isSuperAdmin) matchesRole = true;
-      if (!matchesRole) return;
+      // Role targeting check with unified helper
+      if (!isAnnouncementVisibleForRole(a.target, userRole, isSuperAdmin, isAdmin)) return;
 
       const docTime = parseDocTimestamp(a.createdAt || a.date);
       const isUnread = !readAnnIds.has(a.id) && docTime > annBaseline;
