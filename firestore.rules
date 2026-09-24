@@ -30,6 +30,10 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
+    match /user_menu_reads/{userId} {
+      allow read, write: if isSignedIn();
+    }
+
     match /deleted_accounts/{deletedId} {
       allow read: if true;
       allow write: if isSignedIn();

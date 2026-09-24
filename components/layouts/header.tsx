@@ -8,6 +8,8 @@ import { useAcademicYear } from "@/context/AcademicYearContext";
 import { cn } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useAuth } from "@/context/AuthContext";
+import { useNotificationBadges } from "@/context/NotificationBadgeContext";
+import { NotificationCenterDropdown } from "@/components/notifications/notification-center-dropdown";
 
 export function Header() {
   const pathname = usePathname();
@@ -20,6 +22,8 @@ export function Header() {
     isAuthLoading,
     logout,
   } = useAuth();
+
+  const { totalUnreadCount } = useNotificationBadges();
 
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -154,63 +158,26 @@ export function Header() {
           <div className="relative">
             <button 
               onClick={() => setShowNotifDropdown(prev => !prev)}
-              className="relative text-gray-400 hover:text-gray-600 transition-colors p-1.5 rounded-md hover:bg-gray-100 cursor-pointer"
-              title="Notifikasi & Pengingat"
+              className="relative text-gray-500 hover:text-gray-700 transition-colors p-2 rounded-xl hover:bg-gray-100 cursor-pointer"
+              title="Notifikasi & Pembaruan"
             >
               <Bell className="w-[18px] h-[18px]" />
-              {(!onboardingCompleted || hasPendingReminder) ? (
+              {totalUnreadCount > 0 ? (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[#531FFF] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-xs border-2 border-[#F8F9FC] animate-in zoom-in-75">
+                  {totalUnreadCount > 99 ? "99+" : totalUnreadCount}
+                </span>
+              ) : (!onboardingCompleted || hasPendingReminder) ? (
                 <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-white animate-pulse"></span>
               ) : (
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full border-2 border-[#F8F9FC]"></span>
               )}
             </button>
 
-            {/* Notification Dropdown Panel */}
-            {showNotifDropdown && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-2xl border border-gray-100 p-4 z-50 animate-in fade-in zoom-in-95 duration-200">
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                  <h4 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                    <Bell className="w-4 h-4 text-[#531FFF]" />
-                    Notifikasi & Pengingat
-                  </h4>
-                  <button
-                    onClick={() => setShowNotifDropdown(false)}
-                    className="text-xs text-gray-400 hover:text-gray-600 font-semibold cursor-pointer"
-                  >
-                    Tutup
-                  </button>
-                </div>
-
-                <div className="py-3 space-y-2.5">
-                  {(!onboardingCompleted || hasPendingReminder) ? (
-                    <div className="p-3.5 bg-amber-50/90 border border-amber-200/80 rounded-lg space-y-2">
-                      <div className="flex items-start gap-2.5">
-                        <span className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shrink-0 animate-pulse" />
-                        <div>
-                          <p className="font-bold text-amber-950 text-xs">
-                            Pengingat Selesaikan Onboarding
-                          </p>
-                          <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                            Akun Anda belum menyelesaikan proses pendaftaran siswa. Lengkapi biodata, data orang tua & kontak darurat agar data tersimpan lengkap di Data Siswa.
-                          </p>
-                        </div>
-                      </div>
-                      <Link
-                        href="/onboarding"
-                        onClick={() => setShowNotifDropdown(false)}
-                        className="block text-center w-full py-2 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-md text-xs font-bold transition-all shadow-xs"
-                      >
-                        Lanjutkan Onboarding Sekarang ➔
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="py-6 text-center text-xs text-gray-400 font-medium">
-                      Tidak ada notifikasi baru saat ini. Akun Anda telah aktif dan terverifikasi.
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            {/* Redesigned Notification Dropdown Panel */}
+            <NotificationCenterDropdown
+              isOpen={showNotifDropdown}
+              onClose={() => setShowNotifDropdown(false)}
+            />
           </div>
 
           <div className="h-6 w-px bg-gray-200"></div>

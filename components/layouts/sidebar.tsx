@@ -31,6 +31,7 @@ import {
 import { cn } from "@/lib/utils";
 import { isSuperAdminRole, isStudentRole, isParentRole } from "@/lib/roles-config";
 import { useAuth } from "@/context/AuthContext";
+import { useNotificationBadges } from "@/context/NotificationBadgeContext";
 import { SidebarSkeleton } from "@/components/ui/role-loading-skeleton";
 
 const NAV_MODULE_MAP: Record<string, string> = {
@@ -58,10 +59,10 @@ const NAV_MODULE_MAP: Record<string, string> = {
 };
 
 const OVERVIEW_NAV = [
-  { href: "/dashboard", label: "Dashboard", badge: 1, icon: LayoutDashboard },
-  { href: "/calendar", label: "Kalender Akademik", badge: 10, icon: CalendarDays },
-  { href: "/schedule", label: "Jadwal Pelajaran", badge: 8, icon: BookOpen },
-  { href: "/announcements", label: "Pengumuman", badge: 8, icon: Megaphone },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/calendar", label: "Kalender Akademik", icon: CalendarDays },
+  { href: "/schedule", label: "Jadwal Pelajaran", icon: BookOpen },
+  { href: "/announcements", label: "Pengumuman", icon: Megaphone },
 ];
 
 const MASTER_DATA_NAV = [
@@ -70,11 +71,11 @@ const MASTER_DATA_NAV = [
   { href: "/classes", label: "Kelas", icon: Users },
   { href: "/teachers", label: "Staff Guru", icon: GraduationCap },
   { href: "/homeroom", label: "Wali Kelas", icon: GraduationCap },
-  { href: "/subjects", label: "Mata Pelajaran", badge: 8, icon: BookOpen },
+  { href: "/subjects", label: "Mata Pelajaran", icon: BookOpen },
 ];
 
 const AKADEMIK_NAV = [
-  { href: "/attendance", label: "Absensi Siswa", badge: 12, icon: FileCheck },
+  { href: "/attendance", label: "Absensi Siswa", icon: FileCheck },
   { href: "/teacher-attendance", label: "Absensi Guru", icon: UserCheck },
   { href: "/grades", label: "Penilaian", icon: PenLine },
   { href: "/report-cards", label: "Rapor Digital", icon: Award },
@@ -103,7 +104,9 @@ function NavGroup({
   userPermissions, 
   userRole = "admin", 
   isFooter = false,
-  onLogoutClick
+  onLogoutClick,
+  getBadgeCount,
+  onItemClick,
 }: { 
   title: string; 
   items: any[]; 
@@ -113,6 +116,8 @@ function NavGroup({
   userRole?: string;
   isFooter?: boolean;
   onLogoutClick?: () => void;
+  getBadgeCount?: (path: string) => number;
+  onItemClick?: (path: string) => void;
 }) {
   const isSuperAdmin = isSuperAdminRole(userRole) || (userRole || "").toLowerCase() === "admin";
   const isParent = isParentRole(userRole) || (userRole || "").toLowerCase() === "orang-tua";
@@ -187,6 +192,7 @@ function NavGroup({
         {visibleItems.map((item) => {
           const isActive = currentPath === item.href || (item.href === '/data-siswa' && currentPath.includes('/data-siswa'));
           const Icon = item.icon;
+          const itemBadge = getBadgeCount ? getBadgeCount(item.href) : (item.badge || 0);
 
           if (isCollapsed) {
             return (
@@ -205,6 +211,7 @@ function NavGroup({
                 ) : (
                   <Link
                     href={item.href}
+                    onClick={() => onItemClick?.(item.href)}
                     className={cn(
                       "w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 relative cursor-pointer active:scale-95",
                       isActive
@@ -223,9 +230,9 @@ function NavGroup({
                     )} />
 
                     {/* Notification Badge / Pill in Collapsed View */}
-                    {item.badge && (
+                    {itemBadge > 0 && (
                       <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#531FFF] text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-xs border-2 border-[#F9FAFB] animate-in zoom-in-75 duration-200">
-                        {item.badge > 99 ? "99+" : item.badge}
+                        {itemBadge > 99 ? "99+" : itemBadge}
                       </span>
                     )}
                   </Link>
@@ -234,9 +241,10 @@ function NavGroup({
                 {/* Instant Floating Tooltip */}
                 <div className="absolute left-[calc(100%+12px)] top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-2 px-3 py-1.5 bg-gray-900 text-white text-xs font-bold rounded-xl shadow-2xl z-50 whitespace-nowrap pointer-events-none transition-all duration-150 animate-in fade-in zoom-in-95">
                   <span>{item.label}</span>
-                  {item.badge && (
-                    <span className="px-1.5 py-0.2 bg-[#531FFF] text-white text-[10px] font-black rounded-md">
-                      {item.badge}
+                  {itemBadge > 0 && (
+                    <span className="px-1.5 py-0.2 bg-[#531FFF] text-white text-[10px] font-black rounded-md flex items-center gap-1">
+                      <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
+                      {itemBadge > 99 ? "99+" : itemBadge}
                     </span>
                   )}
                   {/* Tooltip left arrow */}
@@ -267,6 +275,7 @@ function NavGroup({
             <Link
               key={item.label}
               href={item.href}
+              onClick={() => onItemClick?.(item.href)}
               className={cn(
                 "flex items-center justify-between mx-4 px-3.5 py-2.5 rounded-xl transition-all relative group cursor-pointer",
                 isActive
@@ -274,20 +283,28 @@ function NavGroup({
                   : "text-[#4B5563] hover:bg-gray-100/80 hover:text-gray-900 rounded-xl font-semibold"
               )}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <Icon className={cn(
-                  "w-4 h-4 transition-colors", 
+                  "w-4 h-4 transition-colors shrink-0", 
                   isActive ? "text-[#531FFF]" : "text-[#4B5563]"
                 )} />
-                <span className="text-[13px]">{item.label}</span>
+                <span className="text-[13px] truncate">{item.label}</span>
               </div>
-              {item.badge && (
-                <span className={cn(
-                  "px-2 py-0.5 text-[11px] rounded-md font-bold transition-colors",
-                  isActive ? "bg-[#F3F0FF] text-[#531FFF]" : "bg-gray-200/60 text-gray-500"
-                )}>
-                  {item.badge}
-                </span>
+              {itemBadge > 0 && (
+                <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                  <span className={cn(
+                    "px-2 py-0.5 text-[10px] rounded-full font-black tracking-wide transition-all duration-200 flex items-center gap-1 shadow-xs",
+                    isActive
+                      ? "bg-[#531FFF] text-white shadow-[#531FFF]/20"
+                      : "bg-[#531FFF]/10 text-[#531FFF] group-hover:bg-[#531FFF] group-hover:text-white"
+                  )}>
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#531FFF] opacity-75 group-hover:bg-white" />
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#531FFF] group-hover:bg-white" />
+                    </span>
+                    <span>{itemBadge > 99 ? "99+" : itemBadge}</span>
+                  </span>
+                </div>
               )}
             </Link>
           );
@@ -301,6 +318,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { profile } = useSchoolProfile();
   const { role, rawRole, rolePermissions, isAuthLoading, isRoleReady, logout } = useAuth();
+  const { getBadgeCount, markAsRead } = useNotificationBadges();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -423,10 +441,46 @@ export function Sidebar() {
             "flex-1 pt-3 pb-2 scrollbar-none",
             isCollapsed ? "overflow-y-auto overflow-x-visible" : "overflow-y-auto overflow-x-hidden"
           )}>
-            <NavGroup title="OVERVIEW" items={OVERVIEW_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={effectiveUserRole} />
-            <NavGroup title="MASTER DATA" items={MASTER_DATA_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={effectiveUserRole} />
-            <NavGroup title="AKADEMIK" items={AKADEMIK_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={effectiveUserRole} />
-            <NavGroup title="KEUANGAN" items={KEUANGAN_NAV} currentPath={pathname} isCollapsed={isCollapsed} userPermissions={rolePermissions} userRole={effectiveUserRole} />
+            <NavGroup 
+              title="OVERVIEW" 
+              items={OVERVIEW_NAV} 
+              currentPath={pathname} 
+              isCollapsed={isCollapsed} 
+              userPermissions={rolePermissions} 
+              userRole={effectiveUserRole} 
+              getBadgeCount={getBadgeCount}
+              onItemClick={markAsRead}
+            />
+            <NavGroup 
+              title="MASTER DATA" 
+              items={MASTER_DATA_NAV} 
+              currentPath={pathname} 
+              isCollapsed={isCollapsed} 
+              userPermissions={rolePermissions} 
+              userRole={effectiveUserRole} 
+              getBadgeCount={getBadgeCount}
+              onItemClick={markAsRead}
+            />
+            <NavGroup 
+              title="AKADEMIK" 
+              items={AKADEMIK_NAV} 
+              currentPath={pathname} 
+              isCollapsed={isCollapsed} 
+              userPermissions={rolePermissions} 
+              userRole={effectiveUserRole} 
+              getBadgeCount={getBadgeCount}
+              onItemClick={markAsRead}
+            />
+            <NavGroup 
+              title="KEUANGAN" 
+              items={KEUANGAN_NAV} 
+              currentPath={pathname} 
+              isCollapsed={isCollapsed} 
+              userPermissions={rolePermissions} 
+              userRole={effectiveUserRole} 
+              getBadgeCount={getBadgeCount}
+              onItemClick={markAsRead}
+            />
           </div>
 
           {/* Pinned Bottom Section: SYSTEM & SETTINGS */}
@@ -440,6 +494,8 @@ export function Sidebar() {
               userRole={effectiveUserRole} 
               isFooter={true} 
               onLogoutClick={() => setShowLogoutConfirm(true)}
+              getBadgeCount={getBadgeCount}
+              onItemClick={markAsRead}
             />
           </div>
         </>

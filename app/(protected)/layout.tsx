@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/layouts/sidebar";
 import { Header } from "@/components/layouts/header";
 import { AcademicYearProvider } from "@/context/AcademicYearContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { NotificationBadgeProvider } from "@/context/NotificationBadgeContext";
 import { ShieldAlert, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { AuthRequiredState } from "@/components/ui/auth-required-state";
@@ -225,8 +226,10 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   return (
     <AuthProvider>
       <AcademicYearProvider>
-        <IdleTimeoutManager />
-        <ProtectedContentGuard>{children}</ProtectedContentGuard>
+        <NotificationBadgeProvider>
+          <IdleTimeoutManager />
+          <ProtectedContentGuard>{children}</ProtectedContentGuard>
+        </NotificationBadgeProvider>
       </AcademicYearProvider>
     </AuthProvider>
   );
