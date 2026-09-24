@@ -8,13 +8,21 @@ import {
   Send, Sparkles, ChevronDown, PenTool, Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CrudSheet } from "@/components/layouts/crud-sheet";
+import { AnnouncementFormModal } from "@/components/announcements/announcement-form-modal";
 import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { isParentRole } from "@/lib/roles-config";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
-import { TARGET_ROLE_OPTIONS, isAnnouncementVisibleForRole, getTargetBadgeInfo } from "@/lib/announcements-helper";
+import { 
+  TARGET_ROLE_OPTIONS, 
+  isAnnouncementVisibleForRole, 
+  getTargetsBadgeList,
+  packAnnouncementDesc, 
+  unpackAnnouncementDesc,
+  cleanAnnouncementDesc 
+} from "@/lib/announcements-helper";
 import { AnnouncementDetailDrawer } from "@/components/announcements/announcement-detail-drawer";
 
 const POPULAR_ANNOUNCEMENTS = [
@@ -26,6 +34,7 @@ const POPULAR_ANNOUNCEMENTS = [
 ];
 
 export default function AnnouncementsPage() {
+  const toast = useToast();
   const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete" | "view"; data?: any }>({
     open: false,
     mode: "create"
@@ -53,7 +62,18 @@ export default function AnnouncementsPage() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "announcements"), (snap) => {
-      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const data = snap.docs.map(doc => {
+        const raw = doc.data() as any;
+        const meta = unpackAnnouncementDesc(raw.desc || "");
+        return {
+          id: doc.id,
+          ...raw,
+          desc: meta.cleanDesc,
+          eventDate: raw.eventDate || meta.eventDate || "",
+          eventTime: raw.eventTime || meta.eventTime || "",
+          room: raw.room || meta.room || ""
+        };
+      });
       setAnnouncements(data);
       setLoading(false);
     }, (error) => {
@@ -88,19 +108,87 @@ export default function AnnouncementsPage() {
     }
   };
 
+  /**
+   * Parse Indonesian short-date strings like "10 Apr 2026", "5 Mei 2025", "2 Agu 2026"
+   * into a JS Date (midnight, local time). Returns null if unparseable.
+   */
+  const parseIndonesianDate = (dateStr: string): Date | null => {
+    if (!dateStr || typeof dateStr !== "string") return null;
+    const MONTHS: Record<string, number> = {
+      jan: 0, feb: 1, mar: 2, apr: 3, mei: 4, may: 4,
+      jun: 5, jul: 6, agu: 7, aug: 7, sep: 8, okt: 9, oct: 9, nov: 10, des: 11, dec: 11,
+    };
+    const parts = dateStr.trim().split(/\s+/);
+    if (parts.length < 3) return null;
+    const day = parseInt(parts[0], 10);
+    const monthKey = parts[1].toLowerCase().slice(0, 3);
+    const year = parseInt(parts[2], 10);
+    const month = MONTHS[monthKey];
+    if (isNaN(day) || month === undefined || isNaN(year)) return null;
+    return new Date(year, month, day, 0, 0, 0, 0);
+  };
+
+  /**
+   * Returns the effective display status for an announcement.
+   * Priority: eventDate (ISO YYYY-MM-DD from date picker) → date (Indonesian string).
+   * If the resolved date is in the past and status is Aktif/Terjadwal, returns "Berakhir".
+   * Never writes to Firestore.
+   */
+  const getComputedStatus = (item: any): string => {
+    const storedStatus: string = item.status || "Aktif";
+    if (storedStatus === "Berakhir") return "Berakhir";
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 1. Prefer eventDate (ISO YYYY-MM-DD from the date picker — easy to parse)
+    if (item.eventDate && typeof item.eventDate === "string" && item.eventDate.length >= 10) {
+      const d = new Date(item.eventDate + "T00:00:00");
+      if (!isNaN(d.getTime()) && d < today) return "Berakhir";
+      return storedStatus;
+    }
+
+    // 2. Fall back to Indonesian-formatted date string
+    const parsed = parseIndonesianDate(item.date || "");
+    if (!parsed) return storedStatus;
+    if (parsed < today) return "Berakhir";
+    return storedStatus;
+  };
+
   const handleCrudSubmit = async (data: any) => {
-    if (isReadOnly) return; // Read only safeguard
+    if (isReadOnly) return;
 
     try {
       if (crudState.mode === "create") {
         const id = crypto.randomUUID();
         const tag = data.tag || "INFORMASI";
+        const cleanDescText = cleanAnnouncementDesc(data.desc || "");
+        const packedDesc = packAnnouncementDesc(cleanDescText, {
+          eventDate: data.eventDate || "",
+          eventTime: data.eventTime || "",
+          room: data.room || ""
+        });
+
+        // Normalize target (handles array from multiselect)
+        let targetString = "Semua";
+        if (Array.isArray(data.target)) {
+          if (data.target.includes("Semua") || data.target.length === 0) {
+            targetString = "Semua";
+          } else {
+            targetString = data.target.join(", ");
+          }
+        } else if (typeof data.target === "string" && data.target.trim()) {
+          targetString = data.target.trim();
+        }
+
+        // Exactly 11 keys required by Firestore security rules:
+        // ['title', 'desc', 'target', 'tag', 'author', 'status', 'tagColor', 'theme', 'date', 'createdAt', 'updatedAt']
         await setDoc(doc(db, "announcements", id), {
-          title: data.title || "Pengumuman Baru",
-          desc: data.desc || "-",
-          target: data.target || "Semua",
-          tag: tag,
-          author: user?.displayName || (isSuperAdmin ? "Super Admin" : "Admin Sekolah"),
+          title: (data.title || "Pengumuman Baru").slice(0, 200),
+          desc: packedDesc.slice(0, 2000),
+          target: targetString.slice(0, 100),
+          tag: tag.slice(0, 50),
+          author: (user?.displayName || (isSuperAdmin ? "Super Admin" : "Admin Sekolah")).slice(0, 100),
           status: data.status || "Aktif",
           tagColor: getTagColor(tag),
           theme: getTheme(tag),
@@ -108,20 +196,46 @@ export default function AnnouncementsPage() {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
+        toast.showSuccess("Pengumuman baru berhasil dibuat dan dipublikasikan.", "Berhasil Buat");
       } else if (crudState.mode === "edit" && crudState.data?.id) {
-        const tag = data.tag || crudState.data.tag;
+        const tag = data.tag || crudState.data.tag || "INFORMASI";
+        const cleanDescText = cleanAnnouncementDesc(data.desc !== undefined ? data.desc : crudState.data.desc || "");
+        const packedDesc = packAnnouncementDesc(cleanDescText, {
+          eventDate: data.eventDate !== undefined ? data.eventDate : crudState.data.eventDate || "",
+          eventTime: data.eventTime !== undefined ? data.eventTime : crudState.data.eventTime || "",
+          room: data.room !== undefined ? data.room : crudState.data.room || ""
+        });
+
+        // Normalize target (handles array from multiselect)
+        let targetString = crudState.data.target || "Semua";
+        if (data.target !== undefined) {
+          if (Array.isArray(data.target)) {
+            if (data.target.includes("Semua") || data.target.length === 0) {
+              targetString = "Semua";
+            } else {
+              targetString = data.target.join(", ");
+            }
+          } else if (typeof data.target === "string" && data.target.trim()) {
+            targetString = data.target.trim();
+          }
+        }
+
+        // Update fields matching security rules:
+        // ['title', 'desc', 'target', 'tag', 'author', 'status', 'tagColor', 'theme', 'date', 'updatedAt']
         await updateDoc(doc(db, "announcements", crudState.data.id), {
-          title: data.title || crudState.data.title,
-          desc: data.desc || crudState.data.desc,
-          target: data.target || crudState.data.target,
-          tag: tag,
-          status: data.status || crudState.data.status,
+          title: (data.title || crudState.data.title || "Pengumuman").slice(0, 200),
+          desc: packedDesc.slice(0, 2000),
+          target: targetString.slice(0, 100),
+          tag: tag.slice(0, 50),
+          status: data.status || crudState.data.status || "Aktif",
           tagColor: getTagColor(tag),
           theme: getTheme(tag),
           updatedAt: serverTimestamp()
         });
+        toast.showEdit("Pengumuman berhasil diperbarui.", "Berhasil Edit");
       } else if (crudState.mode === "delete" && crudState.data?.id) {
         await deleteDoc(doc(db, "announcements", crudState.data.id));
+        toast.showError("Pengumuman telah berhasil dihapus dari sistem.", "Berhasil Hapus");
       }
     } catch (error) {
       console.error("Error saving announcement", error);
@@ -129,60 +243,25 @@ export default function AnnouncementsPage() {
     }
   };
 
-  // Form fields aligned with the 6 system roles + Semua
-  const announcementFields = [
-    { 
-      name: "title", 
-      label: "Judul Pengumuman",
-      colSpan: 2 as const,
-      placeholder: "Contoh: Libur Idul Fitri 1447 H",
-      helperText: "Judul singkat dan jelas yang menggambarkan isi pengumuman."
-    },
-    { 
-      name: "desc", 
-      label: "Isi Pengumuman", 
-      type: "textarea" as const,
-      colSpan: 2 as const,
-      placeholder: "Tuliskan isi pengumuman secara lengkap dan informatif di sini...",
-      helperText: "Jelaskan informasi secara detail agar mudah dipahami oleh penerima."
-    },
-    { 
-      name: "target", 
-      label: "Target Penerima", 
-      type: "select" as const, 
-      placeholder: "Pilih target penerima pengumuman",
-      helperText: "Pengumuman hanya akan tampil untuk role yang dipilih.",
-      options: TARGET_ROLE_OPTIONS.map((opt) => ({
-        label: `${opt.label} — ${opt.description}`,
-        value: opt.value,
-      }))
-    },
-    { 
-      name: "tag", 
-      label: "Kategori", 
-      type: "select" as const,
-      placeholder: "Pilih kategori pengumuman",
-      options: [
-        { label: "🔴  PENTING — Pengumuman mendesak", value: "PENTING" },
-        { label: "📚  AKADEMIK — Berkaitan dengan akademik", value: "AKADEMIK" },
-        { label: "💰  KEUANGAN — Informasi keuangan", value: "KEUANGAN" },
-        { label: "🎉  KEGIATAN — Acara & kegiatan sekolah", value: "KEGIATAN" },
-        { label: "ℹ️  INFORMASI — Informasi umum", value: "INFORMASI" }
-      ] 
-    },
-    { 
-      name: "status", 
-      label: "Status Publikasi", 
-      type: "select" as const,
-      placeholder: "Pilih status publikasi",
-      helperText: "Atur kapan pengumuman ini akan ditampilkan kepada penerima.",
-      options: [
-        { label: "Aktif — Langsung ditampilkan", value: "Aktif" },
-        { label: "Terjadwal — Akan ditampilkan nanti", value: "Terjadwal" },
-        { label: "Berakhir — Tidak lagi ditampilkan", value: "Berakhir" }
-      ] 
+  /**
+   * Helper to extract a timestamp value from an announcement document
+   * for consistent, deterministic sorting.
+   */
+  const getAnnouncementTimestamp = (item: any): number => {
+    if (item.createdAt?.toMillis && typeof item.createdAt.toMillis === "function") {
+      return item.createdAt.toMillis();
     }
-  ];
+    if (item.createdAt?.seconds) {
+      return item.createdAt.seconds * 1000;
+    }
+    if (item.eventDate && typeof item.eventDate === "string") {
+      const t = new Date(item.eventDate + "T00:00:00").getTime();
+      if (!isNaN(t)) return t;
+    }
+    const parsed = parseIndonesianDate(item.date || "");
+    if (parsed) return parsed.getTime();
+    return 0;
+  };
 
   // 1. Filter based on user role authorization (Siswa only sees Siswa/Semua, etc.)
   const visibleAnnouncements = useMemo(() => {
@@ -192,24 +271,23 @@ export default function AnnouncementsPage() {
   }, [announcements, userRole, isSuperAdmin, isAdmin]);
 
   // 2. Filter based on selected tabs, target role pills, and search query
+  //    Sort: Pengumuman yang BELUM KADALUWARSA di ATAS, KADALUWARSA di BAWAH
   const filteredAnnouncements = useMemo(() => {
-    return visibleAnnouncements.filter((item) => {
-      // Status tab filter
+    const list = visibleAnnouncements.filter((item) => {
+      const effectiveStatus = getComputedStatus(item);
+
+      // Status tab filter — compare against computed (auto-expired) status
       if (statusFilter !== "Semua") {
-        if (statusFilter === "Pengumuman Aktif" && item.status !== "Aktif") return false;
-        if (statusFilter === "Terjadwal" && item.status !== "Terjadwal") return false;
-        if (statusFilter === "Berakhir" && item.status !== "Berakhir") return false;
+        if (statusFilter === "Pengumuman Aktif" && effectiveStatus !== "Aktif") return false;
+        if (statusFilter === "Terjadwal" && effectiveStatus !== "Terjadwal") return false;
+        if (statusFilter === "Berakhir" && effectiveStatus !== "Berakhir") return false;
       }
 
       // Target role filter (for Admin / Super Admin)
       if (targetFilter !== "Semua") {
         const itemTarget = (item.target || "Semua").toLowerCase();
         const selected = targetFilter.toLowerCase();
-        if (selected === "semua") {
-          // pass
-        } else if (!itemTarget.includes(selected)) {
-          return false;
-        }
+        if (selected !== "semua" && !itemTarget.includes(selected)) return false;
       }
 
       // Search query
@@ -224,13 +302,32 @@ export default function AnnouncementsPage() {
 
       return true;
     });
+
+    // Urutkan: Yang belum kadaluwarsa (Aktif, Terjadwal) di ATAS, yang kadaluwarsa (Berakhir) di BAWAH
+    return list.sort((a, b) => {
+      const statusA = getComputedStatus(a);
+      const statusB = getComputedStatus(b);
+      const isExpiredA = statusA === "Berakhir";
+      const isExpiredB = statusB === "Berakhir";
+
+      // 1. Belum kadaluwarsa selalu ditempatkan sebelum yang sudah kadaluwarsa
+      if (isExpiredA !== isExpiredB) {
+        return isExpiredA ? 1 : -1;
+      }
+
+      // 2. Dalam grup yang sama, urutkan berdasarkan data terbaru (descending timestamp)
+      const timeA = getAnnouncementTimestamp(a);
+      const timeB = getAnnouncementTimestamp(b);
+      return timeB - timeA;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleAnnouncements, statusFilter, targetFilter, searchQuery]);
 
   const metrics = [
     { label: "Total Pengumuman", value: visibleAnnouncements.length, desc: "Sesuai hak akses", icon: Megaphone, color: "text-[#531FFF]", bgColor: "bg-[#531FFF]/10", iconBg: "bg-[#531FFF]" },
-    { label: "Pengumuman Aktif", value: visibleAnnouncements.filter(a => a.status === 'Aktif').length, desc: "Sedang berjalan", icon: Send, color: "text-emerald-500", bgColor: "bg-emerald-50", iconBg: "bg-emerald-500" },
-    { label: "Terjadwal", value: visibleAnnouncements.filter(a => a.status === 'Terjadwal').length, desc: "Akan tayang", icon: Clock, color: "text-amber-500", bgColor: "bg-amber-50", iconBg: "bg-amber-500" },
-    { label: "Berakhir", value: visibleAnnouncements.filter(a => a.status === 'Berakhir').length, desc: "Selesai", icon: CheckCircle2, color: "text-blue-500", bgColor: "bg-blue-50", iconBg: "bg-blue-500" },
+    { label: "Pengumuman Aktif", value: visibleAnnouncements.filter(a => getComputedStatus(a) === 'Aktif').length, desc: "Sedang berjalan", icon: Send, color: "text-emerald-500", bgColor: "bg-emerald-50", iconBg: "bg-emerald-500" },
+    { label: "Terjadwal", value: visibleAnnouncements.filter(a => getComputedStatus(a) === 'Terjadwal').length, desc: "Akan tayang", icon: Clock, color: "text-amber-500", bgColor: "bg-amber-50", iconBg: "bg-amber-500" },
+    { label: "Berakhir", value: visibleAnnouncements.filter(a => getComputedStatus(a) === 'Berakhir').length, desc: "Selesai", icon: CheckCircle2, color: "text-blue-500", bgColor: "bg-blue-50", iconBg: "bg-blue-500" },
   ];
 
   const categories = [
@@ -247,16 +344,13 @@ export default function AnnouncementsPage() {
 
   return (
     <div className="p-8 pb-12 max-w-[1600px] mx-auto w-full h-full flex flex-col space-y-6">
-      {/* 1. Modal Form CRUD (Create, Edit, Delete) */}
-      <CrudSheet 
+      {/* 1. Modal Form CRUD Redesigned (Create, Edit, Delete) */}
+      <AnnouncementFormModal 
         open={crudState.open} 
         onOpenChange={(open) => setCrudState(s => ({ ...s, open }))}
-        mode={crudState.mode}
-        entityName="Pengumuman"
-        fields={announcementFields}
+        mode={crudState.mode as "create" | "edit" | "delete"}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
-        onEditRequested={!isReadOnly ? () => setCrudState(s => ({ ...s, mode: "edit" })) : undefined}
       />
 
       {/* 2. Redesigned Announcement Detail Drawer */}
@@ -267,7 +361,15 @@ export default function AnnouncementsPage() {
         onEdit={!isReadOnly ? () => {
           const item = detailDrawer.data;
           setDetailDrawer({ open: false });
-          setCrudState({ open: true, mode: "edit", data: item });
+          setCrudState({ 
+            open: true, 
+            mode: "edit", 
+            data: {
+              ...item,
+              desc: cleanAnnouncementDesc(item?.desc),
+              target: item?.target || "Semua"
+            } 
+          });
         } : undefined}
         onDelete={!isReadOnly ? () => {
           const item = detailDrawer.data;
@@ -424,69 +526,126 @@ export default function AnnouncementsPage() {
                   )}
                 </div>
               ) : (
-                filteredAnnouncements.map((item) => {
-                  const targetInfo = getTargetBadgeInfo(item.target || "Semua");
-                  const TargetIcon = targetInfo.icon;
+                filteredAnnouncements.map((item, index) => {
+                  const targetBadges = getTargetsBadgeList(item.target || "Semua");
+                  // Compute effective status (auto-expire by date) — no DB write
+                  const effectiveStatus = getComputedStatus(item);
+                  const isAutoExpired = effectiveStatus === "Berakhir" && item.status !== "Berakhir";
+                  const isExpired = effectiveStatus === "Berakhir";
+
+                  // Check if this is the transition point from non-expired to expired announcements
+                  const prevItem = index > 0 ? filteredAnnouncements[index - 1] : null;
+                  const isFirstExpiredItem = isExpired && (prevItem ? getComputedStatus(prevItem) !== "Berakhir" : false);
 
                   return (
-                    <div 
-                      key={item.id} 
-                      onClick={() => setDetailDrawer({ open: true, data: item })}
-                      className="flex flex-col sm:flex-row bg-white border border-gray-100 hover:border-[#531FFF]/30 rounded-2xl p-4 shadow-xs hover:shadow-md transition-all gap-4 items-stretch group cursor-pointer"
+                    <React.Fragment key={item.id}>
+                      {isFirstExpiredItem && (
+                        <div className="flex items-center gap-3 pt-4 pb-1">
+                          <div className="h-px bg-gray-200/80 flex-1" />
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400 bg-gray-100 border border-gray-200/80 px-3.5 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
+                            <Clock className="w-3.5 h-3.5 text-gray-400" />
+                            Pengumuman Kedaluwarsa / Selesai
+                          </span>
+                          <div className="h-px bg-gray-200/80 flex-1" />
+                        </div>
+                      )}
+
+                      <div 
+                        onClick={() => setDetailDrawer({ open: true, data: item })}
+                        className={cn(
+                        "flex flex-col sm:flex-row rounded-2xl p-4 transition-all gap-4 items-stretch group cursor-pointer border",
+                        isExpired
+                          ? "bg-gray-50 border-gray-200/70 opacity-70 grayscale-[30%] hover:opacity-90 hover:grayscale-0 hover:border-gray-300 shadow-none"
+                          : "bg-white border-gray-100 hover:border-[#531FFF]/30 shadow-xs hover:shadow-md"
+                      )}
                     >
                       {/* Illustration Thumbnail */}
                       <div className={cn(
-                        "w-full sm:w-[200px] h-[130px] sm:h-auto rounded-xl relative overflow-hidden shrink-0 flex items-center justify-center p-4 transition-transform group-hover:scale-[1.01]",
-                        item.theme === "purple" ? "bg-gradient-to-br from-purple-100 to-indigo-100" :
-                        item.theme === "orange" ? "bg-gradient-to-br from-amber-100 to-orange-100" :
-                        item.theme === "green" ? "bg-gradient-to-br from-emerald-100 to-teal-100" : "bg-gradient-to-br from-sky-100 to-cyan-100"
+                        "w-full sm:w-[200px] h-[130px] sm:h-auto rounded-xl relative overflow-hidden shrink-0 flex items-center justify-center p-4 transition-transform",
+                        !isExpired && "group-hover:scale-[1.01]",
+                        isExpired
+                          ? "bg-gray-200/60"
+                          : item.theme === "purple" ? "bg-gradient-to-br from-purple-100 to-indigo-100"
+                          : item.theme === "orange" ? "bg-gradient-to-br from-amber-100 to-orange-100"
+                          : item.theme === "green" ? "bg-gradient-to-br from-emerald-100 to-teal-100"
+                          : "bg-gradient-to-br from-sky-100 to-cyan-100"
                       )}>
                         <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_white_10%,_transparent_60%)]"></div>
                         <h3 className={cn(
                           "text-lg font-black text-center z-10 leading-tight tracking-tight",
-                          item.theme === "purple" ? "text-purple-800" :
-                          item.theme === "orange" ? "text-orange-800" :
-                          item.theme === "green" ? "text-emerald-800" : "text-sky-800"
+                          isExpired ? "text-gray-400"
+                          : item.theme === "purple" ? "text-purple-800"
+                          : item.theme === "orange" ? "text-orange-800"
+                          : item.theme === "green" ? "text-emerald-800"
+                          : "text-sky-800"
                         )}>
                           {item.title.split(" ").slice(0, 2).join(" ")}<br/>
                           {item.title.split(" ").slice(2, 5).join(" ")}
                         </h3>
+                        {/* Expired overlay ribbon */}
+                        {isExpired && (
+                          <div className="absolute bottom-0 inset-x-0 bg-gray-400/20 backdrop-blur-[1px] flex items-center justify-center py-1.5">
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">
+                              Berakhir
+                            </span>
+                          </div>
+                        )}
                       </div>
                       
                       {/* Content */}
                       <div className="flex-1 flex flex-col justify-between py-1 pr-1">
                         <div>
                           <div className="flex flex-wrap justify-between items-start gap-2 mb-2">
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-1.5">
                               {/* Category Badge */}
-                              <span className={cn("text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider", item.tagColor)}>
+                              <span className={cn(
+                                "text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider",
+                                isExpired ? "text-gray-400 bg-gray-100" : item.tagColor
+                              )}>
                                 {item.tag}
                               </span>
 
-                              {/* Target Role Badge */}
-                              <span className={cn(
-                                "text-[11px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 shadow-2xs",
-                                targetInfo.badgeColor
-                              )}>
-                                <TargetIcon className="w-3 h-3" />
-                                <span>{item.target || "Semua"}</span>
-                              </span>
+                              {/* Target Role Badges (Supports Multi-Role) */}
+                              {targetBadges.map((tb, idx) => {
+                                const IconComp = tb.icon;
+                                return (
+                                  <span
+                                    key={idx}
+                                    className={cn(
+                                      "text-[11px] font-bold px-2 py-0.5 rounded-md border flex items-center gap-1 shadow-2xs",
+                                      isExpired ? "text-gray-400 bg-gray-50 border-gray-200" : tb.badgeColor
+                                    )}
+                                  >
+                                    <IconComp className="w-3 h-3" />
+                                    <span>{tb.label.split(" (")[0]}</span>
+                                  </span>
+                                );
+                              })}
+
+                              {/* Auto-expired pill — only shows when date-based, not manually set */}
+                              {isAutoExpired && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-gray-100 text-gray-500 border border-gray-200 flex items-center gap-1">
+                                  <Clock className="w-2.5 h-2.5" />
+                                  Kedaluwarsa otomatis
+                                </span>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                              {/* Status pill — shows computed status */}
                               <span className={cn(
                                 "text-[11px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1",
-                                item.status === "Aktif" 
-                                  ? "text-emerald-700 bg-emerald-50 border border-emerald-200/70" 
-                                  : item.status === "Terjadwal"
+                                effectiveStatus === "Aktif"
+                                  ? "text-emerald-700 bg-emerald-50 border border-emerald-200/70"
+                                  : effectiveStatus === "Terjadwal"
                                   ? "text-amber-700 bg-amber-50 border border-amber-200/70"
-                                  : "text-gray-600 bg-gray-100 border border-gray-200"
+                                  : "text-gray-500 bg-gray-100 border border-gray-200"
                               )}>
                                 <span className={cn(
                                   "w-1.5 h-1.5 rounded-full",
-                                  item.status === "Aktif" ? "bg-emerald-500 animate-pulse" : "bg-gray-400"
+                                  effectiveStatus === "Aktif" ? "bg-emerald-500 animate-pulse" : "bg-gray-400"
                                 )} />
-                                {item.status || "Aktif"}
+                                {effectiveStatus}
                               </span>
 
                               <div className="flex items-center gap-1">
@@ -500,7 +659,15 @@ export default function AnnouncementsPage() {
                                 {!isReadOnly && (
                                   <>
                                     <button 
-                                      onClick={() => setCrudState({ open: true, mode: "edit", data: item })}
+                                      onClick={() => setCrudState({ 
+                                        open: true, 
+                                        mode: "edit", 
+                                        data: {
+                                          ...item,
+                                          desc: cleanAnnouncementDesc(item.desc),
+                                          target: item.target || "Semua"
+                                        } 
+                                      })}
                                       className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-[#531FFF]/10 rounded-lg transition-colors cursor-pointer" 
                                       title="Edit Pengumuman"
                                     >
@@ -519,32 +686,51 @@ export default function AnnouncementsPage() {
                             </div>
                           </div>
                           
-                          <h3 className="text-[16px] font-bold text-gray-900 group-hover:text-[#531FFF] transition-colors mb-1.5 leading-snug">
+                          <h3 className={cn(
+                            "text-[16px] font-bold mb-1.5 leading-snug transition-colors",
+                            isExpired
+                              ? "text-gray-400"
+                              : "text-gray-900 group-hover:text-[#531FFF]"
+                          )}>
                             {item.title}
                           </h3>
-                          <p className="text-[13px] text-gray-500 leading-relaxed max-w-3xl line-clamp-2">
-                            {item.desc}
+                          <p className={cn(
+                            "text-[13px] leading-relaxed max-w-3xl line-clamp-2",
+                            isExpired ? "text-gray-400" : "text-gray-500"
+                          )}>
+                            {cleanAnnouncementDesc(item.desc)}
                           </p>
                         </div>
                         
-                        <div className="flex flex-wrap items-center gap-4 sm:gap-6 mt-4 pt-2 border-t border-gray-50 text-[12px] text-gray-500">
+                        <div className={cn(
+                          "flex flex-wrap items-center gap-4 sm:gap-6 mt-4 pt-2 border-t text-[12px]",
+                          isExpired ? "border-gray-100 text-gray-400" : "border-gray-50 text-gray-500"
+                        )}>
                           <div className="flex items-center gap-1.5">
-                            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                            <Calendar className={cn("w-3.5 h-3.5", isExpired ? "text-gray-300" : "text-gray-400")} />
                             <span className="font-medium">{item.date || "-"}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <User className="w-3.5 h-3.5 text-gray-400" />
+                            <User className={cn("w-3.5 h-3.5", isExpired ? "text-gray-300" : "text-gray-400")} />
                             <span className="font-medium">{item.author || "Admin Sekolah"}</span>
                           </div>
-                          <div className="flex items-center gap-1.5 text-[#531FFF] font-semibold ml-auto">
-                            <span>Baca Selengkapnya</span>
-                            <span className="group-hover:translate-x-0.5 transition-transform">→</span>
-                          </div>
+                          {isExpired ? (
+                            <div className="flex items-center gap-1 text-gray-400 font-semibold ml-auto">
+                              <Clock className="w-3.5 h-3.5" />
+                              <span className="text-[11px]">Sudah Berakhir</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 text-[#531FFF] font-semibold ml-auto">
+                              <span>Baca Selengkapnya</span>
+                              <span className="group-hover:translate-x-0.5 transition-transform">→</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
-                  );
-                })
+                  </React.Fragment>
+                );
+              })
               )}
             </div>
           </div>

@@ -43,7 +43,7 @@ import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
-import { isAnnouncementVisibleForRole } from "@/lib/announcements-helper";
+import { isAnnouncementVisibleForRole, cleanAnnouncementDesc } from "@/lib/announcements-helper";
 import { useAuth } from "@/context/AuthContext";
 import { useTeacherAttendance } from "@/lib/teacher-attendance";
 import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal";
@@ -1556,7 +1556,7 @@ export function TeacherDashboardView({
                     </div>
                     <h5 className="text-xs font-bold text-gray-900 line-clamp-1">{ann.title || "Pengumuman Sekolah"}</h5>
                     <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">
-                      {ann.desc || ann.content || ann.description || "Informasi terkait kegiatan belajar mengajar."}
+                      {cleanAnnouncementDesc(ann.desc || ann.content || ann.description || "Informasi terkait kegiatan belajar mengajar.")}
                     </p>
                   </div>
                 ))}

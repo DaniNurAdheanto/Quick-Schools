@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { cleanAnnouncementDesc } from "@/lib/announcements-helper";
 import {
   Users,
   GraduationCap,
@@ -877,7 +878,7 @@ export function AdminDashboardView({
                   {ann.title || "Pengumuman Sekolah"}
                 </h4>
                 <p className="text-[10px] text-gray-500 line-clamp-2 leading-relaxed">
-                  {ann.content || ann.description || "Informasi seputar kegiatan belajar mengajar."}
+                  {cleanAnnouncementDesc(ann.desc || ann.content || ann.description || "Informasi seputar kegiatan belajar mengajar.")}
                 </p>
               </div>
             ))}

@@ -40,7 +40,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { formatRupiah } from "@/lib/spp-payments";
-import { isAnnouncementVisibleForRole } from "@/lib/announcements-helper";
+import { isAnnouncementVisibleForRole, cleanAnnouncementDesc } from "@/lib/announcements-helper";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { useAuth } from "@/context/AuthContext";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
@@ -1584,7 +1584,7 @@ export function ParentDashboardView({
                     <span className="text-[10px] text-gray-400 font-semibold">{ann.date || "Terbaru"}</span>
                   </div>
                   <h4 className="text-xs font-bold text-gray-900 leading-snug">{ann.title}</h4>
-                  <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">{ann.desc}</p>
+                  <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">{cleanAnnouncementDesc(ann.desc)}</p>
                 </div>
               ))}
             </div>

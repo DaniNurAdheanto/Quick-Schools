@@ -13,10 +13,16 @@ import {
   PenTool,
   Trash2,
   ShieldCheck,
+  MapPin,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
-import { getTargetBadgeInfo } from "@/lib/announcements-helper";
+import { 
+  getTargetsBadgeList, 
+  unpackAnnouncementDesc, 
+  cleanAnnouncementDesc 
+} from "@/lib/announcements-helper";
 
 interface AnnouncementDetailDrawerProps {
   open: boolean;
@@ -50,8 +56,7 @@ export function AnnouncementDetailDrawer({
 
   if (!open || !announcement) return null;
 
-  const targetInfo = getTargetBadgeInfo(announcement.target || "Semua");
-  const TargetIcon = targetInfo.icon;
+  const targetBadges = getTargetsBadgeList(announcement.target || "Semua");
 
   const isUrgent = announcement.tag === "PENTING";
 
@@ -91,10 +96,28 @@ export function AnnouncementDetailDrawer({
 
   const themeStyle = getThemeStyle(announcement.theme, announcement.tag);
 
+  const meta = unpackAnnouncementDesc(announcement.desc || "");
+  const effectiveDesc = cleanAnnouncementDesc(meta.cleanDesc || announcement.desc || "Tidak ada deskripsi pengumuman tambahan.");
+  const effectiveEventDate = announcement.eventDate || meta.eventDate || "";
+  const effectiveEventTime = announcement.eventTime || meta.eventTime || "";
+  const effectiveRoom = announcement.room || meta.room || "";
+
   const handleCopyText = async () => {
     try {
-      const textToCopy = `${announcement.title}\n\n${announcement.desc}\n\nTarget: ${announcement.target || "Semua"}\nTanggal: ${announcement.date || "-"}\nSumber: Smart School OS`;
-      await navigator.clipboard.writeText(textToCopy);
+      const lines = [
+        announcement.title,
+        "",
+        effectiveDesc,
+        "",
+        `Target: ${announcement.target || "Semua"}`,
+        `Tanggal Terbit: ${announcement.date || "-"}`,
+      ];
+      if (effectiveEventDate) lines.push(`Tanggal Pelaksanaan: ${effectiveEventDate}`);
+      if (effectiveEventTime) lines.push(`Jam Pelaksanaan: ${effectiveEventTime}`);
+      if (effectiveRoom) lines.push(`Ruangan/Lokasi: ${effectiveRoom}`);
+      lines.push("Sumber: Smart School OS");
+
+      await navigator.clipboard.writeText(lines.join("\n"));
       setCopied(true);
       toast.showSuccess("Teks pengumuman berhasil disalin ke clipboard.", "Tersalin");
       setTimeout(() => setCopied(false), 2500);
@@ -151,14 +174,22 @@ export function AnnouncementDetailDrawer({
                 {announcement.status || "Aktif"}
               </span>
 
-              {/* Target Role Badge */}
-              <span className={cn(
-                "px-2.5 py-1 text-[11px] font-bold rounded-lg border shadow-2xs flex items-center gap-1.5",
-                targetInfo.badgeColor
-              )}>
-                <TargetIcon className="w-3.5 h-3.5" />
-                Target: {announcement.target || "Semua"}
-              </span>
+              {/* Target Role Badges */}
+              {targetBadges.map((tb, idx) => {
+                const IconComp = tb.icon;
+                return (
+                  <span
+                    key={idx}
+                    className={cn(
+                      "px-2.5 py-1 text-[11px] font-bold rounded-lg border shadow-2xs flex items-center gap-1.5",
+                      tb.badgeColor
+                    )}
+                  >
+                    <IconComp className="w-3.5 h-3.5" />
+                    <span>Target: {tb.label.split(" (")[0]}</span>
+                  </span>
+                );
+              })}
             </div>
 
             {/* Close Button */}
@@ -225,9 +256,72 @@ export function AnnouncementDetailDrawer({
               Isi Pengumuman
             </h3>
             <div className="p-5 rounded-2xl bg-gray-50/80 border border-gray-100 text-[14px] text-gray-800 leading-relaxed font-normal whitespace-pre-line selection:bg-[#531FFF]/10">
-              {announcement.desc || "Tidak ada deskripsi pengumuman tambahan."}
+              {effectiveDesc}
             </div>
           </div>
+
+          {/* Execution Detail Block — only shown if at least one field has a value */}
+          {(effectiveEventDate || effectiveEventTime || effectiveRoom) && (
+            <div className="space-y-3">
+              <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
+                Detail Pelaksanaan
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Tanggal Pelaksanaan */}
+                {effectiveEventDate && (
+                  <div className="p-3.5 rounded-xl border border-gray-100 bg-white shadow-2xs flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center shrink-0">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                        Tanggal
+                      </span>
+                      <p className="text-xs font-black text-gray-900 mt-0.5">
+                        {new Date(effectiveEventDate + "T00:00:00").toLocaleDateString("id-ID", {
+                          weekday: "short", day: "numeric", month: "long", year: "numeric"
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Jam Pelaksanaan */}
+                {effectiveEventTime && (
+                  <div className="p-3.5 rounded-xl border border-gray-100 bg-white shadow-2xs flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                        Jam Mulai
+                      </span>
+                      <p className="text-xs font-black text-gray-900 mt-0.5">
+                        {effectiveEventTime} WIB
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Ruangan / Lokasi */}
+                {effectiveRoom && (
+                  <div className="p-3.5 rounded-xl border border-gray-100 bg-white shadow-2xs flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                      <MapPin className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                        Ruangan / Lokasi
+                      </span>
+                      <p className="text-xs font-black text-gray-900 mt-0.5 truncate">
+                        {effectiveRoom}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Key Information Summary Grid */}
           <div className="space-y-3 pt-2">
@@ -238,19 +332,30 @@ export function AnnouncementDetailDrawer({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Target Penerima Card */}
               <div className="p-3.5 rounded-xl border border-gray-100 bg-white shadow-2xs flex items-start gap-3">
-                <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", targetInfo.badgeColor)}>
-                  <TargetIcon className="w-4 h-4" />
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-purple-50 text-[#531FFF]">
+                  <Users className="w-4 h-4" />
                 </div>
-                <div className="min-w-0">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                    Target Penerima
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                    Target Penerima ({targetBadges.length})
                   </span>
-                  <p className="text-xs font-black text-gray-900 truncate mt-0.5">
-                    {targetInfo.label}
-                  </p>
-                  <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1 leading-snug">
-                    {targetInfo.description}
-                  </p>
+                  <div className="flex flex-wrap gap-1.5 mt-0.5">
+                    {targetBadges.map((tb, idx) => {
+                      const IconComp = tb.icon;
+                      return (
+                        <span
+                          key={idx}
+                          className={cn(
+                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold text-[11px] border shadow-2xs",
+                            tb.badgeColor
+                          )}
+                        >
+                          <IconComp className="w-3 h-3" />
+                          <span>{tb.label.split(" (")[0]}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 

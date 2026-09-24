@@ -90,39 +90,45 @@ export function isAnnouncementVisibleForRole(
 
   // If user is Admin Sekolah
   if (isAdmin || role === "admin" || role === "admin-sekolah" || role.includes("admin sekolah")) {
-    // Admin sees everything except announcements strictly meant only for Super Admin
     if (target === "super admin" || target === "super-admin") {
       return false;
     }
     return true;
   }
 
-  // Siswa matching
-  if (role === "siswa" || role === "student") {
-    return target.includes("siswa") || target.includes("murid") || target.includes("kelas");
-  }
+  // Split comma-separated targets for multi-select support (e.g. "Siswa, Guru")
+  const targets = target.split(",").map(t => t.trim().toLowerCase());
 
-  // Guru matching
-  if (role === "guru" || role === "teacher") {
-    return target.includes("guru") || target.includes("pengajar") || target.includes("staff") || target.includes("staf") || target.includes("pendidik");
-  }
+  return targets.some(t => {
+    if (t === "semua" || t === "all" || t.includes("seluruh")) return true;
 
-  // Orang Tua matching
-  if (role === "orang-tua" || role === "parent" || role === "wali" || role.includes("parent")) {
-    return target.includes("orang tua") || target.includes("wali") || target.includes("parent") || target.includes("paguyuban");
-  }
+    // Siswa matching
+    if (role === "siswa" || role === "student") {
+      return t.includes("siswa") || t.includes("murid") || t.includes("kelas");
+    }
 
-  // Kepala Sekolah matching
-  if (role === "kepala-sekolah" || role === "kepsek" || role === "principal") {
-    return target.includes("kepala sekolah") || target.includes("kepsek") || target.includes("principal") || target.includes("pimpinan");
-  }
+    // Guru matching
+    if (role === "guru" || role === "teacher") {
+      return t.includes("guru") || t.includes("pengajar") || t.includes("staff") || t.includes("staf") || t.includes("pendidik");
+    }
 
-  // Super Admin role check if not flagged via isSuperAdmin
-  if (role === "super-admin" || role === "superadmin") {
-    return true;
-  }
+    // Orang Tua matching
+    if (role === "orang-tua" || role === "parent" || role === "wali" || role.includes("parent")) {
+      return t.includes("orang tua") || t.includes("wali") || t.includes("parent") || t.includes("paguyuban");
+    }
 
-  return false;
+    // Kepala Sekolah matching
+    if (role === "kepala-sekolah" || role === "kepsek" || role === "principal") {
+      return t.includes("kepala sekolah") || t.includes("kepsek") || t.includes("principal") || t.includes("pimpinan");
+    }
+
+    // Super Admin role check if not flagged via isSuperAdmin
+    if (role === "super-admin" || role === "superadmin") {
+      return true;
+    }
+
+    return false;
+  });
 }
 
 
@@ -144,4 +150,90 @@ export function getTargetBadgeInfo(target: string = "Semua") {
   if (t.includes("admin")) return TARGET_ROLE_OPTIONS[5];
 
   return TARGET_ROLE_OPTIONS[0];
+}
+
+/**
+ * Splits a target string (e.g. "Siswa, Guru") into a list of badge info objects
+ */
+export function getTargetsBadgeList(target: string = "Semua"): TargetRoleOption[] {
+  if (!target || target.trim().toLowerCase() === "semua" || target.trim().toLowerCase().includes("seluruh")) {
+    return [TARGET_ROLE_OPTIONS[0]];
+  }
+  const parts = target.split(",").map(p => p.trim()).filter(Boolean);
+  if (parts.length === 0) return [TARGET_ROLE_OPTIONS[0]];
+  
+  return parts.map(p => getTargetBadgeInfo(p));
+}
+
+export interface AnnouncementExecutionMeta {
+  eventDate?: string;
+  eventTime?: string;
+  room?: string;
+}
+
+/**
+ * Unconditionally strips any internal metadata comment from the description string
+ * so the user only ever sees clean, pristine description text.
+ */
+export function cleanAnnouncementDesc(fullDesc: string = ""): string {
+  if (!fullDesc) return "-";
+  return fullDesc
+    .replace(/\s*<!--qs_meta:[\s\S]*?-->/g, "")
+    .replace(/<!--qs_meta:[\s\S]*?-->/g, "")
+    .trim() || "-";
+}
+
+/**
+ * Encodes execution metadata into announcement description text.
+ * Keeps Firestore document payload strictly within the standard 11 fields,
+ * guaranteeing compatibility with any strict security rules.
+ */
+export function packAnnouncementDesc(descText: string, meta: AnnouncementExecutionMeta): string {
+  const clean = cleanAnnouncementDesc(descText);
+  const base = clean || "-";
+
+  if (!meta.eventDate && !meta.eventTime && !meta.room) {
+    return base;
+  }
+
+  const payload = JSON.stringify({
+    eventDate: meta.eventDate || "",
+    eventTime: meta.eventTime || "",
+    room: meta.room || ""
+  });
+
+  return `${base}\n<!--qs_meta:${payload}-->`;
+}
+
+/**
+ * Decodes execution metadata from announcement description text.
+ */
+export function unpackAnnouncementDesc(fullDesc: string = ""): {
+  cleanDesc: string;
+  eventDate: string;
+  eventTime: string;
+  room: string;
+} {
+  if (!fullDesc) {
+    return { cleanDesc: "-", eventDate: "", eventTime: "", room: "" };
+  }
+
+  const match = fullDesc.match(/<!--qs_meta:([\s\S]*?)-->/);
+  const cleanDesc = cleanAnnouncementDesc(fullDesc);
+
+  if (!match) {
+    return { cleanDesc, eventDate: "", eventTime: "", room: "" };
+  }
+
+  try {
+    const parsed = JSON.parse(match[1]);
+    return {
+      cleanDesc,
+      eventDate: typeof parsed.eventDate === "string" ? parsed.eventDate : "",
+      eventTime: typeof parsed.eventTime === "string" ? parsed.eventTime : "",
+      room: typeof parsed.room === "string" ? parsed.room : "",
+    };
+  } catch (e) {
+    return { cleanDesc, eventDate: "", eventTime: "", room: "" };
+  }
 }

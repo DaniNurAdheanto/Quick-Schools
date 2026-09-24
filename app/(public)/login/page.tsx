@@ -4,7 +4,7 @@ import { Mail, Lock, EyeOff, Eye, BarChart3, ShieldCheck, Zap, Building2, Loader
 import Link from "next/link";
 import Image from "next/image";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { signInWithEmailAndPassword, deleteUser } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
@@ -24,13 +24,20 @@ function LoginFormContent() {
   const [error, setError] = useState("");
 
   const isSessionExpired = searchParams.get("session_expired") === "1" || searchParams.get("reason") === "session_expired";
+  const sessionAlertShownRef = useRef(false);
 
   useEffect(() => {
-    if (isSessionExpired) {
+    if (isSessionExpired && !sessionAlertShownRef.current) {
+      sessionAlertShownRef.current = true;
       toast.showWarning(
         "Sesi Anda telah berakhir secara otomatis karena tidak ada aktivitas selama 30 menit. Silakan masuk kembali.",
         "Sesi Telah Berakhir"
       );
+      // Clean query parameter from URL so it doesn't trigger again on component re-render
+      try {
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, "", cleanUrl);
+      } catch (e) {}
     }
   }, [isSessionExpired, toast]);
 

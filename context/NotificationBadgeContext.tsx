@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { collection, doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
-import { isAnnouncementVisibleForRole } from "@/lib/announcements-helper";
+import { isAnnouncementVisibleForRole, cleanAnnouncementDesc } from "@/lib/announcements-helper";
 
 export interface MenuReadState {
   lastReadAt: Record<string, string>;
@@ -643,7 +643,7 @@ export function NotificationBadgeProvider({ children }: { children: React.ReactN
         categoryLabel: a.tag || "Pengumuman",
         categoryPath: "/announcements",
         title: a.title || "Pengumuman Sekolah",
-        description: a.desc || "Informasi resmi untuk warga sekolah.",
+        description: cleanAnnouncementDesc(a.desc || "Informasi resmi untuk warga sekolah."),
         timestamp: docTime,
         formattedTime: formatNotificationTime(docTime),
         href: "/announcements",

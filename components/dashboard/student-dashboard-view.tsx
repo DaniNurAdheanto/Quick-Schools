@@ -39,7 +39,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, collection, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { isAnnouncementVisibleForRole } from "@/lib/announcements-helper";
+import { isAnnouncementVisibleForRole, cleanAnnouncementDesc } from "@/lib/announcements-helper";
 import { cn } from "@/lib/utils";
 import { formatRupiah } from "@/lib/spp-payments";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
@@ -1472,7 +1472,7 @@ export function StudentDashboardView({
                       )}
                     </div>
                     <p className="text-[11px] text-gray-600 line-clamp-2 leading-relaxed">
-                      {item.content || item.desc || "Pengumuman resmi dari pihak sekolah."}
+                      {cleanAnnouncementDesc(item.content || item.desc || "Pengumuman resmi dari pihak sekolah.")}
                     </p>
                     <div className="text-[10px] text-gray-400 font-semibold pt-0.5">
                       {item.date || "Terbaru"}
