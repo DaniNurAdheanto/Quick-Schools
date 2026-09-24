@@ -4,8 +4,6 @@ import React, { useState, useEffect } from "react";
 import {
   X,
   Calendar,
-  User,
-  Users,
   Megaphone,
   CheckCircle2,
   Clock,
@@ -14,10 +12,7 @@ import {
   Check,
   PenTool,
   Trash2,
-  Share2,
-  BookmarkCheck,
   ShieldCheck,
-  Sparkles
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";

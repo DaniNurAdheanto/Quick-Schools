@@ -131,29 +131,57 @@ export default function AnnouncementsPage() {
 
   // Form fields aligned with the 6 system roles + Semua
   const announcementFields = [
-    { name: "title", label: "Judul Pengumuman" },
-    { name: "desc", label: "Deskripsi Pengumuman" },
+    { 
+      name: "title", 
+      label: "Judul Pengumuman",
+      colSpan: 2 as const,
+      placeholder: "Contoh: Libur Idul Fitri 1447 H",
+      helperText: "Judul singkat dan jelas yang menggambarkan isi pengumuman."
+    },
+    { 
+      name: "desc", 
+      label: "Isi Pengumuman", 
+      type: "textarea" as const,
+      colSpan: 2 as const,
+      placeholder: "Tuliskan isi pengumuman secara lengkap dan informatif di sini...",
+      helperText: "Jelaskan informasi secara detail agar mudah dipahami oleh penerima."
+    },
     { 
       name: "target", 
       label: "Target Penerima", 
       type: "select" as const, 
+      placeholder: "Pilih target penerima pengumuman",
+      helperText: "Pengumuman hanya akan tampil untuk role yang dipilih.",
       options: TARGET_ROLE_OPTIONS.map((opt) => ({
-        label: `${opt.label} - ${opt.description}`,
+        label: `${opt.label} — ${opt.description}`,
         value: opt.value,
       }))
     },
-    { name: "tag", label: "Kategori", type: "select" as const, options: [
-      { label: "PENTING", value: "PENTING" },
-      { label: "AKADEMIK", value: "AKADEMIK" },
-      { label: "KEUANGAN", value: "KEUANGAN" },
-      { label: "KEGIATAN", value: "KEGIATAN" },
-      { label: "INFORMASI", value: "INFORMASI" }
-    ] },
-    { name: "status", label: "Status Publikasi", type: "select" as const, options: [
-      { label: "Aktif", value: "Aktif" },
-      { label: "Terjadwal", value: "Terjadwal" },
-      { label: "Berakhir", value: "Berakhir" }
-    ] }
+    { 
+      name: "tag", 
+      label: "Kategori", 
+      type: "select" as const,
+      placeholder: "Pilih kategori pengumuman",
+      options: [
+        { label: "🔴  PENTING — Pengumuman mendesak", value: "PENTING" },
+        { label: "📚  AKADEMIK — Berkaitan dengan akademik", value: "AKADEMIK" },
+        { label: "💰  KEUANGAN — Informasi keuangan", value: "KEUANGAN" },
+        { label: "🎉  KEGIATAN — Acara & kegiatan sekolah", value: "KEGIATAN" },
+        { label: "ℹ️  INFORMASI — Informasi umum", value: "INFORMASI" }
+      ] 
+    },
+    { 
+      name: "status", 
+      label: "Status Publikasi", 
+      type: "select" as const,
+      placeholder: "Pilih status publikasi",
+      helperText: "Atur kapan pengumuman ini akan ditampilkan kepada penerima.",
+      options: [
+        { label: "Aktif — Langsung ditampilkan", value: "Aktif" },
+        { label: "Terjadwal — Akan ditampilkan nanti", value: "Terjadwal" },
+        { label: "Berakhir — Tidak lagi ditampilkan", value: "Berakhir" }
+      ] 
+    }
   ];
 
   // 1. Filter based on user role authorization (Siswa only sees Siswa/Semua, etc.)

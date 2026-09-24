@@ -29,7 +29,8 @@ import {
   Sparkles,
   AlertCircle,
   Share2,
-  ChevronDown
+  ChevronDown,
+  Activity
 } from "lucide-react";
 import { useToast } from "@/context/ToastContext";
 import { cn } from "@/lib/utils";
@@ -38,7 +39,7 @@ import { ProfileAvatar } from "@/components/ui/profile-avatar";
 export interface CrudField {
   name: string;
   label: string;
-  type?: string;
+  type?: "text" | "email" | "tel" | "number" | "date" | "select" | "multiselect" | "file" | "textarea" | string;
   placeholder?: string;
   options?: { label: string; value: string; sublabel?: string }[];
   category?: "pribadi" | "akademik" | "orangTua" | "darurat" | "lainnya" | string;
@@ -337,9 +338,13 @@ export function CrudSheet({
     return "pribadi";
   };
 
-  // Field icons helper
   const getFieldIcon = (fieldName: string) => {
     const name = fieldName.toLowerCase();
+    if (name === "title" || name.includes("judul")) return FileText;
+    if (name === "desc" || name.includes("description") || name.includes("content") || name.includes("isi") || name.includes("deskripsi")) return BookOpen;
+    if (name === "tag" || name.includes("kategori") || name.includes("category")) return Activity;
+    if (name === "target" || name.includes("penerima") || name.includes("recipient")) return Users;
+    if (name === "status") return CheckCircle2;
     if (name.includes("mail")) return Mail;
     if (name.includes("phone") || name.includes("hp") || name.includes("telepon") || name.includes("kontak")) return Phone;
     if (name.includes("address") || name.includes("alamat") || name.includes("place") || name.includes("tempat")) return MapPin;
@@ -350,7 +355,6 @@ export function CrudSheet({
     if (name.includes("income") || name.includes("penghasilan") || name.includes("biaya") || name.includes("gaji")) return CreditCard;
     if (name.includes("job") || name.includes("pekerjaan")) return Briefcase;
     if (name.includes("emergency") || name.includes("darurat")) return ShieldAlert;
-    if (name === "status") return CheckCircle2;
     return User;
   };
 
@@ -968,10 +972,20 @@ export function CrudSheet({
             </div>
           ) : (
             <div className="pr-8">
-              <h2 className="text-[20px] font-extrabold text-gray-900 mb-1">{getTitle()}</h2>
-              <p className="text-[13px] text-gray-500 font-medium leading-relaxed">
-                {getDescription()}
-              </p>
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm",
+                  isDelete ? "bg-rose-100 text-rose-600" : "bg-[#531FFF]/10 text-[#531FFF]"
+                )}>
+                  {isDelete ? <AlertTriangle className="w-5 h-5" /> : <Edit3 className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h2 className="text-[18px] font-extrabold text-gray-900 leading-tight">{getTitle()}</h2>
+                  <p className="text-[12px] text-gray-400 font-medium leading-relaxed mt-0.5">
+                    {getDescription()}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1111,78 +1125,131 @@ export function CrudSheet({
               )}
             </div>
           ) : !isDelete ? (
-            /* EDIT / CREATE MODE: Ergonomic 2-Column Form Inputs */
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {fields.map((field) => {
-                const isLong = field.colSpan === 2 || field.name.toLowerCase().includes("address") || field.name === "name" || field.name === "pasFoto";
-                return (
-                  <div 
-                    key={field.name} 
-                    className={cn(
-                      "space-y-1.5",
-                      isLong ? "sm:col-span-2" : "sm:col-span-1"
-                    )}
-                  >
-                    <label className="text-[13px] font-bold text-gray-800 block">
-                      {field.label}
-                    </label>
-                    {field.type === "select" ? (
-                      <select
-                        id={field.name}
-                        value={formData[field.name] || ""}
-                        onChange={(e) => handleChange(field.name, e.target.value)}
-                        className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-[13px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium appearance-none bg-white cursor-pointer"
-                        disabled={isSubmitting || field.disabled || field.readOnly}
-                      >
-                        <option value="" disabled>{field.placeholder || `Pilih ${field.label.toLowerCase()}`}</option>
-                        {field.options?.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    ) : field.type === "multiselect" ? (
-                      <MultiSelectField
-                        field={field}
-                        value={formData[field.name]}
-                        onChange={(val) => handleChange(field.name, val)}
-                        disabled={isSubmitting || field.disabled || field.readOnly}
-                      />
-                    ) : field.type === "file" ? (
-                      <input
-                        id={field.name}
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            handleChange(field.name, file);
-                          }
-                        }}
-                        disabled={isSubmitting || field.disabled || field.readOnly}
-                        className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-[#531FFF]/10 file:text-[#531FFF] hover:file:bg-[#531FFF]/20 cursor-pointer disabled:bg-gray-100 disabled:cursor-not-allowed"
-                      />
-                    ) : (
-                      <input
-                        id={field.name}
-                        type={field.type || "text"}
-                        placeholder={field.placeholder || `Masukkan ${field.label.toLowerCase()}`}
-                        value={formData[field.name] || ""}
-                        onChange={(e) => handleChange(field.name, e.target.value)}
-                        disabled={isSubmitting || field.disabled || field.readOnly}
-                        readOnly={field.readOnly}
-                        className={cn(
-                          "w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium",
-                          (field.disabled || field.readOnly) && "bg-gray-100/90 text-gray-500 cursor-not-allowed select-none"
-                        )}
-                      />
-                    )}
-                    {field.helperText && (
-                      <p className="text-[11px] text-gray-400 font-medium">{field.helperText}</p>
-                    )}
-                  </div>
-                );
-              })}
+            /* EDIT / CREATE MODE: Modern Ergonomic Form */
+            <div className="space-y-5">
+              {/* Form Fields */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-5">
+                {fields.map((field) => {
+                  const isLong = field.colSpan === 2
+                    || field.type === "textarea"
+                    || field.name.toLowerCase().includes("address")
+                    || field.name.toLowerCase().includes("desc")
+                    || field.name.toLowerCase().includes("content")
+                    || field.name.toLowerCase().includes("isi")
+                    || field.name === "name"
+                    || field.name === "pasFoto";
+                  const FieldIcon = getFieldIcon(field.name);
+                  return (
+                    <div
+                      key={field.name}
+                      className={cn(
+                        "flex flex-col gap-1.5",
+                        isLong ? "sm:col-span-2" : "sm:col-span-1"
+                      )}
+                    >
+                      {/* Label Row */}
+                      <div className="flex items-center gap-1.5">
+                        <FieldIcon className="w-3.5 h-3.5 text-[#531FFF]/60 shrink-0" />
+                        <label
+                          htmlFor={field.name}
+                          className="text-[12px] font-bold text-gray-700 uppercase tracking-wide leading-none"
+                        >
+                          {field.label}
+                          {!field.disabled && !field.readOnly && (
+                            <span className="ml-1 text-[#531FFF]/40 font-extrabold" title="Wajib diisi">*</span>
+                          )}
+                        </label>
+                      </div>
+
+                      {/* Input Field */}
+                      {field.type === "textarea" ? (
+                        <textarea
+                          id={field.name}
+                          placeholder={field.placeholder || `Masukkan ${field.label.toLowerCase()}...`}
+                          value={formData[field.name] || ""}
+                          onChange={(e) => handleChange(field.name, e.target.value)}
+                          disabled={isSubmitting || field.disabled || field.readOnly}
+                          rows={5}
+                          className={cn(
+                            "w-full px-3.5 py-3 border border-gray-200 rounded-xl text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium resize-y min-h-[120px] leading-relaxed bg-gray-50/50 hover:bg-white",
+                            (field.disabled || field.readOnly) && "bg-gray-100/90 text-gray-500 cursor-not-allowed select-none resize-none"
+                          )}
+                        />
+                      ) : field.type === "select" ? (
+                        <div className="relative">
+                          <select
+                            id={field.name}
+                            value={formData[field.name] || ""}
+                            onChange={(e) => handleChange(field.name, e.target.value)}
+                            className={cn(
+                              "w-full pl-3.5 pr-9 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium appearance-none bg-gray-50/50 hover:bg-white cursor-pointer",
+                              !formData[field.name] && "text-gray-400"
+                            )}
+                            disabled={isSubmitting || field.disabled || field.readOnly}
+                          >
+                            <option value="" disabled>{field.placeholder || `Pilih ${field.label.toLowerCase()}`}</option>
+                            {field.options?.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        </div>
+                      ) : field.type === "multiselect" ? (
+                        <MultiSelectField
+                          field={field}
+                          value={formData[field.name]}
+                          onChange={(val) => handleChange(field.name, val)}
+                          disabled={isSubmitting || field.disabled || field.readOnly}
+                        />
+                      ) : field.type === "file" ? (
+                        <input
+                          id={field.name}
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleChange(field.name, file);
+                          }}
+                          disabled={isSubmitting || field.disabled || field.readOnly}
+                          className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium bg-gray-50/50 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#531FFF]/10 file:text-[#531FFF] hover:file:bg-[#531FFF]/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                      ) : (
+                        <input
+                          id={field.name}
+                          type={field.type || "text"}
+                          placeholder={field.placeholder || `Masukkan ${field.label.toLowerCase()}`}
+                          value={formData[field.name] || ""}
+                          onChange={(e) => handleChange(field.name, e.target.value)}
+                          disabled={isSubmitting || field.disabled || field.readOnly}
+                          readOnly={field.readOnly}
+                          className={cn(
+                            "w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium bg-gray-50/50 hover:bg-white",
+                            (field.disabled || field.readOnly) && "bg-gray-100/90 text-gray-500 cursor-not-allowed select-none"
+                          )}
+                        />
+                      )}
+
+                      {/* Helper Text */}
+                      {field.helperText && (
+                        <p className="text-[11px] text-gray-400 font-medium leading-relaxed flex items-start gap-1">
+                          <Info className="w-3 h-3 mt-0.5 shrink-0 text-gray-300" />
+                          {field.helperText}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Form Footer Tip */}
+              <div className="flex items-start gap-2 p-3 bg-[#531FFF]/5 border border-[#531FFF]/10 rounded-xl">
+                <Info className="w-3.5 h-3.5 text-[#531FFF]/60 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-[#531FFF]/70 font-medium leading-relaxed">
+                  Pastikan semua kolom bertanda <strong className="text-[#531FFF]">*</strong> telah diisi sebelum menyimpan data.
+                </p>
+              </div>
             </div>
           ) : (
             <div className="py-3 px-1 space-y-4">
