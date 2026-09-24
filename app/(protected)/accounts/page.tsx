@@ -54,6 +54,7 @@ import { syncStudentRecord, syncTeacherRecord } from "@/lib/unified-sync-service
 interface AccountUser {
   id: string; // doc ID
   uid: string;
+  _allDocIds?: string[];
   name: string;
   email: string;
   role: string;
@@ -201,44 +202,86 @@ export default function AccountManagementPage() {
 
   const isSuperAdmin = isSuperAdminRole(currentUserRole) || (currentUserRole || "").toLowerCase() === "admin";
 
-  // 2. Subscribe to real-time users collection once authenticated
+  // 2. Subscribe to real-time users collection once authenticated with automatic deduplication
   useEffect(() => {
     if (!currentUser) return;
 
     setLoading(true);
     const qUsers = query(collection(db, "users"));
     const unsubscribe = onSnapshot(qUsers, (snapshot) => {
-      const list: AccountUser[] = [];
+      const userMap = new Map<string, AccountUser>();
+      const isDocId = (val: any) => typeof val === "string" && val.length >= 20 && !/^\d+$/.test(val);
+
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
         const docId = docSnap.id;
+        const uid = data.uid || docId;
+        const email = (data.email || "").toLowerCase().trim();
         
         let statusNormalized = data.status || "Aktif";
         if (data.onboardingCompleted === false && statusNormalized !== "Nonaktif") {
           statusNormalized = "Belum Onboarding";
         }
 
-        list.push({
+        // Deduplication key: prioritized by UID -> normalized Email -> docId
+        let key = "";
+        if (uid && uid.length >= 10) {
+          key = `uid_${uid}`;
+        } else if (email && email !== "-" && email.length >= 3) {
+          key = `email_${email}`;
+        } else {
+          key = `doc_${docId}`;
+        }
+
+        // If duplicate entry exists, merge and prioritize canonical UID doc
+        if (userMap.has(key)) {
+          const existing = userMap.get(key)!;
+          if (!existing._allDocIds?.includes(docId)) {
+            existing._allDocIds = [...(existing._allDocIds || [existing.id]), docId];
+          }
+
+          // If this document's ID is the true UID, adopt it as primary canonical record
+          if (docId === uid || (!existing.uid && uid)) {
+            existing.id = docId;
+            existing.uid = uid;
+            if (data.name) existing.name = data.name;
+            if (data.email) existing.email = data.email;
+            if (data.role) existing.role = (data.role || "siswa").toLowerCase();
+            existing.status = statusNormalized;
+          }
+
+          // Proactively delete ghost document from Firestore if it is a detached duplicate
+          if (docId !== uid && isDocId(docId) && isDocId(uid)) {
+            deleteDoc(doc(db, "users", docId)).catch(() => {});
+          }
+          return;
+        }
+
+        const accountObj: AccountUser = {
           id: docId,
-          uid: data.uid || docId,
-          name: data.name || data.email?.split("@")[0] || "Tanpa Nama",
+          uid: uid,
+          _allDocIds: [docId],
+          name: data.name || data.fullName || data.email?.split("@")[0] || "Tanpa Nama",
           email: data.email || "-",
           role: (data.role || "siswa").toLowerCase(),
           status: statusNormalized,
           onboardingCompleted: data.onboardingCompleted ?? true,
           createdAt: data.createdAt || null,
           updatedAt: data.updatedAt || null,
-          phone: data.phone || "-",
+          phone: data.phone || data.contact || "-",
           pendingOnboardingReminder: data.pendingOnboardingReminder || false,
           reminderSentAt: data.reminderSentAt || null,
           studentId: data.studentId || null,
           studentName: data.studentName || null,
           studentIds: data.studentIds || (data.studentId ? [data.studentId] : []),
-          nisn: data.nisn || null,
-          nip: data.nip || null
-        });
+          nisn: data.nisn || data.id || null,
+          nip: data.nip || data.id || null
+        };
+
+        userMap.set(key, accountObj);
       });
 
+      const list = Array.from(userMap.values());
       list.sort((a, b) => a.name.localeCompare(b.name));
       setUsersList(list);
       setLoading(false);
@@ -679,6 +722,9 @@ export default function AccountManagementPage() {
       const userDocsToDelete = new Set<string>();
       if (targetId) userDocsToDelete.add(targetId);
       if (targetUid) userDocsToDelete.add(targetUid);
+      if (targetUser._allDocIds && Array.isArray(targetUser._allDocIds)) {
+        targetUser._allDocIds.forEach((id) => userDocsToDelete.add(id));
+      }
 
       const studentDocsToDelete = new Set<string>();
       if (targetId) studentDocsToDelete.add(targetId);
