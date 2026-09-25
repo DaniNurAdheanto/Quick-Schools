@@ -35,7 +35,7 @@ import {
   Cell,
   ReferenceLine
 } from "recharts";
-import { collection, onSnapshot, doc, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, getDoc, query, where } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { cn, getTodayDateString } from "@/lib/utils";
@@ -93,6 +93,9 @@ export function ParentDashboardView({
 
   // Active Selected Child State
   const [selectedChildId, setSelectedChildId] = useState<string>("");
+
+  // Attendance Period Filter State
+  const [attendancePeriod, setAttendancePeriod] = useState<"7days" | "30days" | "semester" | "all">("semester");
 
   // Live time tracker
   const [nowTimeStr, setNowTimeStr] = useState<string>(() => {
@@ -168,9 +171,52 @@ export function ParentDashboardView({
 
   // 2. Realtime Subscriptions
   useEffect(() => {
+    // Attendance: merge Firestore "attendance" + "roles" (type=attendance_record) + localStorage
+    // with deduplication and mock/dummy filtering
+    const mergeAndSetAttendance = (firestoreRecords: any[], rolesRecords: any[]) => {
+      const map: Record<string, any> = {};
+
+      // 1. Firestore attendance records (primary source)
+      firestoreRecords.forEach((r: any) => { map[r.id] = r; });
+
+      // 2. Roles collection attendance records
+      rolesRecords.forEach((r: any) => { map[r.id] = r; });
+
+      // 3. localStorage records (offline/cached from attendance page)
+      try {
+        const stored = localStorage.getItem("quick_schools_attendance_records");
+        if (stored) {
+          const localList = JSON.parse(stored);
+          if (Array.isArray(localList)) {
+            localList
+              .filter((r: any) => r && r.id && !r.id.startsWith("ATT-100") && !r.id.startsWith("MOCK"))
+              .forEach((r: any) => { if (!map[r.id]) map[r.id] = r; });
+          }
+        }
+      } catch (e) {
+        // localStorage parsing error — skip
+      }
+
+      setAttendanceRecords(Object.values(map));
+    };
+
+    let latestFirestore: any[] = [];
+    let latestRoles: any[] = [];
+
     const unsubAttendance = onSnapshot(collection(db, "attendance"), (snap) => {
-      setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Attendance listener warning:", err));
+      latestFirestore = snap.docs
+        .filter(d => !d.id.startsWith("ATT-100") && !d.id.startsWith("MOCK"))
+        .map(d => ({ id: d.id, ...d.data() }));
+      mergeAndSetAttendance(latestFirestore, latestRoles);
+    }, (err) => console.warn("Parent Attendance listener warning:", err));
+
+    const qRolesAtt = query(collection(db, "roles"), where("type", "==", "attendance_record"));
+    const unsubRolesAtt = onSnapshot(qRolesAtt, (snap) => {
+      latestRoles = snap.docs
+        .filter(d => !d.id.startsWith("ATT-100") && !d.id.startsWith("MOCK"))
+        .map(d => ({ id: d.id, ...d.data() }));
+      mergeAndSetAttendance(latestFirestore, latestRoles);
+    }, (err) => console.warn("Parent Roles attendance listener warning:", err));
 
     const unsubGrades = onSnapshot(collection(db, "grades"), (snap) => {
       setGradesRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -198,6 +244,7 @@ export function ParentDashboardView({
 
     return () => {
       unsubAttendance();
+      unsubRolesAtt();
       unsubGrades();
       unsubSchedules();
       unsubExams();
@@ -459,6 +506,7 @@ export function ParentDashboardView({
   }, [activeChild, childClass, classesList]);
 
   // 4. Computed Attendance for Active Child (strictly unique student ID, NEVER by name)
+  //    Now supports period filtering and merges all data sources with deduplication
   const childAttendance = useMemo(() => {
     if (!activeChild) {
       return {
@@ -472,30 +520,86 @@ export function ParentDashboardView({
         todayRecord: null,
         pieData: [],
         recentLogs: [],
-        isLive: false
+        isLive: false,
+        periodLabel: "Semua"
       };
     }
 
     const sId = String(activeChild.id || activeChild._firestoreId || "");
     const sUid = String(activeChild.uid || "");
     const sNisn = childNisn ? String(childNisn) : "";
+    const sDocId = String(activeChild.docId || activeChild._firestoreId || "");
+    const sName = String(activeChild.fullName || activeChild.name || "").toLowerCase().trim();
 
-    const myRecords = attendanceRecords.filter(r => {
-      if (sId && String(r.studentId) === sId) return true;
-      if (sUid && (String(r.studentId) === sUid || String(r.uid) === sUid)) return true;
-      if (sNisn && (String(r.studentId) === sNisn || String(r.nisn) === sNisn)) return true;
+    // Step 1: Filter attendance records belonging to THIS child (strict ID matching only)
+    const allMyRecords = attendanceRecords.filter(r => {
+      const rStudentId = String(r.studentId || "");
+      const rUid = String(r.uid || "");
+      const rNisn = String(r.nisn || "");
+      const rDocStudentId = String(r.studentDocId || "");
+
+      if (sId && (rStudentId === sId || rDocStudentId === sId)) return true;
+      if (sUid && (rStudentId === sUid || rUid === sUid)) return true;
+      if (sNisn && (rStudentId === sNisn || rNisn === sNisn)) return true;
+      if (sDocId && (rStudentId === sDocId || rDocStudentId === sDocId)) return true;
+      // Fallback: exact student name match (only when IDs fail and name is specific)
+      if (sName && sName.length >= 4 && r.studentName) {
+        const rName = String(r.studentName).toLowerCase().trim();
+        if (rName === sName) return true;
+      }
       return false;
     });
 
-    const todayStr = getTodayDateString();
-    const todayRecord = myRecords.find(r => r.date === todayStr);
+    // Step 2: Deduplicate by (date + studentId) to prevent double-counting
+    const deduped = new Map<string, any>();
+    allMyRecords.forEach(r => {
+      const key = `${r.date || "unknown"}_${r.studentId || r.uid || r.nisn || "x"}`;
+      // Keep the most recent version (prefer Firestore over localStorage)
+      if (!deduped.has(key) || (r._source === "firestore")) {
+        deduped.set(key, r);
+      }
+    });
+    const uniqueRecords = Array.from(deduped.values());
 
-    const total = myRecords.length;
-    const hadir = myRecords.filter(r => r.status === "Hadir").length;
-    const terlambat = myRecords.filter(r => r.status === "Terlambat").length;
-    const sakit = myRecords.filter(r => r.status === "Sakit").length;
-    const izin = myRecords.filter(r => r.status === "Izin").length;
-    const alpa = myRecords.filter(r => r.status === "Alpa" || r.status === "Ditolak").length;
+    // Step 3: Apply period filter
+    const now = new Date();
+    let periodLabel = "Semua Waktu";
+    let filteredRecords = uniqueRecords;
+
+    if (attendancePeriod === "7days") {
+      const cutoff = new Date(now);
+      cutoff.setDate(cutoff.getDate() - 7);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      filteredRecords = uniqueRecords.filter(r => (r.date || "") >= cutoffStr);
+      periodLabel = "7 Hari Terakhir";
+    } else if (attendancePeriod === "30days") {
+      const cutoff = new Date(now);
+      cutoff.setDate(cutoff.getDate() - 30);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      filteredRecords = uniqueRecords.filter(r => (r.date || "") >= cutoffStr);
+      periodLabel = "30 Hari Terakhir";
+    } else if (attendancePeriod === "semester") {
+      // Current semester: Jul-Dec or Jan-Jun
+      const month = now.getMonth(); // 0-indexed
+      const year = now.getFullYear();
+      const semesterStart = month >= 6
+        ? `${year}-07-01`
+        : `${year}-01-01`;
+      filteredRecords = uniqueRecords.filter(r => (r.date || "") >= semesterStart);
+      periodLabel = "Semester Ini";
+    } else {
+      periodLabel = "Semua Waktu";
+    }
+
+    const todayStr = getTodayDateString();
+    const todayRecord = uniqueRecords.find(r => r.date === todayStr);
+
+    const total = filteredRecords.length;
+    const hadir = filteredRecords.filter(r => (r.status || "") === "Hadir").length;
+    const terlambat = filteredRecords.filter(r => (r.status || "") === "Terlambat").length;
+    const sakit = filteredRecords.filter(r => (r.status || "") === "Sakit").length;
+    const izin = filteredRecords.filter(r => (r.status || "") === "Izin").length;
+    const alpa = filteredRecords.filter(r => ["Alpa", "Ditolak", "Alpha"].includes(r.status || "")).length;
 
     let percentage = "0.0";
     if (total > 0) {
@@ -510,9 +614,14 @@ export function ParentDashboardView({
       { name: "Alpa", value: alpa, color: "#EF4444" },
     ].filter(item => item.value > 0);
 
-    const recentLogs = [...myRecords]
-      .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
-      .slice(0, 5);
+    // Show up to 10 recent logs from the filtered period
+    const recentLogs = [...filteredRecords]
+      .sort((a, b) => {
+        const dateA = a.date || "";
+        const dateB = b.date || "";
+        return dateB.localeCompare(dateA);
+      })
+      .slice(0, 10);
 
     return {
       total,
@@ -525,9 +634,10 @@ export function ParentDashboardView({
       todayRecord,
       pieData,
       recentLogs,
-      isLive: total > 0
+      isLive: uniqueRecords.length > 0,
+      periodLabel
     };
-  }, [attendanceRecords, activeChild, childNisn]);
+  }, [attendanceRecords, activeChild, childNisn, attendancePeriod]);
 
   // 5. Computed Academic Performance & Grades for Active Child (strictly unique student ID, NEVER by name)
   const childGrades = useMemo(() => {
@@ -1323,19 +1433,37 @@ export function ParentDashboardView({
 
           {/* 3. Rekap Kehadiran Presensi Lengkap */}
           <div className="bg-white p-5 md:p-6 rounded-xl border border-gray-100 shadow-xs">
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
               <div>
                 <h2 className="text-base font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
                   <CalendarCheck className="w-5 h-5 text-[#531FFF]" />
                   <span>Rekapitulasi Presensi Kehadiran Siswa</span>
                 </h2>
                 <p className="text-xs text-gray-500 font-medium mt-0.5">
-                  Monitoring absensi semester ini · Total {childAttendance.total} hari efektif sekolah
+                  {childAttendance.periodLabel} · Total {childAttendance.total} hari tercatat
+                  {childAttendance.isLive && (
+                    <span className="inline-flex items-center gap-1 ml-2 text-emerald-600">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Live
+                    </span>
+                  )}
                 </p>
               </div>
-              <Link href="/attendance" className="text-xs font-bold text-[#531FFF] hover:underline flex items-center gap-0.5">
-                Detail Presensi <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
+              <div className="flex items-center gap-2">
+                <select
+                  value={attendancePeriod}
+                  onChange={(e) => setAttendancePeriod(e.target.value as any)}
+                  className="text-[11px] font-bold text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none cursor-pointer"
+                >
+                  <option value="7days">7 Hari</option>
+                  <option value="30days">30 Hari</option>
+                  <option value="semester">Semester Ini</option>
+                  <option value="all">Semua</option>
+                </select>
+                <Link href="/attendance" className="text-xs font-bold text-[#531FFF] hover:underline flex items-center gap-0.5 whitespace-nowrap">
+                  Detail <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
             </div>
 
             {/* Attendance Counters Bar */}
@@ -1367,48 +1495,78 @@ export function ParentDashboardView({
               </div>
             </div>
 
-            {/* Log Kehadiran 5 Hari Terakhir */}
+            {/* Log Kehadiran Terbaru (periode terpilih) */}
             <div>
               <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5">
-                Riwayat Presensi Terbaru
+                Riwayat Presensi Terbaru ({childAttendance.periodLabel})
               </h4>
               <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
                 {childAttendance.recentLogs.length > 0 ? (
-                  childAttendance.recentLogs.map((rec, i) => (
-                    <div key={rec.id || i} className="p-3 bg-white flex items-center justify-between text-xs hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-gray-600">
-                          <Calendar className="w-4 h-4" />
+                  childAttendance.recentLogs.map((rec, i) => {
+                    // Format date for display
+                    let displayDate = rec.date || "Hari Ini";
+                    try {
+                      if (rec.date) {
+                        const d = new Date(rec.date + "T00:00:00");
+                        const dayName = d.toLocaleDateString("id-ID", { weekday: "long" });
+                        const dateStr = d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+                        displayDate = `${dayName}, ${dateStr}`;
+                      }
+                    } catch (_) {}
+
+                    const clockInTime = rec.clockIn?.time || rec.timestamp || rec.time || rec.checkInTime || "";
+
+                    return (
+                      <div key={rec.id || i} className="p-3 bg-white flex items-center justify-between text-xs hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center gap-2.5">
+                          <div className={cn(
+                            "w-8 h-8 rounded-lg flex items-center justify-center font-bold",
+                            rec.status === "Hadir" ? "bg-emerald-100 text-emerald-600" :
+                            rec.status === "Terlambat" ? "bg-amber-100 text-amber-600" :
+                            rec.status === "Sakit" ? "bg-blue-100 text-blue-600" :
+                            rec.status === "Izin" ? "bg-amber-100 text-amber-600" :
+                            "bg-rose-100 text-rose-600"
+                          )}>
+                            <Calendar className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="font-extrabold text-gray-900">{displayDate}</p>
+                            <p className="text-[11px] text-gray-400 font-medium">
+                              {clockInTime ? `Masuk: ${clockInTime}` : "Waktu tidak tercatat"}
+                              {rec.className ? ` · ${rec.className}` : ""}
+                              {rec.location ? ` · ${rec.location}` : ""}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-extrabold text-gray-900">{rec.date || "Hari Ini"}</p>
-                          <p className="text-[11px] text-gray-400 font-medium">
-                            Masuk: {rec.timestamp || rec.time || "07:05 WIB"} {rec.location ? `· ${rec.location}` : ""}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {rec.faceVerified && (
-                          <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                            <ShieldCheck className="w-3 h-3" /> Wajah Valid
+                        <div className="flex items-center gap-2">
+                          {rec.faceVerified && (
+                            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                              <ShieldCheck className="w-3 h-3" /> Wajah Valid
+                            </span>
+                          )}
+                          <span className={cn(
+                            "px-2.5 py-1 rounded-full text-[10px] font-black",
+                            rec.status === "Hadir" ? "bg-emerald-100 text-emerald-800" :
+                            rec.status === "Terlambat" ? "bg-amber-100 text-amber-800" :
+                            rec.status === "Sakit" ? "bg-blue-100 text-blue-800" :
+                            rec.status === "Izin" ? "bg-amber-100 text-amber-800" :
+                            "bg-rose-100 text-rose-800"
+                          )}>
+                            {rec.status || "-"}
                           </span>
-                        )}
-                        <span className={cn(
-                          "px-2.5 py-1 rounded-full text-[10px] font-black",
-                          rec.status === "Hadir" ? "bg-emerald-100 text-emerald-800" :
-                          rec.status === "Terlambat" ? "bg-amber-100 text-amber-800" :
-                          rec.status === "Sakit" ? "bg-blue-100 text-blue-800" :
-                          rec.status === "Izin" ? "bg-amber-100 text-amber-800" :
-                          "bg-rose-100 text-rose-800"
-                        )}>
-                          {rec.status || "Hadir"}
-                        </span>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
-                  <div className="p-4 text-center text-xs text-gray-400 font-medium">
-                    Belum ada catatan presensi terekam hari ini.
+                  <div className="p-6 text-center">
+                    <CalendarCheck className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-xs text-gray-400 font-medium">
+                      Belum ada catatan presensi pada periode ini.
+                    </p>
+                    <p className="text-[11px] text-gray-300 mt-1">
+                      Data akan muncul otomatis saat guru mengisi absensi.
+                    </p>
                   </div>
                 )}
               </div>
