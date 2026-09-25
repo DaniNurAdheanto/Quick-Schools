@@ -24,7 +24,8 @@ import {
   ScanFace,
   School,
   CalendarRange,
-  BookOpen
+  BookOpen,
+  BookUser
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -465,6 +466,13 @@ export function AdminDashboardView({
               >
                 <GraduationCap className="w-4 h-4" />
                 Pratinjau Dashboard Guru
+              </button>
+              <button
+                onClick={() => setPreviewRole("kepala-sekolah")}
+                className="flex items-center justify-center gap-2 bg-purple-200 hover:bg-purple-100 text-purple-950 px-4 py-2.5 rounded-lg text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer"
+              >
+                <BookUser className="w-4 h-4" />
+                Pratinjau Dashboard Kepala Sekolah
               </button>
             </>
           )}

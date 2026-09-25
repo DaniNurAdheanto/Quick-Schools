@@ -67,6 +67,8 @@ export default function TeacherAttendancePage() {
     userEmail: authUserEmail,
     isAuthLoading,
     isRoleReady,
+    isKepalaSekolah,
+    rolePermissions,
   } = useAuth();
 
   // Auth & Role
@@ -81,6 +83,7 @@ export default function TeacherAttendancePage() {
     resolvedRole === "guru" ||
     resolvedRole === "teacher"
   );
+  const canMutateAttendance = !isKepalaSekolah || Boolean(rolePermissions?.attendance?.write);
 
   // Active teacher UID & Email from auth / database
   const activeTeacherUid = authUser?.uid || currentUser?.uid || "";
@@ -826,6 +829,10 @@ export default function TeacherAttendancePage() {
   // Admin Manual Record Save
   const handleSaveManualRecord = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canMutateAttendance) {
+      showError("Akun Anda berstatus Monitoring Executive (Hanya Lihat). Anda tidak memiliki izin untuk mencatat presensi guru secara manual.");
+      return;
+    }
     if (!manualRecord.teacherId || !manualRecord.date) {
       showError("Pilih guru dan tanggal.");
       return;
@@ -1515,13 +1522,15 @@ export default function TeacherAttendancePage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsManualRecordModalOpen(true)}
-                className="px-3.5 py-2 text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4216d6] rounded-xl shadow-xs transition-all inline-flex items-center gap-1.5 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Catat Presensi Manual</span>
-              </button>
+              {canMutateAttendance && (
+                <button
+                  onClick={() => setIsManualRecordModalOpen(true)}
+                  className="px-3.5 py-2 text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4216d6] rounded-xl shadow-xs transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Catat Presensi Manual</span>
+                </button>
+              )}
 
               <button
                 onClick={handleExportCSV}
@@ -1586,7 +1595,7 @@ export default function TeacherAttendancePage() {
                       placeholder="Cari guru, NIP, mapel..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1.5 text-xs font-medium bg-gray-50 border border-gray-200 rounded-xl focus:outline-hidden focus:border-[#531FFF]"
+                      className="w-full pl-8 pr-3 py-1.5 text-xs font-medium bg-gray-50 border border-gray-200 rounded-lg focus:outline-hidden focus:border-[#531FFF]"
                     />
                   </div>
                 </div>
@@ -1595,7 +1604,7 @@ export default function TeacherAttendancePage() {
                   <select
                     value={selectedSubjectFilter}
                     onChange={(e) => setSelectedSubjectFilter(e.target.value)}
-                    className="px-3 py-2 text-xs font-bold bg-white border border-gray-200 rounded-xl text-gray-700"
+                    className="px-3 py-2 text-xs font-bold bg-white border border-gray-200 rounded-lg text-gray-700"
                   >
                     <option value="all">Semua Mata Pelajaran</option>
                     {subjectList.map((s) => (
@@ -1608,7 +1617,7 @@ export default function TeacherAttendancePage() {
                   <select
                     value={selectedStatusFilter}
                     onChange={(e) => setSelectedStatusFilter(e.target.value)}
-                    className="px-3 py-2 text-xs font-bold bg-white border border-gray-200 rounded-xl text-gray-700"
+                    className="px-3 py-2 text-xs font-bold bg-white border border-gray-200 rounded-lg text-gray-700"
                   >
                     <option value="all">Semua Status Kehadiran</option>
                     <option value="Hadir">Hadir Tepat Waktu</option>
@@ -1738,7 +1747,7 @@ export default function TeacherAttendancePage() {
                               <Eye className="w-3.5 h-3.5" />
                               <span>Detail</span>
                             </button>
-                            {record && (
+                            {record && canMutateAttendance && (
                               <button
                                 onClick={() => adminDeleteRecord(record.id)}
                                 className="p-1.5 text-gray-400 hover:text-rose-600 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
@@ -1770,7 +1779,7 @@ export default function TeacherAttendancePage() {
                     type="month"
                     value={monthlyMonth}
                     onChange={(e) => setMonthlyMonth(e.target.value)}
-                    className="px-3 py-1.5 text-xs font-bold bg-white border border-gray-200 rounded-xl"
+                    className="px-3 py-1.5 text-xs font-bold bg-white border border-gray-200 rounded-lg"
                   />
                 </div>
               </div>
@@ -2188,7 +2197,7 @@ export default function TeacherAttendancePage() {
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Rencana kegiatan mengajar hari ini atau catatan kehadiran..."
                       rows={2}
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] resize-none"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] resize-none"
                     />
                   </div>
 
@@ -2531,7 +2540,7 @@ export default function TeacherAttendancePage() {
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Materi ajar yang telah diselesaikan, penugasan, atau catatan kelas..."
                       rows={2}
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] resize-none"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] resize-none"
                     />
                   </div>
 
@@ -2623,7 +2632,7 @@ export default function TeacherAttendancePage() {
                   type="date"
                   value={permitForm.date}
                   onChange={(e) => setPermitForm({ ...permitForm, date: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl"
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg"
                   required
                 />
               </div>
@@ -2633,7 +2642,7 @@ export default function TeacherAttendancePage() {
                 <select
                   value={permitForm.status}
                   onChange={(e) => setPermitForm({ ...permitForm, status: e.target.value as any })}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl font-bold text-gray-800"
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg font-bold text-gray-800"
                 >
                   <option value="Izin">Izin (Keperluan Mendesak)</option>
                   <option value="Sakit">Sakit (Kondisi Medis)</option>
@@ -2648,7 +2657,7 @@ export default function TeacherAttendancePage() {
                   value={permitForm.reason}
                   onChange={(e) => setPermitForm({ ...permitForm, reason: e.target.value })}
                   placeholder="Jelaskan alasan ketidakhadiran Anda..."
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl"
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg"
                   required
                 />
               </div>
@@ -2705,7 +2714,7 @@ export default function TeacherAttendancePage() {
                 <select
                   value={manualRecord.teacherId}
                   onChange={(e) => setManualRecord({ ...manualRecord, teacherId: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl font-bold"
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg font-bold"
                   required
                 >
                   <option value="">-- Pilih Guru --</option>
@@ -2723,7 +2732,7 @@ export default function TeacherAttendancePage() {
                   type="date"
                   value={manualRecord.date}
                   onChange={(e) => setManualRecord({ ...manualRecord, date: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl"
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg"
                   required
                 />
               </div>
@@ -2733,7 +2742,7 @@ export default function TeacherAttendancePage() {
                 <select
                   value={manualRecord.status}
                   onChange={(e) => setManualRecord({ ...manualRecord, status: e.target.value as any })}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl font-bold"
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg font-bold"
                 >
                   <option value="Hadir">Hadir Tepat Waktu</option>
                   <option value="Terlambat">Terlambat</option>

@@ -93,9 +93,11 @@ export default function TeachersPage() {
   const [classesList, setClassesList] = useState<any[]>([]);
 
   // Centralized useAuth
-  const { role: authRole, rawRole: authRawRole, isAuthLoading, isRoleReady } = useAuth();
+  const { role: authRole, rawRole: authRawRole, isAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
   const rawR = (authRawRole || authRole || "").toLowerCase();
   const isGuru = rawR === "guru" || rawR === "teacher";
+  const canMutateTeachers = (rawR === "super-admin" || rawR === "admin" || Boolean(rolePermissions?.users?.write)) && (!isKepalaSekolah || Boolean(rolePermissions?.users?.write));
+  const isReadOnly = !canMutateTeachers || isGuru;
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState("");
@@ -210,7 +212,7 @@ export default function TeachersPage() {
   };
 
   const handleCrudSubmit = async (data: any) => {
-    if (isGuru) {
+    if (isReadOnly) {
       toast.showError("Anda tidak memiliki hak akses untuk mengubah data staff guru.", "Akses Ditolak");
       return;
     }
@@ -493,7 +495,7 @@ export default function TeachersPage() {
         fields={teacherFields}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
-        onEditRequested={isGuru ? undefined : () => setCrudState(s => ({ ...s, mode: "edit", open: true }))}
+        onEditRequested={isReadOnly ? undefined : () => setCrudState(s => ({ ...s, mode: "edit", open: true }))}
       />
 
       {/* Page Header Card */}
@@ -505,7 +507,7 @@ export default function TeachersPage() {
           <div>
             <div className="flex items-center gap-2.5">
               <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Staff Guru</h1>
-              {isGuru && (
+              {isReadOnly && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                   Mode Lihat (Read-Only)
                 </span>
@@ -518,7 +520,7 @@ export default function TeachersPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {!isGuru && (
+          {!isReadOnly && (
             <button 
               onClick={() => openTeacherCrud("create")}
               className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
@@ -785,7 +787,7 @@ export default function TeachersPage() {
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
-                        {!isGuru && (
+                        {!isReadOnly && (
                           <>
                             <button 
                               onClick={() => openTeacherCrud("edit", teacher)}
@@ -907,7 +909,7 @@ export default function TeachersPage() {
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
-                              {!isGuru && (
+                              {!isReadOnly && (
                                 <>
                                   <button
                                     onClick={() => openTeacherCrud("edit", teacher)}
@@ -961,7 +963,7 @@ export default function TeachersPage() {
                 >
                   Reset Filter
                 </button>
-              ) : !isGuru ? (
+              ) : !isReadOnly ? (
                 <button 
                   onClick={() => setCrudState({ open: true, mode: "create" })}
                   className="bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md shadow-[#531FFF]/20"

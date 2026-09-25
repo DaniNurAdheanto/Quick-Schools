@@ -38,7 +38,7 @@ import {
 import { collection, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
-import { cn } from "@/lib/utils";
+import { cn, getTodayDateString } from "@/lib/utils";
 import { formatRupiah } from "@/lib/spp-payments";
 import { isAnnouncementVisibleForRole, cleanAnnouncementDesc } from "@/lib/announcements-helper";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
@@ -487,7 +487,7 @@ export function ParentDashboardView({
       return false;
     });
 
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = getTodayDateString();
     const todayRecord = myRecords.find(r => r.date === todayStr);
 
     const total = myRecords.length;

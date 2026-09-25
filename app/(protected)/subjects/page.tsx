@@ -24,17 +24,22 @@ import {
   BadgeCheck,
   FolderKanban
 } from "lucide-react";
-import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
+import { SubjectModal } from "@/components/subjects/subject-modal";
+import { DeleteSubjectModal } from "@/components/subjects/delete-subject-modal";
+import { 
+  saveSubjectWithCascade, 
+  deleteSubjectWithCascade, 
+  type SubjectInputData 
+} from "@/lib/subject-sync-service";
 import { db, auth } from "@/lib/firebase";
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, writeBatch, orderBy } from "firebase/firestore";
+import { collection, query, onSnapshot, doc, writeBatch, orderBy } from "firebase/firestore";
 import { useToast } from "@/context/ToastContext";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { 
-  getTeachersForSubject, 
-  syncSubjectTeacherRelations 
+  getTeachersForSubject 
 } from "@/lib/subject-teacher-relations";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { getSubjectPresetsForStage, SubjectPresetDef } from "@/lib/school-level-config";
@@ -88,7 +93,7 @@ export default function SubjectsPage() {
   const [assignTargetGroup, setAssignTargetGroup] = useState<SubjectGroup | null>(null);
 
   // Centralized useAuth
-  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
+  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
   const rawRole = (authRawRole || authRole || "").toLowerCase();
   const currentUserRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : (rawRole === "teacher" || rawRole === "guru") ? "guru" : rawRole;
   const currentUserData = userData;
@@ -103,10 +108,25 @@ export default function SubjectsPage() {
   const [studentViewMode, setStudentViewMode] = useState<"grid" | "table">("grid");
 
   const isGuru = currentUserRole === "guru" || currentUserRole === "teacher";
+  const canMutateAcademic = ((!isGuru && !isKepalaSekolah) || Boolean(rolePermissions?.academic?.write)) && !((isGuru || isKepalaSekolah) && !rolePermissions?.academic?.write);
+  const isReadOnly = !canMutateAcademic;
 
-  const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete" | "view"; data?: any }>({
-    open: false,
-    mode: "create"
+  const [subjectModalState, setSubjectModalState] = useState<{
+    isOpen: boolean;
+    mode: "create" | "edit" | "view";
+    subject: any | null;
+  }>({
+    isOpen: false,
+    mode: "create",
+    subject: null
+  });
+
+  const [deleteModalState, setDeleteModalState] = useState<{
+    isOpen: boolean;
+    subject: any | null;
+  }>({
+    isOpen: false,
+    subject: null
   });
 
   // Real-time subjects, teachers, classes, schedules, students & subject_groups listener
@@ -176,140 +196,36 @@ export default function SubjectsPage() {
     setStudents(unifiedStudents);
   }, [unifiedStudents]);
 
-  // Form Fields Configuration for CrudSheet
-  const subjectFields: CrudField[] = useMemo(() => [
-    { 
-      name: "code", 
-      label: "Kode Mapel", 
-      placeholder: "Contoh: MAT, BIN, RPL-PBO", 
-      category: "akademik",
-      colSpan: 1
-    },
-    { 
-      name: "name", 
-      label: "Nama Mata Pelajaran", 
-      placeholder: "Contoh: Pemrograman Berorientasi Objek", 
-      category: "akademik",
-      colSpan: 1
-    },
-    {
-      name: "groupId",
-      label: "Kelompok Mata Pelajaran",
-      type: "select",
-      category: "akademik",
-      placeholder: "Pilih kelompok mata pelajaran...",
-      helperText: "Mengelompokkan mapel berdasarkan kurikulum & jurusan (misal: Muatan Nasional, C1, C2, C3).",
-      options: [
-        { label: "Tanpa Kelompok (Umum / Standar)", value: "" },
-        ...subjectGroups.map(g => ({
-          label: `${g.name} (${g.code})${g.major && g.major !== "Semua Jurusan / Umum" ? ` • ${g.major}` : ""}`,
-          value: g.id
-        }))
-      ],
-      colSpan: 1
-    },
-    {
-      name: "major",
-      label: "Jurusan / Program Keahlian",
-      type: "select",
-      category: "akademik",
-      helperText: "Tentukan jurusan/peminatan yang wajib mempelajari mata pelajaran ini.",
-      options: [
-        { label: "Semua Jurusan / Umum", value: "Semua Jurusan / Umum" },
-        ...majorOptions.map(m => ({ label: `${m.label} (${m.value})`, value: m.value }))
-      ],
-      colSpan: 1
-    },
-    { 
-      name: "category", 
-      label: "Kategori Kurikulum", 
-      type: "select", 
-      category: "akademik",
-      options: currentStage === "SMK" ? [
-        { label: "Wajib (Muatan Nasional / Kewilayahan)", value: "Wajib" },
-        { label: "Peminatan / Kejuruan (Produktif)", value: "Peminatan" },
-        { label: "Muatan Lokal", value: "Muatan Lokal" }
-      ] : currentStage === "SD" ? [
-        { label: "Wajib / Tematik", value: "Wajib" },
-        { label: "Peminatan / Ekstrakurikuler", value: "Peminatan" },
-        { label: "Muatan Lokal", value: "Muatan Lokal" }
-      ] : [
-        { label: "Wajib", value: "Wajib" },
-        { label: "Peminatan", value: "Peminatan" },
-        { label: "Muatan Lokal", value: "Muatan Lokal" }
-      ],
-      colSpan: 1
-    },
-    { 
-      name: "creditHours", 
-      label: "Alokasi Jam (JP / Minggu)", 
-      placeholder: "Contoh: 4 JP", 
-      category: "akademik",
-      colSpan: 1
-    },
-    { 
-      name: "kkm", 
-      label: "KKM (Kriteria Ketuntasan)", 
-      placeholder: `Contoh: ${stageConfig.defaultKkm}`, 
-      category: "akademik",
-      colSpan: 1
-    },
-    { 
-      name: "level", 
-      label: "Tingkat / Sasaran Kelas", 
-      type: "select",
-      category: "akademik",
-      options: [
-        { label: "Semua Tingkat", value: "Semua Tingkat" },
-        ...gradeLevels.map(lvl => ({ label: lvl, value: lvl }))
-      ],
-      colSpan: 1
-    },
-    {
-      name: "teacherIds",
-      label: "Guru Pengajar (Bisa Lebih dari 1)",
-      type: "multiselect",
-      category: "akademik",
-      placeholder: "Pilih satu atau lebih guru pengajar...",
-      helperText: "Satu mata pelajaran dapat diampu oleh beberapa guru pengajar sekaligus.",
-      options: teachers.map(t => {
-        const idVal = t.id || t._firestoreId || t.nip;
-        const sub = t.subject || (Array.isArray(t.subjects) ? t.subjects.join(", ") : "");
-        return {
-          label: t.name,
-          value: idVal,
-          sublabel: t.nip ? `NIP: ${t.nip}${sub ? ` • ${sub}` : ""}` : sub
-        };
-      }),
-      colSpan: 2
-    },
-    {
-      name: "description",
-      label: "Deskripsi Mata Pelajaran",
-      placeholder: "Ringkasan cakupan materi pembelajaran...",
-      category: "pribadi",
-      colSpan: 2
-    },
-    { 
-      name: "status", 
-      label: "Status Mapel", 
-      type: "select", 
-      category: "darurat",
-      options: [
-        { label: "Aktif", value: "Aktif" },
-        { label: "Nonaktif", value: "Nonaktif" }
-      ],
-      colSpan: 2
-    }
-  ], [teachers, gradeLevels, currentStage, stageConfig, subjectGroups, majorOptions]);
-
-  // Centralized Helper to Open Subject CRUD Sheet with Full Relation Resolution
+  // Helper to Open Subject Modal or Delete Modal with Full Teacher & Group Relation Resolution
   const openSubjectCrud = (mode: "create" | "edit" | "delete" | "view", item?: any) => {
+    if (mode === "delete") {
+      if (isReadOnly) {
+        toast.showError("Akses ditolak. Anda tidak memiliki hak akses menghapus mata pelajaran.", "Akses Ditolak");
+        return;
+      }
+      setDeleteModalState({
+        isOpen: true,
+        subject: item || null,
+      });
+      return;
+    }
+
+    if (mode === "create" && isReadOnly) {
+      toast.showError("Akses ditolak. Anda tidak memiliki izin menambah mata pelajaran.", "Akses Ditolak");
+      return;
+    }
+
+    if (mode === "edit" && isReadOnly) {
+      mode = "view";
+    }
+
     if (!item) {
-      setCrudState({
-        open: true,
+      setSubjectModalState({
+        isOpen: true,
         mode,
-        data: {
+        subject: {
+          code: "",
+          name: "",
           category: "Wajib",
           groupId: "",
           major: "Semua Jurusan / Umum",
@@ -319,7 +235,8 @@ export default function SubjectsPage() {
           status: "Aktif",
           teacherIds: [],
           teachers: [],
-          teacher: "-"
+          teacher: "-",
+          description: ""
         }
       });
       return;
@@ -333,10 +250,10 @@ export default function SubjectsPage() {
       resolvedTeacherIds = matched.map(t => t.id || t._firestoreId || t.nip).filter((id): id is string => Boolean(id));
     }
 
-    setCrudState({
-      open: true,
+    setSubjectModalState({
+      isOpen: true,
       mode,
-      data: {
+      subject: {
         ...item,
         groupId: item.groupId || "",
         major: item.major || "Semua Jurusan / Umum",
@@ -345,95 +262,74 @@ export default function SubjectsPage() {
     });
   };
 
-  // CRUD Submission Handler
-  const handleCrudSubmit = async (data: any) => {
-    if (isGuru) {
-      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+  // CRUD Submission Handler with Cascade to Database, Groups, Schedules & Grades
+  const handleSaveSubject = async (formData: SubjectInputData, previousSubject?: any) => {
+    if (isReadOnly) {
+      toast.showError("Akses ditolak. Anda hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
 
     try {
-      const rawTeacherIds: string[] = Array.isArray(data.teacherIds)
-        ? data.teacherIds
-        : (typeof data.teacherIds === "string" && data.teacherIds.trim() && data.teacherIds !== "-")
-          ? data.teacherIds.split(",").map((s: string) => s.trim()).filter(Boolean)
-          : [];
+      const isEdit = subjectModalState.mode === "edit";
+      const subjectDocId = previousSubject?._firestoreId || previousSubject?.id;
 
-      // Resolve teachers from teachers state
-      const selectedTeachers = teachers.filter(t => {
-        const tid = (t.id || "").toLowerCase();
-        const tdoc = (t._firestoreId || "").toLowerCase();
-        const tnip = (t.nip || "").toLowerCase();
-        return rawTeacherIds.some(rid => {
-          const norm = rid.toLowerCase().trim();
-          return norm === tid || norm === tdoc || norm === tnip;
-        });
+      const result = await saveSubjectWithCascade({
+        db,
+        mode: isEdit ? "edit" : "create",
+        subjectId: subjectDocId,
+        data: formData,
+        previousSubject,
+        allTeachers: teachers,
+        allSubjectGroups: subjectGroups,
       });
 
-      const teacherIds = selectedTeachers.map(t => t.id || t._firestoreId || t.nip).filter(Boolean);
-      const teachersDenorm = selectedTeachers.map(t => ({
-        id: t.id || t._firestoreId || t.nip,
-        name: t.name,
-        nip: t.nip || ""
-      }));
-      const teacherString = teachersDenorm.map(t => t.name).join(", ") || (rawTeacherIds.length > 0 ? "Guru Pengajar Ditugaskan" : "-");
+      let successMsg = isEdit
+        ? `Mata pelajaran "${formData.name}" berhasil diperbarui!`
+        : `Mata pelajaran "${formData.name}" berhasil ditambahkan!`;
 
-      const selectedGroup = subjectGroups.find(g => g.id === data.groupId);
-      const groupName = selectedGroup ? selectedGroup.name : (data.groupName || "");
-      const major = data.major || (selectedGroup && selectedGroup.major !== "Semua Jurusan / Umum" ? selectedGroup.major : "Semua Jurusan / Umum");
-
-      const payload = {
-        code: (data.code || "").toUpperCase().trim(),
-        name: (data.name || "").trim(),
-        groupId: data.groupId || "",
-        groupName: groupName || "",
-        major: major || "Semua Jurusan / Umum",
-        category: data.category || (selectedGroup ? selectedGroup.category : "Wajib"),
-        creditHours: data.creditHours || "3 JP",
-        kkm: Number(data.kkm) || 75,
-        level: data.level || "Semua Tingkat",
-        teacherIds,
-        teachers: teachersDenorm,
-        teacher: teacherString,
-        description: data.description || "",
-        status: data.status || "Aktif",
-        updatedAt: new Date().toISOString()
-      };
-
-      let subjectDocId = data._firestoreId;
-
-      if (crudState.mode === "create") {
-        const docRef = await addDoc(collection(db, "subjects"), {
-          ...payload,
-          createdAt: new Date().toISOString()
-        });
-        subjectDocId = docRef.id;
-        await syncSubjectTeacherRelations(db, docRef.id, teacherIds, teachers, payload);
-      } else if (crudState.mode === "edit" && data._firestoreId) {
-        await updateDoc(doc(db, "subjects", data._firestoreId), payload);
-        await syncSubjectTeacherRelations(db, data._firestoreId, teacherIds, teachers, payload);
-      } else if (crudState.mode === "delete" && data._firestoreId) {
-        await deleteDoc(doc(db, "subjects", data._firestoreId));
-        await syncSubjectTeacherRelations(db, data._firestoreId, [], teachers, payload);
+      if (result.schedulesUpdated > 0 || result.gradesUpdated > 0) {
+        successMsg += ` (${result.schedulesUpdated} jadwal & ${result.gradesUpdated} penilaian disinkronkan)`;
       }
 
-      // Sinkronkan ke subject_groups jika ada groupId terpilih
-      if (data.groupId && subjectDocId && crudState.mode !== "delete") {
-        const targetGroup = subjectGroups.find(g => g.id === data.groupId);
-        if (targetGroup) {
-          const currentIds = Array.isArray(targetGroup.subjectIds) ? targetGroup.subjectIds : [];
-          if (!currentIds.includes(subjectDocId) && !currentIds.includes(payload.code)) {
-            const updatedSubjectIds = [...currentIds, subjectDocId];
-            await saveSubjectGroupToDb({
-              ...targetGroup,
-              subjectIds: updatedSubjectIds,
-              updatedAt: new Date().toISOString()
-            });
-          }
-        }
-      }
+      toast.showSuccess(successMsg, "Tersimpan");
+      setSubjectModalState(s => ({ ...s, isOpen: false }));
     } catch (error: any) {
       console.error("Error saving subject data:", error);
+      toast.showError("Gagal menyimpan mata pelajaran: " + (error?.message || "Terjadi kesalahan"), "Gagal");
+      throw error;
+    }
+  };
+
+  const handleConfirmDeleteSubject = async (subjectToDelete: any) => {
+    if (isReadOnly) {
+      toast.showError("Akses ditolak. Anda tidak memiliki hak akses menghapus mata pelajaran.", "Akses Ditolak");
+      return;
+    }
+
+    try {
+      const subjectDocId = subjectToDelete?._firestoreId || subjectToDelete?.id;
+      if (!subjectDocId) {
+        throw new Error("ID dokumen mata pelajaran tidak ditemukan.");
+      }
+
+      const res = await deleteSubjectWithCascade({
+        db,
+        subjectId: subjectDocId,
+        subject: subjectToDelete,
+        allTeachers: teachers,
+        allSubjectGroups: subjectGroups,
+      });
+
+      let msg = `Mata pelajaran "${subjectToDelete.name || subjectToDelete.code}" berhasil dihapus dari database.`;
+      if (res.groupsCleaned > 0 || res.schedulesCleaned > 0) {
+        msg += ` (${res.groupsCleaned} kelompok & ${res.schedulesCleaned} jadwal diselaraskan)`;
+      }
+
+      toast.showSuccess(msg, "Berhasil Dihapus");
+      setDeleteModalState({ isOpen: false, subject: null });
+    } catch (error: any) {
+      console.error("Error deleting subject:", error);
+      toast.showError("Gagal menghapus mata pelajaran: " + (error?.message || "Terjadi kesalahan"), "Gagal");
       throw error;
     }
   };
@@ -560,11 +456,11 @@ export default function SubjectsPage() {
 
   // Quick Apply Preset to New Form
   const handleApplyPreset = (preset: SubjectPresetDef) => {
-    if (isGuru) return;
-    setCrudState({
-      open: true,
+    if (isReadOnly) return;
+    setSubjectModalState({
+      isOpen: true,
       mode: "create",
-      data: {
+      subject: {
         code: preset.code,
         name: preset.name,
         category: (preset.category === "Kejuruan / Produktif" ? "Peminatan" : preset.category) as "Wajib" | "Peminatan" | "Muatan Lokal",
@@ -572,6 +468,8 @@ export default function SubjectsPage() {
         level: preset.level,
         kkm: preset.kkm,
         description: preset.description,
+        groupId: "",
+        major: "Semua Jurusan / Umum",
         teacherIds: [],
         teachers: [],
         teacher: "-",
@@ -582,8 +480,8 @@ export default function SubjectsPage() {
 
   // Batch Add Standard Curriculum Package
   const handleBatchAddPresets = async () => {
-    if (isGuru) {
-      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+    if (isReadOnly) {
+      toast.showError("Akses ditolak. Anda hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
 
@@ -1169,16 +1067,29 @@ export default function SubjectsPage() {
   return (
     <div className="p-4 sm:p-8 pb-16 max-w-[1600px] mx-auto w-full flex flex-col space-y-6">
       
-      {/* ================= CRUD DRAWER / SHEET ================= */}
-      <CrudSheet 
-        open={crudState.open} 
-        onOpenChange={(open) => setCrudState(s => ({ ...s, open }))}
-        mode={crudState.mode}
-        entityName="Mata Pelajaran"
-        fields={subjectFields}
-        initialData={crudState.data}
-        onSubmit={handleCrudSubmit}
-        onEditRequested={isGuru ? undefined : () => setCrudState(s => ({ ...s, mode: "edit" }))}
+      {/* ================= SUBJECT MODAL (CREATE / EDIT / VIEW) ================= */}
+      <SubjectModal
+        isOpen={subjectModalState.isOpen}
+        mode={subjectModalState.mode}
+        subject={subjectModalState.subject}
+        onClose={() => setSubjectModalState(s => ({ ...s, isOpen: false }))}
+        onSave={handleSaveSubject}
+        onSwitchToEdit={isReadOnly ? undefined : (sub) => setSubjectModalState({ isOpen: true, mode: "edit", subject: sub })}
+        subjectGroups={subjectGroups}
+        majorOptions={majorOptions}
+        gradeLevels={gradeLevels}
+        currentStage={currentStage}
+        stageConfig={stageConfig}
+        teachers={teachers}
+        isGuru={isReadOnly}
+      />
+
+      {/* ================= DEDICATED DELETE MODAL ================= */}
+      <DeleteSubjectModal
+        isOpen={deleteModalState.isOpen}
+        subject={deleteModalState.subject}
+        onClose={() => setDeleteModalState({ isOpen: false, subject: null })}
+        onConfirmDelete={handleConfirmDeleteSubject}
       />
 
       {/* ================= HEADER SECTION ================= */}
@@ -1193,7 +1104,7 @@ export default function SubjectsPage() {
                 <h1 className="text-2xl font-black text-gray-900 tracking-tight">
                   {activeTab === "subjects" ? "Mata Pelajaran" : "Kelompok Mata Pelajaran (Jurusan)"}
                 </h1>
-                {isGuru && (
+                {isReadOnly && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                     Mode Lihat (Read-Only)
                   </span>
@@ -1208,7 +1119,7 @@ export default function SubjectsPage() {
           </div>
         </div>
 
-        {!isGuru && (
+        {!isReadOnly && (
           <div className="flex flex-wrap items-center gap-2.5">
             {activeTab === "subjects" ? (
               <>
@@ -1349,7 +1260,7 @@ export default function SubjectsPage() {
       {activeTab === "subjects" && (
         <div className="space-y-6">
           {/* ================= QUICK PRESET TEMPLATES BAR ================= */}
-          {!isGuru && (
+          {!isReadOnly && (
             <div className="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-2xs space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -1614,7 +1525,7 @@ export default function SubjectsPage() {
                   >
                     Reset Filter
                   </button>
-                ) : !isGuru ? (
+                ) : !isReadOnly ? (
                   <>
                     <button
                       type="button"
@@ -1762,7 +1673,7 @@ export default function SubjectsPage() {
                         <span>Lihat Detail</span>
                       </button>
 
-                      {!isGuru && (
+                      {!isReadOnly && (
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
@@ -1801,7 +1712,7 @@ export default function SubjectsPage() {
                       <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">Beban / KKM</th>
                       <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">Guru Pengampu</th>
                       <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider text-center">Status</th>
-                      <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider text-right">{isGuru ? "Detail" : "Aksi"}</th>
+                      <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider text-right">{isReadOnly ? "Detail" : "Aksi"}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -1884,7 +1795,7 @@ export default function SubjectsPage() {
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
-                              {!isGuru && (
+                              {!isReadOnly && (
                                 <>
                                   <button
                                     type="button"
@@ -2033,7 +1944,7 @@ export default function SubjectsPage() {
                   Kelompok mata pelajaran memungkinkan Anda menampung dan mengelompokkan mapel berdasarkan jurusan (seperti Muatan Nasional, C1, C2, dan C3).
                 </p>
               </div>
-              {!isGuru && (
+              {!isReadOnly && (
                 <div className="flex flex-wrap items-center gap-3">
                   <button
                     type="button"
@@ -2175,7 +2086,7 @@ export default function SubjectsPage() {
                         <span>Kelola Mapel</span>
                       </button>
 
-                      {!isGuru && (
+                      {!isReadOnly && (
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
@@ -2235,7 +2146,7 @@ export default function SubjectsPage() {
       />
 
       {/* ================= BATCH ADD MODAL (PAKET KURIKULUM NASIONAL) ================= */}
-      {!isGuru && showBatchModal && (
+      {!isReadOnly && showBatchModal && (
         <div className="fixed inset-0 z-50 p-3 sm:p-6 bg-gray-950/60 backdrop-blur-xs flex items-center justify-center animate-in fade-in duration-200">
           <div className="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Modal Header */}

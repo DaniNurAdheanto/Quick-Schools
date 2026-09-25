@@ -10,16 +10,20 @@ import {
   Lock, 
   Eye, 
   Edit3, 
-  Building2 
+  Building2,
+  ShieldAlert,
+  Shield
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { doc, setDoc, onSnapshot, collection } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/context/ToastContext";
+import { useAuth } from "@/context/AuthContext";
 import { ROLES, PERMISSION_MODULES, DEFAULT_PERMISSIONS } from "@/lib/roles-config";
 
 export default function RolesAndPermissionsPage() {
   const toast = useToast();
+  const { isSuperAdmin, isAdmin, isAuthLoading } = useAuth();
   const [activeRole, setActiveRole] = useState(ROLES[0].id);
   const [permissions, setPermissions] = useState(DEFAULT_PERMISSIONS);
   const [isSaving, setIsSaving] = useState(false);
@@ -202,6 +206,19 @@ export default function RolesAndPermissionsPage() {
         }, { merge: true });
       }
 
+      if (activeRole === "kepala-sekolah") {
+        await setDoc(doc(db, "roles", "kepalasekolah"), {
+          roleId: "kepalasekolah",
+          modules: roleModules,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        await setDoc(doc(db, "roles", "principal"), {
+          roleId: "principal",
+          modules: roleModules,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+
       setIsSaving(false);
       setSaveSuccess(true);
       toast.showEdit(`Konfigurasi hak akses RBAC ${activeRoleData.name} berhasil disimpan di database.`, "Berhasil Simpan");
@@ -212,6 +229,25 @@ export default function RolesAndPermissionsPage() {
       toast.showError("Gagal menyimpan konfigurasi hak akses.", "Gagal");
     }
   };
+
+  // Access Restricted if authenticated user is NOT Super Admin or Admin
+  if (!isAuthLoading && !isSuperAdmin && !isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[65vh] p-6 text-center animate-in fade-in duration-300">
+        <div className="w-16 h-16 rounded-xl bg-purple-50 border border-purple-200 text-[#531FFF] flex items-center justify-center shadow-lg shadow-[#531FFF]/10 mb-4">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-purple-50 text-[#531FFF] border border-purple-200 uppercase tracking-wider mb-2">
+          <Shield className="w-3.5 h-3.5" />
+          Akses Khusus Administrator
+        </span>
+        <h1 className="text-2xl font-black text-gray-900 tracking-tight">Halaman Role & Permission Dibatasi</h1>
+        <p className="text-gray-500 text-sm mt-2 max-w-md">
+          Halaman konfigurasi Role-Based Access Control (RBAC) hanya dapat diakses oleh Super Admin dan Administrator sistem.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">

@@ -5,7 +5,12 @@ import { cn } from "@/lib/utils";
 import { ToastProvider } from "@/context/ToastContext";
 import { SchoolProfileProvider } from "@/context/SchoolProfileContext";
 
-const geist = Inter({subsets:['latin'],variable:'--font-sans'});
+const geist = Inter({
+  subsets: ['latin'],
+  variable: '--font-sans',
+  display: 'swap',
+  fallback: ['ui-sans-serif', 'system-ui', 'sans-serif'],
+});
 
 export const metadata: Metadata = {
   title: 'Smart School OS',

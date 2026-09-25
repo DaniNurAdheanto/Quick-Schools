@@ -36,9 +36,10 @@ import {
   UserX,
   Filter,
   GraduationCap,
-  X
+  X,
+  ShieldAlert
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getTodayDateString } from "@/lib/utils";
 import { db, auth } from "@/lib/firebase";
 import {
   collection,
@@ -245,9 +246,10 @@ export default function AttendancePage() {
   const [activeTab, setActiveTab] = useState<"daily" | "biometric" | "monthly">("daily");
 
   // Centralized useAuth
-  const { user: authUser, role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
+  const { user: authUser, role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
   const rawRole = (authRawRole || authRole || "").toLowerCase();
   const userRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : rawRole;
+  const canMutateAttendance = !isKepalaSekolah || Boolean(rolePermissions?.attendance?.write);
   const currentUser = authUser;
   const currentUserData = userData;
   const [dbStudentInfo, setDbStudentInfo] = useState<any>(null);
@@ -313,7 +315,7 @@ export default function AttendancePage() {
   }, [unifiedTeachers]);
 
   // Tab 1: Daily Class Attendance State
-  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(() => getTodayDateString());
   const [selectedClass, setSelectedClass] = useState<string>(userData?.className || userData?.kelas || "Semua Kelas");
   const [classAttendanceMap, setClassAttendanceMap] = useState<Record<string, StudentDailyAttendance>>({});
   const [dailySubFilter, setDailySubFilter] = useState<"all" | "sudah" | "belum" | "hadir" | "terlambat" | "izin_sakit" | "alpa">("all");
@@ -403,7 +405,7 @@ export default function AttendancePage() {
               nisn: data.nisn || "",
               studentName: data.studentName || "Siswa",
               className: data.className || data.classId || "10 MIPA 1",
-              date: data.date || new Date().toISOString().split("T")[0],
+              date: data.date || getTodayDateString(),
               timestamp: data.timestamp || cleanTimeHM,
               time: cleanTimeHM,
               jamMasuk: cleanTimeHM,
@@ -450,7 +452,7 @@ export default function AttendancePage() {
               nisn: data.nisn || "",
               studentName: data.studentName || "Siswa",
               className: data.className || data.classId || "10 MIPA 1",
-              date: data.date || new Date().toISOString().split("T")[0],
+              date: data.date || getTodayDateString(),
               timestamp: data.timestamp || cleanTimeHM,
               time: cleanTimeHM,
               jamMasuk: cleanTimeHM,
@@ -797,6 +799,10 @@ export default function AttendancePage() {
 
   // Quick action: Mark all as Hadir
   const handleMarkAllHadir = () => {
+    if (!canMutateAttendance) {
+      toast.showError("Akun Anda berstatus Monitoring Executive (Hanya Lihat). Anda tidak memiliki izin untuk mengubah data absensi.", "Akses Terbatas");
+      return;
+    }
     const updated = { ...classAttendanceMap };
     classStudents.forEach((st) => {
       const prev = updated[st.id];
@@ -818,6 +824,10 @@ export default function AttendancePage() {
 
   // Quick action: Mark all unrecorded as Alpa
   const handleMarkRemainingAlpa = () => {
+    if (!canMutateAttendance) {
+      toast.showError("Akun Anda berstatus Monitoring Executive (Hanya Lihat). Anda tidak memiliki izin untuk mengubah data absensi.", "Akses Terbatas");
+      return;
+    }
     const updated = { ...classAttendanceMap };
     let count = 0;
     classStudents.forEach((st) => {
@@ -843,6 +853,10 @@ export default function AttendancePage() {
 
   // Quick single change
   const handleStudentStatusChange = (studentId: string, status: AttendanceStatus | "Belum Absen") => {
+    if (!canMutateAttendance) {
+      toast.showError("Akun Anda berstatus Monitoring Executive (Hanya Lihat). Anda tidak memiliki izin untuk mengubah data absensi.", "Akses Terbatas");
+      return;
+    }
     setClassAttendanceMap((prev) => {
       const prevItem = prev[studentId] || { notes: "", time: "07:00", isRecorded: false };
       const defaultTime = status === "Belum Absen" ? "-" : (prevItem.time === "-" ? (config.schoolStartTime || "07:00") : prevItem.time);
@@ -860,6 +874,7 @@ export default function AttendancePage() {
   };
 
   const handleStudentNotesChange = (studentId: string, notes: string) => {
+    if (!canMutateAttendance) return;
     setClassAttendanceMap((prev) => ({
       ...prev,
       [studentId]: {
@@ -871,6 +886,10 @@ export default function AttendancePage() {
 
   // Save Batch Class Attendance to Firestore (using allowed roles collection + local cache)
   const handleSaveClassAttendance = async () => {
+    if (!canMutateAttendance) {
+      toast.showError("Akun Anda berstatus Monitoring Executive (Hanya Lihat). Anda tidak memiliki izin untuk menyimpan perubahan presensi.", "Akses Terbatas");
+      return;
+    }
     setIsSavingBatch(true);
     try {
       const updatedList: AttendanceRecord[] = [];
@@ -947,7 +966,7 @@ export default function AttendancePage() {
   // -------------------------------------------------------------
   // Summary Metrics Calculation
   // -------------------------------------------------------------
-  const todayDateStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const todayDateStr = useMemo(() => getTodayDateString(), []);
 
   const statsToday = useMemo(() => {
     const todayRecords = scopedAttendanceRecords.filter((r) => r.date === todayDateStr || r.date === selectedDate);
@@ -1184,7 +1203,7 @@ export default function AttendancePage() {
         studentClass={studentInfo?.className || selectedClass}
         studentId={studentInfo?.nisn || "NISN-2023001"}
         alreadyAttendedToday={(() => {
-          const todayDateStr = new Date().toISOString().split("T")[0];
+          const todayDateStr = getTodayDateString();
           const sId = studentInfo?.id || "";
           const sNisn = studentInfo?.nisn || "";
           const sEmail = (studentInfo?.email || "").toLowerCase().trim();
@@ -1574,10 +1593,10 @@ export default function AttendancePage() {
                     onChange={(e) => setSelectedDate(e.target.value)}
                     className="bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 text-gray-900 font-bold px-3 py-2 rounded-lg text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all shadow-xs"
                   />
-                  {selectedDate !== new Date().toISOString().split("T")[0] && (
+                  {selectedDate !== getTodayDateString() && (
                     <button
                       type="button"
-                      onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])}
+                      onClick={() => setSelectedDate(getTodayDateString())}
                       className="px-2.5 py-2 bg-purple-50 text-[#531FFF] rounded-lg text-[11px] font-bold hover:bg-purple-100 transition-colors cursor-pointer"
                     >
                       Hari Ini
@@ -1614,37 +1633,46 @@ export default function AttendancePage() {
             </div>
 
             {/* Quick Batch Actions Right */}
-            <div className="flex flex-wrap items-center gap-2 justify-end">
-              <button
-                type="button"
-                onClick={handleMarkAllHadir}
-                className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
-                title="Tandai semua siswa di kelas ini Hadir"
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>Semua Hadir</span>
-              </button>
+            {canMutateAttendance ? (
+              <div className="flex flex-wrap items-center gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={handleMarkAllHadir}
+                  className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  title="Tandai semua siswa di kelas ini Hadir"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Semua Hadir</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={handleMarkRemainingAlpa}
-                className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
-                title="Tandai siswa yang belum ada data absensi sebagai Alpa"
-              >
-                <UserX className="w-3.5 h-3.5" />
-                <span>Belum Absen → Alpa</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={handleMarkRemainingAlpa}
+                  className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  title="Tandai siswa yang belum ada data absensi sebagai Alpa"
+                >
+                  <UserX className="w-3.5 h-3.5" />
+                  <span>Belum Absen → Alpa</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={handleSaveClassAttendance}
-                disabled={isSavingBatch}
-                className="px-4 sm:px-5 py-2 bg-gradient-to-r from-[#531FFF] to-[#7344FF] hover:from-[#4314cc] hover:to-[#5e31e6] text-white rounded-lg text-xs font-extrabold transition-all active:scale-[0.98] flex items-center gap-2 shadow-sm shadow-[#531FFF]/25 cursor-pointer disabled:opacity-50"
-              >
-                <Save className={cn("w-4 h-4", isSavingBatch && "animate-spin")} />
-                <span>{isSavingBatch ? "Menyimpan..." : "Simpan Presensi Kelas"}</span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={handleSaveClassAttendance}
+                  disabled={isSavingBatch}
+                  className="px-4 sm:px-5 py-2 bg-gradient-to-r from-[#531FFF] to-[#7344FF] hover:from-[#4314cc] hover:to-[#5e31e6] text-white rounded-lg text-xs font-extrabold transition-all active:scale-[0.98] flex items-center gap-2 shadow-sm shadow-[#531FFF]/25 cursor-pointer disabled:opacity-50"
+                >
+                  <Save className={cn("w-4 h-4", isSavingBatch && "animate-spin")} />
+                  <span>{isSavingBatch ? "Menyimpan..." : "Simpan Presensi Kelas"}</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                  Mode Monitoring (Hanya Lihat)
+                </span>
+              </div>
+            )}
           </div>
 
           {/* B. Live Monitoring Dashboard Card for the Selected Class */}
@@ -2050,6 +2078,7 @@ export default function AttendancePage() {
                                 <Clock className="w-3.5 h-3.5 text-gray-400" />
                                 <input
                                   type="time"
+                                  disabled={!canMutateAttendance}
                                   value={extractValidTimeHM(att.time, att.record?.createdAt)}
                                   onChange={(e) => {
                                     const newTime = e.target.value;
@@ -2061,7 +2090,7 @@ export default function AttendancePage() {
                                       }
                                     }));
                                   }}
-                                  className="px-2 py-1 bg-white border border-gray-200 rounded-md text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#531FFF]"
+                                  className="px-2 py-1 bg-white border border-gray-200 rounded-md text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#531FFF] disabled:opacity-75 disabled:bg-gray-50"
                                 />
                               </div>
                             )}
@@ -2111,6 +2140,7 @@ export default function AttendancePage() {
                           <td className="px-5 py-3.5">
                             <input
                               type="text"
+                              disabled={!canMutateAttendance}
                               placeholder={
                                 att.status === "Sakit"
                                   ? "Surat dokter / keluhan..."
@@ -2122,13 +2152,15 @@ export default function AttendancePage() {
                               }
                               value={att.notes}
                               onChange={(e) => handleStudentNotesChange(student.id, e.target.value)}
-                              className="w-full min-w-[160px] px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                              className="w-full min-w-[160px] px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all disabled:opacity-75 disabled:bg-gray-50"
                             />
                           </td>
 
                           {/* Aksi Cepat */}
                           <td className="px-5 py-3.5 text-center">
-                            {att.status === "Belum Absen" ? (
+                            {!canMutateAttendance ? (
+                              <span className="text-[11px] font-medium text-gray-400 italic">Hanya Pantau</span>
+                            ) : att.status === "Belum Absen" ? (
                               <div className="flex items-center justify-center gap-1.5">
                                 <button
                                   type="button"
@@ -2190,14 +2222,16 @@ export default function AttendancePage() {
                 <span className="text-gray-400 text-xs">
                   {classStats.belumAbsen > 0 ? `${classStats.belumAbsen} siswa belum absen` : "Semua kehadiran telah terdata"}
                 </span>
-                <button
-                  type="button"
-                  onClick={handleSaveClassAttendance}
-                  disabled={isSavingBatch}
-                  className="px-4 py-2 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
-                >
-                  {isSavingBatch ? "Menyimpan..." : "Simpan Perubahan"}
-                </button>
+                {canMutateAttendance && (
+                  <button
+                    type="button"
+                    onClick={handleSaveClassAttendance}
+                    disabled={isSavingBatch}
+                    className="px-4 py-2 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingBatch ? "Menyimpan..." : "Simpan Perubahan"}
+                  </button>
+                )}
               </div>
             </div>
           </div>

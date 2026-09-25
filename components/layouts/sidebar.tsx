@@ -29,7 +29,7 @@ import {
   Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { isSuperAdminRole, isStudentRole, isParentRole } from "@/lib/roles-config";
+import { isSuperAdminRole, isStudentRole, isParentRole, isKepalaSekolahRole } from "@/lib/roles-config";
 import { useAuth } from "@/context/AuthContext";
 import { useNotificationBadges } from "@/context/NotificationBadgeContext";
 import { SidebarSkeleton } from "@/components/ui/role-loading-skeleton";
@@ -119,9 +119,11 @@ function NavGroup({
   getBadgeCount?: (path: string) => number;
   onItemClick?: (path: string) => void;
 }) {
-  const isSuperAdmin = isSuperAdminRole(userRole) || (userRole || "").toLowerCase() === "admin";
+  const isSuperAdmin = isSuperAdminRole(userRole);
+  const isAdmin = (userRole || "").toLowerCase() === "admin" && !isSuperAdmin;
   const isParent = isParentRole(userRole) || (userRole || "").toLowerCase() === "orang-tua";
   const isStudent = isStudentRole(userRole) || (userRole || "").toLowerCase() === "siswa";
+  const isKepalaSekolah = isKepalaSekolahRole(userRole) || (userRole || "").toLowerCase() === "kepala-sekolah";
 
   // Hide entire MASTER DATA group for parents and students
   if ((isParent || isStudent) && title === "MASTER DATA") {
@@ -132,32 +134,43 @@ function NavGroup({
   const visibleItems = items.filter(item => {
     if (item.isDanger || item.href === "/" || item.href === "/profile") return true;
 
-    // Strict rule: Manajemen Akun System is exclusively visible & accessible to Super Admin / Admin
+    // Strict rule: Manajemen Akun System is exclusively visible to Super Admin / System Admin
     if (item.href === "/accounts" || NAV_MODULE_MAP[item.href] === "accounts") {
       return isSuperAdmin;
     }
 
-    // Strict rule: Laporan Keuangan is exclusively for Super Admin / Admin
+    // Role & Permission: Exclusively for Super Admin / Admin
+    if (item.href === "/roles") {
+      return isSuperAdmin || isAdmin;
+    }
+
+    // Laporan Keuangan is accessible to Super Admin, Admin, Kepala Sekolah, and any role with finance read permission
     if (item.href === "/financial-reports") {
-      return isSuperAdmin;
+      return isSuperAdmin || isAdmin || isKepalaSekolah || Boolean(userPermissions["finance"]?.read);
     }
 
-    // Strict rule: Pengaturan Sekolah & Role & Permission are exclusively for Super Admin / Admin
-    if (item.href === "/settings" || item.href === "/roles") {
+    // Pengaturan Sekolah: Hidden from Parents, Students, and Kepala Sekolah (unless explicit settings permission is granted)
+    if (item.href === "/settings") {
       if (isParent || isStudent) return false;
+      if (isKepalaSekolah) {
+        return Boolean(userPermissions["settings"]?.read);
+      }
     }
 
-    // Strict rule: Tahun Ajaran & Kenaikan is for school staff only
+    // Tahun Ajaran & Kenaikan: Hidden from Parents, Students, and Kepala Sekolah (unless explicit settings permission is granted)
     if (item.href === "/academic-years") {
       if (isParent || isStudent) return false;
+      if (isKepalaSekolah) {
+        return Boolean(userPermissions["settings"]?.read);
+      }
     }
 
-    // Pembayaran SPP is accessible to Admin, Guru (Wali Kelas), Siswa, and Orang Tua
+    // Pembayaran SPP is accessible to Admin, Guru (Wali Kelas), Siswa, Orang Tua, and Kepala Sekolah
     if (item.href === "/payments") {
       return true;
     }
 
-    // Strict rule: Absensi Guru is strictly for Guru, Admin, Kepala Sekolah, Super Admin (HIDDEN from Siswa and Orang Tua)
+    // Absensi Guru is strictly for Guru, Admin, Kepala Sekolah, Super Admin (HIDDEN from Siswa and Orang Tua)
     if (item.href === "/teacher-attendance") {
       if (isStudent || isParent) {
         return false;

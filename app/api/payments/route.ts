@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { isStudentRole, isTeacherRole } from "@/lib/roles-config";
+import { isStudentRole, isTeacherRole, isKepalaSekolahRole } from "@/lib/roles-config";
 
 /**
  * Backend Route Handler for SPP Payments
  * Enforces role-based security on the server side:
  * - Siswa: Read-only, strictly scoped to student's own bills.
  * - Guru (Wali Kelas): Read-only, strictly scoped to students in their homeroom class.
+ * - Kepala Sekolah: Read-only, full school monitoring across all classes.
  * - Admin / Super Admin: Full Read/Write CRUD access.
  */
 export async function GET(request: NextRequest) {
@@ -69,6 +70,16 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    if (isKepalaSekolahRole(role)) {
+      // Kepala Sekolah has full monitoring access to all bills across the entire school, marked as Read-Only
+      return NextResponse.json({
+        success: true,
+        role: "kepala-sekolah",
+        readOnly: true,
+        bills: allBills,
+      });
+    }
+
     // Default: Admin / Super Admin
     return NextResponse.json({
       success: true,
@@ -107,6 +118,17 @@ export async function POST(request: NextRequest) {
           success: false,
           error:
             "Akses Ditolak (403): Wali Kelas hanya memiliki hak akses baca (Read-Only). Pencatatan pembayaran dan penerbitan tagihan hanya dapat dilakukan oleh Bendahara atau Administrator.",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (isKepalaSekolahRole(role)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Akses Ditolak (403): Kepala Sekolah memiliki hak akses pemantauan (Read-Only). Transaksi, pengubahan, atau penghapusan data pembayaran SPP hanya dapat dilakukan oleh Bendahara atau Administrator.",
         },
         { status: 403 }
       );

@@ -15,7 +15,7 @@ import {
   MapPin,
   X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getTodayDateString } from "@/lib/utils";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc, getDoc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/context/ToastContext";
@@ -352,7 +352,8 @@ export function QuickAttendanceModal({
     const cleanTimeHM = `${hours}:${minutes}`;
     const cleanTimeHMS = `${hours}:${minutes}:${seconds}`;
     const timeStr = `${cleanTimeHMS} WIB`;
-    const dateStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
+    // Reference date based on current local date (YYYY-MM-DD), rolling over automatically at 00:00 midnight
+    const dateStr = getTodayDateString(now);
     const readableDate = now.toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
     setVerifiedTime(timeStr);
 
@@ -365,7 +366,8 @@ export function QuickAttendanceModal({
     const user = auth.currentUser;
     const studentUid = user?.uid || "";
     const cleanStudentId = studentId && studentId !== "-" ? studentId : (studentUid || "siswa");
-    // Deterministic doc ID: one per student per day — prevents duplicates at database level
+    // Deterministic doc ID: combination of Student ID + Attendance Date (att_ID_YYYY-MM-DD)
+    // Ensures records automatically reset after 00:00 midnight on day transition
     const recordDocId = `att_${cleanStudentId}_${dateStr}`;
     const recordPayload = {
       id: recordDocId,
@@ -400,26 +402,33 @@ export function QuickAttendanceModal({
     };
 
     try {
-      // 0. Server-side duplicate check: verify no existing record for this student+date
-      try {
-        const existingDoc = await getDoc(doc(db, "attendance", recordDocId));
-        if (existingDoc.exists()) {
-          if (showError) showError("Data presensi untuk hari ini sudah tercatat di database. Presensi hanya dapat dilakukan satu kali per hari.", "Duplikasi Dicegah");
-          setStep("input");
-          setIsSubmitting(false);
-          return;
-        }
-      } catch (checkErr) {
-        // Also check 'roles' collection as fallback
+      // 0. Server-side duplicate check: verify Student ID + Today's Date combination
+      const idsToCheck = [recordDocId];
+      if (studentUid && studentUid !== cleanStudentId) {
+        idsToCheck.push(`att_${studentUid}_${dateStr}`);
+      }
+
+      for (const idToCheck of idsToCheck) {
         try {
-          const existingRole = await getDoc(doc(db, "roles", recordDocId));
-          if (existingRole.exists()) {
-            if (showError) showError("Data presensi untuk hari ini sudah tercatat di database. Presensi hanya dapat dilakukan satu kali per hari.", "Duplikasi Dicegah");
+          const existingDoc = await getDoc(doc(db, "attendance", idToCheck));
+          if (existingDoc.exists()) {
+            if (showError) showError("Absensi hari ini sudah tercatat. Presensi hanya dapat dilakukan satu kali per hari.", "Absensi Hari Ini Sudah Tercatat");
             setStep("input");
             setIsSubmitting(false);
             return;
           }
-        } catch (e) {}
+        } catch (checkErr) {
+          // Fallback check in 'roles' collection
+          try {
+            const existingRole = await getDoc(doc(db, "roles", idToCheck));
+            if (existingRole.exists()) {
+              if (showError) showError("Absensi hari ini sudah tercatat. Presensi hanya dapat dilakukan satu kali per hari.", "Absensi Hari Ini Sudah Tercatat");
+              setStep("input");
+              setIsSubmitting(false);
+              return;
+            }
+          } catch (e) {}
+        }
       }
 
       // 1. Primary write to 'attendance' collection

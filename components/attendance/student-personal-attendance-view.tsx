@@ -19,7 +19,7 @@ import {
   Filter,
   UserCheck
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getTodayDateString } from "@/lib/utils";
 import type { AttendanceRecord, AttendanceConfig } from "@/app/(protected)/attendance/page";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 
@@ -86,7 +86,7 @@ export default function StudentPersonalAttendanceView({
   }, [attendanceRecords, student]);
 
   // Today string YYYY-MM-DD
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const todayStr = useMemo(() => getTodayDateString(), []);
 
   // Check today's attendance status
   const todayAttendance = useMemo(() => {

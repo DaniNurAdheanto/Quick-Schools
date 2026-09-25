@@ -76,9 +76,12 @@ export default function ClassesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
   // Centralized useAuth
-  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
+  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
   const rawRole = (authRawRole || authRole || "").toLowerCase();
   const currentUserRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : (rawRole === "teacher" || rawRole === "guru") ? "guru" : rawRole;
+  const isGuru = currentUserRole === "guru" || currentUserRole === "teacher";
+  const canMutateClasses = (rawRole === "super-admin" || rawRole === "admin" || Boolean(rolePermissions?.academic?.write)) && (!isKepalaSekolah || Boolean(rolePermissions?.academic?.write));
+  const isReadOnly = !canMutateClasses || isGuru;
   const currentUserData = userData;
   const currentStudentClass = userData?.classId || userData?.className || userData?.class || "";
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
@@ -106,8 +109,6 @@ export default function ClassesPage() {
 
   const toast = useToast();
   const { currentStage, gradeLevels, majorOptions } = useSchoolProfile();
-
-  const isGuru = currentUserRole === "guru" || currentUserRole === "teacher";
 
   const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete" | "view"; data?: any }>({
     open: false,
@@ -227,8 +228,8 @@ export default function ClassesPage() {
 
   // Handle Create / Edit / Delete Class
   const handleCrudSubmit = async (data: any) => {
-    if (isGuru) {
-      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+    if (isReadOnly) {
+      toast.showError("Akses ditolak. Anda hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
 
@@ -284,7 +285,7 @@ export default function ClassesPage() {
 
   // Quick Preset Add Class
   const handleApplyClassPreset = async (preset: typeof STANDARD_CLASS_PRESETS[0]) => {
-    if (isGuru) return;
+    if (isReadOnly) return;
     try {
       // Check if already exists
       const exists = classes.some(c => c.name.toLowerCase() === preset.name.toLowerCase());
@@ -316,8 +317,8 @@ export default function ClassesPage() {
 
   // 1. Unassign student from class
   const handleRemoveStudentFromClass = async (student: any) => {
-    if (isGuru) {
-      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+    if (isReadOnly) {
+      toast.showError("Akses ditolak. Anda hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
     const studentId = student?._firestoreId || student?.id || student?.uid;
@@ -364,8 +365,8 @@ export default function ClassesPage() {
 
   // 2. Add single student to managingClass
   const handleAddSingleStudent = async (student: any) => {
-    if (isGuru) {
-      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+    if (isReadOnly) {
+      toast.showError("Akses ditolak. Anda hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
     const studentId = student?._firestoreId || student?.id || student?.uid;
@@ -414,8 +415,8 @@ export default function ClassesPage() {
 
   // 3. Bulk Add selected students to managingClass
   const handleBulkAddStudents = async () => {
-    if (isGuru) {
-      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+    if (isReadOnly) {
+      toast.showError("Akses ditolak. Anda hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
     if (selectedStudentIdsToAdd.length === 0 || !managingClass?.name) return;
@@ -469,8 +470,8 @@ export default function ClassesPage() {
   // 4. Quick Add brand new student directly to class
   const handleQuickCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isGuru) {
-      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+    if (isReadOnly) {
+      toast.showError("Akses ditolak. Anda hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
     if (!newStudentForm.name.trim() || !managingClass?.name) {
@@ -540,8 +541,8 @@ export default function ClassesPage() {
 
   // 5. Transfer student to another class
   const handleTransferStudent = async () => {
-    if (isGuru) {
-      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+    if (isReadOnly) {
+      toast.showError("Akses ditolak. Anda hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
     const studentId = transferringStudent?._firestoreId || transferringStudent?.id || transferringStudent?.uid;
@@ -1181,7 +1182,7 @@ export default function ClassesPage() {
         fields={classFields}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
-        onEditRequested={isGuru ? undefined : () => setCrudState(s => ({ ...s, mode: "edit" }))}
+        onEditRequested={isReadOnly ? undefined : () => setCrudState(s => ({ ...s, mode: "edit" }))}
       />
 
       {/* ================= HEADER SECTION ================= */}
@@ -1196,7 +1197,7 @@ export default function ClassesPage() {
                 <h1 className="text-2xl font-black text-gray-900 tracking-tight">
                   Manajemen Kelas &amp; Siswa
                 </h1>
-                {isGuru && (
+                {isReadOnly && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                     Mode Lihat (Read-Only)
                   </span>
@@ -1209,7 +1210,7 @@ export default function ClassesPage() {
           </div>
         </div>
 
-        {!isGuru && (
+        {!isReadOnly && (
           <div className="flex flex-wrap items-center gap-2.5">
             {/* New Class Button */}
             <button 
@@ -1235,7 +1236,7 @@ export default function ClassesPage() {
       </div>
 
       {/* ================= QUICK PRESET TEMPLATES BAR ================= */}
-      {!isGuru && (
+      {!isReadOnly && (
         <div className="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 shadow-2xs space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1624,7 +1625,7 @@ export default function ClassesPage() {
                     className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-purple-50 hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-lg text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer group/btn"
                   >
                     <Users className="w-3.5 h-3.5" />
-                    <span>{isGuru ? "Lihat Siswa" : "Kelola Siswa"} ({enrolled.length})</span>
+                    <span>{isReadOnly ? "Lihat Siswa" : "Kelola Siswa"} ({enrolled.length})</span>
                   </button>
 
                   <div className="flex items-center gap-1">
@@ -1636,7 +1637,7 @@ export default function ClassesPage() {
                     >
                       <Eye className="w-3.5 h-3.5" />
                     </button>
-                    {!isGuru && (
+                    {!isReadOnly && (
                       <>
                         <button
                           type="button"
@@ -1675,7 +1676,7 @@ export default function ClassesPage() {
                   <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">Wali Kelas</th>
                   <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider text-center">Siswa / Kapasitas</th>
                   <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider text-center">Status</th>
-                  <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider text-right">{isGuru ? "Detail" : "Aksi"}</th>
+                  <th className="py-3.5 px-6 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider text-right">{isReadOnly ? "Detail" : "Aksi"}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -1743,10 +1744,10 @@ export default function ClassesPage() {
                               setManageSearch("");
                             }}
                             className="px-3 py-1.5 bg-purple-50 hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                            title={isGuru ? "Lihat Siswa di Kelas Ini" : "Kelola Siswa di Kelas Ini"}
+                            title={isReadOnly ? "Lihat Siswa di Kelas Ini" : "Kelola Siswa di Kelas Ini"}
                           >
                             <Users className="w-3.5 h-3.5" />
-                            <span>{isGuru ? "Lihat Siswa" : "Kelola"} ({enrolled.length})</span>
+                            <span>{isReadOnly ? "Lihat Siswa" : "Kelola"} ({enrolled.length})</span>
                           </button>
                           <button
                             type="button"
@@ -1756,7 +1757,7 @@ export default function ClassesPage() {
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          {!isGuru && (
+                          {!isReadOnly && (
                             <>
                               <button
                                 type="button"
@@ -1803,7 +1804,7 @@ export default function ClassesPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-xl font-black text-gray-900 tracking-tight">
-                      {isGuru ? "Daftar Siswa:" : "Kelola Siswa:"} Kelas {managingClass.name}
+                      {isReadOnly ? "Daftar Siswa:" : "Kelola Siswa:"} Kelas {managingClass.name}
                     </h3>
                     <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
                       {managingClass.level} • {managingClass.major}
@@ -1852,7 +1853,7 @@ export default function ClassesPage() {
                   </span>
                 </button>
 
-                {!isGuru && (
+                {!isReadOnly && (
                   <>
                     <button
                       type="button"
@@ -1905,11 +1906,11 @@ export default function ClassesPage() {
                       </div>
                       <h4 className="text-base font-extrabold text-gray-900">Belum ada siswa di kelas ini</h4>
                       <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                        {isGuru 
+                        {isReadOnly 
                           ? "Belum ada siswa yang terdaftar di kelas ini." 
                           : "Kelas ini masih kosong. Klik tab “Tambah dari Database Siswa” untuk memasukkan siswa ke kelas ini."}
                       </p>
-                      {!isGuru && (
+                      {!isReadOnly && (
                         <button
                           type="button"
                           onClick={() => setManageTab("add")}
@@ -1961,7 +1962,7 @@ export default function ClassesPage() {
                             </div>
                           </div>
 
-                          {!isGuru && (
+                          {!isReadOnly && (
                             <div className="flex items-center gap-2 justify-end">
                               {/* Pindah Kelas Button */}
                               <button
@@ -2253,7 +2254,7 @@ export default function ClassesPage() {
       {/* ========================================================================= */}
       {/* ================= TRANSFER STUDENT TO ANOTHER CLASS MODAL =============== */}
       {/* ========================================================================= */}
-      {transferringStudent && !isGuru && (
+      {transferringStudent && !isReadOnly && (
         <div className="fixed inset-0 z-60 p-4 bg-gray-950/70 backdrop-blur-xs flex items-center justify-center animate-in fade-in duration-150">
           <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl border border-gray-100 space-y-4 animate-in zoom-in-95 duration-150">
             <div className="flex items-center gap-3">

@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { DashboardSkeleton } from "@/components/ui/role-loading-skeleton";
-import { isParentRole, isTeacherRole, isStudentRole } from "@/lib/roles-config";
+import { isParentRole, isTeacherRole, isStudentRole, isKepalaSekolahRole } from "@/lib/roles-config";
 import { StudentDashboardView } from "@/components/dashboard/student-dashboard-view";
 import { TeacherDashboardView } from "@/components/dashboard/teacher-dashboard-view";
 import { AdminDashboardView } from "@/components/dashboard/admin-dashboard-view";
 import { ParentDashboardView } from "@/components/dashboard/parent-dashboard-view";
+import { PrincipalDashboardView } from "@/components/dashboard/principal-dashboard-view";
 
 export default function DashboardPage() {
   const {
@@ -16,6 +17,7 @@ export default function DashboardPage() {
     rawRole,
     isAuthLoading,
     isRoleReady,
+    isKepalaSekolah,
   } = useAuth();
 
   const [previewRole, setPreviewRole] = useState<string | null>(null);
@@ -58,6 +60,8 @@ export default function DashboardPage() {
     };
     
     updateGreeting();
+    const interval = setInterval(updateGreeting, 30000); // Check every 30s so midnight transition updates smoothly
+    return () => clearInterval(interval);
   }, []);
 
   // 1. Role-Based Loading Guard: NEVER render Admin dashboard before user role is verified
@@ -155,7 +159,36 @@ export default function DashboardPage() {
     );
   }
 
-  // 5. Admin / Super Admin Dashboard
+  // 5. Kepala Sekolah Dashboard
+  if (effectiveRole === "kepala-sekolah" || isKepalaSekolahRole(effectiveRole) || isKepalaSekolah) {
+    return (
+      <div className="relative">
+        {previewRole && (
+          <div className="bg-[#531FFF] text-white px-6 py-2.5 text-xs font-bold flex items-center justify-between shadow-sm sticky top-0 z-30">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>Pratinjau Kepala Sekolah: Anda sedang melihat Dashboard sebagai <strong>Kepala Sekolah (Monitoring Executive)</strong>.</span>
+            </div>
+            <button
+              onClick={() => setPreviewRole(null)}
+              className="px-3 py-1 bg-white text-[#531FFF] rounded-md text-xs font-black hover:bg-purple-50 transition-colors cursor-pointer"
+            >
+              Kembali ke Mode Asli ({rawRole || role})
+            </button>
+          </div>
+        )}
+        <PrincipalDashboardView 
+          userName={userName}
+          greeting={greeting}
+          academicYear={academicYear}
+          currentDate={currentDate}
+          currentDay={currentDay}
+        />
+      </div>
+    );
+  }
+
+  // 6. Admin / Super Admin Dashboard
   return (
     <AdminDashboardView
       userName={userName}

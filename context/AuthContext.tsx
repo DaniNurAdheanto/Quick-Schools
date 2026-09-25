@@ -10,6 +10,8 @@ import {
   isStudentRole, 
   isTeacherRole,
   isParentRole,
+  isKepalaSekolahRole,
+  canMutateModule,
   ModulePermission
 } from "@/lib/roles-config";
 
@@ -53,6 +55,9 @@ interface AuthContextType {
   isStudent: boolean;
   isParent: boolean;
   isKepalaSekolah: boolean;
+  canWrite: (module: string) => boolean;
+  canDelete: (module: string) => boolean;
+  canRead: (module: string) => boolean;
   refreshUserData: () => Promise<void>;
   logout: (redirectTo?: string) => Promise<void>;
 }
@@ -65,7 +70,14 @@ function normalizeRole(roleStr: string = ""): UserRole {
   if (r === "guru" || r === "teacher" || r === "pengajar") return "guru";
   if (r === "siswa" || r === "student" || r === "murid") return "siswa";
   if (r === "orang-tua" || r === "orang tua" || r === "wali" || r === "wali-murid" || r === "parent") return "orang-tua";
-  if (r === "kepala-sekolah" || r === "kepsek" || r === "principal") return "kepala-sekolah";
+  if (
+    r === "kepala-sekolah" || 
+    r === "kepala sekolah" || 
+    r === "kepala_sekolah" || 
+    r === "kepsek" || 
+    r === "principal" || 
+    r === "headmaster"
+  ) return "kepala-sekolah";
   return "admin";
 }
 
@@ -88,6 +100,9 @@ const AuthContext = createContext<AuthContextType>({
   isStudent: false,
   isParent: false,
   isKepalaSekolah: false,
+  canWrite: () => false,
+  canDelete: () => false,
+  canRead: () => false,
   refreshUserData: async () => {},
   logout: async () => {},
 });
@@ -310,12 +325,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Compute convenient role checks
-  const isSuperAdmin = useMemo(() => isSuperAdminRole(rawRole) || role === "super-admin", [rawRole, role]);
-  const isGuru = useMemo(() => isTeacherRole(rawRole) || role === "guru", [rawRole, role]);
-  const isStudent = useMemo(() => isStudentRole(rawRole) || role === "siswa", [rawRole, role]);
-  const isParent = useMemo(() => isParentRole(rawRole) || role === "orang-tua", [rawRole, role]);
-  const isKepalaSekolah = useMemo(() => role === "kepala-sekolah", [role]);
-  const isAdmin = useMemo(() => role === "admin" && !isSuperAdmin, [role, isSuperAdmin]);
+  const isSuperAdmin = useMemo(() => isSuperAdminRole(rawRole) || isSuperAdminRole(role) || role === "super-admin", [rawRole, role]);
+  const isGuru = useMemo(() => isTeacherRole(rawRole) || isTeacherRole(role) || role === "guru", [rawRole, role]);
+  const isStudent = useMemo(() => isStudentRole(rawRole) || isStudentRole(role) || role === "siswa", [rawRole, role]);
+  const isParent = useMemo(() => isParentRole(rawRole) || isParentRole(role) || role === "orang-tua", [rawRole, role]);
+  const isKepalaSekolah = useMemo(() => isKepalaSekolahRole(rawRole) || isKepalaSekolahRole(role) || role === "kepala-sekolah", [rawRole, role]);
+  const isAdmin = useMemo(() => (role === "admin" || (rawRole || "").toLowerCase() === "admin") && !isSuperAdmin && !isKepalaSekolah, [role, rawRole, isSuperAdmin, isKepalaSekolah]);
+
+  const canWrite = useCallback((module: string): boolean => {
+    return canMutateModule(rawRole || role, rolePermissions, module, "write");
+  }, [rawRole, role, rolePermissions]);
+
+  const canDelete = useCallback((module: string): boolean => {
+    return canMutateModule(rawRole || role, rolePermissions, module, "delete");
+  }, [rawRole, role, rolePermissions]);
+
+  const canRead = useCallback((module: string): boolean => {
+    const activeR = rawRole || role;
+    if (isSuperAdminRole(activeR)) return true;
+    if (rolePermissions && rolePermissions[module]) {
+      return Boolean(rolePermissions[module].read);
+    }
+    const def = DEFAULT_PERMISSIONS[role || "admin"];
+    return def && def[module] ? Boolean(def[module].read) : false;
+  }, [rawRole, role, rolePermissions]);
 
   const userName = useMemo(() => {
     if (userData?.fullName) return userData.fullName;
@@ -356,6 +389,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isStudent,
       isParent,
       isKepalaSekolah,
+      canWrite,
+      canDelete,
+      canRead,
       refreshUserData,
       logout,
     }),
@@ -378,6 +414,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isStudent,
       isParent,
       isKepalaSekolah,
+      canWrite,
+      canDelete,
+      canRead,
       refreshUserData,
       logout,
     ]

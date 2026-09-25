@@ -104,7 +104,7 @@ export default function ExamSchedulePage() {
   const [localGroups, setLocalGroups] = useState<ExamGroup[]>([]);
 
   // Centralized useAuth
-  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
+  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
   const rawR = (authRawRole || authRole || "").toLowerCase();
   const userRole = (rawR === "student" || rawR === "siswa") ? "siswa" : rawR;
   const [loading, setLoading] = useState(true);
@@ -224,6 +224,7 @@ export default function ExamSchedulePage() {
 
   const isParent = isParentRole(userRole) || userRole === "orang-tua" || isParentRole(currentUserData?.role);
   const isStudentRole = userRole === "student" || userRole === "siswa" || isParent;
+  const canMutateExams = (rawR === "super-admin" || rawR === "admin" || Boolean(rolePermissions?.academic?.write)) && (!isKepalaSekolah || Boolean(rolePermissions?.academic?.write)) && !isStudentRole;
 
   // Load initial local groups
   useEffect(() => {
@@ -515,6 +516,10 @@ export default function ExamSchedulePage() {
   // 3. SUBMIT FORM (CREATE / UPDATE TO FIRESTORE DATABASE)
   const handleSubmitGroupForm = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canMutateExams) {
+      triggerAlert("error", "Akses ditolak. Anda tidak memiliki izin untuk memodifikasi kelompok ujian.");
+      return;
+    }
     if (!groupFormData.name || !groupFormData.startDate || !groupFormData.endDate) {
       triggerAlert("error", "Harap lengkapi nama kelompok ujian dan rentang tanggal.", "Gagal Validasi");
       return;
@@ -599,6 +604,10 @@ export default function ExamSchedulePage() {
 
   // CONFIRM DELETE HANDLER (FIRESTORE EXECUTION)
   const handleConfirmDelete = async () => {
+    if (!canMutateExams) {
+      triggerAlert("error", "Akses ditolak. Anda tidak memiliki izin untuk menghapus jadwal ujian.");
+      return;
+    }
     if (!deleteModalState.id) return;
     setDeleteModalState(prev => ({ ...prev, loading: true }));
 
@@ -710,6 +719,10 @@ export default function ExamSchedulePage() {
 
   const handleSubmitExamForm = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canMutateExams) {
+      triggerAlert("error", "Akses ditolak. Anda tidak memiliki izin untuk memodifikasi sesi ujian.");
+      return;
+    }
     if (!examFormData.subject || !examFormData.classId || !examFormData.date) {
       triggerAlert("error", "Harap lengkapi mata pelajaran, kelas, dan tanggal ujian.", "Gagal Validasi");
       return;
@@ -915,7 +928,7 @@ export default function ExamSchedulePage() {
           </button>
 
           {/* Primary Action */}
-          {!isStudentRole && (
+          {canMutateExams && (
             currentGroup ? (
               <button
                 onClick={handleOpenAddSchedule}
@@ -1239,7 +1252,7 @@ export default function ExamSchedulePage() {
                             <ChevronRight className="w-3.5 h-3.5" />
                           </button>
 
-                          {!isStudentRole && (
+                          {canMutateExams && (
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => handleEditGroup(group)}
@@ -1274,7 +1287,7 @@ export default function ExamSchedulePage() {
                           ? `Belum ada kelompok ujian yang terdaftar untuk kelas ${studentClass || "Anda"} di database.`
                           : "Seluruh data kelompok ujian tersinkronisasi langsung dari database Firestore. Buat kelompok ujian baru untuk mulai menjadwalkan."}
                       </p>
-                      {!isStudentRole && (
+                      {canMutateExams && (
                         <div className="mt-4 flex items-center gap-3 flex-wrap justify-center">
                           <button
                             onClick={handleOpenAddGroup}
@@ -1353,7 +1366,7 @@ export default function ExamSchedulePage() {
                                   >
                                     Buka
                                   </button>
-                                  {!isStudentRole && (
+                                  {canMutateExams && (
                                     <>
                                       <button
                                         onClick={() => handleEditGroup(grp)}
@@ -1409,7 +1422,7 @@ export default function ExamSchedulePage() {
               </p>
             </div>
 
-            {!isStudentRole && currentGroup && (
+            {canMutateExams && currentGroup && (
               <button
                 onClick={() => handleEditGroup(currentGroup)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 hover:text-[#531FFF] hover:border-[#531FFF]/30 rounded-lg text-xs font-bold shadow-xs cursor-pointer shrink-0"
@@ -1553,7 +1566,7 @@ export default function ExamSchedulePage() {
                         KKM: <span className="text-gray-800 font-extrabold">{schedule.passingScore || 75}</span>
                       </span>
 
-                      {!isStudentRole && (
+                      {canMutateExams && (
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => handleEditSchedule(schedule)}
@@ -1581,7 +1594,7 @@ export default function ExamSchedulePage() {
                 <div className="col-span-full bg-white rounded-lg border border-gray-100 p-12 text-center text-gray-400">
                   <CalendarRange className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                   <p className="text-sm font-medium">Belum ada jadwal mata pelajaran pada kelompok ujian ini.</p>
-                  {!isStudentRole && (
+                  {canMutateExams && (
                     <button
                       onClick={handleOpenAddSchedule}
                       className="mt-4 inline-flex items-center gap-2 bg-[#531FFF] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-xs hover:bg-[#531FFF]/90 cursor-pointer"
@@ -1607,7 +1620,7 @@ export default function ExamSchedulePage() {
                       <th className="py-3.5 px-4">Ruangan</th>
                       <th className="py-3.5 px-4">Pengawas Ujian</th>
                       <th className="py-3.5 px-4 text-center">KKM</th>
-                      {!isStudentRole && <th className="py-3.5 px-4 text-center w-20">Aksi</th>}
+                      {canMutateExams && <th className="py-3.5 px-4 text-center w-20">Aksi</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 font-medium">
@@ -1642,7 +1655,7 @@ export default function ExamSchedulePage() {
                             {schedule.passingScore || 75}
                           </span>
                         </td>
-                        {!isStudentRole && (
+                        {canMutateExams && (
                           <td className="py-3 px-4 text-center">
                             <div className="flex items-center justify-center gap-1">
                               <button
@@ -1665,7 +1678,7 @@ export default function ExamSchedulePage() {
 
                     {currentGroupSchedules.length === 0 && (
                       <tr>
-                        <td colSpan={isStudentRole ? 7 : 8} className="py-8 text-center text-gray-400 text-xs">
+                        <td colSpan={canMutateExams ? 8 : 7} className="py-8 text-center text-gray-400 text-xs">
                           Belum ada jadwal mata pelajaran pada kelompok ujian ini.
                         </td>
                       </tr>

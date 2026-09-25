@@ -56,11 +56,13 @@ export default function HomeroomPage() {
   const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isReconciling, setIsReconciling] = useState(false);
-  const { role: authRole, rawRole: authRawRole, isAuthLoading: isUserAuthLoading, isRoleReady } = useAuth();
+  const { role: authRole, rawRole: authRawRole, isAuthLoading: isUserAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
   const [userRole, setUserRole] = useState<string>("");
 
   const resolvedRole = (authRawRole || authRole || userRole || "").toLowerCase();
   const isGuru = resolvedRole === "guru" || resolvedRole === "teacher";
+  const canMutateHomeroom = (resolvedRole === "super-admin" || resolvedRole === "admin" || Boolean(rolePermissions?.academic?.write)) && (!isKepalaSekolah || Boolean(rolePermissions?.academic?.write));
+  const isReadOnly = !canMutateHomeroom || isGuru;
 
   // Filters state for Classes Tab
   const [searchQuery, setSearchQuery] = useState("");
@@ -200,7 +202,7 @@ export default function HomeroomPage() {
 
   // Open assign modal for a specific class
   const handleOpenAssignModal = (cls: any) => {
-    if (isGuru) return;
+    if (isReadOnly) return;
     const currentTeacher = findAssignedTeacherForClass(cls, teachers) || teachers.find(
       t => String(t.name).trim().toLowerCase() === String(cls.homeroom).trim().toLowerCase()
     );
@@ -216,7 +218,7 @@ export default function HomeroomPage() {
 
   // Open assign modal for a teacher to choose a class
   const handleAssignTeacherToClass = (teacher: any) => {
-    if (isGuru) return;
+    if (isReadOnly) return;
     setSelectedTeacherId(teacher._firestoreId || teacher.id || "");
     setModalSearch("");
     setModalFilter("all");
@@ -231,8 +233,8 @@ export default function HomeroomPage() {
 
   // Execute two-way unified assignment
   const handleSaveAssignment = async () => {
-    if (isGuru) {
-      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+    if (isReadOnly) {
+      toast.showError("Akses ditolak. Anda hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
 
@@ -276,8 +278,8 @@ export default function HomeroomPage() {
 
   // Execute two-way unassign
   const handleConfirmUnassign = async () => {
-    if (isGuru) {
-      toast.showError("Akses ditolak. Guru hanya memiliki hak akses lihat data.", "Akses Ditolak");
+    if (isReadOnly) {
+      toast.showError("Akses ditolak. Anda hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
 
@@ -302,7 +304,7 @@ export default function HomeroomPage() {
 
   // One-click Reconcile Database Handler
   const handleReconcileDatabase = async () => {
-    if (isGuru) return;
+    if (isReadOnly) return;
     try {
       setIsReconciling(true);
       const res = await reconcileAllHomeroomData(db, classes, teachers);
@@ -410,7 +412,7 @@ export default function HomeroomPage() {
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Sistem Penugasan
               </span>
-              {isGuru && (
+              {isReadOnly && (
                 <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                   Mode Lihat (Read-Only)
                 </span>
@@ -423,7 +425,7 @@ export default function HomeroomPage() {
         </div>
 
         <div className="flex items-center gap-3 relative z-10">
-          {!isGuru && (
+          {!isReadOnly && (
             <button 
               onClick={handleReconcileDatabase}
               disabled={isReconciling || loading}
@@ -831,7 +833,7 @@ export default function HomeroomPage() {
                         </div>
 
                         {/* Card Action Footer */}
-                        {!isGuru && (
+                        {!isReadOnly && (
                           <div className="p-4 pt-3 border-t border-gray-100/90 flex items-center gap-2 bg-gray-50/50 rounded-b-3xl">
                             {hasHomeroom ? (
                               <>
@@ -881,7 +883,7 @@ export default function HomeroomPage() {
                           <th className="py-4 px-6">Wali Kelas Ditetapkan</th>
                           <th className="py-4 px-6">Kontak WhatsApp</th>
                           <th className="py-4 px-6">Status</th>
-                          {!isGuru && <th className="py-4 px-6 text-right">Aksi</th>}
+                          {!isReadOnly && <th className="py-4 px-6 text-right">Aksi</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -948,7 +950,7 @@ export default function HomeroomPage() {
                                   {hasHomeroom ? "Terisi" : "Belum Ada"}
                                 </span>
                               </td>
-                              {!isGuru && (
+                              {!isReadOnly && (
                                 <td className="py-4 px-6 text-right">
                                   <div className="flex items-center justify-end gap-2">
                                     {hasHomeroom ? (
@@ -1154,7 +1156,7 @@ export default function HomeroomPage() {
                   </div>
 
                   {/* Teacher Matrix Actions */}
-                  {!isGuru && (
+                  {!isReadOnly && (
                     <div className="pt-4 border-t border-gray-100 mt-4 flex items-center gap-2">
                       {isAssigned ? (
                         <button
@@ -1184,7 +1186,7 @@ export default function HomeroomPage() {
       {/* ========================================================================= */}
       {/* QUICK ASSIGN MODAL (MODAL PENETAPAN WALI KELAS)                           */}
       {/* ========================================================================= */}
-      {!isGuru && assignModal.open && assignModal.targetClass && (
+      {!isReadOnly && assignModal.open && assignModal.targetClass && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-xl rounded-xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             
@@ -1432,7 +1434,7 @@ export default function HomeroomPage() {
       {/* ========================================================================= */}
       {/* CONFIRMATION UNASSIGN MODAL                                               */}
       {/* ========================================================================= */}
-      {!isGuru && unassignModal.open && unassignModal.targetClass && (
+      {!isReadOnly && unassignModal.open && unassignModal.targetClass && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-md rounded-xl shadow-2xl border border-gray-100 overflow-hidden p-6 space-y-4 animate-in zoom-in-95 duration-200">
             <div className="w-12 h-12 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">

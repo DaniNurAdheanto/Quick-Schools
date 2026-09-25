@@ -53,6 +53,7 @@ import {
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
+import { useAuth } from "@/context/AuthContext";
 import { db, auth } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
@@ -179,6 +180,10 @@ export default function SettingsPage() {
   const showSuccess = toastCtx?.showSuccess;
   const showInfo = toastCtx?.showInfo;
   const showError = toastCtx?.showError;
+
+  const { isSuperAdmin, isAdmin, isKepalaSekolah, rolePermissions, isAuthLoading } = useAuth();
+  const canReadSettings = (isSuperAdmin || isAdmin || Boolean(rolePermissions?.settings?.read)) && (!isKepalaSekolah || Boolean(rolePermissions?.settings?.read));
+  const canWriteSettings = (isSuperAdmin || isAdmin || Boolean(rolePermissions?.settings?.write)) && (!isKepalaSekolah || Boolean(rolePermissions?.settings?.write));
 
   const searchParams = useSearchParams();
   const tabParam = searchParams?.get("tab") as SettingCategory | null;
@@ -946,6 +951,10 @@ export default function SettingsPage() {
 
   // Save All Settings Handler
   const handleSaveSettings = async () => {
+    if (!canWriteSettings) {
+      if (showError) showError("Anda hanya memiliki izin melihat. Perubahan konfigurasi tidak diizinkan.", "Akses Ditolak");
+      return;
+    }
     setSaving(true);
     const targetLat = Number(
       attendance.schoolCenterLat ?? 
@@ -1032,9 +1041,40 @@ export default function SettingsPage() {
     }
   };
 
+  if (!isAuthLoading && !canReadSettings) {
+    return (
+      <div className="p-6 md:p-12 max-w-4xl mx-auto">
+        <div className="bg-white rounded-2xl border border-red-100 p-8 text-center shadow-sm">
+          <div className="w-16 h-16 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto mb-4">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Akses Terbatas</h2>
+          <p className="text-sm text-gray-600 max-w-md mx-auto mb-6">
+            Anda tidak memiliki izin untuk mengakses Pengaturan Sistem. Halaman ini hanya dapat diakses oleh Administrator sekolah atau pengguna yang diberikan izin khusus.
+          </p>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] text-white text-sm font-semibold rounded-xl hover:bg-[#4316D0] transition-colors"
+          >
+            Kembali ke Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-8 max-w-[1600px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
       
+      {!canWriteSettings && (
+        <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs font-medium shadow-xs">
+          <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+          <span>
+            <strong>Mode Pemantauan (Hanya Lihat):</strong> Anda memiliki hak akses untuk meninjau konfigurasi sistem, namun tidak diizinkan menambah, mengubah, atau menghapus pengaturan kecuali diberikan izin khusus oleh Administrator.
+          </span>
+        </div>
+      )}
+
       {/* Top Main Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
         <div>
@@ -1044,7 +1084,7 @@ export default function SettingsPage() {
             </div>
             <div>
               <h1 className="text-2xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-                Pusat Konfigurasi Sekolah <span className="text-xs px-2.5 py-0.5 font-bold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20">Enterprise Admin</span>
+                Pusat Konfigurasi Sekolah <span className="text-xs px-2.5 py-0.5 font-bold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20">{canWriteSettings ? "Enterprise Admin" : "Monitoring Mode"}</span>
               </h1>
               <p className="text-sm text-gray-500 font-medium mt-0.5">
                 Kelola profil, struktur akademik, absensi geofence, kurikulum, penilaian, dan keamanan Smart School OS.
@@ -1055,28 +1095,36 @@ export default function SettingsPage() {
 
         {/* Global Action Header Buttons */}
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
-              if (showInfo) showInfo("Formulir pengaturan diset ulang ke nilai semula", "Reset Default");
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
-          >
-            <RotateCcw className="w-4 h-4 text-gray-500" />
-            Reset
-          </button>
+          {canWriteSettings && (
+            <button
+              onClick={() => {
+                if (showInfo) showInfo("Formulir pengaturan diset ulang ke nilai semula", "Reset Default");
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4 text-gray-500" />
+              Reset
+            </button>
+          )}
 
-          <button
-            onClick={handleSaveSettings}
-            disabled={saving}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white rounded-lg hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] transition-all text-xs font-extrabold shadow-sm cursor-pointer border border-white/20 disabled:opacity-50"
-          >
-            {saving ? (
-              <RefreshCw className="w-4 h-4 animate-spin text-white" />
-            ) : (
-              <Save className="w-4 h-4 text-white" />
-            )}
-            <span>Simpan Perubahan</span>
-          </button>
+          {canWriteSettings ? (
+            <button
+              onClick={handleSaveSettings}
+              disabled={saving}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white rounded-lg hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] transition-all text-xs font-extrabold shadow-sm cursor-pointer border border-white/20 disabled:opacity-50"
+            >
+              {saving ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-white" />
+              ) : (
+                <Save className="w-4 h-4 text-white" />
+              )}
+              <span>Simpan Perubahan</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 border border-gray-200 text-gray-500 rounded-lg text-xs font-bold">
+              <span>Read-Only</span>
+            </div>
+          )}
         </div>
       </div>
 

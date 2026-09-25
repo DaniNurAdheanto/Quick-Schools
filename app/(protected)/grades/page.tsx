@@ -78,7 +78,7 @@ export default function GradesPage() {
   const [loading, setLoading] = useState(true);
 
   // Centralized useAuth
-  const { user: authUser, role: authRole, rawRole: authRawRole, userData: authUserData, isAuthLoading, isRoleReady } = useAuth();
+  const { user: authUser, role: authRole, rawRole: authRawRole, userData: authUserData, isAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
   const rawRole = (authRawRole || authRole || "").toLowerCase();
   const userRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : (rawRole === "teacher" || rawRole === "guru") ? "guru" : rawRole;
   const currentUser = authUser;
@@ -138,15 +138,14 @@ export default function GradesPage() {
   }, [isParent, currentUser, currentUserData, students]);
 
   const isStudentRole = userRole === "siswa" || userRole === "student" || isParent;
+  const isGuru = userRole === "guru" || userRole === "teacher";
+  const canMutateGrades = (rawRole === "super-admin" || rawRole === "admin" || isGuru || Boolean(rolePermissions?.grades?.write)) && (!isKepalaSekolah || Boolean(rolePermissions?.grades?.write)) && !isStudentRole;
 
   useEffect(() => {
     if (userRole === "siswa") {
       setViewMode("table");
     }
   }, [userRole]);
-
-  // Determine if logged in user is Guru and their assigned Homeroom Class (Wali Kelas) or Subject Teaching Responsibilities
-  const isGuru = userRole === "guru" || userRole === "teacher";
 
   // Resolve Teacher Profile and Identifiers
   const teacherInfo = useMemo(() => {
@@ -796,6 +795,11 @@ export default function GradesPage() {
 
   // Save Matrix to Firestore (Writes all edited/filled cells simultaneously, or even just 1 cell!)
   const handleSaveMatrix = async () => {
+    if (!canMutateGrades) {
+      toast.showError("Akses ditolak. Anda tidak memiliki izin untuk menyimpan perubahan nilai.", "Akses Ditolak");
+      return;
+    }
+
     if (isGuru) {
       if (!hasAnyGradingAccess) {
         toast.showError("Anda belum memiliki penugasan mengajar mata pelajaran atau penugasan wali kelas.", "Akses Ditolak");
@@ -986,7 +990,10 @@ export default function GradesPage() {
 
   // Single Grade Submit Handler (CrudSheet)
   const handleCrudSubmit = async (data: any) => {
-    if (isStudentRole) return;
+    if (isStudentRole || !canMutateGrades) {
+      toast.showError("Akses ditolak. Anda tidak memiliki wewenang mengubah data nilai.", "Akses Ditolak");
+      return;
+    }
 
     if (isGuru) {
       if (!hasAnyGradingAccess) {
@@ -2285,7 +2292,7 @@ export default function GradesPage() {
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
         onDataChange={(data) => setCurrentFormData(data)}
-        onEditRequested={!isStudentRole ? () => setCrudState(s => ({ ...s, mode: "edit" })) : undefined}
+        onEditRequested={canMutateGrades ? () => setCrudState(s => ({ ...s, mode: "edit" })) : undefined}
       />
 
       {/* ================= HEADER SECTION ================= */}
@@ -2338,7 +2345,7 @@ export default function GradesPage() {
         </div>
 
         {/* Action Buttons for Teachers & Admins */}
-        {!isStudentRole && (
+        {canMutateGrades && (
           <div className="flex flex-wrap items-center gap-2.5">
             {/* Save Matrix Button when in Matrix view */}
             {viewMode === "matrix" && (
@@ -2787,11 +2794,13 @@ export default function GradesPage() {
                                   type="number"
                                   min={0}
                                   max={100}
+                                  readOnly={!canMutateGrades}
                                   placeholder="-"
                                   value={val}
-                                  onChange={(e) => handleCellChange(student.id, type.key, e.target.value)}
+                                  onChange={(e) => canMutateGrades && handleCellChange(student.id, type.key, e.target.value)}
                                   className={cn(
                                     "w-16 sm:w-20 px-2 py-1.5 rounded-lg border text-center font-black text-xs transition-all focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:bg-white",
+                                    !canMutateGrades && "cursor-default bg-gray-50/60",
                                     numVal === null
                                       ? "bg-gray-50/80 border-gray-200 text-gray-400"
                                       : numVal >= matrixKkm
@@ -2840,9 +2849,10 @@ export default function GradesPage() {
                           <td className="py-2.5 px-4">
                             <input
                               type="text"
-                              placeholder="Catatan..."
+                              readOnly={!canMutateGrades}
+                              placeholder={canMutateGrades ? "Catatan..." : "-"}
                               value={rowData.notes || ""}
-                              onChange={(e) => handleCellChange(student.id, "notes", e.target.value)}
+                              onChange={(e) => canMutateGrades && handleCellChange(student.id, "notes", e.target.value)}
                               className="w-full px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-md text-xs text-gray-700 placeholder:text-gray-300 focus:outline-none focus:ring-1 focus:ring-[#531FFF]"
                             />
                           </td>
@@ -3132,7 +3142,7 @@ export default function GradesPage() {
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            {!isStudentRole && (
+                            {canMutateGrades && (
                               <>
                                 <button
                                   type="button"

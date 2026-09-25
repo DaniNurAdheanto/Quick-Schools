@@ -110,10 +110,13 @@ export default function DataSiswaPage() {
   const [cleaning, setCleaning] = useState(false);
 
   // User auth & role detection from centralized useAuth
-  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
+  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
   const currentUser = userData;
   const rawR = (authRawRole || authRole || "").toLowerCase();
   const userRole = rawR === "teacher" ? "guru" : rawR;
+
+  const canMutateUsers = (rawR === "super-admin" || rawR === "admin" || Boolean(rolePermissions?.users?.write)) && (!isKepalaSekolah || Boolean(rolePermissions?.users?.write));
+  const canDeleteUsers = (rawR === "super-admin" || rawR === "admin" || Boolean(rolePermissions?.users?.delete)) && (!isKepalaSekolah || Boolean(rolePermissions?.users?.delete));
 
   useEffect(() => {
     setTeachers(unifiedTeachers);
@@ -178,6 +181,10 @@ export default function DataSiswaPage() {
 
   const isTeacherWaliKelas = Boolean(isGuru && teacherClasses && teacherClasses.length > 0);
   const primaryTeacherClass = teacherClasses && teacherClasses.length > 0 ? teacherClasses[0] : "";
+
+  const canCreateStudent = canMutateUsers || isTeacherWaliKelas;
+  const canEditStudent = canMutateUsers || isTeacherWaliKelas;
+  const canDeleteStudent = canDeleteUsers;
 
   // Base students scoped to teacher's homeroom class if user is guru
   const baseStudents = useMemo(() => {
@@ -501,6 +508,19 @@ export default function DataSiswaPage() {
   ];
 
   const handleCrudSubmit = async (data: any) => {
+    if (crudState.mode === "create" && !canCreateStudent) {
+      toast.showError("Akses ditolak. Anda tidak memiliki izin menambah data siswa.", "Akses Ditolak");
+      return;
+    }
+    if (crudState.mode === "edit" && !canEditStudent) {
+      toast.showError("Akses ditolak. Anda tidak memiliki izin mengubah data siswa.", "Akses Ditolak");
+      return;
+    }
+    if (crudState.mode === "delete" && !canDeleteStudent) {
+      toast.showError("Akses ditolak. Anda tidak memiliki izin menghapus data siswa.", "Akses Ditolak");
+      return;
+    }
+
     try {
       let imageUrl = data.imageUrl || data.photoUrl || "";
 
@@ -980,7 +1000,7 @@ export default function DataSiswaPage() {
         fields={studentFields}
         initialData={crudState.data}
         onSubmit={handleCrudSubmit}
-        onEditRequested={() => setCrudState(s => ({ ...s, mode: "edit" }))}
+        onEditRequested={canEditStudent ? () => setCrudState(s => ({ ...s, mode: "edit" })) : undefined}
       />
 
       {/* Page Header Card */}
@@ -1010,17 +1030,19 @@ export default function DataSiswaPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setCrudState({ 
-              open: true, 
-              mode: "create",
-              data: isTeacherWaliKelas ? { classId: primaryTeacherClass, className: primaryTeacherClass } : undefined
-            })}
-            className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah Siswa {isTeacherWaliKelas ? `(${primaryTeacherClass})` : ""}</span>
-          </button>
+          {canCreateStudent && (
+            <button 
+              onClick={() => setCrudState({ 
+                open: true, 
+                mode: "create",
+                data: isTeacherWaliKelas ? { classId: primaryTeacherClass, className: primaryTeacherClass } : undefined
+              })}
+              className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah Siswa {isTeacherWaliKelas ? `(${primaryTeacherClass})` : ""}</span>
+            </button>
+          )}
           
           <button 
             onClick={handleExportCSV}
@@ -1329,20 +1351,24 @@ export default function DataSiswaPage() {
                       >
                         <Eye className="w-3.5 h-3.5" />
                       </button>
-                      <button 
-                        onClick={() => setCrudState({ open: true, mode: "edit", data: student })}
-                        className="w-8 h-8 rounded-lg bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
-                        title="Edit Data Siswa"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button 
-                        onClick={() => setCrudState({ open: true, mode: "delete", data: student })}
-                        className="w-8 h-8 rounded-lg bg-gray-50 hover:bg-rose-50 text-gray-500 hover:text-rose-600 transition-all flex items-center justify-center"
-                        title="Hapus Data Siswa"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {canEditStudent && (
+                        <button 
+                          onClick={() => setCrudState({ open: true, mode: "edit", data: student })}
+                          className="w-8 h-8 rounded-lg bg-gray-50 hover:bg-[#531FFF]/10 text-gray-500 hover:text-[#531FFF] transition-all flex items-center justify-center"
+                          title="Edit Data Siswa"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {canDeleteStudent && (
+                        <button 
+                          onClick={() => setCrudState({ open: true, mode: "delete", data: student })}
+                          className="w-8 h-8 rounded-lg bg-gray-50 hover:bg-rose-50 text-gray-500 hover:text-rose-600 transition-all flex items-center justify-center"
+                          title="Hapus Data Siswa"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1440,20 +1466,24 @@ export default function DataSiswaPage() {
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => setCrudState({ open: true, mode: "edit", data: student })}
-                              className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-lg transition-colors"
-                              title="Edit"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setCrudState({ open: true, mode: "delete", data: student })}
-                              className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                              title="Hapus"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {canEditStudent && (
+                              <button
+                                onClick={() => setCrudState({ open: true, mode: "edit", data: student })}
+                                className="p-2 text-gray-500 hover:text-[#531FFF] hover:bg-gray-100 rounded-lg transition-colors"
+                                title="Edit"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            )}
+                            {canDeleteStudent && (
+                              <button
+                                onClick={() => setCrudState({ open: true, mode: "delete", data: student })}
+                                className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                title="Hapus"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1501,7 +1531,7 @@ export default function DataSiswaPage() {
                 >
                   Reset Filter
                 </button>
-              ) : !(isGuru && (!teacherClasses || teacherClasses.length === 0)) ? (
+              ) : !(isGuru && (!teacherClasses || teacherClasses.length === 0)) && canCreateStudent ? (
                 <button 
                   onClick={() => setCrudState({ 
                     open: true, 

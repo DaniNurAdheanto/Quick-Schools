@@ -162,7 +162,7 @@ export function SubjectGroupModal({
                 value={formData.name || ""}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Contoh: Dasar Program Keahlian (C2) - RPL atau Peminatan MIPA"
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-semibold text-xs"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-semibold text-xs"
                 required
               />
             </div>
@@ -177,7 +177,7 @@ export function SubjectGroupModal({
                 value={formData.code || ""}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                 placeholder="Contoh: C2-RPL, A-NAS, C-MIPA"
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-mono font-bold text-xs"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-mono font-bold text-xs"
                 required
               />
             </div>
@@ -190,7 +190,7 @@ export function SubjectGroupModal({
               <select
                 value={formData.major || "Semua Jurusan / Umum"}
                 onChange={(e) => setFormData({ ...formData, major: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-xs cursor-pointer"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-xs cursor-pointer"
               >
                 <option value="Semua Jurusan / Umum">Semua Jurusan / Umum (Nasional)</option>
                 {majorOptions.map((m) => (
@@ -207,7 +207,7 @@ export function SubjectGroupModal({
               <select
                 value={formData.category || "Wajib"}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-xs cursor-pointer"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-xs cursor-pointer"
               >
                 <option value="Wajib">Wajib (Muatan Nasional / Inti)</option>
                 <option value="Peminatan">Peminatan / Kejuruan (Produktif / Minat)</option>
@@ -221,7 +221,7 @@ export function SubjectGroupModal({
               <select
                 value={formData.level || "Semua Tingkat"}
                 onChange={(e) => setFormData({ ...formData, level: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-xs cursor-pointer"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-xs cursor-pointer"
               >
                 <option value="Semua Tingkat">Semua Tingkat</option>
                 {gradeLevels.map((lvl) => (
@@ -242,7 +242,7 @@ export function SubjectGroupModal({
                 max={99}
                 value={formData.order || 1}
                 onChange={(e) => setFormData({ ...formData, order: Number(e.target.value) || 1 })}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-xs"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-xs"
               />
             </div>
 
@@ -251,7 +251,7 @@ export function SubjectGroupModal({
               <select
                 value={formData.status || "Aktif"}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-xs cursor-pointer"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-bold text-xs cursor-pointer"
               >
                 <option value="Aktif">Aktif</option>
                 <option value="Nonaktif">Nonaktif</option>
@@ -266,7 +266,7 @@ export function SubjectGroupModal({
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Catatan mengenai cakupan materi ajar atau kelompok kompetensi ini..."
                 rows={2}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-xs resize-none"
+                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-xs resize-none"
               />
             </div>
 

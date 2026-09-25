@@ -149,19 +149,25 @@ service cloud.firestore {
     // SPP Payments & Financial Management
     match /payments/{paymentId} {
       allow read: if isSignedIn();
-      // Only Admin / Financial Staff can create, update, or delete payments; Teachers & Students are strictly read-only
+      // Only Admin / Financial Staff can create, update, or delete payments; Teachers, Students, and Kepala Sekolah are strictly read-only
       allow write: if isSignedIn() && (
         request.auth.token.role != 'siswa' && 
         request.auth.token.role != 'guru' &&
         request.auth.token.role != 'student' &&
-        request.auth.token.role != 'teacher'
+        request.auth.token.role != 'teacher' &&
+        request.auth.token.role != 'kepala-sekolah' &&
+        request.auth.token.role != 'kepsek' &&
+        request.auth.token.role != 'principal'
       );
     }
     match /spp_rates/{rateId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && (
         request.auth.token.role != 'siswa' && 
-        request.auth.token.role != 'guru'
+        request.auth.token.role != 'guru' &&
+        request.auth.token.role != 'kepala-sekolah' &&
+        request.auth.token.role != 'kepsek' &&
+        request.auth.token.role != 'principal'
       );
     }
     match /payment_activities/{activityId} {

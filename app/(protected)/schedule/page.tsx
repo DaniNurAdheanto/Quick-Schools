@@ -93,10 +93,12 @@ export default function SchedulePage() {
   const currentTimeString = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }).replace('.', ':');
 
   // Centralized useAuth
-  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
+  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
   const rawR = (authRawRole || authRole || "").toLowerCase();
   const userRole = (rawR === "student" || rawR === "siswa") ? "siswa" : rawR;
   const currentUserData = userData;
+  const isParent = isParentRole(userRole) || userRole === "orang-tua" || isParentRole(currentUserData?.role);
+  const canMutateSchedule = (rawR === "super-admin" || rawR === "admin" || Boolean(rolePermissions?.academic?.write)) && (!isKepalaSekolah || Boolean(rolePermissions?.academic?.write)) && userRole !== "siswa" && !isParent;
 
   const isActive = (schedule: any) => {
     if (!mounted) return false;
@@ -213,6 +215,10 @@ export default function SchedulePage() {
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canMutateSchedule) {
+      toast.showError("Akses ditolak. Anda tidak memiliki izin untuk memodifikasi jadwal pelajaran.", "Akses Ditolak");
+      return;
+    }
     setConflictError(null);
 
     if (modalMode === "delete" && activeItem?._firestoreId) {
@@ -314,7 +320,6 @@ export default function SchedulePage() {
   // LOGIKA KHUSUS ROLE SISWA & ORANG TUA (READ-ONLY SCHEDULE VIEW)
   // =========================================================================
   const isStudent = userRole === "siswa" || userRole === "student" || currentUserData?.role === "siswa" || currentUserData?.role === "student";
-  const isParent = isParentRole(userRole) || userRole === "orang-tua" || isParentRole(currentUserData?.role);
   const isReadOnly = isStudent || isParent;
 
   const resolvedParentChild = useMemo(() => {
@@ -990,7 +995,7 @@ export default function SchedulePage() {
              <span>{mounted ? `${currentDayString}, ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : ""}</span>
           </div>
           
-          {userRole !== "siswa" && (
+          {canMutateSchedule && (
             <button 
               onClick={() => handleOpenAddModal()}
               className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
@@ -1149,8 +1154,8 @@ export default function SchedulePage() {
                                 {schedule.startTime} - {schedule.endTime}
                               </span>
 
-                              {/* Action Buttons: Only for non-students */}
-                              {userRole !== "siswa" && (
+                              {/* Action Buttons: Only for authorized users */}
+                              {canMutateSchedule && (
                                 <div className="flex items-center gap-1">
                                   <button 
                                     onClick={() => handleOpenEditModal(schedule)}
@@ -1191,7 +1196,7 @@ export default function SchedulePage() {
                       })}
 
                       {/* Empty Day State */}
-                      {daySchedules.length === 0 && userRole !== "siswa" && (
+                      {daySchedules.length === 0 && canMutateSchedule && (
                         <button
                           onClick={() => handleOpenAddModal(day)}
                           className="w-full h-32 flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 hover:border-[#531FFF]/40 hover:bg-[#531FFF]/5 text-gray-400 hover:text-[#531FFF] transition-all group p-4 cursor-pointer"
@@ -1261,7 +1266,7 @@ export default function SchedulePage() {
                                           <span className={cn("font-bold text-xs truncate", palette.text)}>
                                             {s.subject}
                                           </span>
-                                          {userRole !== "siswa" && (
+                                          {canMutateSchedule && (
                                             <div className="flex items-center gap-0.5">
                                               <button 
                                                 onClick={() => handleOpenEditModal(s)}
@@ -1285,7 +1290,7 @@ export default function SchedulePage() {
                                     );
                                   })}
                                 </div>
-                              ) : userRole !== "siswa" ? (
+                              ) : canMutateSchedule ? (
                                 <button
                                   onClick={() => handleOpenAddModal(day, selectedClassFilter !== "All" ? selectedClassFilter : "", slot.start, slot.end)}
                                   className="w-full h-full flex flex-col items-center justify-center text-gray-300 hover:text-[#531FFF] hover:bg-[#531FFF]/5 rounded-md border border-dashed border-transparent hover:border-[#531FFF]/20 transition-all group py-3 cursor-pointer"
@@ -1367,7 +1372,7 @@ export default function SchedulePage() {
                                   </h4>
                                 </div>
 
-                                {userRole !== "siswa" && (
+                                {canMutateSchedule && (
                                   <div className="flex items-center gap-2">
                                     <button
                                       onClick={() => handleOpenEditModal(schedule)}
@@ -1407,7 +1412,7 @@ export default function SchedulePage() {
                     </div>
                     <h3 className="text-base font-bold text-gray-900">Belum ada jadwal untuk {selectedDay}</h3>
                     <p className="text-xs text-gray-500 mt-1 max-w-sm">Klik tombol di bawah untuk menambahkan sesi pelajaran baru di hari {selectedDay}.</p>
-                    {userRole !== "siswa" && (
+                    {canMutateSchedule && (
                       <button
                         onClick={() => handleOpenAddModal(selectedDay)}
                         className="mt-4 inline-flex items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm cursor-pointer"

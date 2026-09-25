@@ -457,7 +457,7 @@ export default function AnnouncementsPage() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Cari pengumuman..."
-                    className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-[13px] placeholder:text-gray-400 bg-white focus:outline-none focus:border-[#531FFF] focus:ring-1 focus:ring-[#531FFF] transition-all"
+                    className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-[13px] placeholder:text-gray-400 bg-white focus:outline-none focus:border-[#531FFF] focus:ring-1 focus:ring-[#531FFF] transition-all"
                   />
                   {searchQuery && (
                     <button 
@@ -847,7 +847,7 @@ export default function AnnouncementsPage() {
                       <select 
                         value={quickTarget}
                         onChange={(e) => setQuickTarget(e.target.value)}
-                        className="w-full appearance-none bg-white border border-gray-200 text-gray-800 text-[13px] rounded-xl px-3 py-2.5 outline-none focus:border-[#531FFF] focus:ring-1 focus:ring-[#531FFF] font-semibold shadow-2xs"
+                        className="w-full appearance-none bg-white border border-gray-200 text-gray-800 text-[13px] rounded-lg px-3 py-2.5 outline-none focus:border-[#531FFF] focus:ring-1 focus:ring-[#531FFF] font-semibold shadow-2xs"
                       >
                         {TARGET_ROLE_OPTIONS.map((opt) => (
                           <option key={opt.value} value={opt.value}>

@@ -41,7 +41,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { cn } from "@/lib/utils";
+import { cn, getTodayDateString } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { isAnnouncementVisibleForRole, cleanAnnouncementDesc } from "@/lib/announcements-helper";
 import { useAuth } from "@/context/AuthContext";
@@ -483,12 +483,12 @@ export function TeacherDashboardView({
 
   // 8. Real-time Attendance Stats for Today
   const todayAttendanceStats = useMemo(() => {
-    const todayIso = new Date().toISOString().split("T")[0];
+    const todayDate = getTodayDateString();
     
     // Filter records for today in classes taught by this teacher
     const relevantRecords = attendanceRecords.filter((r: any) => {
       const rDate = r.date || "";
-      const isToday = rDate === todayIso;
+      const isToday = rDate === todayDate;
       if (!isToday) return false;
       const rClass = (r.className || "").toLowerCase().trim();
       return taughtClasses.some(tc => tc.toLowerCase() === rClass);
@@ -520,7 +520,7 @@ export function TeacherDashboardView({
   // 9. Homeroom Class Attendance (If teacher is a Wali Kelas)
   const homeroomAttendance = useMemo(() => {
     if (!resolvedHomeroomClass) return null;
-    const todayIso = new Date().toISOString().split("T")[0];
+    const todayDate = getTodayDateString();
     const hrClean = resolvedHomeroomClass.toLowerCase().trim();
 
     const classStudents = students.filter((s: any) => {
@@ -529,7 +529,7 @@ export function TeacherDashboardView({
     });
 
     const records = attendanceRecords.filter((r: any) => {
-      return (r.date === todayIso) && (r.className || "").toLowerCase().trim() === hrClean;
+      return (r.date === todayDate) && (r.className || "").toLowerCase().trim() === hrClean;
     });
 
     const hadir = records.filter((r: any) => r.status === "Hadir").length;

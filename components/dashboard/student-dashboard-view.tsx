@@ -40,7 +40,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, collection, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { isAnnouncementVisibleForRole, cleanAnnouncementDesc } from "@/lib/announcements-helper";
-import { cn } from "@/lib/utils";
+import { cn, getTodayDateString } from "@/lib/utils";
 import { formatRupiah } from "@/lib/spp-payments";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useAuth } from "@/context/AuthContext";
@@ -99,7 +99,10 @@ export function StudentDashboardView({
     return DAYS_ORDER.includes(currentDay) ? currentDay : "Senin";
   });
 
-  // Realtime clock for live class status
+  // Current local calendar date (YYYY-MM-DD), rolling over automatically at 00:00 midnight
+  const [currentLocalDate, setCurrentLocalDate] = useState<string>(() => getTodayDateString());
+
+  // Realtime clock for live class status & midnight day rollover detection
   const [nowTimeStr, setNowTimeStr] = useState<string>(() => {
     const d = new Date();
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -109,7 +112,16 @@ export function StudentDashboardView({
     const timer = setInterval(() => {
       const d = new Date();
       setNowTimeStr(`${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`);
-    }, 30000);
+      const today = getTodayDateString(d);
+      setCurrentLocalDate((prevDate) => {
+        if (prevDate !== today) {
+          // Midnight has passed! Reset live attended record immediately for the new day
+          setLiveAttendedRecord(null);
+          return today;
+        }
+        return prevDate;
+      });
+    }, 10000); // Check every 10 seconds for real-time midnight rollover
     return () => clearInterval(timer);
   }, []);
 
@@ -120,23 +132,22 @@ export function StudentDashboardView({
     }
   }, [currentDay]);
 
-  // Read local storage cached attendance on mount to prevent any delay/flicker
+  // Read local storage cached attendance on mount and when local date changes
   useEffect(() => {
     try {
       const stored = localStorage.getItem("quick_schools_attendance_records");
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const todayIso = new Date().toISOString().split("T")[0];
-          const todayLocal = new Date().toLocaleDateString("sv-SE");
+          const today = currentLocalDate;
           const uid = currentUser?.uid;
           const nisn = studentNisn;
           const found = parsed.find((r: any) => {
+            // Strictly check for today's local date!
             const isToday =
-              r.date === todayIso ||
-              r.date === todayLocal ||
-              r.id?.includes(todayIso) ||
-              r.id?.includes(todayLocal);
+              r.date === today ||
+              r.id === `att_${nisn}_${today}` ||
+              (uid && r.id === `att_${uid}_${today}`);
             if (!isToday) return false;
             if (uid && (r.studentUid === uid || r.uid === uid || r.studentId === uid)) return true;
             if (nisn && (r.nisn === nisn || r.studentId === nisn)) return true;
@@ -144,11 +155,13 @@ export function StudentDashboardView({
           });
           if (found) {
             setLiveAttendedRecord(found);
+          } else {
+            setLiveAttendedRecord(null);
           }
         }
       }
     } catch (e) {}
-  }, [currentUser, studentNisn]);
+  }, [currentUser, studentNisn, currentLocalDate]);
 
   // Listen to cross-component instant attendance event
   useEffect(() => {
@@ -383,23 +396,20 @@ export function StudentDashboardView({
       return false;
     });
 
-    const todayIso = new Date().toISOString().split("T")[0];
-    const todayLocal = new Date().toLocaleDateString("sv-SE");
+    const todayDate = currentLocalDate;
 
     let todayRecord = myRecords.find((r) => {
-      if (r.date === todayIso || r.date === todayLocal) return true;
-      if (r.id?.includes(todayIso) || r.id?.includes(todayLocal)) return true;
-      if (r.createdAt && (r.createdAt.startsWith(todayIso) || r.createdAt.startsWith(todayLocal))) return true;
+      // Must match today's local date exactly
+      if (r.date === todayDate) return true;
+      if (r.id === `att_${nisn}_${todayDate}` || (uid && r.id === `att_${uid}_${todayDate}`)) return true;
       return false;
     });
 
     if (!todayRecord && liveAttendedRecord) {
       const isToday =
-        liveAttendedRecord.date === todayIso ||
-        liveAttendedRecord.date === todayLocal ||
-        liveAttendedRecord.id?.includes(todayIso) ||
-        liveAttendedRecord.id?.includes(todayLocal) ||
-        (liveAttendedRecord.createdAt && (liveAttendedRecord.createdAt.startsWith(todayIso) || liveAttendedRecord.createdAt.startsWith(todayLocal)));
+        liveAttendedRecord.date === todayDate ||
+        liveAttendedRecord.id === `att_${nisn}_${todayDate}` ||
+        (uid && liveAttendedRecord.id === `att_${uid}_${todayDate}`);
       if (isToday) {
         todayRecord = liveAttendedRecord;
       }
@@ -447,7 +457,7 @@ export function StudentDashboardView({
       recentLogs,
       hasData: total > 0,
     };
-  }, [attendanceRecords, currentUser, studentNisn, studentDoc, liveAttendedRecord]);
+  }, [attendanceRecords, currentUser, studentNisn, studentDoc, liveAttendedRecord, currentLocalDate]);
 
   // ── 4. COMPUTED ACADEMIC GRADES (Strictly for Current Student) ─────────────
   const gradesData = useMemo(() => {
@@ -826,7 +836,10 @@ export function StudentDashboardView({
             {attendanceData.todayRecord ? (
               <>
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Presensi Hari Ini: {attendanceData.todayRecord.status || "Hadir"} ({attendanceData.todayRecord.timestamp || "Tercatat"})</span>
+                <span>
+                  Presensi Hari Ini: {attendanceData.todayRecord.status || "Hadir"} (
+                  {(attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "Tercatat").replace(/\s*WIB/gi, "").trim()} WIB)
+                </span>
               </>
             ) : (
               <>
@@ -910,7 +923,11 @@ export function StudentDashboardView({
                   </span>
                 </div>
                 <p className="text-xs md:text-sm font-bold text-emerald-950 mt-0.5">
-                  Kehadiran Anda telah tercatat pada pukul <strong className="text-emerald-900 font-extrabold">{attendanceData.todayRecord.timestamp || "waktu presensi"} WIB</strong> ({currentDate}).
+                  Kehadiran Anda telah tercatat pada pukul{" "}
+                  <strong className="text-emerald-900 font-extrabold">
+                    {(attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "waktu presensi").replace(/\s*WIB/gi, "").trim()} WIB
+                  </strong>{" "}
+                  ({currentDate}).
                 </p>
               </div>
             </div>

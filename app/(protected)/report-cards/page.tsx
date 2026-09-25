@@ -9,7 +9,7 @@ import {
   GraduationCap, X, AlertTriangle,
   Layers, ChevronRight, UserCheck, Clock, CheckCircle,
   ArrowLeft, ArrowRight, ArrowDown, Zap, CheckCheck,
-  PanelLeftClose, PanelLeftOpen
+  PanelLeftClose, PanelLeftOpen, Eye, ShieldAlert
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart,
@@ -265,7 +265,7 @@ export default function ReportCardsPage() {
   const [isSyncingSubjects, setIsSyncingSubjects] = useState(false);
 
   // Centralized useAuth
-  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady } = useAuth();
+  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
   const currentUserData = userData;
   const userRole = (authRawRole || authRole || "").toLowerCase();
   const userEmail = userData?.email || auth.currentUser?.email || "";
@@ -315,6 +315,8 @@ export default function ReportCardsPage() {
   const isParent = isParentRole(userRole) || userRole === "orang-tua" || isParentRole(currentUserData?.role);
   const isStudentRole = userRole === "student" || userRole === "siswa" || isParent;
   const isGuru = (userRole === "guru" || userRole === "teacher") || previewAsGuru;
+  const canMutateGrades = !isKepalaSekolah || Boolean(rolePermissions?.grades?.write);
+  const isReadOnly = isStudentRole || !canMutateGrades;
 
   // Determine homeroom class(es) for the logged-in Guru (Wali Kelas)
   const teacherHomeroomClasses = useMemo(() => {
@@ -1181,7 +1183,11 @@ export default function ReportCardsPage() {
 
   // Fungsi Sinkronisasi Ulang Jurusan & Mapel (Membersihkan mapel jurusan lama & menyesuaikan ke jurusan terbaru)
   const handleResyncStudentMajorAndSubjects = async () => {
-    if (!currentStudent || !studentMajor || isStudentRole) return;
+    if (!currentStudent || !studentMajor || isReadOnly) return;
+    if (!canMutateGrades) {
+      triggerAlert("error", "Akun Anda berstatus Monitoring Executive (Hanya Lihat). Anda tidak memiliki izin untuk mengubah mata pelajaran atau data rapor.", "Akses Terbatas");
+      return;
+    }
     setIsResyncingMajor(true);
 
     try {
@@ -1268,7 +1274,11 @@ export default function ReportCardsPage() {
 
   // One-click sync to create missing subjects in Firestore 'subjects' collection
   const handleSyncMissingSubjectsToMaster = async () => {
-    if (missingSubjects.length === 0) return;
+    if (missingSubjects.length === 0 || isReadOnly) return;
+    if (!canMutateGrades) {
+      triggerAlert("error", "Akun Anda berstatus Monitoring Executive (Hanya Lihat). Anda tidak memiliki izin untuk menambah mata pelajaran ke database.", "Akses Terbatas");
+      return;
+    }
     setIsSyncingSubjects(true);
     try {
       for (const subj of missingSubjects) {
@@ -1351,6 +1361,7 @@ export default function ReportCardsPage() {
 
   // Sync attendance with Firestore attendance collection
   const handleSyncAttendanceFromDb = () => {
+    if (isReadOnly) return;
     setSickCount(dbAttendanceStats.sick);
     setPermitCount(dbAttendanceStats.permit);
     setAlphaCount(dbAttendanceStats.alpha);
@@ -1359,7 +1370,11 @@ export default function ReportCardsPage() {
 
   // Save Complete Report Card to Firestore with Draft or Published status
   const handleSaveReportCard = async (targetStatus: "draft" | "published" = "published") => {
-    if (!currentStudent || !reportDocKey || isStudentRole) return;
+    if (!currentStudent || !reportDocKey || isReadOnly) return;
+    if (!canMutateGrades) {
+      triggerAlert("error", "Akun Anda berstatus Monitoring Executive (Hanya Lihat). Anda tidak memiliki izin untuk menyimpan perubahan rapor.", "Akses Terbatas");
+      return;
+    }
     setIsSaving(true);
 
     try {
@@ -1432,11 +1447,13 @@ export default function ReportCardsPage() {
   };
 
   const handleAddExtra = (presetName?: string) => {
+    if (isReadOnly) return;
     const name = presetName || "Ekstrakurikuler Baru";
     setExtraCurriculars(prev => [...prev, { name, grade: "A", desc: "Aktif dan menunjukkan perkembangan positif." }]);
   };
 
   const handleUpdateExtra = (index: number, field: string, value: string) => {
+    if (isReadOnly) return;
     setExtraCurriculars(prev => {
       const copy = [...prev];
       copy[index] = { ...copy[index], [field]: value };
@@ -1445,11 +1462,13 @@ export default function ReportCardsPage() {
   };
 
   const handleRemoveExtra = (idx: number) => {
+    if (isReadOnly) return;
     setExtraCurriculars(prev => prev.filter((_, i) => i !== idx));
   };
 
   // Quick preset teacher notes
   const applyPresetNote = (noteText: string) => {
+    if (isReadOnly) return;
     setTeacherNotes(noteText);
   };
 
@@ -1509,7 +1528,11 @@ export default function ReportCardsPage() {
 
   // Instant Save and Advance to Next Student in Class
   const handleSaveAndNextStudent = async (targetStatus?: "draft" | "published") => {
-    if (!currentStudent || !reportDocKey || isStudentRole) return;
+    if (!currentStudent || !reportDocKey || isReadOnly) return;
+    if (!canMutateGrades) {
+      triggerAlert("error", "Akun Anda berstatus Monitoring Executive (Hanya Lihat). Anda tidak memiliki izin untuk menyimpan perubahan rapor.", "Akses Terbatas");
+      return;
+    }
     const statusToUse = targetStatus || (isReportPublished ? "published" : "draft");
     await handleSaveReportCard(statusToUse);
     if (nextStudent) {
@@ -1522,7 +1545,7 @@ export default function ReportCardsPage() {
 
   // 1-Click Quick Fill Default Template (Sikap Sangat Baik, Presensi Hadir Penuh, Catatan Positif)
   const handleApplyQuickDefaults = () => {
-    if (isStudentRole) return;
+    if (isReadOnly) return;
     setSpiritualAttitude("Sangat Baik");
     setSpiritualDesc("Terbiasa berdoa sebelum/sesudah belajar, taat beribadah, dan menunjukkan toleransi serta akhlak mulia yang tinggi.");
     setSocialAttitude("Baik");
@@ -2150,7 +2173,7 @@ export default function ReportCardsPage() {
 
                         <div className="flex items-center gap-2 flex-wrap">
                           {/* Quick Fill Button */}
-                          {!isStudentRole && (
+                          {!isReadOnly && (
                             <button
                               type="button"
                               onClick={handleApplyQuickDefaults}
@@ -2327,7 +2350,7 @@ export default function ReportCardsPage() {
                             <span className="text-xs text-gray-600 font-extrabold bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-2xs">
                               {studentSubjectScores.length} Mata Pelajaran
                             </span>
-                            {!isStudentRole && (
+                            {!isReadOnly && (
                               <button
                                 onClick={handleResyncStudentMajorAndSubjects}
                                 disabled={isResyncingMajor}
@@ -2342,7 +2365,7 @@ export default function ReportCardsPage() {
                                 <span>Sinkronkan Ulang Jurusan ({studentMajor || "Umum"})</span>
                               </button>
                             )}
-                            {!isStudentRole && missingSubjects.length > 0 && (
+                            {!isReadOnly && missingSubjects.length > 0 && (
                               <button
                                 onClick={handleSyncMissingSubjectsToMaster}
                                 disabled={isSyncingSubjects}
@@ -2465,7 +2488,7 @@ export default function ReportCardsPage() {
                                           )}
                                         </td>
                                         <td className="py-3 px-4">
-                                          {isStudentRole ? (
+                                          {isReadOnly ? (
                                             <p className="text-xs text-gray-700 leading-relaxed italic">{item.description}</p>
                                           ) : (
                                             <textarea
@@ -2535,12 +2558,11 @@ export default function ReportCardsPage() {
                               </div>
 
                               <div className="space-y-4 mt-3">
-                                {/* Sikap Spiritual */}
-                                <div className="bg-gray-50/60 p-3.5 rounded-xl border border-gray-200/70">
+                                                    <div className="bg-gray-50/60 p-3.5 rounded-xl border border-gray-200/70">
                                   <div className="flex items-center justify-between mb-1.5">
                                     <label className="block text-xs font-black text-gray-800">1. Sikap Spiritual</label>
                                     <select
-                                      disabled={isStudentRole}
+                                      disabled={isReadOnly}
                                       value={spiritualAttitude}
                                       onChange={(e) => setSpiritualAttitude(e.target.value)}
                                       className="px-2.5 py-1 text-xs font-extrabold bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 disabled:opacity-80 cursor-pointer shadow-2xs"
@@ -2552,7 +2574,7 @@ export default function ReportCardsPage() {
                                     </select>
                                   </div>
 
-                                  {!isStudentRole && (
+                                  {!isReadOnly && (
                                     <div className="flex items-center gap-1.5 flex-wrap mb-2">
                                       <span className="text-[10px] text-gray-400 font-bold">Preset:</span>
                                       <button
@@ -2574,7 +2596,7 @@ export default function ReportCardsPage() {
 
                                   <textarea
                                     rows={2}
-                                    disabled={isStudentRole}
+                                    disabled={isReadOnly}
                                     value={spiritualDesc}
                                     onChange={(e) => setSpiritualDesc(e.target.value)}
                                     placeholder="Deskripsi perkembangan sikap spiritual siswa..."
@@ -2587,7 +2609,7 @@ export default function ReportCardsPage() {
                                   <div className="flex items-center justify-between mb-1.5">
                                     <label className="block text-xs font-black text-gray-800">2. Sikap Sosial</label>
                                     <select
-                                      disabled={isStudentRole}
+                                      disabled={isReadOnly}
                                       value={socialAttitude}
                                       onChange={(e) => setSocialAttitude(e.target.value)}
                                       className="px-2.5 py-1 text-xs font-extrabold bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 disabled:opacity-80 cursor-pointer shadow-2xs"
@@ -2599,7 +2621,7 @@ export default function ReportCardsPage() {
                                     </select>
                                   </div>
 
-                                  {!isStudentRole && (
+                                  {!isReadOnly && (
                                     <div className="flex items-center gap-1.5 flex-wrap mb-2">
                                       <span className="text-[10px] text-gray-400 font-bold">Preset:</span>
                                       <button
@@ -2621,7 +2643,7 @@ export default function ReportCardsPage() {
 
                                   <textarea
                                     rows={2}
-                                    disabled={isStudentRole}
+                                    disabled={isReadOnly}
                                     value={socialDesc}
                                     onChange={(e) => setSocialDesc(e.target.value)}
                                     placeholder="Deskripsi perkembangan sikap sosial siswa..."
@@ -2655,7 +2677,7 @@ export default function ReportCardsPage() {
                                     {attendanceRate}% Hadir
                                   </span>
 
-                                  {!isStudentRole && (
+                                  {!isReadOnly && (
                                     <button
                                       type="button"
                                       onClick={handleSyncAttendanceFromDb}
@@ -2671,31 +2693,31 @@ export default function ReportCardsPage() {
 
                               {/* Live DB Attendance Sync Banner */}
                               <div className="mt-3 bg-gradient-to-r from-blue-50/90 to-purple-50/90 p-3.5 rounded-xl border border-blue-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
-                                <div className="flex items-center gap-2.5">
-                                  <Database className="w-4 h-4 text-[#531FFF] shrink-0" />
-                                  <div className="text-[11px]">
-                                    <span className="font-black text-gray-800 block">Database Presensi Harian Terdeteksi</span>
-                                    <span className="text-gray-600 font-medium">
-                                      {dbAttendanceStats.total > 0 ? (
-                                        <>Tercatat {dbAttendanceStats.total} log ({dbAttendanceStats.present} Hadir, {dbAttendanceStats.sick} Sakit, {dbAttendanceStats.permit} Izin, {dbAttendanceStats.alpha} Alpa)</>
-                                      ) : (
-                                        <>Belum ada log presensi khusus di database (tersedia opsi manual)</>
-                                      )}
-                                    </span>
+                                  <div className="flex items-center gap-2.5">
+                                    <Database className="w-4 h-4 text-[#531FFF] shrink-0" />
+                                    <div className="text-[11px]">
+                                      <span className="font-black text-gray-800 block">Database Presensi Harian Terdeteksi</span>
+                                      <span className="text-gray-600 font-medium">
+                                        {dbAttendanceStats.total > 0 ? (
+                                          <>Tercatat {dbAttendanceStats.total} log ({dbAttendanceStats.present} Hadir, {dbAttendanceStats.sick} Sakit, {dbAttendanceStats.permit} Izin, {dbAttendanceStats.alpha} Alpa)</>
+                                        ) : (
+                                          <>Belum ada log presensi khusus di database (tersedia opsi manual)</>
+                                        )}
+                                      </span>
+                                    </div>
                                   </div>
-                                </div>
 
-                                {!isStudentRole && (
-                                  <button
-                                    type="button"
-                                    onClick={handleSyncAttendanceFromDb}
-                                    className="shrink-0 flex items-center gap-1 bg-white hover:bg-gray-50 text-[#531FFF] border border-purple-200 px-2.5 py-1 rounded-lg text-[10px] font-black shadow-2xs transition-colors cursor-pointer"
-                                    title="Tarik dan terapkan data dari koleksi presensi harian"
-                                  >
-                                    <RefreshCw className="w-3 h-3" />
-                                    <span>Tarik Presensi DB</span>
-                                  </button>
-                                )}
+                                  {!isReadOnly && (
+                                    <button
+                                      type="button"
+                                      onClick={handleSyncAttendanceFromDb}
+                                      className="shrink-0 flex items-center gap-1 bg-white hover:bg-gray-50 text-[#531FFF] border border-purple-200 px-2.5 py-1 rounded-lg text-[10px] font-black shadow-2xs transition-colors cursor-pointer"
+                                      title="Tarik dan terapkan data dari koleksi presensi harian"
+                                    >
+                                      <RefreshCw className="w-3 h-3" />
+                                      <span>Tarik Presensi DB</span>
+                                    </button>
+                                  )}
                               </div>
 
                               <div className="grid grid-cols-3 gap-3 mt-4">
@@ -2703,7 +2725,7 @@ export default function ReportCardsPage() {
                                 <div className="bg-gray-50/80 p-3 rounded-xl border border-gray-200 text-center hover:border-gray-300 transition-colors">
                                   <label className="block text-[11px] font-black text-gray-700 mb-1.5">Sakit (Hari)</label>
                                   <div className="flex items-center justify-center gap-1.5">
-                                    {!isStudentRole && (
+                                    {!isReadOnly && (
                                       <button
                                         type="button"
                                         onClick={() => setSickCount(Math.max(0, sickCount - 1))}
@@ -2715,12 +2737,12 @@ export default function ReportCardsPage() {
                                     <input
                                       type="number"
                                       min={0}
-                                      disabled={isStudentRole}
+                                      disabled={isReadOnly}
                                       value={sickCount}
                                       onChange={(e) => setSickCount(Math.max(0, parseInt(e.target.value) || 0))}
                                       className="w-12 text-center text-base font-black text-gray-900 bg-white border border-gray-200 rounded-lg py-1 shadow-2xs"
                                     />
-                                    {!isStudentRole && (
+                                    {!isReadOnly && (
                                       <button
                                         type="button"
                                         onClick={() => setSickCount(sickCount + 1)}
@@ -2736,7 +2758,7 @@ export default function ReportCardsPage() {
                                 <div className="bg-gray-50/80 p-3 rounded-xl border border-gray-200 text-center hover:border-gray-300 transition-colors">
                                   <label className="block text-[11px] font-black text-gray-700 mb-1.5">Izin (Hari)</label>
                                   <div className="flex items-center justify-center gap-1.5">
-                                    {!isStudentRole && (
+                                    {!isReadOnly && (
                                       <button
                                         type="button"
                                         onClick={() => setPermitCount(Math.max(0, permitCount - 1))}
@@ -2748,12 +2770,12 @@ export default function ReportCardsPage() {
                                     <input
                                       type="number"
                                       min={0}
-                                      disabled={isStudentRole}
+                                      disabled={isReadOnly}
                                       value={permitCount}
                                       onChange={(e) => setPermitCount(Math.max(0, parseInt(e.target.value) || 0))}
                                       className="w-12 text-center text-base font-black text-gray-900 bg-white border border-gray-200 rounded-lg py-1 shadow-2xs"
                                     />
-                                    {!isStudentRole && (
+                                    {!isReadOnly && (
                                       <button
                                         type="button"
                                         onClick={() => setPermitCount(permitCount + 1)}
@@ -2769,7 +2791,7 @@ export default function ReportCardsPage() {
                                 <div className="bg-gray-50/80 p-3 rounded-xl border border-gray-200 text-center hover:border-gray-300 transition-colors">
                                   <label className="block text-[11px] font-black text-gray-700 mb-1.5">Alpa (Hari)</label>
                                   <div className="flex items-center justify-center gap-1.5">
-                                    {!isStudentRole && (
+                                    {!isReadOnly && (
                                       <button
                                         type="button"
                                         onClick={() => setAlphaCount(Math.max(0, alphaCount - 1))}
@@ -2781,12 +2803,12 @@ export default function ReportCardsPage() {
                                     <input
                                       type="number"
                                       min={0}
-                                      disabled={isStudentRole}
+                                      disabled={isReadOnly}
                                       value={alphaCount}
                                       onChange={(e) => setAlphaCount(Math.max(0, parseInt(e.target.value) || 0))}
                                       className="w-12 text-center text-base font-black text-gray-900 bg-white border border-gray-200 rounded-lg py-1 shadow-2xs"
                                     />
-                                    {!isStudentRole && (
+                                    {!isReadOnly && (
                                       <button
                                         type="button"
                                         onClick={() => setAlphaCount(alphaCount + 1)}
@@ -2838,7 +2860,7 @@ export default function ReportCardsPage() {
                               <p className="text-[10px] text-gray-400">Pengembangan bakat dan minat non-akademik</p>
                             </div>
                           </div>
-                          {!isStudentRole && (
+                          {!isReadOnly && (
                             <button
                               type="button"
                               onClick={() => handleAddExtra()}
@@ -2850,7 +2872,7 @@ export default function ReportCardsPage() {
                           )}
                         </div>
 
-                        {!isStudentRole && (
+                        {!isReadOnly && (
                           <div className="flex items-center gap-2 flex-wrap bg-gray-50/80 p-3 rounded-xl border border-gray-200/70">
                             <span className="text-[11px] font-black text-gray-500">Preset Cepat:</span>
                             {["Pramuka Wajib", "PMR (Palang Merah)", "Paskibra", "Rohis & Keagamaan", "English Club", "Futsal", "Seni Tari", "Robotik & KIR"].map((p, pIdx) => (
@@ -2872,14 +2894,14 @@ export default function ReportCardsPage() {
                               <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-3">
                                 <input
                                   type="text"
-                                  disabled={isStudentRole}
+                                  disabled={isReadOnly}
                                   value={ex.name}
                                   onChange={(e) => handleUpdateExtra(exIdx, "name", e.target.value)}
                                   placeholder="Nama Ekstrakurikuler..."
                                   className="md:col-span-4 px-3 py-2 font-bold bg-white border border-gray-200 rounded-xl disabled:opacity-80 focus:ring-2 focus:ring-[#531FFF]/20 shadow-2xs"
                                 />
                                 <select
-                                  disabled={isStudentRole}
+                                  disabled={isReadOnly}
                                   value={ex.grade}
                                   onChange={(e) => handleUpdateExtra(exIdx, "grade", e.target.value)}
                                   className="md:col-span-2 px-2.5 py-2 font-black bg-white border border-gray-200 rounded-xl disabled:opacity-80 focus:ring-2 focus:ring-[#531FFF]/20 shadow-2xs cursor-pointer"
@@ -2891,7 +2913,7 @@ export default function ReportCardsPage() {
                                 </select>
                                 <input
                                   type="text"
-                                  disabled={isStudentRole}
+                                  disabled={isReadOnly}
                                   value={ex.desc}
                                   onChange={(e) => handleUpdateExtra(exIdx, "desc", e.target.value)}
                                   placeholder="Keterangan perkembangan, keaktifan, dan capaian prestasi..."
@@ -2899,7 +2921,7 @@ export default function ReportCardsPage() {
                                 />
                               </div>
 
-                              {!isStudentRole && (
+                              {!isReadOnly && (
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveExtra(exIdx)}
@@ -2915,7 +2937,7 @@ export default function ReportCardsPage() {
                           {extraCurriculars.length === 0 && (
                             <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-2xl">
                               <p className="text-xs text-gray-400 mb-2 font-medium">Belum ada kegiatan ekstrakurikuler tercatat untuk siswa ini.</p>
-                              {!isStudentRole && (
+                              {!isReadOnly && (
                                 <button
                                   type="button"
                                   onClick={() => handleAddExtra()}
@@ -2960,7 +2982,7 @@ export default function ReportCardsPage() {
                           </div>
                         </div>
 
-                        {!isStudentRole && (
+                        {!isReadOnly && (
                           <div className="flex items-center gap-2 flex-wrap pb-1">
                             <span className="text-[11px] font-black text-gray-400">Template Cepat:</span>
                             <button
@@ -2998,7 +3020,7 @@ export default function ReportCardsPage() {
                           <label className="block text-xs font-black text-gray-800 mb-1.5">Catatan Motivasi & Evaluasi Wali Kelas:</label>
                           <textarea
                             rows={3}
-                            disabled={isStudentRole}
+                            disabled={isReadOnly}
                             value={teacherNotes}
                             onChange={(e) => setTeacherNotes(e.target.value)}
                             placeholder="Tuliskan catatan motivasi dan saran perkembangan untuk siswa..."
@@ -3012,7 +3034,7 @@ export default function ReportCardsPage() {
                           <div className="bg-gray-50/80 p-3.5 rounded-xl border border-gray-200/80">
                             <label className="block text-[11px] font-black text-gray-700 mb-1.5">Status Kenaikan / Kelulusan:</label>
                             <select
-                              disabled={isStudentRole}
+                              disabled={isReadOnly}
                               value={promotionStatus}
                               onChange={(e) => setPromotionStatus(e.target.value)}
                               className="w-full p-2 text-xs font-black bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 disabled:opacity-80 shadow-2xs cursor-pointer"
@@ -3034,7 +3056,7 @@ export default function ReportCardsPage() {
                             </div>
                             <input
                               type="text"
-                              disabled={isStudentRole}
+                              disabled={isReadOnly}
                               value={customHomeroomName || homeroomTeacher?.name || ""}
                               onChange={(e) => setCustomHomeroomName(e.target.value)}
                               placeholder="Nama Wali Kelas..."
@@ -3044,7 +3066,7 @@ export default function ReportCardsPage() {
                               <span>NIP:</span>
                               <input
                                 type="text"
-                                disabled={isStudentRole}
+                                disabled={isReadOnly}
                                 value={customHomeroomNip || homeroomTeacher?.nip || ""}
                                 onChange={(e) => setCustomHomeroomNip(e.target.value)}
                                 placeholder="NIP Wali Kelas..."
@@ -3058,7 +3080,7 @@ export default function ReportCardsPage() {
                             <label className="block text-[11px] font-black text-gray-700 mb-1.5">Tanggal Titimangsa Rapor:</label>
                             <input
                               type="text"
-                              disabled={isStudentRole}
+                              disabled={isReadOnly}
                               value={decisionDate}
                               onChange={(e) => setDecisionDate(e.target.value)}
                               placeholder="Contoh: 19 Desember 2025"
@@ -3077,19 +3099,27 @@ export default function ReportCardsPage() {
                       <div className="sticky bottom-4 z-30 bg-white/95 backdrop-blur-md rounded-2xl border border-purple-200/90 shadow-xl p-4 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-4 transition-all hover:border-[#531FFF]/40">
                         <div className="flex items-center gap-3.5 w-full md:w-auto">
                           <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#531FFF] to-indigo-600 text-white flex items-center justify-center shadow-md shadow-[#531FFF]/30 shrink-0">
-                            <Save className="w-5 h-5" />
+                            {canMutateGrades ? <Save className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <h4 className="font-black text-sm text-gray-900 truncate">
-                                Simpan Rapor: {currentStudent?.name || "Siswa"}
+                                {canMutateGrades ? `Simpan Rapor: ${currentStudent?.name || "Siswa"}` : `Pratinjau Rapor: ${currentStudent?.name || "Siswa"}`}
                               </h4>
                               <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
                                 {academicYear} ({semester})
                               </span>
+                              {!canMutateGrades && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                  <ShieldAlert className="w-3 h-3 text-amber-600" />
+                                  Monitoring Eksekutif
+                                </span>
+                              )}
                             </div>
                             <p className="text-[11px] text-gray-500 font-medium truncate mt-0.5">
-                              Nilai akademik, sikap spiritual & sosial, presensi, ekskul, dan catatan wali kelas.
+                              {canMutateGrades 
+                                ? "Nilai akademik, sikap spiritual & sosial, presensi, ekskul, dan catatan wali kelas."
+                                : "Mode pemantauan eksekutif: Anda dapat memeriksa capaian nilai dan mencetak dokumen rapor resmi."}
                             </p>
                           </div>
                         </div>
@@ -3105,64 +3135,68 @@ export default function ReportCardsPage() {
                             <span>Pratinjau / Cetak</span>
                           </button>
 
-                          {/* Tombol Simpan Draft (Belum dilihat siswa) */}
-                          <button
-                            type="button"
-                            onClick={() => handleSaveReportCard("draft")}
-                            disabled={isSaving || !currentStudent}
-                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-2xs active:scale-[0.98] disabled:opacity-70 cursor-pointer"
-                            title="Simpan nilai dan catatan sebagai Draft. Siswa belum dapat melihat nilai sampai Anda mempublikasikannya."
-                          >
-                            <FileText className="w-4 h-4 text-amber-600" />
-                            <span>Simpan Draft</span>
-                          </button>
+                          {canMutateGrades && (
+                            <>
+                              {/* Tombol Simpan Draft (Belum dilihat siswa) */}
+                              <button
+                                type="button"
+                                onClick={() => handleSaveReportCard("draft")}
+                                disabled={isSaving || !currentStudent}
+                                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-2xs active:scale-[0.98] disabled:opacity-70 cursor-pointer"
+                                title="Simpan nilai dan catatan sebagai Draft. Siswa belum dapat melihat nilai sampai Anda mempublikasikannya."
+                              >
+                                <FileText className="w-4 h-4 text-amber-600" />
+                                <span>Simpan Draft</span>
+                              </button>
 
-                          {/* Tombol Publikasikan Rapor (Final / Resmi dilihat siswa) */}
-                          <button
-                            type="button"
-                            onClick={() => handleSaveReportCard("published")}
-                            disabled={isSaving || !currentStudent}
-                            className={cn(
-                              "flex-1 md:flex-none flex items-center justify-center gap-2 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 cursor-pointer",
-                              isReportPublished
-                                ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-emerald-500/25"
-                                : "bg-[#531FFF] hover:bg-[#531FFF]/90 shadow-[#531FFF]/25"
-                            )}
-                            title={
-                              isReportPublished
-                                ? "Perbarui isi rapor yang sudah dipublikasikan ke siswa"
-                                : "Publikasikan rapor secara resmi agar data nilai muncul dan dapat diakses oleh siswa"
-                            }
-                          >
-                            {isSaving ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                <span>Menyimpan...</span>
-                              </>
-                            ) : isReportPublished ? (
-                              <>
-                                <Check className="w-4 h-4 text-emerald-200" />
-                                <span>Perbarui Publikasi Rapor</span>
-                              </>
-                            ) : (
-                              <>
-                                <Save className="w-4 h-4" />
-                                <span>Publikasikan Rapor (Resmi)</span>
-                              </>
-                            )}
-                          </button>
+                              {/* Tombol Publikasikan Rapor (Final / Resmi dilihat siswa) */}
+                              <button
+                                type="button"
+                                onClick={() => handleSaveReportCard("published")}
+                                disabled={isSaving || !currentStudent}
+                                className={cn(
+                                  "flex-1 md:flex-none flex items-center justify-center gap-2 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 cursor-pointer",
+                                  isReportPublished
+                                    ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-emerald-500/25"
+                                    : "bg-[#531FFF] hover:bg-[#531FFF]/90 shadow-[#531FFF]/25"
+                                )}
+                                title={
+                                  isReportPublished
+                                    ? "Perbarui isi rapor yang sudah dipublikasikan ke siswa"
+                                    : "Publikasikan rapor secara resmi agar data nilai muncul dan dapat diakses oleh siswa"
+                                }
+                              >
+                                {isSaving ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <span>Menyimpan...</span>
+                                  </>
+                                ) : isReportPublished ? (
+                                  <>
+                                    <Check className="w-4 h-4 text-emerald-200" />
+                                    <span>Perbarui Publikasi Rapor</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="w-4 h-4" />
+                                    <span>Publikasikan Rapor (Resmi)</span>
+                                  </>
+                                )}
+                              </button>
 
-                          {nextStudent && (
-                            <button
-                              type="button"
-                              onClick={() => handleSaveAndNextStudent()}
-                              disabled={isSaving || !currentStudent}
-                              className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-[#531FFF] hover:from-indigo-700 hover:to-[#531FFF]/90 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-indigo-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 cursor-pointer"
-                              title={`Simpan rapor ${currentStudent?.name || ""} dan langsung lanjut ke siswa berikutnya: ${nextStudent.name}`}
-                            >
-                              <CheckCheck className="w-4 h-4 text-indigo-200" />
-                              <span>Simpan & Lanjut ({nextStudent.name.split(' ')[0]}) →</span>
-                            </button>
+                              {nextStudent && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveAndNextStudent()}
+                                  disabled={isSaving || !currentStudent}
+                                  className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-[#531FFF] hover:from-indigo-700 hover:to-[#531FFF]/90 text-white px-4 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-indigo-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 cursor-pointer"
+                                  title={`Simpan rapor ${currentStudent?.name || ""} dan langsung lanjut ke siswa berikutnya: ${nextStudent.name}`}
+                                >
+                                  <CheckCheck className="w-4 h-4 text-indigo-200" />
+                                  <span>Simpan & Lanjut ({nextStudent.name.split(' ')[0]}) →</span>
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>

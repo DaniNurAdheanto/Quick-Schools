@@ -149,8 +149,8 @@ export const DEFAULT_PERMISSIONS: RolePermissions = {
     "attendance": { read: true, write: false, delete: false },
     "grades": { read: true, write: false, delete: false },
     "finance": { read: true, write: false, delete: false },
-    "announcements": { read: true, write: true, delete: false },
-    "settings": { read: true, write: false, delete: false },
+    "announcements": { read: true, write: false, delete: false },
+    "settings": { read: false, write: false, delete: false },
   },
 };
 
@@ -203,7 +203,58 @@ export function isParentRole(role?: string | null): boolean {
   );
 }
 
+/**
+ * Normalizes and checks if a role string represents Kepala Sekolah / Principal
+ */
+export function isKepalaSekolahRole(role?: string | null): boolean {
+  if (!role) return false;
+  const normalized = role.toLowerCase().trim().replace(/[-_ ]/g, "");
+  return (
+    normalized === "kepalasekolah" ||
+    normalized === "kepsek" ||
+    normalized === "principal" ||
+    normalized === "headmaster"
+  );
+}
+
+/**
+ * Helper to check whether a role / permission allows modifying a module
+ */
+export function canMutateModule(
+  role: string | null | undefined,
+  permissions: Record<string, ModulePermission> | undefined,
+  module: string,
+  action: "write" | "delete" = "write"
+): boolean {
+  if (!role) return false;
+  if (isSuperAdminRole(role)) return true;
+
+  // Check explicit role permissions from Firestore / RBAC state
+  if (permissions && permissions[module]) {
+    return Boolean(permissions[module][action]);
+  }
+
+  // Kepala Sekolah is strictly read-only by default unless explicit permission was granted
+  if (isKepalaSekolahRole(role)) return false;
+
+  // Siswa & Orang Tua cannot mutate master data
+  if (isStudentRole(role) || isParentRole(role)) return false;
+
+  // Admin default allows write for most modules except accounts
+  if (role.toLowerCase() === "admin") {
+    if (module === "accounts") return false;
+    return action === "write";
+  }
+
+  return false;
+}
+
 // Alias parent roles to have consistent permissions lookup
 DEFAULT_PERMISSIONS["parent"] = DEFAULT_PERMISSIONS["orang-tua"];
 DEFAULT_PERMISSIONS["orangtua"] = DEFAULT_PERMISSIONS["orang-tua"];
+
+// Alias kepala sekolah roles to have consistent permissions lookup
+DEFAULT_PERMISSIONS["kepalasekolah"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
+DEFAULT_PERMISSIONS["kepsek"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
+DEFAULT_PERMISSIONS["principal"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
 

@@ -54,7 +54,7 @@ import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
-import { isStudentRole, isTeacherRole, isSuperAdminRole, isParentRole } from "@/lib/roles-config";
+import { isStudentRole, isTeacherRole, isSuperAdminRole, isParentRole, isKepalaSekolahRole } from "@/lib/roles-config";
 import { resolveParentStudent } from "@/lib/parent-child-resolver";
 import Image from "next/image";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
@@ -108,6 +108,8 @@ export default function PaymentsPage() {
     isStudent: isAuthStudent,
     isAdmin: isAuthAdmin,
     isSuperAdmin: isAuthSuperAdmin,
+    isKepalaSekolah,
+    rolePermissions,
   } = useAuth();
 
   const currentUser: any = userData || authUser;
@@ -116,9 +118,11 @@ export default function PaymentsPage() {
   const isStudent = isAuthStudent || isStudentRole(userRole) || isParent;
   const isGuru = isAuthGuru || isTeacherRole(userRole);
   const isSuperAdmin = isAuthSuperAdmin || isSuperAdminRole(userRole);
-  const isAdmin = (isAuthAdmin || isSuperAdmin || userRole === "admin") && !isGuru && !isStudent;
-  const isReadOnly = isGuru || isStudent;
-  const canManagePayments = isAdmin && !isReadOnly;
+  const isKepSek = Boolean(isKepalaSekolah || isKepalaSekolahRole(userRole));
+  const canMutateFinance = !isKepSek || Boolean(rolePermissions?.finance?.write);
+  const isAdmin = (isAuthAdmin || isSuperAdmin || userRole === "admin") && !isGuru && !isStudent && !isKepSek;
+  const isReadOnly = isGuru || isStudent || (isKepSek && !canMutateFinance);
+  const canManagePayments = (isAdmin || (isKepSek && canMutateFinance)) && !isReadOnly;
 
   const [matchedStudent, setMatchedStudent] = useState<any | null>(null);
 
@@ -3247,7 +3251,7 @@ export default function PaymentsPage() {
                         disabled
                         readOnly
                         placeholder="0"
-                        className="w-full pl-11 pr-4 py-2.5 text-base font-mono font-black bg-gray-100 text-gray-800 border border-gray-200 rounded-xl cursor-not-allowed select-none transition-all shadow-2xs"
+                        className="w-full pl-11 pr-4 py-2.5 text-base font-mono font-black bg-gray-100 text-gray-800 border border-gray-200 rounded-lg cursor-not-allowed select-none transition-all shadow-2xs"
                         required
                       />
                     </div>
