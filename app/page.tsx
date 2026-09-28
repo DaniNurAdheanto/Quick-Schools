@@ -2,358 +2,18 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { motion } from "motion/react";
 import {
-  ArrowRight, Sparkles, CheckCircle2, Users, BookOpen, CreditCard,
-  GraduationCap, UserCheck, FileText, Bell, BarChart3, ChevronRight,
-  Check, Star, Shield, Zap, Calendar, LayoutDashboard, PenLine,
-  Award, CalendarDays, Settings, BookMarked, MapPin
+  ArrowRight, CheckCircle2, Star,
+  Zap, ArrowUpRight, Building2
 } from "lucide-react";
 import LandingNavbar from "@/components/landing/navbar";
 import LandingFooter from "@/components/landing/footer";
-
-const T = {
-  id: {
-    heroBadge: "Platform Manajemen Sekolah Modern",
-    heroH1a: "Kelola Sekolah Lebih",
-    heroH1b: "Cerdas & Terpadu",
-    heroDesc: "Satu platform untuk mengelola presensi, data siswa, kelas, jadwal, penilaian, keuangan SPP, pengumuman, dan laporan sekolah secara real-time.",
-    heroCta1: "Mulai Gratis Sekarang",
-    heroCta2: "Lihat Fitur",
-    heroTrust: "Dipercaya 500+ sekolah · Tanpa kartu kredit · Setup 5 menit",
-    statStudents: "Total Siswa",
-    statAttend: "Kehadiran Hari Ini",
-    statClasses: "Kelas Aktif",
-    statSPP: "SPP Terbayar",
-    trustedTitle: "Dipercaya 500+ Sekolah & Institusi Pendidikan di Indonesia",
-    featBadge: "Fitur Sistem",
-    featTitle: "Semua Kebutuhan Manajemen Sekolah dalam Satu Platform",
-    featDesc: "Modul yang sudah tersedia dan siap digunakan langsung — tidak ada instalasi tambahan.",
-    feats: [
-      { icon: LayoutDashboard, title: "Dashboard Real-Time",       desc: "Pantau ringkasan kehadiran, keuangan, dan akademik sekolah dalam satu tampilan." },
-      { icon: UserCheck,       title: "Absensi Siswa & Guru",      desc: "Rekap absensi harian siswa dan guru dengan validasi radius geofence lokasi sekolah." },
-      { icon: Calendar,        title: "Kalender & Jadwal Pelajaran",desc: "Kelola kalender akademik, jadwal pelajaran per kelas, dan jadwal ujian." },
-      { icon: Users,           title: "Data Siswa, Guru & Kelas",  desc: "Kelola biodata siswa, data guru, wali kelas, dan komposisi kelas secara lengkap." },
-      { icon: PenLine,         title: "Penilaian & Rapor Digital", desc: "Input nilai per kompetensi, rekap nilai otomatis, cetak rapor digital siap pakai." },
-      { icon: CreditCard,      title: "Pembayaran SPP",            desc: "Tagihan SPP digital, rekap pembayaran, konfirmasi real-time, dan laporan tunggakan." },
-      { icon: FileText,        title: "Laporan Keuangan",          desc: "Rekap arus kas, laporan pemasukan & pengeluaran, dan monitoring anggaran sekolah." },
-      { icon: Bell,            title: "Pengumuman Sekolah",        desc: "Kirim pengumuman ke siswa, guru, staf, dan orang tua dalam satu klik." },
-    ],
-    howBadge: "Cara Kerja",
-    howTitle: "Mulai dalam 3 Langkah Mudah",
-    howSteps: [
-      { step: "01", title: "Daftar & Setup Profil Sekolah", desc: "Buat akun, lengkapi identitas institusi, logo, NPSN, alamat, dan set radius geofence lokasi sekolah." },
-      { step: "02", title: "Tambah Data Siswa & Guru",      desc: "Import atau tambahkan data siswa, guru, kelas, mata pelajaran, dan jadwal pelajaran." },
-      { step: "03", title: "Jalankan & Pantau Real-Time",   desc: "Mulai gunakan absensi, input nilai, kelola SPP, dan pantau semua aktivitas di dashboard." },
-    ],
-    whyBadge: "Keunggulan",
-    whyTitle: "Solusi Lengkap untuk Sekolah Modern",
-    whys: [
-      { icon: Zap,      title: "Setup Cepat < 1 Hari",      desc: "Onboarding sekolah selesai dalam waktu kurang dari satu hari kerja, tanpa instalasi." },
-      { icon: Shield,   title: "Keamanan Data Enterprise",   desc: "Data tersimpan aman di Firebase dengan enkripsi dan backup otomatis setiap hari." },
-      { icon: BarChart3,title: "Analitik Real-Time",         desc: "Laporan kehadiran, nilai, dan keuangan terupdate otomatis tanpa refresh manual." },
-      { icon: MapPin,   title: "Geofence Lokasi Sekolah",   desc: "Admin set radius geofence sekolah untuk validasi absensi berbasis lokasi GPS." },
-      { icon: Users,    title: "Multi-Role Access",          desc: "Admin, Guru, Siswa, Orang Tua, dan Super Admin punya portal akses tersendiri." },
-      { icon: Settings, title: "Pengaturan Terpusat",        desc: "Profil sekolah diatur di satu tempat dan otomatis dipakai di seluruh sistem." },
-    ],
-    testiBadge: "Testimoni",
-    testiTitle: "Dipercaya Ribuan Pendidik",
-    testis: [
-      { name: "Dra. Siti Rahmawati", role: "Kepala SMA Negeri 5 Jakarta",  text: "Quick Schools benar-benar mengubah cara kami mengelola sekolah. Absensi geofence sangat membantu, dan rapor digital menghemat waktu staf luar biasa.", rating: 5 },
-      { name: "Bpk. Ahmad Fauzi",    role: "Bendahara Yayasan Al-Azhar",   text: "Laporan keuangan dan SPP-nya luar biasa. Rekap bulanan jadi otomatis, kami hemat lebih dari 10 jam per minggu dari pekerjaan administrasi.", rating: 5 },
-      { name: "Ibu Dewi Santoso",    role: "Waka Kurikulum BINUS School",  text: "Jadwal pelajaran dan penilaian dalam satu sistem memudahkan guru kami. Rapor digital bisa langsung dicetak tanpa perlu format ulang.", rating: 5 },
-    ],
-    priceBadge: "Harga",
-    priceTitle: "Transparan, Tanpa Biaya Tersembunyi",
-    priceDesc: "Pilih paket sesuai skala sekolah. Semua paket termasuk onboarding gratis.",
-    plans: [
-      { name: "Basic", desc: "Untuk sekolah kecil & pemula", price: "Gratis", unit: "selamanya", btn: "Mulai Gratis", popular: false,
-        items: ["Hingga 150 Siswa", "Absensi GPS Standard", "Data Siswa & Guru", "Jadwal Pelajaran", "Laporan Bulanan", "Support Email"] },
-      { name: "Pro", desc: "Untuk sekolah menengah & berkembang", price: "Rp 199.000", unit: "/ bulan", btn: "Coba 14 Hari Gratis", popular: true,
-        items: ["Hingga 1.000 Siswa", "Absensi + Geofence", "Penilaian & Rapor Digital", "Pembayaran SPP Digital", "Laporan Keuangan Lengkap", "Pengumuman Multi-Target", "Support Prioritas 24/7"] },
-      { name: "Enterprise", desc: "Untuk grup sekolah & yayasan besar", price: "Kustom", unit: "", btn: "Hubungi Sales", popular: false,
-        items: ["Siswa Tanpa Batas", "Multi-Kampus & Cabang", "API & Integrasi Kustom", "Account Manager Dedikasi", "SLA 99.9% Uptime"] },
-    ],
-    popularBadge: "Paling Populer",
-    ctaTitle: "Siap Mentransformasi Operasional Sekolah Anda?",
-    ctaDesc: "Bergabunglah dengan 500+ sekolah yang telah beralih ke Quick Schools.",
-    ctaBtn: "Daftar Sekarang — Gratis",
-    ctaSub: "Tanpa kartu kredit · Cancel kapanpun · Onboarding gratis",
-  },
-  en: {
-    heroBadge: "Modern School Management Platform",
-    heroH1a: "Manage Your School",
-    heroH1b: "Smarter & Integrated",
-    heroDesc: "One platform for attendance, student data, classes, schedules, grades, tuition payments, announcements, and real-time school reports.",
-    heroCta1: "Start Free Now",
-    heroCta2: "View Features",
-    heroTrust: "Trusted by 500+ schools · No credit card · 5-min setup",
-    statStudents: "Total Students",
-    statAttend: "Attendance Today",
-    statClasses: "Active Classes",
-    statSPP: "SPP Paid",
-    trustedTitle: "Trusted by 500+ Schools & Educational Institutions in Indonesia",
-    featBadge: "System Features",
-    featTitle: "All School Management Needs in One Platform",
-    featDesc: "Available modules ready to use — no extra installation needed.",
-    feats: [
-      { icon: LayoutDashboard, title: "Real-Time Dashboard",        desc: "Monitor attendance, finance, and academic summaries in one view." },
-      { icon: UserCheck,       title: "Student & Teacher Attendance",desc: "Daily attendance recap with school geofence location validation." },
-      { icon: Calendar,        title: "Calendar & Class Schedule",   desc: "Manage academic calendar, class schedules, and exam timetables." },
-      { icon: Users,           title: "Student, Teacher & Class Data",desc: "Manage bio-data, teacher data, homeroom, and class compositions." },
-      { icon: PenLine,         title: "Grades & Digital Report Cards",desc: "Grade input, auto calculation, and print-ready digital report cards." },
-      { icon: CreditCard,      title: "Tuition (SPP) Payment",      desc: "Digital invoicing, payment recap, real-time confirmation & outstanding." },
-      { icon: FileText,        title: "Financial Reports",           desc: "Cashflow recap, income & expense reports, and budget monitoring." },
-      { icon: Bell,            title: "School Announcements",        desc: "Send announcements to students, teachers, staff, and parents in one click." },
-    ],
-    howBadge: "How It Works",
-    howTitle: "Up & Running in 3 Easy Steps",
-    howSteps: [
-      { step: "01", title: "Register & Setup School Profile", desc: "Create an account, fill in identity, logo, NPSN, address, and set geofence location radius." },
-      { step: "02", title: "Add Student & Teacher Data",      desc: "Import or add students, teachers, classes, subjects, and schedules." },
-      { step: "03", title: "Run & Monitor Live",               desc: "Use attendance, grade input, SPP management, and monitor all activities on the dashboard." },
-    ],
-    whyBadge: "Why Us",
-    whyTitle: "Complete Solution for Modern Schools",
-    whys: [
-      { icon: Zap,      title: "Setup in < 1 Day",           desc: "School onboarding done in less than one business day, no installation." },
-      { icon: Shield,   title: "Enterprise Data Security",    desc: "Data stored securely in Firebase with encryption and daily backups." },
-      { icon: BarChart3,title: "Real-Time Analytics",         desc: "Attendance, grades, and financial reports auto-update without refresh." },
-      { icon: MapPin,   title: "School Geofence Location",   desc: "Admin sets school geofence radius for GPS-based attendance validation." },
-      { icon: Users,    title: "Multi-Role Access",           desc: "Admin, Teacher, Student, Parent, and Super Admin each have their own portal." },
-      { icon: Settings, title: "Centralized Settings",        desc: "School profile configured once and auto-applied throughout the system." },
-    ],
-    testiBadge: "Testimonials",
-    testiTitle: "Trusted by Thousands of Educators",
-    testis: [
-      { name: "Dra. Siti Rahmawati", role: "Principal, SMA Negeri 5 Jakarta",  text: "Quick Schools truly changed how we manage our school. Geofence attendance helps control presence, and digital report cards save our staff enormous time.", rating: 5 },
-      { name: "Mr. Ahmad Fauzi",     role: "Treasurer, Al-Azhar Foundation",   text: "The financial reports and SPP system are outstanding. Monthly summaries are now automatic — saving over 10 hours per week in admin work.", rating: 5 },
-      { name: "Ms. Dewi Santoso",    role: "Vice Principal, BINUS School",     text: "Schedules and assessments in one system make things easy for our teachers. Digital report cards can be printed directly without reformatting.", rating: 5 },
-    ],
-    priceBadge: "Pricing",
-    priceTitle: "Transparent, No Hidden Fees",
-    priceDesc: "Choose the plan that fits your school scale. All plans include free onboarding.",
-    plans: [
-      { name: "Basic", desc: "For small schools & beginners", price: "Free", unit: "forever", btn: "Start Free", popular: false,
-        items: ["Up to 150 Students", "Standard GPS Attendance", "Student & Teacher Data", "Class Schedule", "Monthly Reports", "Email Support"] },
-      { name: "Pro", desc: "For growing & medium schools", price: "Rp 199,000", unit: "/ month", btn: "Try 14 Days Free", popular: true,
-        items: ["Up to 1,000 Students", "Attendance + Geofence", "Grades & Digital Report Cards", "Digital SPP Payment", "Full Financial Reports", "Multi-Target Announcements", "24/7 Priority Support"] },
-      { name: "Enterprise", desc: "For school groups & large foundations", price: "Custom", unit: "", btn: "Contact Sales", popular: false,
-        items: ["Unlimited Students", "Multi-Campus & Branches", "Custom API & Integration", "Dedicated Account Manager", "SLA 99.9% Uptime"] },
-    ],
-    popularBadge: "Most Popular",
-    ctaTitle: "Ready to Transform Your School Operations?",
-    ctaDesc: "Join 500+ schools that have switched to Quick Schools.",
-    ctaBtn: "Register Now — It's Free",
-    ctaSub: "No credit card · Cancel anytime · Free onboarding",
-  },
-};
-
-/* ── Dashboard Mockup mirroring real Quick Schools admin UI ── */
-function DashboardMockup() {
-  return (
-    <div className="w-full select-none">
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden" style={{ boxShadow: "0 25px 60px -12px rgba(83,31,255,0.15), 0 0 0 1px rgba(83,31,255,0.06)" }}>
-        {/* Browser chrome */}
-        <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
-          <div className="flex gap-1.5 shrink-0">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
-            <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
-          </div>
-          <div className="flex-1 mx-3 px-3 py-1 bg-white rounded-lg border border-gray-200 flex items-center gap-1.5">
-            <svg className="w-2.5 h-2.5 text-purple-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-            <span className="text-gray-400 font-semibold" style={{ fontSize: 10 }}>quickschools.id/dashboard</span>
-          </div>
-        </div>
-
-        {/* App layout */}
-        <div className="flex" style={{ height: 380 }}>
-          {/* Sidebar — exact colors from real sidebar.tsx */}
-          <div className="border-r border-gray-100 flex flex-col shrink-0 py-3" style={{ width: 130, backgroundColor: "#F9FAFB" }}>
-            {/* Logo */}
-            <div className="flex items-center gap-2 px-3 mb-4">
-              <div className="w-7 h-7 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center shrink-0">
-                <Zap className="w-3.5 h-3.5" style={{ color: "#531FFF" }} />
-              </div>
-              <div>
-                <p className="font-extrabold text-gray-800 leading-tight" style={{ fontSize: 9 }}>Quick Schools</p>
-                <p className="text-gray-400 font-semibold" style={{ fontSize: 7 }}>Smart School OS</p>
-              </div>
-            </div>
-
-            {/* OVERVIEW group */}
-            <div className="px-2 space-y-0.5">
-              <p className="font-extrabold text-gray-400 uppercase px-1 mb-1" style={{ fontSize: 7, letterSpacing: "0.08em" }}>OVERVIEW</p>
-              {[
-                { icon: LayoutDashboard, label: "Dashboard", active: true },
-                { icon: CalendarDays, label: "Kalender", active: false },
-                { icon: BookOpen, label: "Jadwal", active: false },
-                { icon: Bell, label: "Pengumuman", active: false, badge: 3 },
-              ].map((n, i) => (
-                <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg"
-                  style={{ backgroundColor: n.active ? "white" : "transparent", color: n.active ? "#531FFF" : "#6B7280",
-                    boxShadow: n.active ? "0 1px 4px rgba(0,0,0,0.06)" : "none" }}>
-                  <n.icon style={{ width: 11, height: 11, color: n.active ? "#531FFF" : "#9CA3AF" }} />
-                  <span className="font-semibold" style={{ fontSize: 8 }}>{n.label}</span>
-                  {n.badge && <span className="ml-auto font-bold text-white px-1 rounded" style={{ fontSize: 7, backgroundColor: "#531FFF" }}>{n.badge}</span>}
-                </div>
-              ))}
-
-              {/* MASTER DATA */}
-              <p className="font-extrabold text-gray-400 uppercase px-1 mt-3 mb-1" style={{ fontSize: 7, letterSpacing: "0.08em" }}>MASTER DATA</p>
-              {[
-                { icon: Users, label: "Data Siswa" },
-                { icon: GraduationCap, label: "Guru" },
-                { icon: BookMarked, label: "Pelajaran" },
-              ].map((n, i) => (
-                <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-gray-500">
-                  <n.icon style={{ width: 11, height: 11, color: "#9CA3AF" }} />
-                  <span className="font-semibold" style={{ fontSize: 8 }}>{n.label}</span>
-                </div>
-              ))}
-
-              {/* AKADEMIK */}
-              <p className="font-extrabold text-gray-400 uppercase px-1 mt-3 mb-1" style={{ fontSize: 7, letterSpacing: "0.08em" }}>AKADEMIK</p>
-              {[
-                { icon: UserCheck, label: "Absensi" },
-                { icon: PenLine, label: "Penilaian" },
-                { icon: Award, label: "Rapor" },
-              ].map((n, i) => (
-                <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-gray-500">
-                  <n.icon style={{ width: 11, height: 11, color: "#9CA3AF" }} />
-                  <span className="font-semibold" style={{ fontSize: 8 }}>{n.label}</span>
-                </div>
-              ))}
-
-              {/* KEUANGAN */}
-              <p className="font-extrabold text-gray-400 uppercase px-1 mt-3 mb-1" style={{ fontSize: 7, letterSpacing: "0.08em" }}>KEUANGAN</p>
-              {[
-                { icon: CreditCard, label: "SPP" },
-                { icon: FileText, label: "Keuangan" },
-              ].map((n, i) => (
-                <div key={i} className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-gray-500">
-                  <n.icon style={{ width: 11, height: 11, color: "#9CA3AF" }} />
-                  <span className="font-semibold" style={{ fontSize: 8 }}>{n.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Main content */}
-          <div className="flex-1 p-3 overflow-hidden" style={{ backgroundColor: "#FAFBFF" }}>
-            {/* Header */}
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-gray-400 font-semibold" style={{ fontSize: 9 }}>Selamat Datang 👋</p>
-                <p className="font-extrabold text-gray-900" style={{ fontSize: 13 }}>Dashboard Utama</p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ backgroundColor: "#F3F0FF" }}>
-                  <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: "#531FFF" }}></div>
-                  <span className="font-bold" style={{ fontSize: 9, color: "#531FFF" }}>Live</span>
-                </div>
-                <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#531FFF" }}>
-                  <span className="text-white font-extrabold" style={{ fontSize: 9 }}>A</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Stat cards */}
-            <div className="grid grid-cols-4 gap-2 mb-3">
-              {[
-                { label: "Total Siswa", val: "1.248", iconEl: <Users style={{ width: 14, height: 14, color: "#531FFF" }} />, iconBg: "#F3F0FF", change: "+12", changeColor: "#10b981" },
-                { label: "Hadir Hari Ini", val: "96%", iconEl: <UserCheck style={{ width: 14, height: 14, color: "#059669" }} />, iconBg: "#ECFDF5", change: "+2%", changeColor: "#10b981" },
-                { label: "Kelas Aktif", val: "36", iconEl: <BookOpen style={{ width: 14, height: 14, color: "#2563eb" }} />, iconBg: "#EFF6FF", change: "Stabil", changeColor: "#6b7280" },
-                { label: "SPP Lunas", val: "92%", iconEl: <CreditCard style={{ width: 14, height: 14, color: "#d97706" }} />, iconBg: "#FFFBEB", change: "+5%", changeColor: "#10b981" },
-              ].map((s, i) => (
-                <div key={i} className="bg-white rounded-xl p-2.5 border border-gray-100" style={{ boxShadow: "0 2px 8px -4px rgba(0,0,0,0.06)" }}>
-                  <div className="w-6 h-6 rounded-lg flex items-center justify-center mb-1.5" style={{ backgroundColor: s.iconBg }}>
-                    {s.iconEl}
-                  </div>
-                  <p className="font-extrabold text-gray-900" style={{ fontSize: 13 }}>{s.val}</p>
-                  <p className="text-gray-400 font-semibold uppercase mt-0.5" style={{ fontSize: 7 }}>{s.label}</p>
-                  <p className="font-bold mt-0.5" style={{ fontSize: 8, color: s.changeColor }}>↑ {s.change}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Chart + Live Feed */}
-            <div className="grid grid-cols-3 gap-2">
-              {/* Bar chart */}
-              <div className="col-span-2 bg-white rounded-xl p-3 border border-gray-100" style={{ boxShadow: "0 2px 8px -4px rgba(0,0,0,0.06)" }}>
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="font-extrabold uppercase" style={{ fontSize: 9, color: "#531FFF", letterSpacing: "0.06em" }}>Grafik Kehadiran</p>
-                    <p className="font-bold text-gray-800" style={{ fontSize: 10 }}>10 Hari Terakhir</p>
-                  </div>
-                  <span className="text-gray-400 font-bold bg-gray-100 px-2 py-0.5 rounded-full" style={{ fontSize: 8 }}>Real-time</span>
-                </div>
-                <div className="flex items-end gap-1.5 mt-1" style={{ height: 80 }}>
-                  {[72, 85, 78, 92, 88, 96, 91, 98, 95, 97].map((v, i) => (
-                    <div key={i} className="flex-1 rounded-t" style={{ height: `${v}%`, backgroundColor: i === 9 ? "#531FFF" : "#DDD6FF" }}></div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Live feed */}
-              <div className="bg-white rounded-xl p-2.5 border border-gray-100" style={{ boxShadow: "0 2px 8px -4px rgba(0,0,0,0.06)" }}>
-                <p className="text-gray-500 font-extrabold uppercase mb-1.5" style={{ fontSize: 8, letterSpacing: "0.06em" }}>Absensi Live</p>
-                <div className="space-y-1.5">
-                  {[
-                    { name: "Ahmad R.", cl: "10A", color: "#10b981", active: false },
-                    { name: "Siti N.", cl: "11B", color: "#531FFF", active: true },
-                    { name: "Budi S.", cl: "12C", color: "#10b981", active: false },
-                  ].map((s, i) => (
-                    <div key={i} className="flex items-center gap-1.5 p-1.5 rounded-lg border"
-                      style={{ backgroundColor: s.active ? "rgba(83,31,255,0.04)" : "rgba(236,253,245,0.6)", borderColor: s.active ? "rgba(83,31,255,0.2)" : "rgba(167,243,208,1)" }}>
-                      <div className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ backgroundColor: s.color }}></div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-gray-800 truncate" style={{ fontSize: 8 }}>{s.name} · {s.cl}</p>
-                        <p className="font-semibold" style={{ fontSize: 7, color: s.active ? "#531FFF" : "#059669" }}>hadir</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Floating badges */}
-      <motion.div
-        animate={{ y: [0, -6, 0] }}
-        transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
-        style={{ position: "absolute", left: -44, top: "25%", backgroundColor: "white", borderRadius: 16, padding: "10px 14px", border: "1px solid #f3f4f6", boxShadow: "0 10px 30px -8px rgba(0,0,0,0.12)", display: "flex", alignItems: "center", gap: 10 }}
-        className="hidden xl:flex"
-      >
-        <div style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: "#F3F0FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <CheckCircle2 style={{ width: 16, height: 16, color: "#531FFF" }} />
-        </div>
-        <div>
-          <p className="font-bold text-gray-900" style={{ fontSize: 11 }}>Absensi Aktif</p>
-          <p className="font-semibold" style={{ fontSize: 10, color: "#531FFF" }}>96% hadir hari ini</p>
-        </div>
-      </motion.div>
-
-      <motion.div
-        animate={{ y: [0, 6, 0] }}
-        transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-        style={{ position: "absolute", right: -44, bottom: 64, backgroundColor: "white", borderRadius: 16, padding: "10px 14px", border: "1px solid #f3f4f6", boxShadow: "0 10px 30px -8px rgba(0,0,0,0.12)", display: "flex", alignItems: "center", gap: 10 }}
-        className="hidden xl:flex"
-      >
-        <div style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: "#F3F0FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <CreditCard style={{ width: 16, height: 16, color: "#531FFF" }} />
-        </div>
-        <div>
-          <p className="font-bold text-gray-900" style={{ fontSize: 11 }}>SPP Terbayar</p>
-          <p className="font-semibold" style={{ fontSize: 10, color: "#531FFF" }}>92% bulan ini</p>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
+import HeroCanvas from "@/components/landing/hero-canvas";
+import InteractiveFeatures from "@/components/landing/interactive-features";
+import WorkflowSteps from "@/components/landing/workflow-steps";
+import BentoAdvantages from "@/components/landing/bento-advantages";
+import PersonaShowcase from "@/components/landing/persona-showcase";
+import PricingFaq from "@/components/landing/pricing-faq";
 
 export default function LandingPage() {
   const [lang, setLang] = useState<"id" | "en">("id");
@@ -368,333 +28,347 @@ export default function LandingPage() {
     localStorage.setItem("qs_lang", l);
   };
 
-  const t = T[lang];
-
-  const featIconBg = ["#F3F0FF","#ECFDF5","#EFF6FF","#F3F0FF","#FFFBEB","#F0F9FF","#F0FDF4","#FFF1F2"];
-  const featIconColor = ["#531FFF","#059669","#2563eb","#531FFF","#d97706","#0284c7","#16a34a","#e11d48"];
+  const t = {
+    id: {
+      heroBadge: "Sistem Operasi Sekolah Modern",
+      heroBadgeSub: "Standar Kurikulum Merdeka & Kemdikbudristek",
+      heroH1a: "Satu Sistem Operasi untuk Seluruh",
+      heroH1b: "Ekosistem Sekolah.",
+      heroDesc: "Platform cerdas terintegrasi untuk mengelola presensi geofence, penilaian Kurikulum Merdeka, administrasi SPP otomatis, dan komunikasi 5 portal peran secara real-time.",
+      heroCta1: "Mulai Uji Coba Gratis",
+      heroCta2: "Pelajari Kapabilitas",
+      heroTrust: "Aktif digunakan 500+ sekolah · Tanpa kartu kredit · Onboarding didampingi",
+      statSchools: "Sekolah Terdaftar",
+      statSchoolsVal: "500+",
+      statAttend: "Log Presensi GPS",
+      statAttendVal: "1.2M+",
+      statUptime: "Uptime Cloud SLA",
+      statUptimeVal: "99.9%",
+      statSetup: "Waktu Onboarding",
+      statSetupVal: "< 24 Jam",
+      trustedTitle: "Dipercaya Lebih dari 500+ Sekolah & Yayasan Pendidikan di Seluruh Indonesia",
+      testimonialsBadge: "BUKTI KEBERHASILAN",
+      testimonialsTitle: "Cerita Nyata dari Pendidik & Pimpinan Sekolah",
+      testimonialsDesc: "Bagaimana Quick Schools menghemat ratusan jam kerja staf dan meningkatkan akurasi operasional.",
+      testis: [
+        {
+          quote: "Fitur presensi geofence GPS mengubah kedisiplinan di sekolah kami seketika. Siswa tidak bisa lagi titip absen, dan orang tua merasa sangat tenang karena notifikasi kehadiran otomatis masuk ke ponsel mereka saat itu juga.",
+          name: "Dra. Hj. Siti Rahmawati, M.Pd",
+          role: "Kepala SMA Negeri 5 Jakarta",
+          school: "Akreditasi A · 1.120 Siswa",
+          metric: "98.7% Kehadiran Tepat Waktu"
+        },
+        {
+          quote: "Sebelumnya bendahara yayasan kami menghabiskan waktu berhari-hari untuk mencocokkan mutasi bank manual. Dengan sistem SPP dan Virtual Account Quick Schools, rekonsiliasi kas jadi 100% otomatis tanpa selisih.",
+          name: "H. Ahmad Fauzi, S.E., M.M",
+          role: "Ketua Bidang Keuangan Yayasan Al-Azhar",
+          school: "Yayasan Multi-Kampus · 4 Cabang",
+          metric: "Hemat 15 Jam/Minggu Kerja Kasir"
+        },
+        {
+          quote: "Penilaian Kurikulum Merdeka sangat mudah dirumuskan. Rumus Tujuan Pembelajaran (TP) terisi otomatis dan cetak rapor digital siap dibagikan ke wali murid tanpa komplain formatting rusak.",
+          name: "Dewi Santoso, S.Si",
+          role: "Waka Kurikulum BINUS School",
+          school: "Kurikulum Nasional Plus",
+          metric: "100% Rapor Selesai Tepat Waktu"
+        }
+      ],
+      ctaTitle: "Mulai Transformasi Digital Sekolah Anda Hari Ini",
+      ctaDesc: "Bergabunglah bersama 500+ institusi pendidikan modern di Indonesia. Setup cepat didampingi langsung oleh tim ahli kami.",
+      ctaBtn1: "Daftar Akun Sekolah — Gratis",
+      ctaBtn2: "Konsultasi Tim Onboarding",
+      ctaSub: "Tanpa instalasi server lokal · Data tersimpan aman di Google Cloud · Uji coba gratis 14 hari"
+    },
+    en: {
+      heroBadge: "Modern School Operating System",
+      heroBadgeSub: "National Curriculum & Ministry Compliant",
+      heroH1a: "One Operating System for Your Entire",
+      heroH1b: "School Ecosystem.",
+      heroDesc: "An integrated intelligence platform managing GPS geofenced attendance, competency-based report cards, automated tuition billing, and 5 dedicated stakeholder portals in real-time.",
+      heroCta1: "Start Free Trial",
+      heroCta2: "Explore Capabilities",
+      heroTrust: "Trusted by 500+ schools · No credit card required · Free guided setup",
+      statSchools: "Registered Schools",
+      statSchoolsVal: "500+",
+      statAttend: "GPS Attendance Logs",
+      statAttendVal: "1.2M+",
+      statUptime: "Cloud Uptime SLA",
+      statUptimeVal: "99.9%",
+      statSetup: "Average Onboarding",
+      statSetupVal: "< 24 Hours",
+      trustedTitle: "Trusted by 500+ Premier Schools & Educational Foundations Across Indonesia",
+      testimonialsBadge: "PROVEN IMPACT",
+      testimonialsTitle: "Real Stories from Educators & School Leaders",
+      testimonialsDesc: "How Quick Schools eliminated hundreds of administrative hours and boosted campus transparency.",
+      testis: [
+        {
+          quote: "The GPS geofence feature completely transformed punctuality at our campus. Students can no longer falsify check-ins, and parents enjoy complete peace of mind with instant arrival notifications.",
+          name: "Dra. Hj. Siti Rahmawati, M.Pd",
+          role: "Principal, State High School 5 Jakarta",
+          school: "Grade A Accreditation · 1,120 Students",
+          metric: "98.7% On-Time Attendance"
+        },
+        {
+          quote: "Our foundation's bursars previously spent days manually cross-referencing bank slips. With Quick Schools' Virtual Account automation, tuition reconciliation is 100% automatic with zero balance discrepancies.",
+          name: "H. Ahmad Fauzi, S.E., M.M",
+          role: "Head of Treasury, Al-Azhar Foundation",
+          school: "Multi-Campus Trust · 4 Branches",
+          metric: "Saved 15 Hours/Week Admin Time"
+        },
+        {
+          quote: "Assessment tracking for the Merdeka Curriculum is effortless now. Learning objectives are automatically formulated, and print-ready digital report cards are generated without formatting headaches.",
+          name: "Dewi Santoso, S.Si",
+          role: "Vice Principal of Curriculum, BINUS School",
+          school: "National Plus Curriculum",
+          metric: "100% Reports On-Schedule"
+        }
+      ],
+      ctaTitle: "Begin Your School's Digital Evolution Today",
+      ctaDesc: "Join 500+ premier educational institutions across Indonesia. Rapid onboarding guided personally by our technical specialists.",
+      ctaBtn1: "Register School Account — Free",
+      ctaBtn2: "Talk to Onboarding Specialist",
+      ctaSub: "Zero local hardware required · Enterprise data security on Google Cloud · Free 14-day trial"
+    }
+  }[lang];
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "white", fontFamily: "var(--font-sans, system-ui, sans-serif)", color: "#111827", overflowX: "hidden" }}>
+    <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-[#531FFF]/15 selection:text-[#531FFF] overflow-x-hidden">
+      {/* Global Navigation */}
       <LandingNavbar lang={lang} onChangeLang={changeLang} />
 
-      {/* ── HERO ── */}
-      <section style={{ position: "relative", minHeight: "100vh", display: "flex", alignItems: "center", paddingTop: 80, paddingBottom: 64, overflow: "hidden" }}>
-        {/* Backgrounds via inline style — not Tailwind-dependent */}
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, #F3F0FF 0%, #ffffff 50%, #EEF2FF 100%)" }} />
-        <div style={{ position: "absolute", top: 0, right: 0, width: 800, height: 800, background: "radial-gradient(circle, rgba(83,31,255,0.07) 0%, transparent 70%)", pointerEvents: "none" }} />
-        <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle, rgba(83,31,255,0.08) 1px, transparent 1px)", backgroundSize: "36px 36px", pointerEvents: "none" }} />
+      {/* ── 1. HERO SECTION: High-Impact Editorial Showcase ── */}
+      <section className="relative pt-28 pb-20 md:pt-36 md:pb-28 overflow-hidden bg-gradient-to-b from-[#F7F5FF] via-white to-white">
+        {/* Editorial ambient lighting */}
+        <div className="absolute top-0 right-0 w-[700px] h-[700px] bg-gradient-to-b from-[#531FFF]/10 via-[#7B4DFF]/5 to-transparent rounded-full blur-[120px] pointer-events-none -z-0" />
+        <div className="absolute top-1/3 left-0 w-[500px] h-[500px] bg-[#531FFF]/5 rounded-full blur-[100px] pointer-events-none -z-0" />
 
-        <div style={{ position: "relative", zIndex: 10, maxWidth: 1280, margin: "0 auto", padding: "0 24px", width: "100%" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "center" }}
-            className="grid-cols-1 lg:grid-cols-2">
-            {/* Left text */}
-            <div>
-              {/* Badge */}
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.25)", borderRadius: 12, marginBottom: 24 }}>
-                <Sparkles style={{ width: 14, height: 14, color: "#531FFF" }} />
-                <span style={{ fontSize: 12, fontWeight: 800, color: "#531FFF" }}>🎓 {t.heroBadge}</span>
+        <div className="max-w-7xl mx-auto px-6 relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+            
+            {/* Left Column: Editorial Headline & Actions */}
+            <div className="lg:col-span-6 space-y-6 text-left">
+              
+              {/* Dynamic Status Pill */}
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md bg-white border border-[#531FFF]/20 shadow-xs">
+                <span className="w-2 h-2 rounded-full bg-[#531FFF] animate-pulse" />
+                <span className="text-[11px] font-extrabold text-[#531FFF] tracking-wide uppercase">
+                  {t.heroBadge}
+                </span>
+                <span className="text-[11px] text-gray-400 font-medium hidden sm:inline">|</span>
+                <span className="text-[11px] text-gray-600 font-semibold hidden sm:inline">
+                  {t.heroBadgeSub}
+                </span>
               </div>
 
-              {/* H1 */}
-              <h1 style={{ fontSize: "clamp(40px, 5vw, 64px)", fontWeight: 900, color: "#111827", lineHeight: 1.08, letterSpacing: "-0.03em", marginBottom: 24 }}>
+              {/* Main Heading */}
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-gray-900 tracking-tight leading-[1.08]">
                 {t.heroH1a}{" "}
-                <span style={{ background: "linear-gradient(135deg, #531FFF 0%, #7B4DFF 50%, #531FFF 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                <span className="relative inline-block text-[#531FFF]">
                   {t.heroH1b}
+                  <span className="absolute bottom-1.5 left-0 w-full h-3 bg-[#531FFF]/12 -z-10 rounded-sm" />
                 </span>
               </h1>
 
-              {/* Desc */}
-              <p style={{ fontSize: 18, color: "#4B5563", lineHeight: 1.7, fontWeight: 500, marginBottom: 32, maxWidth: 520 }}>
+              {/* Subtitle */}
+              <p className="text-base sm:text-lg text-gray-600 leading-relaxed font-normal max-w-xl">
                 {t.heroDesc}
               </p>
 
-              {/* CTAs */}
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
-                <Link href="/register" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "14px 32px", backgroundColor: "#531FFF", color: "white", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none", boxShadow: "0 8px 24px -4px rgba(83,31,255,0.4)", transition: "all 0.2s" }}
-                  className="hover:bg-[#4314cc] hover:shadow-xl">
-                  {t.heroCta1}
-                  <ArrowRight style={{ width: 16, height: 16 }} />
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-3.5 pt-2">
+                <Link
+                  href="/register"
+                  className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-lg bg-[#531FFF] text-white text-sm font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/30 group"
+                >
+                  <span>{t.heroCta1}</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Link>
-                <Link href="#features" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 32px", backgroundColor: "white", border: "1.5px solid #e5e7eb", color: "#374151", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none", transition: "all 0.2s" }}>
-                  {t.heroCta2}
+
+                <Link
+                  href="#features"
+                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-lg bg-white border border-gray-200 text-gray-700 text-sm font-bold hover:border-gray-300 hover:bg-gray-50 transition-all shadow-2xs"
+                >
+                  <span>{t.heroCta2}</span>
                 </Link>
               </div>
 
-              {/* Trust line */}
-              <p style={{ fontSize: 13, color: "#6B7280", fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
-                <CheckCircle2 style={{ width: 16, height: 16, color: "#10b981", flexShrink: 0 }} />
-                {t.heroTrust}
-              </p>
-
-              {/* Stats */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginTop: 40, paddingTop: 32, borderTop: "1px solid rgba(83,31,255,0.1)" }}>
-                {[
-                  { val: "1.2K+", label: t.statStudents },
-                  { val: "96%", label: t.statAttend },
-                  { val: "36", label: t.statClasses },
-                  { val: "92%", label: t.statSPP },
-                ].map((s, i) => (
-                  <div key={i}>
-                    <p style={{ fontSize: 24, fontWeight: 900, color: "#111827" }}>{s.val}</p>
-                    <p style={{ fontSize: 11, color: "#6B7280", fontWeight: 600, marginTop: 2 }}>{s.label}</p>
-                  </div>
-                ))}
+              {/* Trust Badge */}
+              <div className="flex items-center gap-2 text-xs text-gray-500 font-medium pt-1">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{t.heroTrust}</span>
               </div>
+
+              {/* Metrics Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-gray-200/80">
+                <div>
+                  <div className="text-2xl font-black text-gray-900 tracking-tight">{t.statSchoolsVal}</div>
+                  <div className="text-xs text-gray-500 font-semibold mt-0.5">{t.statSchools}</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-black text-gray-900 tracking-tight">{t.statAttendVal}</div>
+                  <div className="text-xs text-gray-500 font-semibold mt-0.5">{t.statAttend}</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-black text-emerald-600 tracking-tight">{t.statUptimeVal}</div>
+                  <div className="text-xs text-gray-500 font-semibold mt-0.5">{t.statUptime}</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-black text-[#531FFF] tracking-tight">{t.statSetupVal}</div>
+                  <div className="text-xs text-gray-500 font-semibold mt-0.5">{t.statSetup}</div>
+                </div>
+              </div>
+
             </div>
 
-            {/* Right — Dashboard Mockup */}
-            <div style={{ position: "relative" }}>
-              <DashboardMockup />
+            {/* Right Column: Live Interactive Quick Schools OS Canvas */}
+            <div className="lg:col-span-6">
+              <HeroCanvas lang={lang} />
             </div>
+
           </div>
         </div>
       </section>
 
-      {/* ── TRUSTED BY ── */}
-      <section style={{ padding: "56px 0", backgroundColor: "white", borderTop: "1px solid #f3f4f6", borderBottom: "1px solid #f3f4f6" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <p style={{ textAlign: "center", fontSize: 11, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: "0.25em", marginBottom: 32 }}>
+      {/* ── 2. TRUSTED BY / SOCIAL PROOF STRIP ── */}
+      <section className="py-12 bg-white border-t border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-6">
+          <p className="text-center text-xs font-bold text-gray-400 uppercase tracking-widest mb-8">
             {t.trustedTitle}
           </p>
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "16px 64px" }}>
-            {["SMA Labschool · Jakarta","BINUS School · Serpong","Al-Azhar · Kelapa Gading","Global Jaya · International","Tarakanita · Jakarta Pusat"].map((s, i) => (
-              <p key={i} style={{ fontSize: 14, fontWeight: 800, color: "#9CA3AF", opacity: 0.7, cursor: "default" }}>{s}</p>
+          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-14 opacity-75">
+            {[
+              "SMA Labschool Jakarta",
+              "BINUS School Serpong",
+              "Yayasan Al-Azhar Indonesia",
+              "Global Jaya International",
+              "SMA Tarakanita 1",
+              "Sekolah Pelita Harapan"
+            ].map((schoolName, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-2 text-xs sm:text-sm font-black text-gray-400 hover:text-gray-800 transition-colors cursor-default"
+              >
+                <Building2 className="w-4 h-4 text-gray-400" />
+                <span>{schoolName}</span>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── FEATURES ── */}
-      <section id="features" style={{ padding: "112px 0", backgroundColor: "#FAFBFF" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <div style={{ textAlign: "center", maxWidth: 700, margin: "0 auto 80px" }}>
-            <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.2)", borderRadius: 999, marginBottom: 16 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#531FFF", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.featBadge}</span>
+      {/* ── 3. SECTION FITUR: Interactive Capability Studio ── */}
+      <InteractiveFeatures lang={lang} />
+
+      {/* ── 4. SECTION CARA KERJA: Connected Stepped Journey ── */}
+      <WorkflowSteps lang={lang} />
+
+      {/* ── 5. SECTION KEUNGGULAN: Asymmetrical Dark Bento Grid ── */}
+      <BentoAdvantages lang={lang} />
+
+      {/* ── 6. SECTION PERSONA: Tailored Stakeholder Experience ── */}
+      <PersonaShowcase lang={lang} />
+
+      {/* ── 7. SECTION TESTIMONIALS: Verified Educational Social Proof ── */}
+      <section id="testimonials" className="py-24 md:py-32 bg-white border-t border-gray-100 relative">
+        <div className="max-w-7xl mx-auto px-6">
+          
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md bg-[#F3F0FF] border border-[#531FFF]/20 text-[#531FFF] text-xs font-bold uppercase tracking-wider mb-4">
+              <Star className="w-3.5 h-3.5 fill-[#531FFF] text-[#531FFF]" />
+              {t.testimonialsBadge}
             </div>
-            <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 900, color: "#111827", letterSpacing: "-0.02em", marginBottom: 16 }}>{t.featTitle}</h2>
-            <p style={{ fontSize: 16, color: "#6B7280", fontWeight: 500 }}>{t.featDesc}</p>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-gray-900 tracking-tight leading-[1.12] mb-5">
+              {t.testimonialsTitle}
+            </h2>
+            <p className="text-base sm:text-lg text-gray-600 leading-relaxed font-normal">
+              {t.testimonialsDesc}
+            </p>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 20 }}>
-            {t.feats.map((f, i) => {
-              const Icon = f.icon;
-              const featLinks = [
-                "/dashboard",
-                "/features/absensi",
-                "/features/akademik",
-                "/data-siswa",
-                "/features/laporan",
-                "/features/spp",
-                "/features/keuangan",
-                "/features/pengumuman",
-              ];
-              return (
-                <Link
-                  key={i}
-                  href={featLinks[i] || "#"}
-                  style={{ textDecoration: "none", color: "inherit", display: "flex" }}
-                >
-                  <motion.div
-                    style={{ backgroundColor: "white", border: "1px solid #f3f4f6", borderRadius: 20, padding: 24, display: "flex", flexDirection: "column", width: "100%", cursor: "pointer", transition: "all 0.3s", boxShadow: "0 2px 8px -4px rgba(0,0,0,0.05)" }}
-                    whileHover={{ y: -6, boxShadow: "0 20px 40px -12px rgba(83,31,255,0.15)", borderColor: "rgba(83,31,255,0.25)" }}
-                  >
-                    <div style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: featIconBg[i], display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-                      <Icon style={{ width: 20, height: 20, color: featIconColor[i] }} />
-                    </div>
-                    <h3 style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{f.title}</h3>
-                    <p style={{ fontSize: 13, color: "#6B7280", fontWeight: 500, lineHeight: 1.6, flex: 1 }}>{f.desc}</p>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 16, fontSize: 12, fontWeight: 700, color: "#531FFF" }}>
-                      <span>{lang === "id" ? "Pelajari Fitur" : "Learn more"}</span>
-                      <ChevronRight style={{ width: 14, height: 14 }} />
-                    </div>
-                  </motion.div>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ── HOW IT WORKS ── */}
-      <section style={{ padding: "112px 0", backgroundColor: "white" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <div style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 80px" }}>
-            <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.2)", borderRadius: 999, marginBottom: 16 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#531FFF", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.howBadge}</span>
-            </div>
-            <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 900, color: "#111827", letterSpacing: "-0.02em" }}>{t.howTitle}</h2>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 32 }}>
-            {t.howSteps.map((s, i) => (
-              <motion.div key={i}
-                whileHover={{ y: -4 }}
-                transition={{ duration: 0.2 }}
-                style={{ background: "linear-gradient(135deg, rgba(243,240,255,0.6) 0%, white 100%)", border: "1px solid rgba(83,31,255,0.1)", borderRadius: 24, padding: 32 }}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {t.testis.map((item, idx) => (
+              <div
+                key={idx}
+                className="bg-slate-50/70 hover:bg-white rounded-xl p-8 border border-gray-200/80 hover:border-[#531FFF]/30 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between"
               >
-                <div style={{ fontSize: 48, fontWeight: 900, color: "rgba(83,31,255,0.1)", marginBottom: 16 }}>{s.step}</div>
-                <div style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "#531FFF", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16, boxShadow: "0 4px 12px rgba(83,31,255,0.3)" }}>
-                  {i === 0 && <Settings style={{ width: 18, height: 18, color: "white" }} />}
-                  {i === 1 && <Users style={{ width: 18, height: 18, color: "white" }} />}
-                  {i === 2 && <LayoutDashboard style={{ width: 18, height: 18, color: "white" }} />}
-                </div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 12 }}>{s.title}</h3>
-                <p style={{ fontSize: 14, color: "#6B7280", fontWeight: 500, lineHeight: 1.6 }}>{s.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── WHY — Dark ── */}
-      <section style={{ padding: "112px 0", backgroundColor: "#0D0820", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 30% 50%, rgba(83,31,255,0.12) 0%, transparent 60%)" }} />
-        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 70% 20%, rgba(83,31,255,0.08) 0%, transparent 50%)" }} />
-        <div style={{ position: "relative", zIndex: 10, maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <div style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 80px" }}>
-            <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "rgba(83,31,255,0.2)", border: "1px solid rgba(83,31,255,0.3)", borderRadius: 999, marginBottom: 16 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#A78BFA", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.whyBadge}</span>
-            </div>
-            <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 900, color: "white", letterSpacing: "-0.02em" }}>{t.whyTitle}</h2>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 24 }}>
-            {t.whys.map((w, i) => (
-              <motion.div key={i}
-                whileHover={{ backgroundColor: "rgba(255,255,255,0.08)", borderColor: "rgba(83,31,255,0.4)", y: -4 }}
-                transition={{ duration: 0.2 }}
-                style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: 24, backdropFilter: "blur(8px)", transition: "all 0.3s" }}
-              >
-                <div style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: "rgba(83,31,255,0.2)", border: "1px solid rgba(83,31,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-                  <w.icon style={{ width: 20, height: 20, color: "#A78BFA" }} />
-                </div>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: "white", marginBottom: 8 }}>{w.title}</h3>
-                <p style={{ fontSize: 13, color: "#9CA3AF", fontWeight: 500, lineHeight: 1.6 }}>{w.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── TESTIMONIALS ── */}
-      <section id="testimonials" style={{ padding: "112px 0", backgroundColor: "white" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <div style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 64px" }}>
-            <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "#FFFBEB", border: "1px solid rgba(217,119,6,0.2)", borderRadius: 999, marginBottom: 16 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#d97706", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.testiBadge}</span>
-            </div>
-            <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 900, color: "#111827", letterSpacing: "-0.02em" }}>{t.testiTitle}</h2>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 32 }}>
-            {t.testis.map((testi, i) => (
-              <motion.div key={i}
-                whileHover={{ y: -4, boxShadow: "0 20px 40px -12px rgba(83,31,255,0.1)", borderColor: "rgba(83,31,255,0.15)" }}
-                transition={{ duration: 0.2 }}
-                style={{ backgroundColor: "white", border: "1px solid #f3f4f6", borderRadius: 24, padding: 32, boxShadow: "0 2px 8px -4px rgba(0,0,0,0.06)", transition: "all 0.3s" }}
-              >
-                <div style={{ display: "flex", gap: 2, marginBottom: 20 }}>
-                  {Array.from({ length: testi.rating }).map((_, j) => (
-                    <Star key={j} style={{ width: 16, height: 16, color: "#f59e0b", fill: "#f59e0b" }} />
-                  ))}
-                </div>
-                <p style={{ fontSize: 14, color: "#374151", fontWeight: 500, lineHeight: 1.7, marginBottom: 24, fontStyle: "italic" }}>"{testi.text}"</p>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 20, borderTop: "1px solid #f3f4f6" }}>
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg, #531FFF 0%, #7B4DFF 100%)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 14 }}>
-                    {testi.name[0]}
+                <div>
+                  <div className="flex items-center gap-1 text-amber-400 mb-5">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
+                    ))}
                   </div>
-                  <div>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{testi.name}</p>
-                    <p style={{ fontSize: 11, color: "#6B7280", fontWeight: 500 }}>{testi.role}</p>
+                  <p className="text-sm text-gray-700 leading-relaxed font-medium italic mb-6">
+                    "{item.quote}"
+                  </p>
+                </div>
+
+                <div className="pt-5 border-t border-gray-200/80 space-y-1">
+                  <p className="text-sm font-extrabold text-gray-900">{item.name}</p>
+                  <p className="text-xs text-gray-500 font-medium">{item.role}</p>
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-[10px] text-gray-400 font-semibold">{item.school}</span>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
+                      {item.metric}
+                    </span>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
+
         </div>
       </section>
 
-      {/* ── PRICING ── */}
-      <section id="pricing" style={{ padding: "112px 0", backgroundColor: "#FAFBFF" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <div style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 64px" }}>
-            <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.2)", borderRadius: 999, marginBottom: 16 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#531FFF", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.priceBadge}</span>
-            </div>
-            <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 900, color: "#111827", letterSpacing: "-0.02em", marginBottom: 12 }}>{t.priceTitle}</h2>
-            <p style={{ fontSize: 16, color: "#6B7280", fontWeight: 500 }}>{t.priceDesc}</p>
-          </div>
+      {/* ── 8. SECTION PRICING & FAQ ── */}
+      <PricingFaq lang={lang} />
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 32, maxWidth: 1000, margin: "0 auto" }}>
-            {t.plans.map((plan, i) => (
-              <motion.div key={i}
-                whileHover={{ y: plan.popular ? -16 : -4 }}
-                transition={{ duration: 0.2 }}
-                style={{
-                  position: "relative", display: "flex", flexDirection: "column", borderRadius: 24, padding: 32,
-                  backgroundColor: plan.popular ? "#531FFF" : "white",
-                  border: plan.popular ? "1px solid #531FFF" : "1px solid #e5e7eb",
-                  boxShadow: plan.popular ? "0 24px 60px -12px rgba(83,31,255,0.3)" : "0 2px 8px -4px rgba(0,0,0,0.06)",
-                  transform: plan.popular ? "translateY(-12px)" : "none",
-                }}
+      {/* ── 9. FINAL HIGH-CONVERTING CTA BANNER ── */}
+      <section className="py-20 px-6 bg-white">
+        <div className="max-w-6xl mx-auto rounded-2xl bg-gradient-to-br from-[#531FFF] via-[#4812d4] to-[#1E085A] p-10 sm:p-14 md:p-16 text-white text-center shadow-[0_30px_90px_-20px_rgba(83,31,255,0.4)] relative overflow-hidden">
+          {/* Subtle light orb in corner */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 max-w-3xl mx-auto space-y-6">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-white/15 text-purple-200 text-xs font-bold uppercase tracking-wider border border-white/20">
+              <Zap className="w-3.5 h-3.5 text-amber-300" /> Transformasi Digital Sekolah
+            </span>
+
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tight leading-[1.14]">
+              {t.ctaTitle}
+            </h2>
+
+            <p className="text-base sm:text-lg text-purple-100 font-normal leading-relaxed">
+              {t.ctaDesc}
+            </p>
+
+            <div className="flex flex-wrap items-center justify-center gap-3.5 pt-2">
+              <Link
+                href="/register"
+                className="inline-flex items-center gap-2 px-8 py-4 rounded-lg bg-white text-[#531FFF] text-sm font-extrabold hover:bg-slate-50 transition-all shadow-md shadow-black/15"
               >
-                {plan.popular && (
-                  <div style={{ position: "absolute", top: -16, left: "50%", transform: "translateX(-50%)", background: "linear-gradient(90deg, #f59e0b, #f97316)", color: "white", fontSize: 11, fontWeight: 800, padding: "6px 16px", borderRadius: 999, boxShadow: "0 4px 12px rgba(249,115,22,0.4)", whiteSpace: "nowrap" }}>
-                    ⭐ {t.popularBadge}
-                  </div>
-                )}
-                <div style={{ marginBottom: 24 }}>
-                  <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, color: plan.popular ? "white" : "#111827" }}>{plan.name}</h3>
-                  <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 24, color: plan.popular ? "#DDD6FF" : "#6B7280" }}>{plan.desc}</p>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                    <span style={{ fontSize: 36, fontWeight: 900, color: plan.popular ? "white" : "#111827" }}>{plan.price}</span>
-                    {plan.unit && <span style={{ fontSize: 12, fontWeight: 600, color: plan.popular ? "#C4B5FD" : "#9CA3AF" }}>{plan.unit}</span>}
-                  </div>
-                </div>
-                <ul style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12, marginBottom: 32 }}>
-                  {plan.items.map((item, j) => (
-                    <li key={j} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 20, height: 20, borderRadius: "50%", backgroundColor: plan.popular ? "rgba(255,255,255,0.2)" : "#F3F0FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <Check style={{ width: 12, height: 12, color: plan.popular ? "white" : "#531FFF", strokeWidth: 3 }} />
-                      </div>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: plan.popular ? "#EDE9FE" : "#374151" }}>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Link href="/register" style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px 0", borderRadius: 16, fontSize: 14, fontWeight: 700, textDecoration: "none", transition: "all 0.2s",
-                  backgroundColor: plan.popular ? "white" : "#531FFF",
-                  color: plan.popular ? "#531FFF" : "white",
-                  boxShadow: plan.popular ? "0 4px 12px rgba(0,0,0,0.1)" : "0 4px 12px rgba(83,31,255,0.25)",
-                }}>
-                  {plan.btn} <ArrowRight style={{ width: 16, height: 16 }} />
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── CTA ── */}
-      <section style={{ padding: "80px 24px", backgroundColor: "white" }}>
-        <div
-          style={{ maxWidth: 960, margin: "0 auto", position: "relative", overflow: "hidden", borderRadius: 32, background: "linear-gradient(135deg, #531FFF 0%, #6D3DFF 50%, #4314cc 100%)", padding: "64px 48px", textAlign: "center", boxShadow: "0 32px 80px -12px rgba(83,31,255,0.35)" }}
-        >
-          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at top right, rgba(255,255,255,0.08) 0%, transparent 60%)" }} />
-          <div style={{ position: "relative", zIndex: 1 }}>
-            <h2 style={{ fontSize: "clamp(28px, 4vw, 44px)", fontWeight: 900, color: "white", marginBottom: 20, lineHeight: 1.2 }}>{t.ctaTitle}</h2>
-            <p style={{ fontSize: 17, color: "#C4B5FD", fontWeight: 500, marginBottom: 32, maxWidth: 560, margin: "0 auto 32px" }}>{t.ctaDesc}</p>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
-              <Link href="/register" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "16px 32px", backgroundColor: "white", color: "#531FFF", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
-                {t.ctaBtn} <ArrowRight style={{ width: 16, height: 16 }} />
+                <span>{t.ctaBtn1}</span>
+                <ArrowRight className="w-4 h-4" />
               </Link>
-              <Link href="/login" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "16px 32px", backgroundColor: "rgba(255,255,255,0.1)", border: "1.5px solid rgba(255,255,255,0.25)", color: "white", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none" }}>
-                {lang === "id" ? "Masuk ke Dashboard" : "Go to Dashboard"}
+
+              <Link
+                href="https://wa.me/6281234567890"
+                target="_blank"
+                className="inline-flex items-center gap-2 px-8 py-4 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm font-extrabold border border-white/25 transition-all"
+              >
+                <span>{t.ctaBtn2}</span>
+                <ArrowUpRight className="w-4 h-4" />
               </Link>
             </div>
-            <p style={{ fontSize: 12, color: "#C4B5FD", fontWeight: 500, marginTop: 20 }}>{t.ctaSub}</p>
+
+            <p className="text-xs text-purple-200 font-medium pt-2">
+              {t.ctaSub}
+            </p>
           </div>
         </div>
       </section>
 
+      {/* Global Footer */}
       <LandingFooter lang={lang} />
     </div>
   );

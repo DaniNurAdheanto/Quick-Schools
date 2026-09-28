@@ -1970,16 +1970,16 @@ export default function ReportCardsPage() {
             )}
             {isStudentRole && !isReportPublished ? (
               /* EMPTY STATE UNTUK ROLE SISWA SAAT RAPOR BELUM DISIMPAN / BELUM DIPUBLIKASIKAN */
-              <div className="bg-white rounded-3xl border border-gray-200/90 shadow-sm p-8 sm:p-14 text-center flex flex-col items-center justify-center gap-6 relative overflow-hidden">
+              <div className="bg-white rounded-xl border border-gray-200/90 shadow-sm p-8 sm:p-14 text-center flex flex-col items-center justify-center gap-6 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-[#531FFF]/10 via-[#531FFF]/3 to-transparent rounded-bl-full pointer-events-none" />
                 <div className="absolute bottom-0 left-0 w-80 h-80 bg-gradient-to-tr from-amber-500/5 to-transparent rounded-tr-full pointer-events-none" />
 
                 {/* Animated Badge Icon */}
                 <div className="relative">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-br from-purple-50 via-[#531FFF]/10 to-indigo-50 border border-[#531FFF]/25 flex items-center justify-center shadow-lg shadow-[#531FFF]/15 text-[#531FFF]">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-gradient-to-br from-purple-50 via-[#531FFF]/10 to-indigo-50 border border-[#531FFF]/25 flex items-center justify-center shadow-lg shadow-[#531FFF]/15 text-[#531FFF]">
                     <Clock className="w-10 h-10 sm:w-12 sm:h-12 animate-pulse text-[#531FFF]" />
                   </div>
-                  <span className="absolute -bottom-1 -right-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white shadow-sm border-2 border-white">
+                  <span className="absolute -bottom-1 -right-1 px-2.5 py-0.5 rounded-md text-[10px] font-black bg-amber-500 text-white shadow-sm border-2 border-white">
                     {isReportDraft ? "Draft" : "Belum Terbit"}
                   </span>
                 </div>

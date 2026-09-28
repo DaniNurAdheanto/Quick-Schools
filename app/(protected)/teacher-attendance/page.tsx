@@ -1921,11 +1921,11 @@ export default function TeacherAttendancePage() {
       {/* ========================================================================= */}
       {isClockInModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-3xl max-h-[92vh] md:max-h-[88vh] rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col my-auto animate-in zoom-in-95 duration-200">
+          <div className="bg-white w-full max-w-3xl max-h-[92vh] md:max-h-[88vh] rounded-xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col my-auto animate-in zoom-in-95 duration-200">
             {/* Header (Compact Sticky) */}
             <div className="px-5 py-3 border-b border-gray-100 bg-white/95 backdrop-blur-xs flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
                   <LogIn className="w-4 h-4" />
                 </div>
                 <div>
@@ -2262,11 +2262,11 @@ export default function TeacherAttendancePage() {
       {/* ========================================================================= */}
       {isClockOutModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-3xl max-h-[92vh] md:max-h-[88vh] rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col my-auto animate-in zoom-in-95 duration-200">
+          <div className="bg-white w-full max-w-3xl max-h-[92vh] md:max-h-[88vh] rounded-xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col my-auto animate-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="px-5 py-3 border-b border-gray-100 bg-white/95 backdrop-blur-xs flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
                   <LogOut className="w-4 h-4" />
                 </div>
                 <div>

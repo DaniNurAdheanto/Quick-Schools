@@ -500,18 +500,18 @@ export function QuickAttendanceModal({
       <div className="fixed inset-0 bg-gray-900/65 backdrop-blur-xs transition-opacity" onClick={onClose} />
 
       {/* Modal Dialog */}
-      <div className="relative w-full max-w-3xl max-h-[92vh] md:max-h-[88vh] bg-white rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200 z-10 flex flex-col my-auto">
+      <div className="relative w-full max-w-3xl max-h-[92vh] md:max-h-[88vh] bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200 z-10 flex flex-col my-auto">
         
         {/* Header Bar */}
         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-950 via-[#1E1035] to-gray-900 text-white shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#531FFF] flex items-center justify-center text-white shadow-md shadow-[#531FFF]/40">
+            <div className="w-8 h-8 rounded-lg bg-[#531FFF] flex items-center justify-center text-white shadow-md shadow-[#531FFF]/40">
               <ScanFace className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-sm md:text-base font-black tracking-tight leading-tight">Presensi Absensi Siswa</h3>
-                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[9px] font-extrabold rounded-full">
+                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[9px] font-extrabold rounded-md">
                   Real-Time
                 </span>
               </div>
@@ -608,7 +608,7 @@ export function QuickAttendanceModal({
 
                 {/* Viewport Box (Camera or Map) */}
                 {activeTab === "camera" ? (
-                  <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden bg-slate-950 border border-gray-200 shadow-inner flex items-center justify-center">
+                  <div className="relative aspect-4/3 w-full rounded-xl overflow-hidden bg-slate-950 border border-gray-200 shadow-inner flex items-center justify-center">
                     {/* Live Video */}
                     {!capturedPhoto && (
                       <video
@@ -713,7 +713,7 @@ export function QuickAttendanceModal({
                   </div>
                 ) : (
                   /* Map view */
-                  <div className="w-full rounded-2xl overflow-hidden border border-gray-200 bg-gray-50 flex flex-col">
+                  <div className="w-full rounded-xl overflow-hidden border border-gray-200 bg-gray-50 flex flex-col">
                     <AttendanceGeofenceMap
                       centerLat={config.schoolCenterLat}
                       centerLng={config.schoolCenterLng}
@@ -805,7 +805,7 @@ export function QuickAttendanceModal({
                     </span>
                     <span
                       className={cn(
-                        "text-[10px] font-bold px-2 py-0.5 rounded-full border",
+                        "text-[10px] font-bold px-2 py-0.5 rounded-md border",
                         locationData.inRadius
                           ? "bg-emerald-100 text-emerald-800 border-emerald-200"
                           : "bg-rose-100 text-rose-800 border-rose-200"
@@ -900,7 +900,7 @@ export function QuickAttendanceModal({
                     onClick={handleSubmitAttendance}
                     disabled={!canSubmit}
                     className={cn(
-                      "w-full py-3 px-4 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-2 shadow-md",
+                      "w-full py-3 px-4 rounded-lg font-extrabold text-xs transition-all flex items-center justify-center gap-2 shadow-md",
                       canSubmit
                         ? "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/30 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                         : "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none border border-gray-200"
@@ -963,12 +963,12 @@ export function QuickAttendanceModal({
           {/* ------------------------------------------------------------- */}
           {step === "success" && (
             <div className="py-6 flex flex-col items-center justify-center space-y-5 text-center">
-              <div className="w-16 h-16 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <div className="w-16 h-16 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
                 <CheckCircle2 className="w-10 h-10" />
               </div>
 
               <div>
-                <span className="px-3 py-1 bg-emerald-50 text-emerald-700 font-extrabold text-xs rounded-full border border-emerald-200">
+                <span className="px-3 py-1 bg-emerald-50 text-emerald-700 font-extrabold text-xs rounded-md border border-emerald-200">
                   ABSENSI BERHASIL DICATAT
                 </span>
                 <h4 className="text-xl font-extrabold text-gray-900 mt-2">Presensi Kehadiran Terverifikasi!</h4>

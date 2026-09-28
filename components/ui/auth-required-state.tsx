@@ -35,13 +35,13 @@ export function AuthRequiredState({
 
       <div className="w-full max-w-lg z-10 animate-in fade-in zoom-in-95 duration-300">
         {/* Main Card */}
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-xl shadow-purple-900/5 p-6 sm:p-10 text-center relative overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-xl shadow-purple-900/5 p-6 sm:p-10 text-center relative overflow-hidden">
           {/* Top Decorative Line */}
           <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#531FFF] via-purple-500 to-[#531FFF]" />
 
           {/* Icon Badge */}
           <div className="relative mx-auto w-20 h-20 mb-6">
-            <div className="w-20 h-20 rounded-2xl bg-purple-50 text-[#531FFF] border border-purple-100 flex items-center justify-center shadow-inner mx-auto">
+            <div className="w-20 h-20 rounded-lg bg-purple-50 text-[#531FFF] border border-purple-100 flex items-center justify-center shadow-inner mx-auto">
               <Lock className="w-9 h-9" />
             </div>
             <div className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center border-2 border-white shadow-xs" title="Perlu Autentikasi">
@@ -50,7 +50,7 @@ export function AuthRequiredState({
           </div>
 
           {/* Badge Tag */}
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-[#531FFF] text-[11px] font-bold border border-purple-100 mb-3">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-purple-50 text-[#531FFF] text-[11px] font-bold border border-purple-100 mb-3">
             <Sparkles className="w-3 h-3 text-[#531FFF]" />
             <span>Akses Terbatas • Perlu Login</span>
           </div>
@@ -68,7 +68,7 @@ export function AuthRequiredState({
             {/* Back to Home Button */}
             <Link
               href={homeHref}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 text-xs sm:text-sm font-bold transition-all shadow-2xs active:scale-95 cursor-pointer order-2 sm:order-1"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 text-xs sm:text-sm font-bold transition-all shadow-2xs active:scale-95 cursor-pointer order-2 sm:order-1"
             >
               <Home className="w-4 h-4 text-gray-500" />
               <span>Back to Home</span>
@@ -77,7 +77,7 @@ export function AuthRequiredState({
             {/* Login Button */}
             <Link
               href={loginHref}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs sm:text-sm font-bold transition-all shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/30 active:scale-95 cursor-pointer order-1 sm:order-2"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs sm:text-sm font-bold transition-all shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/30 active:scale-95 cursor-pointer order-1 sm:order-2"
             >
               <LogIn className="w-4 h-4" />
               <span>Masuk Sekarang (Login)</span>

@@ -252,7 +252,7 @@ export function IdleTimeoutManager({
       aria-labelledby="session-timeout-title"
       className="fixed inset-0 z-[9990] flex items-center justify-center p-4 sm:p-6 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200"
     >
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-200 relative">
+      <div className="w-full max-w-md bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-200 relative">
         {/* Top Progress bar indicator */}
         <div className="h-1.5 w-full bg-amber-100">
           <div
@@ -264,14 +264,14 @@ export function IdleTimeoutManager({
         <div className="p-6 sm:p-8 text-center space-y-5">
           {/* Animated Warning Icon */}
           <div className="relative w-16 h-16 mx-auto">
-            <div className="absolute inset-0 rounded-2xl bg-amber-500/20 animate-ping opacity-60" />
-            <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shadow-inner relative">
+            <div className="absolute inset-0 rounded-lg bg-amber-500/20 animate-ping opacity-60" />
+            <div className="w-16 h-16 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shadow-inner relative">
               <Clock className="w-8 h-8 animate-pulse" />
             </div>
           </div>
 
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-800 text-xs font-bold border border-amber-200">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-amber-50 text-amber-800 text-xs font-bold border border-amber-200">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
               <span>Inaktivitas Terdeteksi</span>
             </div>
@@ -284,7 +284,7 @@ export function IdleTimeoutManager({
           </div>
 
           {/* Countdown Clock Box */}
-          <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl py-3 px-6 inline-flex items-center justify-center gap-2 shadow-inner">
+          <div className="bg-amber-50/80 border border-amber-200/80 rounded-lg py-3 px-6 inline-flex items-center justify-center gap-2 shadow-inner">
             <Clock className="w-5 h-5 text-amber-600 animate-spin" style={{ animationDuration: "6s" }} />
             <span className="font-mono text-2xl font-black text-amber-900 tracking-widest">
               {formatTime(secondsRemaining)}
@@ -300,7 +300,7 @@ export function IdleTimeoutManager({
             <button
               type="button"
               onClick={handleExtendSession}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs sm:text-sm font-bold shadow-lg shadow-[#531FFF]/20 transition-all active:scale-95 cursor-pointer"
+              className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs sm:text-sm font-bold shadow-lg shadow-[#531FFF]/20 transition-all active:scale-95 cursor-pointer"
             >
               <RefreshCw className="w-4 h-4" />
               <span>Lanjutkan Sesi Saya</span>
@@ -308,7 +308,7 @@ export function IdleTimeoutManager({
             <button
               type="button"
               onClick={() => logout("/login")}
-              className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gray-100 hover:bg-rose-50 hover:text-rose-600 text-gray-600 text-xs sm:text-sm font-bold transition-all active:scale-95 cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-gray-100 hover:bg-rose-50 hover:text-rose-600 text-gray-600 text-xs sm:text-sm font-bold transition-all active:scale-95 cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
               <span>Keluar Sekarang</span>

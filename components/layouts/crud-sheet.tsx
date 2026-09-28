@@ -700,7 +700,7 @@ export function CrudSheet({
         
         {/* ================= HEADER SECTION ================= */}
         <div className={cn(
-          "relative p-5 sm:p-6 border-b border-gray-100 shrink-0 rounded-t-3xl",
+          "relative p-5 sm:p-6 border-b border-gray-100 shrink-0 rounded-t-xl",
           isView ? "bg-gradient-to-b from-[#F7F5FF] via-white to-white" : isDelete ? "bg-rose-50/60" : "bg-[#FAFAFA]"
         )}>
           <button 
@@ -1171,7 +1171,7 @@ export function CrudSheet({
                           disabled={isSubmitting || field.disabled || field.readOnly}
                           rows={5}
                           className={cn(
-                            "w-full px-3.5 py-3 border border-gray-200 rounded-xl text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium resize-y min-h-[120px] leading-relaxed bg-gray-50/50 hover:bg-white",
+                            "w-full px-3.5 py-3 border border-gray-200 rounded-lg text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium resize-y min-h-[120px] leading-relaxed bg-gray-50/50 hover:bg-white",
                             (field.disabled || field.readOnly) && "bg-gray-100/90 text-gray-500 cursor-not-allowed select-none resize-none"
                           )}
                         />
@@ -1182,7 +1182,7 @@ export function CrudSheet({
                             value={formData[field.name] || ""}
                             onChange={(e) => handleChange(field.name, e.target.value)}
                             className={cn(
-                              "w-full pl-3.5 pr-9 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium appearance-none bg-gray-50/50 hover:bg-white cursor-pointer",
+                              "w-full pl-3.5 pr-9 py-2.5 border border-gray-200 rounded-lg text-[13px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium appearance-none bg-gray-50/50 hover:bg-white cursor-pointer",
                               !formData[field.name] && "text-gray-400"
                             )}
                             disabled={isSubmitting || field.disabled || field.readOnly}
@@ -1213,7 +1213,7 @@ export function CrudSheet({
                             if (file) handleChange(field.name, file);
                           }}
                           disabled={isSubmitting || field.disabled || field.readOnly}
-                          className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium bg-gray-50/50 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#531FFF]/10 file:text-[#531FFF] hover:file:bg-[#531FFF]/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                          className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium bg-gray-50/50 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#531FFF]/10 file:text-[#531FFF] hover:file:bg-[#531FFF]/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                       ) : (
                         <input
@@ -1225,7 +1225,7 @@ export function CrudSheet({
                           disabled={isSubmitting || field.disabled || field.readOnly}
                           readOnly={field.readOnly}
                           className={cn(
-                            "w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium bg-gray-50/50 hover:bg-white",
+                            "w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all font-medium bg-gray-50/50 hover:bg-white",
                             (field.disabled || field.readOnly) && "bg-gray-100/90 text-gray-500 cursor-not-allowed select-none"
                           )}
                         />
@@ -1270,7 +1270,7 @@ export function CrudSheet({
         </div>
 
         {/* ================= FOOTER SECTION ================= */}
-        <div className="flex items-center justify-between p-4 sm:p-5 border-t border-gray-100 bg-white rounded-b-3xl shrink-0">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-t border-gray-100 bg-white rounded-b-xl shrink-0">
           {isView ? (
             <>
               <div className="flex items-center gap-2">

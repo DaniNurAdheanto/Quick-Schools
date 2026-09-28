@@ -47,7 +47,7 @@ export default function LandingFooter({ lang }: FooterProps) {
           {/* Brand */}
           <div className="lg:col-span-1">
             <Link href="/" className="flex items-center gap-3 mb-5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-violet-800 flex items-center justify-center shadow-lg shadow-violet-500/30">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-600 to-violet-800 flex items-center justify-center shadow-lg shadow-violet-500/30">
                 <Zap className="w-5 h-5 text-white" strokeWidth={2.5} />
               </div>
               <div className="leading-none">
@@ -60,7 +60,7 @@ export default function LandingFooter({ lang }: FooterProps) {
             {/* Social */}
             <div className="flex items-center gap-3">
               {[Twitter, Instagram, Linkedin].map((Icon, i) => (
-                <a key={i} href="#" className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500 hover:text-white hover:bg-violet-600/30 hover:border-violet-500/40 transition-all">
+                <a key={i} href="#" className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gray-500 hover:text-white hover:bg-violet-600/30 hover:border-violet-500/40 transition-all">
                   <Icon className="w-4 h-4" />
                 </a>
               ))}

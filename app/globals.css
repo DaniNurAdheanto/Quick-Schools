@@ -40,13 +40,14 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xs: 0.1875rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+  --radius-2xl: 0.75rem;
+  --radius-3xl: 0.875rem;
+  --radius-4xl: 1rem;
 }
 
 :root {
@@ -73,7 +74,7 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.5rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -144,4 +145,51 @@
 
 .animate-indeterminate {
   animation: indeterminate 1.4s ease-in-out infinite;
+}
+
+@layer components {
+  /* Form controls: Inputs, Text Fields, Selects, Textareas */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="month"],
+  input[type="week"],
+  select,
+  textarea,
+  [data-slot="input"],
+  [data-slot="select"],
+  [data-slot="textarea"] {
+    border-radius: var(--radius-md, 0.375rem) !important;
+  }
+
+  /* Badges, tags, and chips with padding (reducing bubbly rounded-full pills to subtle rounded corners) */
+  span[class*="px-"][class*="py-"][class*="rounded-full"],
+  div[class*="px-"][class*="py-"][class*="rounded-full"],
+  a[class*="px-"][class*="py-"][class*="rounded-full"] {
+    border-radius: var(--radius-sm, 0.25rem) !important;
+  }
+
+  /* Medium/larger padded badges, pills, and pill buttons */
+  span[class*="px-3"][class*="rounded-full"],
+  span[class*="px-3.5"][class*="rounded-full"],
+  span[class*="px-4"][class*="rounded-full"],
+  div[class*="px-3"][class*="rounded-full"],
+  div[class*="px-3.5"][class*="rounded-full"],
+  div[class*="px-4"][class*="rounded-full"],
+  button[class*="px-"][class*="rounded-full"] {
+    border-radius: var(--radius-md, 0.375rem) !important;
+  }
+
+  /* Modal Dialogs and sheets: ensure sleek modern corners instead of 24px+ rounded-3xl */
+  [role="dialog"] > div,
+  dialog > div {
+    border-radius: var(--radius-2xl, 0.75rem);
+  }
 }

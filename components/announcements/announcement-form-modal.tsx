@@ -250,8 +250,8 @@ export function AnnouncementFormModal({
   if (mode === "delete") {
     return (
       <div className="fixed inset-0 z-50 p-4 bg-gray-950/60 backdrop-blur-xs flex items-center justify-center animate-in fade-in duration-200">
-        <div className="bg-white rounded-3xl max-w-[460px] w-full p-6 shadow-2xl border border-gray-100 flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
-          <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4 border border-rose-100 shadow-sm">
+        <div className="bg-white rounded-xl max-w-[460px] w-full p-6 shadow-2xl border border-gray-100 flex flex-col items-center text-center animate-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center mb-4 border border-rose-100 shadow-sm">
             <AlertTriangle className="w-8 h-8" />
           </div>
           <h3 className="text-xl font-extrabold text-gray-900 tracking-tight">Hapus Pengumuman?</h3>
@@ -266,7 +266,7 @@ export function AnnouncementFormModal({
               type="button"
               onClick={() => onOpenChange(false)}
               disabled={isSubmitting}
-              className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-50 transition-colors cursor-pointer"
+              className="flex-1 px-4 py-2.5 rounded-lg border border-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-50 transition-colors cursor-pointer"
             >
               Batal
             </button>
@@ -274,7 +274,7 @@ export function AnnouncementFormModal({
               type="button"
               onClick={() => handleSubmit()}
               disabled={isSubmitting}
-              className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-sm hover:shadow flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-60"
+              className="flex-1 px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-sm hover:shadow flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-60"
             >
               {isSubmitting ? (
                 <>
@@ -294,12 +294,12 @@ export function AnnouncementFormModal({
 
   return (
     <div className="fixed inset-0 z-50 p-2 sm:p-5 bg-gray-950/60 backdrop-blur-xs flex items-center justify-center animate-in fade-in duration-200 overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-gray-100/90 my-auto flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-gray-100/90 my-auto flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95 duration-200">
         {/* ================= MODAL HEADER ================= */}
         <div className="relative px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/40 shrink-0">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
-              <div className="w-11 h-11 rounded-2xl bg-[#531FFF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/25 shrink-0">
+              <div className="w-11 h-11 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/25 shrink-0">
                 <Megaphone className="w-5 h-5" />
               </div>
               <div>
@@ -309,7 +309,7 @@ export function AnnouncementFormModal({
                   </h2>
                   <span
                     className={cn(
-                      "px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border",
+                      "px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border",
                       isCreate
                         ? "bg-purple-50 text-[#531FFF] border-purple-200"
                         : "bg-blue-50 text-blue-700 border-blue-200"
@@ -680,7 +680,7 @@ export function AnnouncementFormModal({
             type="button"
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting}
-            className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-100 transition-colors cursor-pointer"
+            className="px-4 py-2.5 rounded-lg border border-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-100 transition-colors cursor-pointer"
           >
             Batal
           </button>
@@ -689,7 +689,7 @@ export function AnnouncementFormModal({
             type="button"
             onClick={() => handleSubmit()}
             disabled={isSubmitting || !title.trim()}
-            className="px-5 py-2.5 rounded-xl bg-[#531FFF] hover:bg-[#4314E5] text-white text-xs font-bold transition-all shadow-md shadow-[#531FFF]/20 hover:shadow-lg hover:shadow-[#531FFF]/25 flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="px-5 py-2.5 rounded-lg bg-[#531FFF] hover:bg-[#4314E5] text-white text-xs font-bold transition-all shadow-md shadow-[#531FFF]/20 hover:shadow-lg hover:shadow-[#531FFF]/25 flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isSubmitting ? (
               <>

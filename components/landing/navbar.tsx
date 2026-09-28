@@ -67,7 +67,7 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
       <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between gap-8">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#4314cc] flex items-center justify-center shadow-lg shadow-[#531FFF]/30">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#531FFF] to-[#4314cc] flex items-center justify-center shadow-lg shadow-[#531FFF]/30">
             <Zap className="w-5 h-5 text-white" strokeWidth={2.5} />
           </div>
           <div className="leading-none">
@@ -78,7 +78,7 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
 
         {/* Desktop Nav */}
         <nav className="hidden lg:flex items-center gap-1">
-          <Link href="/" className="px-4 py-2 text-[14px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100/70 rounded-xl transition-all">
+          <Link href="/" className="px-4 py-2 text-[14px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100/70 rounded-md transition-all">
             {lang === "id" ? "Beranda" : "Home"}
           </Link>
 
@@ -87,7 +87,7 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
             <button
               onMouseEnter={() => setFeatDropdown(true)}
               onClick={() => setFeatDropdown(v => !v)}
-              className="flex items-center gap-1.5 px-4 py-2 text-[14px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100/70 rounded-xl transition-all"
+              className="flex items-center gap-1.5 px-4 py-2 text-[14px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100/70 rounded-md transition-all"
             >
               {t.features}
               <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${featDropdown ? "rotate-180" : ""}`} />
@@ -101,16 +101,16 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
                   exit={{ opacity: 0, y: 8, scale: 0.97 }}
                   transition={{ duration: 0.18, ease: "easeOut" }}
                   onMouseLeave={() => setFeatDropdown(false)}
-                  className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[560px] bg-white rounded-2xl shadow-2xl shadow-black/10 border border-gray-100 p-4 grid grid-cols-2 gap-1.5 z-50"
+                  className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[560px] bg-white rounded-xl shadow-2xl shadow-black/10 border border-gray-100 p-4 grid grid-cols-2 gap-1.5 z-50"
                 >
                   {FEATURES.map((f) => (
                     <Link
                       key={f.href}
                       href={f.href}
                       onClick={() => setFeatDropdown(false)}
-                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-[#F3F0FF]/60 transition-colors group"
+                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-[#F3F0FF]/60 transition-colors group"
                     >
-                      <div className={`w-9 h-9 rounded-xl ${f.bg} flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
+                      <div className={`w-9 h-9 rounded-md ${f.bg} flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
                         <f.icon className={f.color} style={{ width: 18, height: 18 }} strokeWidth={2} />
                       </div>
                       <div>
@@ -132,10 +132,10 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
             </AnimatePresence>
           </div>
 
-          <Link href="#pricing" className="px-4 py-2 text-[14px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100/70 rounded-xl transition-all">
+          <Link href="#pricing" className="px-4 py-2 text-[14px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100/70 rounded-md transition-all">
             {t.pricing}
           </Link>
-          <Link href="#testimonials" className="px-4 py-2 text-[14px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100/70 rounded-xl transition-all">
+          <Link href="#testimonials" className="px-4 py-2 text-[14px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100/70 rounded-md transition-all">
             {lang === "id" ? "Testimoni" : "Testimonials"}
           </Link>
         </nav>
@@ -143,12 +143,12 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
         {/* Right Actions */}
         <div className="flex items-center gap-3">
           {/* Language Toggle */}
-          <div className="hidden md:flex items-center bg-gray-100/80 p-1 rounded-xl gap-0.5">
+          <div className="hidden md:flex items-center bg-gray-100/80 p-1 rounded-md gap-0.5">
             {(["id", "en"] as const).map((l) => (
               <button
                 key={l}
                 onClick={() => onChangeLang(l)}
-                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all ${
                   lang === l ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
                 }`}
               >
@@ -159,7 +159,7 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
 
           <div className="hidden lg:flex items-center gap-2">
             {user ? (
-              <Link href="/dashboard" className="flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] text-white rounded-xl text-[13px] font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/30">
+              <Link href="/dashboard" className="flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] text-white rounded-lg text-[13px] font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/30">
                 <LayoutDashboard className="w-3.5 h-3.5" /> {t.dashboard}
               </Link>
             ) : (
@@ -167,7 +167,7 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
                 <Link href="/login" className="px-4 py-2.5 text-[13px] font-bold text-gray-700 hover:text-[#531FFF] transition-colors">
                   {t.signIn}
                 </Link>
-                <Link href="/register" className="flex items-center gap-1.5 px-5 py-2.5 bg-[#531FFF] text-white rounded-xl text-[13px] font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/30 group">
+                <Link href="/register" className="flex items-center gap-1.5 px-5 py-2.5 bg-[#531FFF] text-white rounded-lg text-[13px] font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/30 group">
                   {t.getStarted} <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                 </Link>
               </>
@@ -177,7 +177,7 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
           {/* Mobile hamburger */}
           <button
             onClick={() => setMobileOpen(v => !v)}
-            className="lg:hidden w-10 h-10 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors"
+            className="lg:hidden w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"
           >
             {mobileOpen ? <X className="w-5 h-5 text-gray-700" /> : <Menu className="w-5 h-5 text-gray-700" />}
           </button>
@@ -195,13 +195,13 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
             className="lg:hidden bg-white/97 backdrop-blur-xl border-t border-gray-100 overflow-hidden"
           >
             <div className="max-w-7xl mx-auto px-6 py-4 space-y-1">
-              <Link href="/" onClick={() => setMobileOpen(false)} className="block px-4 py-3 text-[14px] font-semibold text-gray-700 hover:bg-[#F3F0FF] rounded-xl">
+              <Link href="/" onClick={() => setMobileOpen(false)} className="block px-4 py-3 text-[14px] font-semibold text-gray-700 hover:bg-[#F3F0FF] rounded-md">
                 {lang === "id" ? "Beranda" : "Home"}
               </Link>
 
               <button
                 onClick={() => setMobileFeat(v => !v)}
-                className="w-full flex items-center justify-between px-4 py-3 text-[14px] font-semibold text-gray-700 hover:bg-[#F3F0FF] rounded-xl"
+                className="w-full flex items-center justify-between px-4 py-3 text-[14px] font-semibold text-gray-700 hover:bg-[#F3F0FF] rounded-md"
               >
                 {t.features} <ChevronDown className={`w-4 h-4 transition-transform ${mobileFeat ? "rotate-180" : ""}`} />
               </button>
@@ -210,8 +210,8 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
                 {mobileFeat && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="pl-4 space-y-0.5">
                     {FEATURES.map((f) => (
-                      <Link key={f.href} href={f.href} onClick={() => setMobileOpen(false)} className="flex items-center gap-3 px-4 py-2.5 hover:bg-[#F3F0FF] rounded-xl">
-                        <div className={`w-7 h-7 rounded-lg ${f.bg} flex items-center justify-center`}>
+                      <Link key={f.href} href={f.href} onClick={() => setMobileOpen(false)} className="flex items-center gap-3 px-4 py-2.5 hover:bg-[#F3F0FF] rounded-md">
+                        <div className={`w-7 h-7 rounded-md ${f.bg} flex items-center justify-center`}>
                           <f.icon className={`w-4 h-4 ${f.color}`} />
                         </div>
                         <span className="text-[13px] font-semibold text-gray-700">{f.label[lang]}</span>
@@ -221,28 +221,28 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
                 )}
               </AnimatePresence>
 
-              <Link href="#pricing" onClick={() => setMobileOpen(false)} className="block px-4 py-3 text-[14px] font-semibold text-gray-700 hover:bg-[#F3F0FF] rounded-xl">
+              <Link href="#pricing" onClick={() => setMobileOpen(false)} className="block px-4 py-3 text-[14px] font-semibold text-gray-700 hover:bg-[#F3F0FF] rounded-md">
                 {t.pricing}
               </Link>
 
               <div className="pt-4 pb-2 border-t border-gray-100 flex flex-col gap-3">
                 <div className="flex items-center gap-2 justify-center">
                   {(["id", "en"] as const).map((l) => (
-                    <button key={l} onClick={() => onChangeLang(l)} className={`px-4 py-2 text-[12px] font-bold rounded-xl transition-all ${lang === l ? "bg-[#F3F0FF] text-[#531FFF]" : "text-gray-500 hover:bg-gray-100"}`}>
+                    <button key={l} onClick={() => onChangeLang(l)} className={`px-4 py-2 text-[12px] font-bold rounded-md transition-all ${lang === l ? "bg-[#F3F0FF] text-[#531FFF]" : "text-gray-500 hover:bg-gray-100"}`}>
                       {l === "id" ? "🇮🇩 Indonesia" : "🇬🇧 English"}
                     </button>
                   ))}
                 </div>
                 {user ? (
-                  <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="flex items-center justify-center gap-2 py-3 bg-[#531FFF] text-white rounded-xl text-[14px] font-bold">
+                  <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="flex items-center justify-center gap-2 py-3 bg-[#531FFF] text-white rounded-lg text-[14px] font-bold">
                     <LayoutDashboard className="w-4 h-4" /> {t.dashboard}
                   </Link>
                 ) : (
                   <>
-                    <Link href="/login" onClick={() => setMobileOpen(false)} className="block py-3 text-center text-[14px] font-semibold text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50">
+                    <Link href="/login" onClick={() => setMobileOpen(false)} className="block py-3 text-center text-[14px] font-semibold text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">
                       {t.signIn}
                     </Link>
-                    <Link href="/register" onClick={() => setMobileOpen(false)} className="flex items-center justify-center gap-2 py-3 bg-[#531FFF] text-white rounded-xl text-[14px] font-bold">
+                    <Link href="/register" onClick={() => setMobileOpen(false)} className="flex items-center justify-center gap-2 py-3 bg-[#531FFF] text-white rounded-lg text-[14px] font-bold">
                       {t.getStarted} <ArrowRight className="w-4 h-4" />
                     </Link>
                   </>
