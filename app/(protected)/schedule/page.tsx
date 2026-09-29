@@ -19,6 +19,7 @@ import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { getTeachersForSubject } from "@/lib/subject-teacher-relations";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
@@ -44,6 +45,7 @@ function getSubjectColor(subjectName: string) {
 
 export default function SchedulePage() {
   const toast = useToast();
+  const { activeAcademicYear, activeSemester, isArchiveMode, matchesCurrentPeriod } = useAcademicYear();
   const [schedules, setSchedules] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
@@ -280,6 +282,8 @@ export default function SchedulePage() {
     setIsSubmitting(true);
     try {
       const schedulePayload = {
+        academicYear: activeAcademicYear,
+        semester: activeSemester,
         day: formDay,
         class: formClass,
         classId: formClassId,
@@ -368,13 +372,14 @@ export default function SchedulePage() {
     const targetClass = (studentMyClass?.name || studentClassId).toLowerCase().trim();
     const classDocId = studentMyClass?._firestoreId || studentMyClass?.id || "";
     return schedules.filter(s => {
+      if (!matchesCurrentPeriod(s.academicYear, s.semester)) return false;
       if (classDocId && s.classDocId && s.classDocId === classDocId) return true;
       const sc = (s.class || s.classId || s.className || "").toLowerCase().trim();
       if (sc === targetClass || sc.replace(/\s+/g, "") === targetClass.replace(/\s+/g, "")) return true;
       if (studentMyClass?.previousNames?.some((p: string) => p && p.toLowerCase().trim() === sc)) return true;
       return false;
     });
-  }, [schedules, studentClassId, studentMyClass]);
+  }, [schedules, studentClassId, studentMyClass, matchesCurrentPeriod]);
 
   // Filtered by student's search query (subject or teacher)
   const filteredStudentSchedules = useMemo(() => {
@@ -966,6 +971,7 @@ export default function SchedulePage() {
 
   // Filtered schedule items (FOR ADMIN, GURU & SUPER-ADMIN)
   const filteredSchedules = schedules.filter(s => {
+    if (!matchesCurrentPeriod(s.academicYear, s.semester)) return false;
     const matchesClass = selectedClassFilter === "All" || s.class === selectedClassFilter;
     const matchesQuery = !searchQuery || 
       (s.subject && s.subject.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -980,11 +986,16 @@ export default function SchedulePage() {
       {/* Header Section */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Jadwal Pelajaran</h1>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#531FFF]/10 text-[#531FFF]">
-              {schedules.length} Sesi
+              {filteredSchedules.length} Sesi ({activeAcademicYear} - {activeSemester})
             </span>
+            {isArchiveMode && (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                Mode Arsip
+              </span>
+            )}
           </div>
           <p className="text-gray-500 text-sm font-medium mt-1">Kelola dan atur alokasi mata pelajaran mingguan dengan cepat.</p>
         </div>

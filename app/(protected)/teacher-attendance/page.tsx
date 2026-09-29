@@ -54,9 +54,11 @@ import {
   getTodayDateString,
 } from "@/lib/teacher-attendance";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 export default function TeacherAttendancePage() {
   const { showSuccess, showError } = useToast();
+  const { activeAcademicYear, activeSemester, matchesCurrentPeriod } = useAcademicYear();
   const {
     user: authUser,
     userData: authUserData,
@@ -518,13 +520,14 @@ export default function TeacherAttendancePage() {
     const activeNip = (authUserData?.nip || currentTeacherInfo?.nip || "").trim();
 
     return records.filter((r) => {
+      if (!matchesCurrentPeriod(r.academicYear, r.semester)) return false;
       if (activeUid && (r.teacherId === activeUid || (r as any).uid === activeUid || r.id.includes(activeUid))) return true;
       if (activeEmail && r.email && r.email.toLowerCase() === activeEmail) return true;
       if (activeNip && activeNip !== "-" && r.nip && r.nip === activeNip) return true;
       if (activeName && r.teacherName && r.teacherName.toLowerCase().trim() === activeName) return true;
       return false;
     });
-  }, [records, authUser, currentUser, authUserEmail, authUserData, authUserName, currentTeacherInfo]);
+  }, [records, authUser, currentUser, authUserEmail, authUserData, authUserName, currentTeacherInfo, matchesCurrentPeriod]);
 
   // Current Teacher's Personal Monthly Stats - calculated directly from database records
   const myMonthlyStats = useMemo(() => {
@@ -703,6 +706,8 @@ export default function TeacherAttendancePage() {
         email: currentTeacherInfo.email || authUserEmail || currentUser?.email || "",
         phone: currentTeacherInfo.phone || authUserData?.phone || "",
         photoUrl: photoPreview || undefined,
+        academicYear: activeAcademicYear || "2025/2026",
+        semester: activeSemester || "Ganjil",
         location: {
           lat: locationData.lat,
           lng: locationData.lng,
@@ -846,6 +851,8 @@ export default function TeacherAttendancePage() {
       teacherName: t?.name || manualRecord.teacherName || "Guru",
       nip: t?.nip || manualRecord.nip || "-",
       subject: t?.subject || manualRecord.subject || "Guru Pengajar",
+      academicYear: activeAcademicYear || "2025/2026",
+      semester: activeSemester || "Ganjil",
       date: manualRecord.date,
       clockIn: {
         time: "07:00:00",
@@ -1809,6 +1816,7 @@ export default function TeacherAttendancePage() {
                       teachersList.map((teacher, idx) => {
                       const tRecs = records.filter(
                         (r) =>
+                          matchesCurrentPeriod(r.academicYear, r.semester) &&
                           (r.date || "").startsWith(monthlyMonth) &&
                           (r.teacherId === teacher.id ||
                             r.teacherId === teacher.uid ||

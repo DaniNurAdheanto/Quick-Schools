@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
+import { executeGoogleAuth } from "@/lib/auth-helpers";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -15,7 +16,24 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const handleGoogleRegister = async () => {
+    setGoogleLoading(true);
+    setError("");
+    try {
+      const { redirectUrl } = await executeGoogleAuth();
+      router.push(redirectUrl);
+    } catch (err: any) {
+      if (err.code !== "auth/popup-closed-by-user" && err.code !== "auth/cancelled-popup-request") {
+        console.error("Google Register error:", err);
+        setError(err.message || "Gagal mendaftar dengan Google. Silakan coba lagi.");
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,8 +173,31 @@ export default function RegisterPage() {
             <p className="text-gray-500 text-sm mb-8">Bergabunglah dengan Quick Schools hari ini.</p>
 
             {error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl">
-                {error}
+              <div className="mb-6 p-4 bg-red-50 border border-red-200/80 text-red-700 text-sm rounded-xl shadow-sm">
+                <div className="font-semibold text-red-800 mb-1 flex items-center gap-2">
+                  <span>Pemberitahuan Sistem</span>
+                </div>
+                <div className="leading-relaxed text-red-700 text-xs sm:text-sm">{error}</div>
+                {(error.includes("Authorized Domains") || error.includes("unauthorized-domain")) && (
+                  <div className="mt-3 pt-3 border-t border-red-200/70 flex flex-col gap-2">
+                    <p className="text-xs text-red-800 font-medium">
+                      Langkah cepat memperbaiki:
+                    </p>
+                    <ol className="text-xs text-red-700 list-decimal list-inside space-y-1">
+                      <li>Buka Firebase Console &gt; Authentication &gt; Settings &gt; Authorized domains</li>
+                      <li>Klik <strong>Add domain</strong> lalu masukkan <strong>localhost</strong> (dan <strong>127.0.0.1</strong>)</li>
+                      <li>Simpan, lalu ulangi pendaftaran dengan Google</li>
+                    </ol>
+                    <a
+                      href="https://console.firebase.google.com/project/gen-lang-client-0267237773/authentication/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#531FFF] hover:text-[#4115cc] mt-1 underline"
+                    >
+                      Buka Firebase Console Settings ↗
+                    </a>
+                  </div>
+                )}
               </div>
             )}
 
@@ -235,31 +276,30 @@ export default function RegisterPage() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pb-2">
-                <button type="button" className="flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-lg text-xs transition-colors">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                     <path fillRule="evenodd" clipRule="evenodd" d="M23.04 12.2614C23.04 11.4459 22.9668 10.6618 22.8309 9.90909H12V14.3575H18.1891C17.922 15.795 17.1124 17.0227 15.8943 17.8382V20.7136H19.6109C21.7855 18.7118 23.04 15.7636 23.04 12.2614Z" fill="#4285F4"/>
-                     <path fillRule="evenodd" clipRule="evenodd" d="M12 23.4998C15.105 23.4998 17.7082 22.4703 19.6109 20.7135L15.8943 17.8381C14.8648 18.5276 13.545 18.9453 12 18.9453C9.00497 18.9453 6.46951 16.9208 5.56542 14.185H1.72314V17.164C3.61542 20.9231 7.50451 23.4998 12 23.4998Z" fill="#34A853"/>
-                     <path fillRule="evenodd" clipRule="evenodd" d="M5.56523 14.1855C5.33523 13.496 5.20455 12.7586 5.20455 12.0005C5.20455 11.2423 5.33523 10.5049 5.56523 9.8154V6.83643H1.72295C0.944318 8.38415 0.5 10.1413 0.5 12.0005C0.5 13.8595 0.944318 15.6168 1.72295 17.1645L5.56523 14.1855Z" fill="#FBBC05"/>
-                     <path fillRule="evenodd" clipRule="evenodd" d="M12 5.05455C13.6882 5.05455 15.2082 5.635 16.405 6.77455L19.695 3.48455C17.6977 1.625 15.0945 0.5 12 0.5C7.50451 0.5 3.61542 3.07682 1.72314 6.83636L5.56542 9.81545C6.46951 7.07955 9.00497 5.05455 12 5.05455Z" fill="#EA4335"/>
-                  </svg>
-                  Google
-                </button>
-                
-                <button type="button" className="flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-lg text-xs transition-colors">
-                  <svg className="w-4 h-4" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M10 10H0V0H10V10Z" fill="#F25022"/>
-                    <path d="M21 10H11V0H21V10Z" fill="#7FBA00"/>
-                    <path d="M10 21H0V11H10V21Z" fill="#00A4EF"/>
-                    <path d="M21 21H11V11H21V21Z" fill="#FFB900"/>
-                  </svg>
-                  Microsoft
+              <div className="pb-2">
+                <button 
+                  type="button" 
+                  onClick={handleGoogleRegister}
+                  disabled={loading || googleLoading}
+                  className="w-full flex items-center justify-center gap-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold py-3 rounded-lg text-sm transition-all shadow-2xs hover:border-gray-300 active:scale-[0.99] disabled:opacity-70 cursor-pointer"
+                >
+                  {googleLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-[#531FFF]" />
+                  ) : (
+                    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path fillRule="evenodd" clipRule="evenodd" d="M23.04 12.2614C23.04 11.4459 22.9668 10.6618 22.8309 9.90909H12V14.3575H18.1891C17.922 15.795 17.1124 17.0227 15.8943 17.8382V20.7136H19.6109C21.7855 18.7118 23.04 15.7636 23.04 12.2614Z" fill="#4285F4"/>
+                      <path fillRule="evenodd" clipRule="evenodd" d="M12 23.4998C15.105 23.4998 17.7082 22.4703 19.6109 20.7135L15.8943 17.8381C14.8648 18.5276 13.545 18.9453 12 18.9453C9.00497 18.9453 6.46951 16.9208 5.56542 14.185H1.72314V17.164C3.61542 20.9231 7.50451 23.4998 12 23.4998Z" fill="#34A853"/>
+                      <path fillRule="evenodd" clipRule="evenodd" d="M5.56523 14.1855C5.33523 13.496 5.20455 12.7586 5.20455 12.0005C5.20455 11.2423 5.33523 10.5049 5.56523 9.8154V6.83643H1.72295C0.944318 8.38415 0.5 10.1413 0.5 12.0005C0.5 13.8595 0.944318 15.6168 1.72295 17.1645L5.56523 14.1855Z" fill="#FBBC05"/>
+                      <path fillRule="evenodd" clipRule="evenodd" d="M12 5.05455C13.6882 5.05455 15.2082 5.635 16.405 6.77455L19.695 3.48455C17.6977 1.625 15.0945 0.5 12 0.5C7.50451 0.5 3.61542 3.07682 1.72314 6.83636L5.56542 9.81545C6.46951 7.07955 9.00497 5.05455 12 5.05455Z" fill="#EA4335"/>
+                    </svg>
+                  )}
+                  <span>Daftar dengan Google</span>
                 </button>
               </div>
 
               <div className="pt-6 text-center">
                 <p className="text-[13px] font-medium text-gray-500">
-                  Sudah punya akun? <Link href="/" className="text-[#531FFF] hover:underline font-bold">Masuk di sini</Link>
+                  Sudah punya akun? <Link href="/login" className="text-[#531FFF] hover:underline font-bold">Masuk di sini</Link>
                 </p>
               </div>
             </form>

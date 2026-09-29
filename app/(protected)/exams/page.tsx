@@ -25,6 +25,7 @@ import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 // ==========================================
 // TYPES & INTERFACES
@@ -110,6 +111,9 @@ export default function ExamSchedulePage() {
   const [loading, setLoading] = useState(true);
   const [studentClass, setStudentClass] = useState<string>("");
 
+  const { activeAcademicYear, activeSemester, matchesCurrentPeriod } = useAcademicYear();
+  const currentPeriodTag = `${activeAcademicYear} - ${activeSemester}`;
+
   // Filters for Daftar Kelompok (Main Page)
   const [groupSearchQuery, setGroupSearchQuery] = useState<string>("");
   const [selectedGroupType, setSelectedGroupType] = useState<string>("All");
@@ -178,7 +182,7 @@ export default function ExamSchedulePage() {
   }>({
     name: "",
     examType: "PTS",
-    academicYear: "2025/2026 - Ganjil",
+    academicYear: currentPeriodTag,
     targetClass: "10 MIPA 1",
     startDate: new Date().toISOString().split("T")[0],
     endDate: new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0],
@@ -379,6 +383,14 @@ export default function ExamSchedulePage() {
     const effectiveStudentClass = studentClass || "10 MIPA 1";
 
     return allGroups.filter(grp => {
+      // 0. Academic Period Filter
+      if (grp.academicYear) {
+        const parts = grp.academicYear.split("-").map(p => p.trim());
+        const yearPart = parts[0] || "";
+        const semPart = parts[1] || "";
+        if (!matchesCurrentPeriod(yearPart, semPart || undefined)) return false;
+      }
+
       // 1. If student: only show groups for student's class and semester exams
       if (isStudentRole) {
         if (!isSemesterExamType(grp.examType, grp.name)) return false;
@@ -416,7 +428,7 @@ export default function ExamSchedulePage() {
 
       return true;
     });
-  }, [allGroups, isStudentRole, studentClass, selectedGroupClass, selectedGroupType, selectedGroupStatus, groupSearchQuery, groupSchedulesMap]);
+  }, [allGroups, isStudentRole, studentClass, selectedGroupClass, selectedGroupType, selectedGroupStatus, groupSearchQuery, groupSchedulesMap, matchesCurrentPeriod]);
 
   // The active selected group (if any)
   const currentGroup = useMemo(() => {
@@ -485,7 +497,7 @@ export default function ExamSchedulePage() {
     setGroupFormData({
       name: "",
       examType: "PTS",
-      academicYear: "2025/2026 - Ganjil",
+      academicYear: currentPeriodTag,
       targetClass: defaultClass,
       startDate: new Date().toISOString().split("T")[0],
       endDate: new Date(Date.now() + 5 * 86400000).toISOString().split("T")[0],
@@ -502,7 +514,7 @@ export default function ExamSchedulePage() {
     setGroupFormData({
       name: grp.name,
       examType: grp.examType,
-      academicYear: grp.academicYear || "2025/2026 - Ganjil",
+      academicYear: grp.academicYear || currentPeriodTag,
       targetClass: grp.targetClass || (classes[0]?.name || "10 MIPA 1"),
       startDate: grp.startDate || new Date().toISOString().split("T")[0],
       endDate: grp.endDate || new Date().toISOString().split("T")[0],

@@ -48,6 +48,7 @@ import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { formatRupiah } from "@/lib/spp-payments";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 
@@ -111,6 +112,7 @@ export function PrincipalDashboardView({
   const { profile: schoolProfile } = useSchoolProfile();
   const { students: unifiedStudents } = useUnifiedStudents();
   const { teachers: unifiedTeachers } = useUnifiedTeachers();
+  const { activeAcademicYear, activeSemester, availableYears: contextAcademicYears } = useAcademicYear();
 
   // ─── Realtime Database States ─────────────────────────────────────────────
   const [students, setStudents] = useState<any[]>([]);
@@ -126,10 +128,15 @@ export function PrincipalDashboardView({
   const [lastSyncTime, setLastSyncTime] = useState<string>("");
 
   // ─── Interactive Filter States ────────────────────────────────────────────
-  const [filterAcademicYear, setFilterAcademicYear] = useState<string>("Semua");
-  const [filterSemester, setFilterSemester] = useState<string>("Semua");
+  const [filterAcademicYear, setFilterAcademicYear] = useState<string>(activeAcademicYear || "Semua");
+  const [filterSemester, setFilterSemester] = useState<string>(activeSemester || "Semua");
   const [filterPeriod, setFilterPeriod] = useState<"today" | "7days" | "month" | "semester">("today");
   const [filterClass, setFilterClass] = useState<string>("Semua Kelas");
+
+  useEffect(() => {
+    if (activeAcademicYear) setFilterAcademicYear(activeAcademicYear);
+    if (activeSemester) setFilterSemester(activeSemester);
+  }, [activeAcademicYear, activeSemester]);
 
   useEffect(() => {
     setStudents(unifiedStudents);
@@ -241,14 +248,15 @@ export function PrincipalDashboardView({
   // ─── Distinct Filter Options Derived from Database ────────────────────────
   const availableAcademicYears = useMemo(() => {
     const set = new Set<string>();
+    if (activeAcademicYear) set.add(activeAcademicYear.replace(/\s+/g, ""));
     if (academicYear) set.add(academicYear.replace(/\s+/g, ""));
-    grades.forEach(g => { if (g.academicYear) set.add(g.academicYear); });
-    bills.forEach(b => { if (b.academicYear) set.add(b.academicYear); });
+    contextAcademicYears.forEach(y => { if (y.name) set.add(y.name.replace(/\s+/g, "")); });
+    grades.forEach(g => { if (g.academicYear) set.add(g.academicYear.replace(/\s+/g, "")); });
+    bills.forEach(b => { if (b.academicYear) set.add(b.academicYear.replace(/\s+/g, "")); });
     students.forEach(s => { if (s.entryYear) set.add(`${s.entryYear}/${parseInt(s.entryYear) + 1}`); });
     const list = Array.from(set).filter(Boolean);
-    if (!list.includes("2026/2027")) list.unshift("2026/2027");
     return ["Semua", ...list];
-  }, [academicYear, grades, bills, students]);
+  }, [activeAcademicYear, academicYear, contextAcademicYears, grades, bills, students]);
 
   const availableClasses = useMemo(() => {
     const list = classes.map(c => c.name || c.className || c.id).filter(Boolean);
@@ -588,8 +596,8 @@ export function PrincipalDashboardView({
 
   // ─── Reset Filter Action ──────────────────────────────────────────────────
   const handleResetFilters = () => {
-    setFilterAcademicYear("Semua");
-    setFilterSemester("Semua");
+    setFilterAcademicYear(activeAcademicYear || "Semua");
+    setFilterSemester(activeSemester || "Semua");
     setFilterPeriod("today");
     setFilterClass("Semua Kelas");
   };

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 import { DashboardSkeleton } from "@/components/ui/role-loading-skeleton";
 import { isParentRole, isTeacherRole, isStudentRole, isKepalaSekolahRole } from "@/lib/roles-config";
 import { StudentDashboardView } from "@/components/dashboard/student-dashboard-view";
@@ -12,6 +13,7 @@ import { PrincipalDashboardView } from "@/components/dashboard/principal-dashboa
 
 export default function DashboardPage() {
   const {
+    user,
     userName: authUserName,
     role,
     rawRole,
@@ -19,10 +21,10 @@ export default function DashboardPage() {
     isRoleReady,
     isKepalaSekolah,
   } = useAuth();
+  const { activeAcademicYear } = useAcademicYear();
 
   const [previewRole, setPreviewRole] = useState<string | null>(null);
   const [greeting, setGreeting] = useState("Selamat pagi");
-  const [academicYear, setAcademicYear] = useState("2026 / 2027");
   const [currentDate, setCurrentDate] = useState("");
   const [currentDay, setCurrentDay] = useState("");
 
@@ -40,11 +42,6 @@ export default function DashboardPage() {
       } else {
         setGreeting("Selamat malam");
       }
-
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const startYear = month >= 6 ? year : year - 1;
-      setAcademicYear(`${startYear} / ${startYear + 1}`);
 
       const dateFormatter = new Intl.DateTimeFormat('id-ID', {
         day: 'numeric',
@@ -64,13 +61,14 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // 1. Role-Based Loading Guard: NEVER render Admin dashboard before user role is verified
-  if (isAuthLoading || !isRoleReady) {
+  // 1. Role-Based Loading Guard: Strictly require verified session & role before rendering any dashboard
+  if (isAuthLoading || !user || !isRoleReady || !role) {
     return <DashboardSkeleton />;
   }
 
-  const effectiveRole = (previewRole || rawRole || role || "admin").toLowerCase();
-  const userName = authUserName || "User";
+  const effectiveRole = (previewRole || rawRole || role).toLowerCase();
+  const userName = authUserName || "Pengguna";
+  const academicYear = activeAcademicYear || "2025/2026";
 
   // 2. Student Dashboard
   if (effectiveRole === "siswa" || effectiveRole === "student" || isStudentRole(effectiveRole)) {

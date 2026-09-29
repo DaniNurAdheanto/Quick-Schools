@@ -48,7 +48,8 @@ import {
   Layers,
   ArrowRight,
   ExternalLink,
-  User
+  User,
+  Calendar
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,7 @@ import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-m
 import { acquireCurrentLocation } from "@/lib/geolocation-service";
 import { useTimePresets, TimePreset } from "@/lib/time-presets";
 import SPPPaymentSettings from "@/components/settings/spp-payment-settings";
+import AcademicYearSettings from "@/components/settings/academic-year-settings";
 import { useSchoolProfile, DEFAULT_SCHOOL_PROFILE, SchoolProfile } from "@/context/SchoolProfileContext";
 import {
   EducationalStage,
@@ -70,6 +72,7 @@ import {
 type SettingCategory = 
   | "profile" 
   | "academic_stage"
+  | "academic_year"
   | "grading" 
   | "attendance"
   | "time_presets"
@@ -93,7 +96,8 @@ const SETTINGS_GROUPS: NavGroup[] = [
     groupTitle: "PROFIL & IDENTITAS",
     items: [
       { id: "profile", label: "Profil Sekolah", desc: "Nama, logo, NPSN & alamat resmi", icon: Building2 },
-      { id: "academic_stage", label: "Jenjang & Kurikulum", desc: "Pilihan SD, SMP, SMA, SMK & Jurusan", icon: GraduationCap, badge: "Utama" }
+      { id: "academic_stage", label: "Jenjang & Kurikulum", desc: "Pilihan SD, SMP, SMA, SMK & Jurusan", icon: GraduationCap, badge: "Utama" },
+      { id: "academic_year", label: "Tahun Ajaran & Semester", desc: "Konteks periode aktif, arsip & multi-tahun", icon: Calendar, badge: "Konteks Utama" }
     ]
   },
   {
@@ -2731,6 +2735,13 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB 1.6: Academic Year & Semester Configuration (Multi-Period Context) */}
+          {activeTab === "academic_year" && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <AcademicYearSettings />
             </div>
           )}
 

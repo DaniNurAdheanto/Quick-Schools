@@ -22,6 +22,7 @@ import { useToast } from "@/context/ToastContext";
 import { formatDistance } from "@/lib/geofence-utils";
 import { acquireCurrentLocation, type GeolocationErrorState } from "@/lib/geolocation-service";
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 interface AttendanceConfig {
   schoolStartTime: string;
@@ -61,6 +62,8 @@ export function QuickAttendanceModal({
   const toastCtx = useToast();
   const showSuccess = toastCtx?.showSuccess;
   const showError = toastCtx?.showError;
+
+  const { activeAcademicYear, activeSemester } = useAcademicYear();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -379,6 +382,8 @@ export function QuickAttendanceModal({
       studentName: userName,
       studentEmail: user?.email || "",
       className: studentClass,
+      academicYear: activeAcademicYear || "2025/2026",
+      semester: activeSemester || "Ganjil",
       date: dateStr,
       readableDate,
       timestamp: timeStr,

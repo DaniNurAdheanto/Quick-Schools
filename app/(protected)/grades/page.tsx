@@ -52,6 +52,7 @@ import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { isTeacherAssignedToSubject, getSubjectsForTeacher } from "@/lib/subject-teacher-relations";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 // 6 Core Assessment Types requested by user
 const ASSESSMENT_TYPES = [
@@ -88,12 +89,26 @@ export default function GradesPage() {
   // View Mode: 'matrix' (Spreadsheet multi-input), 'table' (Log view), 'gradebook' (Rekap Rapor)
   const [viewMode, setViewMode] = useState<"matrix" | "table" | "gradebook">("matrix");
 
+  // Academic Year Context
+  const {
+    activeAcademicYear,
+    activeSemester,
+    availableYears,
+    isArchiveMode
+  } = useAcademicYear();
+
   // Matrix Configuration States
   const [matrixClassId, setMatrixClassId] = useState<string>("");
   const [matrixSubject, setMatrixSubject] = useState<string>("");
-  const [matrixSemester, setMatrixSemester] = useState<string>("Ganjil");
-  const [matrixAcademicYear, setMatrixAcademicYear] = useState<string>("2025/2026");
+  const [matrixSemester, setMatrixSemester] = useState<string>(activeSemester || "Ganjil");
+  const [matrixAcademicYear, setMatrixAcademicYear] = useState<string>(activeAcademicYear || "2025/2026");
   const [matrixKkm, setMatrixKkm] = useState<number>(() => stageConfig?.defaultKkm || 75);
+
+  // Sync matrix defaults when active academic year context changes
+  useEffect(() => {
+    if (activeAcademicYear) setMatrixAcademicYear(activeAcademicYear);
+    if (activeSemester) setMatrixSemester(activeSemester);
+  }, [activeAcademicYear, activeSemester]);
 
   // Sync matrixKkm when stage default KKM updates
   useEffect(() => {
@@ -113,6 +128,12 @@ export default function GradesPage() {
   const [selectedClass, setSelectedClass] = useState<string>("All");
   const [selectedSubject, setSelectedSubject] = useState<string>("All");
   const [selectedKkmStatus, setSelectedKkmStatus] = useState<string>("All");
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>(activeAcademicYear || "2025/2026");
+  const [selectedSemester, setSelectedSemester] = useState<string>("All");
+
+  useEffect(() => {
+    if (activeAcademicYear) setSelectedAcademicYear(activeAcademicYear);
+  }, [activeAcademicYear]);
 
   // Single Entry CrudSheet State
   const [crudState, setCrudState] = useState<{ open: boolean; mode: "create" | "edit" | "delete" | "view"; data?: any }>({
@@ -974,7 +995,22 @@ export default function GradesPage() {
       if (selectedKkmStatus === "Lulus" && score < kkm) return false;
       if (selectedKkmStatus === "Remedial" && score >= kkm) return false;
 
-      // 7. Search Query
+      // 7. Academic Year & Semester Filter
+      if (selectedAcademicYear !== "All") {
+        const itemYear = (g.academicYear || "2025/2026").trim();
+        const targetYear = selectedAcademicYear.trim();
+        if (itemYear !== targetYear && itemYear.replace(/-/g, "/") !== targetYear.replace(/-/g, "/")) {
+          return false;
+        }
+      }
+      if (selectedSemester !== "All") {
+        const itemSem = (g.semester || "Ganjil").trim();
+        if (itemSem.toLowerCase() !== selectedSemester.trim().toLowerCase()) {
+          return false;
+        }
+      }
+
+      // 8. Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const sName = (g.studentName || "").toLowerCase();
@@ -986,7 +1022,7 @@ export default function GradesPage() {
 
       return true;
     });
-  }, [grades, isStudentRole, studentDoc, currentUser, isGuru, hasAnyGradingAccess, homeroomClasses, taughtSubjectClassPairs, selectedType, selectedClass, selectedSubject, selectedKkmStatus, searchQuery, getStudentByIdOrName]);
+  }, [grades, isStudentRole, studentDoc, currentUser, isGuru, hasAnyGradingAccess, homeroomClasses, taughtSubjectClassPairs, selectedType, selectedClass, selectedSubject, selectedKkmStatus, selectedAcademicYear, selectedSemester, searchQuery, getStudentByIdOrName]);
 
   // Single Grade Submit Handler (CrudSheet)
   const handleCrudSubmit = async (data: any) => {
@@ -1029,9 +1065,8 @@ export default function GradesPage() {
           subject: data.subject || "Matematika Wajib",
           type: firestoreType,
           score: numScore,
-          kkm: officialKkm,
-          semester: data.semester || "Ganjil",
-          academicYear: data.academicYear || "2025/2026",
+          semester: data.semester || activeSemester || "Ganjil",
+          academicYear: data.academicYear || activeAcademicYear || "2025/2026",
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
@@ -1302,13 +1337,25 @@ export default function GradesPage() {
       colSpan: 1
     },
     {
+      name: "academicYear",
+      label: "Tahun Ajaran",
+      type: "select",
+      options: availableYears.map(y => ({
+        label: `${y.name} ${y.status === "Aktif" ? "(Aktif)" : "(Arsip)"}`,
+        value: y.name
+      })),
+      defaultValue: activeAcademicYear,
+      category: "akademik",
+      colSpan: 1
+    },
+    {
       name: "notes",
       label: "Catatan Evaluasi Guru (Opsional)",
       placeholder: "Catatan kemajuan siswa...",
       category: "pribadi",
       colSpan: 2
     }
-  ], [availableClassOptions, availableSubjectOptions, filteredStudentsForSingleForm, currentFormData.classId, currentFormData.subject, subjects, schoolGrading]);
+  ], [availableClassOptions, availableSubjectOptions, filteredStudentsForSingleForm, currentFormData.classId, currentFormData.subject, subjects, schoolGrading, availableYears, activeAcademicYear]);
 
   // =========================================================================
   // LOGIKA RESOLUSI DATA SISWA UNTUK PORTAL SISWA
@@ -2332,6 +2379,11 @@ export default function GradesPage() {
                     Input Cepat Multi-Penilaian
                   </span>
                 )}
+                {isArchiveMode && (
+                  <span className="px-2.5 py-0.5 text-xs font-extrabold bg-amber-100 text-amber-800 rounded-full border border-amber-300 flex items-center gap-1">
+                    Mode Arsip: TA {activeAcademicYear} ({activeSemester})
+                  </span>
+                )}
               </div>
               <p className="text-[13px] text-gray-500 font-medium">
                 {isStudentRole
@@ -2383,8 +2435,8 @@ export default function GradesPage() {
                 mode: "create",
                 data: {
                   kkm: schoolGrading?.kkmScore || 75,
-                  semester: "Ganjil",
-                  academicYear: "2025/2026",
+                  semester: matrixSemester || activeSemester || "Ganjil",
+                  academicYear: matrixAcademicYear || activeAcademicYear || "2025/2026",
                   type: "Tugas",
                   classId: matrixClassId || primaryTeacherClass || availableClassOptions[0]?.value || "",
                   subject: matrixSubject || (matrixClassId ? getAuthorizedSubjectsForClass(matrixClassId)[0] : "") || ""
@@ -2542,8 +2594,11 @@ export default function GradesPage() {
                 onChange={(e) => setMatrixAcademicYear(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] cursor-pointer"
               >
-                <option value="2025/2026">2025/2026</option>
-                <option value="2026/2027">2026/2027</option>
+                {availableYears.map(y => (
+                  <option key={y.id} value={y.name}>
+                    {y.name} {y.status === "Aktif" ? "(Aktif)" : "(Arsip)"}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -3014,6 +3069,37 @@ export default function GradesPage() {
                 <option value="All">Semua Status KKM</option>
                 <option value="Lulus">Lulus KKM (&gt;= 75)</option>
                 <option value="Remedial">Perlu Remedial (&lt; 75)</option>
+              </select>
+
+              {/* Filter Tahun Ajaran */}
+              <select
+                value={selectedAcademicYear}
+                onChange={(e) => setSelectedAcademicYear(e.target.value)}
+                className={cn(
+                  "w-full sm:w-auto px-3 py-2 border rounded-lg text-xs font-bold cursor-pointer transition-colors",
+                  selectedAcademicYear === activeAcademicYear
+                    ? "bg-purple-50/50 border-purple-200 text-[#531FFF]"
+                    : "bg-amber-50/50 border-amber-200 text-amber-900"
+                )}
+                title="Filter Tahun Ajaran (Aktif / Arsip)"
+              >
+                <option value="All">Semua Tahun Ajaran</option>
+                {availableYears.map((y) => (
+                  <option key={y.id} value={y.name}>
+                    TA {y.name} {y.name === activeAcademicYear ? "(Aktif)" : "(Arsip)"}
+                  </option>
+                ))}
+              </select>
+
+              {/* Filter Semester */}
+              <select
+                value={selectedSemester}
+                onChange={(e) => setSelectedSemester(e.target.value)}
+                className="w-full sm:w-auto px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 cursor-pointer"
+              >
+                <option value="All">Semua Semester</option>
+                <option value="Ganjil">Semester Ganjil</option>
+                <option value="Genap">Semester Genap</option>
               </select>
             </div>
           </div>

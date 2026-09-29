@@ -60,6 +60,7 @@ import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 // -------------------------------------------------------------
 // Types & Defaults
@@ -71,6 +72,8 @@ export interface AttendanceRecord {
   studentId: string;
   studentName: string;
   className: string;
+  academicYear?: string;
+  semester?: string;
   date: string; // YYYY-MM-DD
   timestamp: string; // HH:mm:ss
   time?: string; // HH:mm
@@ -241,6 +244,7 @@ const DEFAULT_CONFIG: AttendanceConfig = {
 
 export default function AttendancePage() {
   const toast = useToast();
+  const { activeAcademicYear, activeSemester, isArchiveMode, matchesCurrentPeriod } = useAcademicYear();
 
   // Tab State: "daily" | "biometric" | "monthly"
   const [activeTab, setActiveTab] = useState<"daily" | "biometric" | "monthly">("daily");
@@ -421,6 +425,8 @@ export default function AttendancePage() {
                 inRadius: true
               },
               source: data.source || "biometric",
+              academicYear: data.academicYear,
+              semester: data.semester,
               markedBy: data.markedBy || "Admin",
               createdAt: data.createdAt
             });
@@ -468,6 +474,8 @@ export default function AttendancePage() {
                 inRadius: true
               },
               source: data.source || "manual",
+              academicYear: data.academicYear,
+              semester: data.semester,
               markedBy: data.markedBy || "Admin",
               createdAt: data.createdAt
             });
@@ -622,11 +630,14 @@ export default function AttendancePage() {
     });
   }, [isGuru, teacherHomeroomClasses, studentsList]);
 
-  // Scoped attendance records for Guru
+  // Scoped attendance records for Guru and Active Period
   const scopedAttendanceRecords = useMemo(() => {
-    if (!isGuru) return attendanceRecords;
+    const periodFiltered = attendanceRecords.filter((r) =>
+      matchesCurrentPeriod(r.academicYear, r.semester)
+    );
+    if (!isGuru) return periodFiltered;
     if (teacherHomeroomClasses.length === 0) return [];
-    return attendanceRecords.filter((r) => {
+    return periodFiltered.filter((r) => {
       const rc = (r.className || "").trim().toLowerCase();
       const rcNoSpace = rc.replace(/\s+/g, "");
       return teacherHomeroomClasses.some((tc) => {
@@ -635,7 +646,7 @@ export default function AttendancePage() {
         return rc === target || rcNoSpace === targetNoSpace;
       });
     });
-  }, [isGuru, teacherHomeroomClasses, attendanceRecords]);
+  }, [isGuru, teacherHomeroomClasses, attendanceRecords, matchesCurrentPeriod]);
 
   // -------------------------------------------------------------
   // Filtered Students for the selected class (Tab 1)
@@ -908,6 +919,8 @@ export default function AttendancePage() {
           studentId: student.id,
           studentName: student.name,
           className: studentClassName,
+          academicYear: activeAcademicYear || "2025/2026",
+          semester: activeSemester || "Ganjil",
           date: selectedDate,
           timestamp: effectiveTime,
           time: effectiveTime,
@@ -1299,6 +1312,14 @@ export default function AttendancePage() {
                     {previewAsGuru && (
                       <span className="px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200">
                         Pratinjau Role Guru
+                      </span>
+                    )}
+                    <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-purple-50 text-[#531FFF] border border-purple-200/80">
+                      TA {activeAcademicYear} ({activeSemester})
+                    </span>
+                    {isArchiveMode && (
+                      <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                        Mode Arsip
                       </span>
                     )}
                   </div>

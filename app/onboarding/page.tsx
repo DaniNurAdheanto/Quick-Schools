@@ -45,6 +45,7 @@ import { createAuthAccount } from "@/lib/create-user-auth";
 import { syncParentWithStudents } from "@/lib/parent-student-sync";
 import { AuthRequiredState } from "@/components/ui/auth-required-state";
 import { INDONESIAN_CITIES_BY_REGION, INDONESIAN_PARENT_JOBS } from "@/lib/indonesian-cities";
+import { isUserOnboardingComplete } from "@/lib/auth-helpers";
 
 function cleanFirestoreData<T>(obj: T): T {
   if (obj === null || obj === undefined) {
@@ -484,8 +485,8 @@ export default function StudentOnboardingPage() {
               email: prev.email || uData.email || user.email || ""
             }));
 
-            if (uData.onboardingCompleted && (role === "siswa" || role === "student")) {
-              router.push("/dashboard");
+            if (isUserOnboardingComplete(uData)) {
+              router.replace("/dashboard");
               return;
             }
           }
@@ -495,6 +496,7 @@ export default function StudentOnboardingPage() {
         setLoading(false);
       } else {
         setLoading(false);
+        router.replace("/login?redirect=/onboarding");
       }
     });
 

@@ -58,6 +58,7 @@ import { isStudentRole, isTeacherRole, isSuperAdminRole, isParentRole, isKepalaS
 import { resolveParentStudent } from "@/lib/parent-child-resolver";
 import Image from "next/image";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 import {
   SPPBill,
   PaymentStatus,
@@ -137,6 +138,10 @@ export default function PaymentsPage() {
     }
     return PAYMENT_METHOD_OPTIONS;
   }, [sppConfig]);
+
+  // Academic Year Context
+  const { activeAcademicYear, activeSemester, availableYears, matchesCurrentPeriod } = useAcademicYear();
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>("Aktif");
 
   // Filters & Controls
   const [searchQuery, setSearchQuery] = useState("");
@@ -465,6 +470,17 @@ export default function PaymentsPage() {
         return false;
       }
 
+      // 5. Academic Year Filter
+      if (selectedAcademicYear === "Aktif") {
+        if (bill.academicYear) {
+          if (!matchesCurrentPeriod(bill.academicYear, bill.semester)) return false;
+        }
+      } else if (selectedAcademicYear !== "Semua") {
+        if (bill.academicYear && bill.academicYear !== selectedAcademicYear) {
+          return false;
+        }
+      }
+
       return true;
     });
 
@@ -487,7 +503,7 @@ export default function PaymentsPage() {
     });
 
     return result;
-  }, [scopedBills, searchQuery, selectedMonth, selectedStatus, selectedClass, sortBy]);
+  }, [scopedBills, searchQuery, selectedMonth, selectedStatus, selectedClass, sortBy, selectedAcademicYear, matchesCurrentPeriod]);
 
   // Pagination slice
   const paginatedBills = useMemo(() => {
@@ -814,7 +830,8 @@ export default function PaymentsPage() {
         classId: studentClass,
         periodMonth: singleFormData.periodMonth,
         periodYear: singleFormData.periodMonth.split(" ")[1] || "2026",
-        academicYear: "2026/2027",
+        academicYear: activeAcademicYear || "2025/2026",
+        semester: activeSemester || "Ganjil",
         amount: Number(singleFormData.amount),
         initialPaid: Number(singleFormData.initialPaid || 0),
         dueDate: singleFormData.dueDate,
@@ -900,7 +917,8 @@ export default function PaymentsPage() {
           classId: std.className || std.classId || "12 MIPA 1",
           periodMonth: bulkFormData.periodMonth,
           periodYear: bulkFormData.periodMonth.split(" ")[1] || "2026",
-          academicYear: "2026/2027",
+          academicYear: activeAcademicYear || "2025/2026",
+          semester: activeSemester || "Ganjil",
           amount: nominal,
           dueDate: bulkFormData.dueDate,
           notes: bulkFormData.notes || "Tagihan SPP Bulanan Terpadu",
@@ -1716,6 +1734,27 @@ export default function PaymentsPage() {
 
               {/* Filter controls */}
               <div className="flex items-center gap-2 flex-wrap">
+                {/* Tahun Ajaran / Periode */}
+                <div className="flex items-center gap-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1">
+                  <Calendar className="w-3.5 h-3.5 text-[#531FFF] shrink-0" />
+                  <select
+                    value={selectedAcademicYear}
+                    onChange={(e) => {
+                      setSelectedAcademicYear(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="bg-transparent text-xs font-bold text-gray-700 outline-none cursor-pointer py-1"
+                  >
+                    <option value="Aktif">TA Aktif: {activeAcademicYear}</option>
+                    <option value="Semua">Semua TA (Riwayat)</option>
+                    {availableYears.map((ay) => (
+                      <option key={ay.id} value={ay.name}>
+                        TA {ay.name} ({ay.status})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Bulan */}
                 <div className="flex items-center gap-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1">
                   <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
@@ -1727,7 +1766,7 @@ export default function PaymentsPage() {
                     }}
                     className="bg-transparent text-xs font-bold text-gray-700 outline-none cursor-pointer py-1"
                   >
-                    <option value="Semua">Semua Periode</option>
+                    <option value="Semua">Semua Bulan</option>
                     {SPP_MONTHS.map((m) => (
                       <option key={m} value={m}>
                         {m}
@@ -1782,9 +1821,10 @@ export default function PaymentsPage() {
                 </div>
 
                 {/* Reset button */}
-                {(selectedMonth !== "Semua" || selectedStatus !== "Semua" || selectedClass !== "Semua" || searchQuery) && (
+                {(selectedAcademicYear !== "Aktif" || selectedMonth !== "Semua" || selectedStatus !== "Semua" || selectedClass !== "Semua" || searchQuery) && (
                   <button
                     onClick={() => {
+                      setSelectedAcademicYear("Aktif");
                       setSelectedMonth("Semua");
                       setSelectedStatus("Semua");
                       setSelectedClass("Semua");

@@ -33,6 +33,7 @@ export interface SPPBill {
   periodMonth: string; // e.g. "September 2026"
   periodYear: string;  // e.g. "2026"
   academicYear: string; // e.g. "2026/2027"
+  semester?: string;   // e.g. "Ganjil" | "Genap"
   amount: number;      // Total Bill (Tagihan) e.g. 500000
   paidAmount: number;  // Total Paid (Dibayar) e.g. 250000
   remainingAmount: number; // Remaining (Sisa) e.g. 250000

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ChevronDown, ChevronRight, Home, Calendar, User, LogOut, Loader2 } from "lucide-react";
+import { Bell, ChevronDown, ChevronRight, Home, Calendar, User, LogOut, Loader2, RotateCcw } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import React, { useEffect, useState, useRef } from 'react';
@@ -32,7 +32,17 @@ export function Header() {
 
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
-  const { activeAcademicYear, activeSemester, availableYears, setActiveAcademicYear, setActiveSemester } = useAcademicYear();
+  const { 
+    activeAcademicYear, 
+    activeSemester, 
+    availableYears, 
+    isArchiveMode,
+    schoolDefaultYear,
+    schoolDefaultSemester,
+    resetToSchoolDefault,
+    setActiveAcademicYear, 
+    setActiveSemester 
+  } = useAcademicYear();
 
   const onboardingCompleted = userData?.onboardingCompleted ?? (userData?.status !== "Belum Onboarding");
   const hasPendingReminder = Boolean(userData?.pendingOnboardingReminder) || (onboardingCompleted === false);
@@ -123,19 +133,25 @@ export function Header() {
         {/* Center - Academic Year Switcher */}
         <div className="flex items-center justify-center">
           {/* Global Academic Year Selector */}
-          <div className="flex items-center gap-2 bg-white border border-gray-200/80 px-3.5 py-1.5 rounded-lg shadow-2xs hover:border-[#531FFF]/40 transition-all">
-            <Calendar className="w-3.5 h-3.5 text-[#531FFF] shrink-0" />
+          <div className={cn(
+            "flex items-center gap-2 bg-white border px-3.5 py-1.5 rounded-lg shadow-2xs transition-all",
+            isArchiveMode 
+              ? "border-amber-300 ring-2 ring-amber-100 bg-amber-50/20" 
+              : "border-gray-200/80 hover:border-[#531FFF]/40"
+          )}>
+            <Calendar className={cn("w-3.5 h-3.5 shrink-0", isArchiveMode ? "text-amber-600" : "text-[#531FFF]")} />
             <select
               value={activeAcademicYear}
               onChange={(e) => setActiveAcademicYear(e.target.value)}
               className="bg-transparent text-xs font-extrabold text-gray-900 focus:outline-none cursor-pointer"
-              title="Pilih Tahun Ajaran Aktif"
+              title="Pilih Tahun Ajaran Aktif / Arsip"
             >
               {availableYears.map((y) => {
                 const yName = y.name || y.id;
+                const isDefault = y.name === schoolDefaultYear || y.isDefault;
                 return (
                   <option key={y.id || yName} value={yName}>
-                    Tahun Ajaran {yName}
+                    T.A. {yName} {isDefault ? "(Aktif)" : "(Arsip)"}
                   </option>
                 );
               })}
@@ -143,13 +159,28 @@ export function Header() {
             <span className="text-gray-300 font-normal">|</span>
             <select
               value={activeSemester}
-              onChange={(e) => setActiveSemester(e.target.value)}
-              className="bg-transparent text-xs font-extrabold text-[#531FFF] focus:outline-none cursor-pointer"
-              title="Pilih Semester Aktif"
+              onChange={(e) => setActiveSemester(e.target.value as "Ganjil" | "Genap")}
+              className={cn(
+                "bg-transparent text-xs font-extrabold focus:outline-none cursor-pointer",
+                isArchiveMode ? "text-amber-700" : "text-[#531FFF]"
+              )}
+              title="Pilih Semester"
             >
-              <option value="Ganjil">Semester Ganjil</option>
-              <option value="Genap">Semester Genap</option>
+              <option value="Ganjil">Sem. Ganjil</option>
+              <option value="Genap">Sem. Genap</option>
             </select>
+
+            {isArchiveMode && (
+              <button
+                type="button"
+                onClick={resetToSchoolDefault}
+                className="hidden xl:inline-flex items-center gap-1 ml-1 text-[10px] font-black text-amber-800 bg-amber-100 hover:bg-amber-200 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                title={`Sedang melihat arsip periode. Klik untuk kembali ke periode aktif sekolah (${schoolDefaultYear} - ${schoolDefaultSemester})`}
+              >
+                <RotateCcw className="w-2.5 h-2.5" />
+                <span>Reset Aktif</span>
+              </button>
+            )}
           </div>
         </div>
 

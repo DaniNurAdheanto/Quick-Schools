@@ -52,6 +52,8 @@ export interface TeacherAttendanceRecord {
   subject?: string;
   email?: string;
   phone?: string;
+  academicYear?: string;
+  semester?: string;
   date: string; // YYYY-MM-DD
   clockIn: ClockEventDetail | null;
   clockOut: ClockEventDetail | null;
@@ -429,6 +431,8 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
     photoUrl,
     location,
     notes,
+    academicYear,
+    semester,
   }: {
     teacherId: string;
     teacherName: string;
@@ -439,6 +443,8 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
     photoUrl?: string;
     location?: ClockEventDetail["location"];
     notes?: string;
+    academicYear?: string;
+    semester?: string;
   }) => {
     const docId = `TA_${teacherId}_${todayDate}`;
 
@@ -514,6 +520,8 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
       subject: subject || "Guru Pengajar",
       email: email || "",
       phone: phone || "",
+      academicYear,
+      semester,
       date: todayDate,
       clockIn: clockInDetail,
       clockOut: null,

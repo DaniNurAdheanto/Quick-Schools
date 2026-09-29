@@ -46,6 +46,7 @@ import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { useToast } from "@/context/ToastContext";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal";
 
 export interface StudentDashboardViewProps {
@@ -61,12 +62,13 @@ const DAYS_ORDER = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 export function StudentDashboardView({
   userName,
   greeting,
-  academicYear,
+  academicYear: propAcademicYear,
   currentDate,
   currentDay,
 }: StudentDashboardViewProps) {
   const { user: authUser, userData: authUserData } = useAuth();
   const { profile: schoolProfile } = useSchoolProfile();
+  const { activeAcademicYear } = useAcademicYear();
   const toastCtx = useToast();
   const showError = toastCtx?.showError;
 
@@ -548,7 +550,7 @@ export function StudentDashboardView({
     }
 
     const matchedSchedules = schedulesList.filter((s) => {
-      const sClass = s.classId || s.className || "";
+      const sClass = s.class || s.classId || s.className || "";
       return matchClass(sClass, studentClass);
     });
 
@@ -616,7 +618,7 @@ export function StudentDashboardView({
 
     const filtered = allExams.filter((e) => {
       if (e.isGroup || !e.subject) return false;
-      const eClass = e.classId || e.className || "";
+      const eClass = e.class || e.classId || e.className || "";
       if (eClass && !matchClass(eClass, studentClass)) return false;
       return true;
     });
@@ -958,7 +960,7 @@ export function StudentDashboardView({
               Portal Siswa Terhubung
             </span>
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-white/10 text-white border border-white/20 backdrop-blur-md">
-              Tahun Ajaran {academicYear}
+              Tahun Ajaran {activeAcademicYear || propAcademicYear}
             </span>
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-white/10 text-white border border-white/20 backdrop-blur-md flex items-center gap-1">
               <School className="w-3.5 h-3.5 text-purple-200" />

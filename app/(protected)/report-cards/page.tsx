@@ -28,6 +28,7 @@ import { resolveParentStudent } from "@/lib/parent-child-resolver";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { SubjectGroup, fetchSubjectGroupsFromDb } from "@/lib/subject-groups";
+import { useAcademicYear } from "@/context/AcademicYearContext";
 
 // Standard Indonesian Curriculum Subject Presets (Kurikulum Merdeka & Nasional)
 const STANDARD_SUBJECT_PRESETS = [
@@ -272,11 +273,19 @@ export default function ReportCardsPage() {
   const [previewAsGuru, setPreviewAsGuru] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const { activeAcademicYear, activeSemester, availableYears } = useAcademicYear();
+
   const [selectedClass, setSelectedClass] = useState<string>("All");
   const [selectedStudentId, setSelectedStudentId] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [semester, setSemester] = useState<string>("Ganjil");
-  const [academicYear, setAcademicYear] = useState<string>("2025/2026");
+  const [semester, setSemester] = useState<string>(activeSemester || "Ganjil");
+  const [academicYear, setAcademicYear] = useState<string>(activeAcademicYear || "2025/2026");
+
+  // Keep synced if user switches from global header
+  useEffect(() => {
+    if (activeAcademicYear) setAcademicYear(activeAcademicYear);
+    if (activeSemester) setSemester(activeSemester);
+  }, [activeAcademicYear, activeSemester]);
 
   const [activeTab, setActiveTab] = useState<"report" | "analytics">("report");
   const [activeSectionFilter, setActiveSectionFilter] = useState<"all" | "academic" | "attitude" | "attendance" | "extracurricular" | "notes">("all");
@@ -1769,8 +1778,18 @@ export default function ReportCardsPage() {
               onChange={(e) => setAcademicYear(e.target.value)}
               className="bg-transparent text-gray-800 text-xs font-black focus:outline-none cursor-pointer"
             >
-              <option value="2025/2026">2025/2026</option>
-              <option value="2024/2025">2024/2025</option>
+              {availableYears.length > 0 ? (
+                availableYears.map((ay) => (
+                  <option key={ay.id} value={ay.name}>
+                    {ay.name} {ay.status === "Aktif" ? "(Aktif)" : "(Arsip)"}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="2025/2026">2025/2026</option>
+                  <option value="2024/2025">2024/2025</option>
+                </>
+              )}
             </select>
           </div>
         </div>

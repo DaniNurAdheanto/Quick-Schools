@@ -123,7 +123,7 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
                     <p className="text-[11px] text-gray-400 font-medium">
                       {lang === "id" ? "Platform manajemen sekolah terintegrasi" : "Integrated school management platform"}
                     </p>
-                    <Link href="/dashboard" className="flex items-center gap-1.5 text-[12px] font-bold text-[#531FFF] hover:text-[#4314cc] transition-colors">
+                    <Link href={user ? "/dashboard" : "/login?redirect=/dashboard"} className="flex items-center gap-1.5 text-[12px] font-bold text-[#531FFF] hover:text-[#4314cc] transition-colors">
                       {lang === "id" ? "Buka Dashboard" : "Open Dashboard"} <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                   </div>

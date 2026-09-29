@@ -108,25 +108,13 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Read initial cache if present to prevent any layout jumping
-  const initialCached = useMemo(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const raw = localStorage.getItem(AUTH_CACHE_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (e) {}
-    return null;
-  }, []);
-
   const [user, setUser] = useState<User | null>(null);
-  const [userData, setUserData] = useState<UserProfileData | null>(initialCached?.userData || null);
-  const [role, setRole] = useState<UserRole | null>(initialCached?.role ? normalizeRole(initialCached.role) : null);
-  const [rawRole, setRawRole] = useState<string>(initialCached?.rawRole || "");
+  const [userData, setUserData] = useState<UserProfileData | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
+  const [rawRole, setRawRole] = useState<string>("");
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
   const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
-  const [rolePermissions, setRolePermissions] = useState<Record<string, ModulePermission>>(
-    initialCached?.role ? (DEFAULT_PERMISSIONS[normalizeRole(initialCached.role)] || {}) : {}
-  );
+  const [rolePermissions, setRolePermissions] = useState<Record<string, ModulePermission>>({});
 
   const fetchUserData = useCallback(async (firebaseUser: User) => {
     try {
@@ -266,6 +254,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
+        // Fast hydration: only use cache if it strictly belongs to this authenticated user
+        try {
+          const raw = localStorage.getItem(AUTH_CACHE_KEY);
+          if (raw) {
+            const cached = JSON.parse(raw);
+            if (cached && cached.uid === currentUser.uid) {
+              if (cached.userData) setUserData(cached.userData);
+              if (cached.role) {
+                const norm = normalizeRole(cached.role);
+                setRole(norm);
+                setRolePermissions(DEFAULT_PERMISSIONS[norm] || {});
+              }
+              if (cached.rawRole) setRawRole(cached.rawRole);
+            }
+          }
+        } catch (e) {}
         await fetchUserData(currentUser);
       } else {
         setUser(null);
@@ -324,23 +328,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Compute convenient role checks
-  const isSuperAdmin = useMemo(() => isSuperAdminRole(rawRole) || isSuperAdminRole(role) || role === "super-admin", [rawRole, role]);
-  const isGuru = useMemo(() => isTeacherRole(rawRole) || isTeacherRole(role) || role === "guru", [rawRole, role]);
-  const isStudent = useMemo(() => isStudentRole(rawRole) || isStudentRole(role) || role === "siswa", [rawRole, role]);
-  const isParent = useMemo(() => isParentRole(rawRole) || isParentRole(role) || role === "orang-tua", [rawRole, role]);
-  const isKepalaSekolah = useMemo(() => isKepalaSekolahRole(rawRole) || isKepalaSekolahRole(role) || role === "kepala-sekolah", [rawRole, role]);
-  const isAdmin = useMemo(() => (role === "admin" || (rawRole || "").toLowerCase() === "admin") && !isSuperAdmin && !isKepalaSekolah, [role, rawRole, isSuperAdmin, isKepalaSekolah]);
+  // Compute convenient role checks - strictly require verified active user
+  const isSuperAdmin = useMemo(() => Boolean(user) && (isSuperAdminRole(rawRole) || isSuperAdminRole(role) || role === "super-admin"), [user, rawRole, role]);
+  const isGuru = useMemo(() => Boolean(user) && (isTeacherRole(rawRole) || isTeacherRole(role) || role === "guru"), [user, rawRole, role]);
+  const isStudent = useMemo(() => Boolean(user) && (isStudentRole(rawRole) || isStudentRole(role) || role === "siswa"), [user, rawRole, role]);
+  const isParent = useMemo(() => Boolean(user) && (isParentRole(rawRole) || isParentRole(role) || role === "orang-tua"), [user, rawRole, role]);
+  const isKepalaSekolah = useMemo(() => Boolean(user) && (isKepalaSekolahRole(rawRole) || isKepalaSekolahRole(role) || role === "kepala-sekolah"), [user, rawRole, role]);
+  const isAdmin = useMemo(() => Boolean(user) && (role === "admin" || (rawRole || "").toLowerCase() === "admin") && !isSuperAdmin && !isKepalaSekolah, [user, role, rawRole, isSuperAdmin, isKepalaSekolah]);
 
   const canWrite = useCallback((module: string): boolean => {
+    if (!user) return false;
     return canMutateModule(rawRole || role, rolePermissions, module, "write");
-  }, [rawRole, role, rolePermissions]);
+  }, [user, rawRole, role, rolePermissions]);
 
   const canDelete = useCallback((module: string): boolean => {
+    if (!user) return false;
     return canMutateModule(rawRole || role, rolePermissions, module, "delete");
-  }, [rawRole, role, rolePermissions]);
+  }, [user, rawRole, role, rolePermissions]);
 
   const canRead = useCallback((module: string): boolean => {
+    if (!user) return false;
     const activeR = rawRole || role;
     if (isSuperAdminRole(activeR)) return true;
     if (rolePermissions && rolePermissions[module]) {
@@ -348,26 +355,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const def = DEFAULT_PERMISSIONS[role || "admin"];
     return def && def[module] ? Boolean(def[module].read) : false;
-  }, [rawRole, role, rolePermissions]);
+  }, [user, rawRole, role, rolePermissions]);
 
   const userName = useMemo(() => {
+    if (!user) return "";
     if (userData?.fullName) return userData.fullName;
     if (userData?.name) return userData.name;
     if (user?.displayName) return user.displayName;
     if (user?.email) return user.email.split("@")[0];
     return "";
-  }, [userData, user]);
+  }, [user, userData]);
 
   const userEmail = useMemo(() => {
+    if (!user) return "";
     return userData?.email || user?.email || "";
-  }, [userData, user]);
+  }, [user, userData]);
 
   const userAvatar = useMemo(() => {
+    if (!user) return "";
     return userData?.imageUrl || userData?.photoUrl || user?.photoURL || "";
-  }, [userData, user]);
+  }, [user, userData]);
 
-  const isRoleReady = useMemo(() => !isAuthLoading && Boolean(role), [isAuthLoading, role]);
-  const userRole = useMemo(() => role || "", [role]);
+  const isRoleReady = useMemo(() => !isAuthLoading && Boolean(user) && Boolean(role), [isAuthLoading, user, role]);
+  const userRole = useMemo(() => (user && role) ? role : "", [user, role]);
 
   const value = useMemo(
     () => ({

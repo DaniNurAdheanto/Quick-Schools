@@ -48,6 +48,11 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
+    match /academicYears/{yearId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
     match /reportCards/{cardId} {
       allow read, write: if isSignedIn();
     }
@@ -171,6 +176,10 @@ service cloud.firestore {
       );
     }
     match /payment_activities/{activityId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /school_incomes/{incomeId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
     }

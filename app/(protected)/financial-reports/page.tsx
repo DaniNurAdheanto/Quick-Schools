@@ -29,6 +29,8 @@ import {
   CircleDollarSign,
   Landmark,
   ChevronDown,
+  Calendar,
+  RotateCcw,
 } from "lucide-react";
 import {
   XAxis,
@@ -57,6 +59,9 @@ import {
   SPP_MONTHS,
   calculateLateFee,
 } from "@/lib/spp-payments";
+import { useAcademicYear } from "@/context/AcademicYearContext";
+import { useSchoolIncomes } from "@/lib/school-incomes";
+import { DanaMasukTab } from "@/components/finance/dana-masuk-tab";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -68,7 +73,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   Cancelled: { label: "Dibatalkan",  color: "text-gray-500",    bg: "bg-gray-50",     border: "border-gray-200",    icon: Ban },
 };
 
-type MainTab = "ringkasan" | "transaksi" | "tagihan" | "tunggakan" | "kelas";
+type MainTab = "ringkasan" | "dana_masuk" | "transaksi" | "tagihan" | "tunggakan" | "kelas";
 
 // ─── Helper Functions ────────────────────────────────────────────────────────
 
@@ -130,6 +135,26 @@ export default function FinancialReportsPage() {
 
   const { students } = useUnifiedStudents();
 
+  // Academic Year Context & Non-SPP Incomes
+  const {
+    activeAcademicYear,
+    activeSemester,
+    isArchiveMode,
+    resetToSchoolDefault,
+  } = useAcademicYear();
+
+  const {
+    incomes,
+  } = useSchoolIncomes(activeAcademicYear, activeSemester);
+
+  // Filter bills strictly by active academic year if tagged, while gracefully falling back
+  const periodBills = useMemo(() => {
+    if (!bills || bills.length === 0) return [];
+    const hasAcademicYearBills = bills.some(b => b.academicYear);
+    if (!hasAcademicYearBills) return bills;
+    return bills.filter(b => !b.academicYear || b.academicYear === activeAcademicYear);
+  }, [bills, activeAcademicYear]);
+
   // UI State
   const [mainTab, setMainTab] = useState<MainTab>("ringkasan");
   const [searchQuery, setSearchQuery] = useState("");
@@ -149,46 +174,46 @@ export default function FinancialReportsPage() {
 
   // ─── Derived Data ────────────────────────────────────────────────────────
 
-  // All unique classes from bills + students
+  // All unique classes from periodBills + students
   const allClasses = useMemo(() => {
     const set = new Set<string>();
-    bills.forEach(b => { if (b.classId) set.add(b.classId); });
+    periodBills.forEach(b => { if (b.classId) set.add(b.classId); });
     students.forEach(s => { if (s.classId) set.add(s.classId); });
     return Array.from(set).sort();
-  }, [bills, students]);
+  }, [periodBills, students]);
 
   // All unique payment methods from transactions
   const allMethods = useMemo(() => {
     const set = new Set<string>();
-    bills.forEach(b => {
+    periodBills.forEach(b => {
       (b.transactions || []).forEach(t => { if (t.paymentMethod) set.add(t.paymentMethod); });
     });
     return Array.from(set).sort();
-  }, [bills]);
+  }, [periodBills]);
 
-  // Flatten all transactions from all bills
+  // Flatten all transactions from all period bills
   const allTransactions = useMemo(() => {
     const txs: (PaymentTransaction & { bill: SPPBill })[] = [];
-    bills.forEach(b => {
+    periodBills.forEach(b => {
       (b.transactions || []).forEach(t => {
         txs.push({ ...t, bill: b });
       });
     });
     return txs.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-  }, [bills]);
+  }, [periodBills]);
 
   // ─── Summary Stats ──────────────────────────────────────────────────────
 
   const summaryStats = useMemo(() => {
-    const totalTagihan = bills.reduce((sum, b) => sum + (b.amount || 0), 0);
-    const totalPaid = bills.reduce((sum, b) => sum + (b.paidAmount || 0), 0);
-    const totalRemaining = bills.reduce((sum, b) => sum + (b.remainingAmount || 0), 0);
-    const totalBills = bills.length;
-    const paidBills = bills.filter(b => b.status === "Paid").length;
-    const overdueBills = bills.filter(b => b.status === "Overdue").length;
-    const partialBills = bills.filter(b => b.status === "Partial").length;
-    const unpaidBills = bills.filter(b => b.status === "Unpaid").length;
-    const cancelledBills = bills.filter(b => b.status === "Cancelled").length;
+    const totalTagihan = periodBills.reduce((sum, b) => sum + (b.amount || 0), 0);
+    const totalPaid = periodBills.reduce((sum, b) => sum + (b.paidAmount || 0), 0);
+    const totalRemaining = periodBills.reduce((sum, b) => sum + (b.remainingAmount || 0), 0);
+    const totalBills = periodBills.length;
+    const paidBills = periodBills.filter(b => b.status === "Paid").length;
+    const overdueBills = periodBills.filter(b => b.status === "Overdue").length;
+    const partialBills = periodBills.filter(b => b.status === "Partial").length;
+    const unpaidBills = periodBills.filter(b => b.status === "Unpaid").length;
+    const cancelledBills = periodBills.filter(b => b.status === "Cancelled").length;
     const collectRate = totalBills > 0 ? Math.round((paidBills / totalBills) * 100) : 0;
 
     // This month vs last month comparison
@@ -205,28 +230,28 @@ export default function FinancialReportsPage() {
       .reduce((sum, t) => sum + (t.amount || 0), 0);
     const incomeTrend = lastMonthIncome > 0 ? Math.round(((thisMonthIncome - lastMonthIncome) / lastMonthIncome) * 100) : thisMonthIncome > 0 ? 100 : 0;
 
-    const totalLateFees = bills.reduce((sum, b) => sum + calculateLateFee(b, sppConfig), 0);
+    const totalLateFees = periodBills.reduce((sum, b) => sum + calculateLateFee(b, sppConfig), 0);
 
     return {
       totalTagihan, totalPaid, totalRemaining, totalBills,
       paidBills, overdueBills, partialBills, unpaidBills, cancelledBills,
       collectRate, thisMonthIncome, lastMonthIncome, incomeTrend, totalLateFees,
     };
-  }, [bills, allTransactions, sppConfig]);
+  }, [periodBills, allTransactions, sppConfig]);
 
   // ─── Chart Data ──────────────────────────────────────────────────────────
 
   // Monthly income trend (12 months)
   const monthlyTrendData = useMemo(() => {
     return SPP_MONTHS.map(month => {
-      const monthBills = bills.filter(b => b.periodMonth === month);
+      const monthBills = periodBills.filter(b => b.periodMonth === month);
       const tagihan = monthBills.reduce((s, b) => s + (b.amount || 0), 0);
       const dibayar = monthBills.reduce((s, b) => s + (b.paidAmount || 0), 0);
       const parts = month.split(" ");
       const shortMonth = (parts[0] || "").slice(0, 3);
       return { name: shortMonth, Tagihan: tagihan, Pemasukan: dibayar };
     });
-  }, [bills]);
+  }, [periodBills]);
 
   // Status distribution for pie chart
   const statusDistribution = useMemo(() => {
@@ -242,7 +267,7 @@ export default function FinancialReportsPage() {
   // Per-class breakdown
   const classBreakdown = useMemo(() => {
     const map = new Map<string, { kelas: string; totalTagihan: number; totalDibayar: number; totalSisa: number; jumlahSiswa: number; lunas: number; tunggakan: number }>();
-    bills.forEach(b => {
+    periodBills.forEach(b => {
       const k = b.classId || "Lainnya";
       const existing = map.get(k) || { kelas: k, totalTagihan: 0, totalDibayar: 0, totalSisa: 0, jumlahSiswa: 0, lunas: 0, tunggakan: 0 };
       existing.totalTagihan += b.amount || 0;
@@ -254,7 +279,7 @@ export default function FinancialReportsPage() {
       map.set(k, existing);
     });
     return Array.from(map.values()).sort((a, b) => a.kelas.localeCompare(b.kelas));
-  }, [bills]);
+  }, [periodBills]);
 
   const classChartData = useMemo(() => {
     return classBreakdown.map(c => ({
@@ -267,7 +292,7 @@ export default function FinancialReportsPage() {
   // ─── Filtered Bills ──────────────────────────────────────────────────────
 
   const filteredBills = useMemo(() => {
-    let result = [...bills];
+    let result = [...periodBills];
 
     if (selectedMonth !== "Semua") {
       result = result.filter(b => b.periodMonth === selectedMonth);
@@ -302,7 +327,7 @@ export default function FinancialReportsPage() {
     if (sortBy === "remainingDesc") result.sort((a, b) => (b.remainingAmount || 0) - (a.remainingAmount || 0));
 
     return result;
-  }, [bills, selectedMonth, selectedClass, selectedStatus, searchQuery, dateFrom, dateTo, sortBy]);
+  }, [periodBills, selectedMonth, selectedClass, selectedStatus, searchQuery, dateFrom, dateTo, sortBy]);
 
   // Filtered transactions
   const filteredTransactions = useMemo(() => {
@@ -446,8 +471,9 @@ export default function FinancialReportsPage() {
 
   const TABS: { id: MainTab; label: string; icon: any; count?: number }[] = [
     { id: "ringkasan", label: "Ringkasan", icon: BarChart3 },
+    { id: "dana_masuk", label: "Dana Masuk (Non-SPP)", icon: Landmark, count: incomes.length },
     { id: "transaksi", label: "Transaksi", icon: Receipt, count: allTransactions.length },
-    { id: "tagihan", label: "Tagihan SPP", icon: CreditCard, count: bills.length },
+    { id: "tagihan", label: "Tagihan SPP", icon: CreditCard, count: periodBills.length },
     { id: "tunggakan", label: "Tunggakan", icon: AlertTriangle, count: arrearsBills.length },
     { id: "kelas", label: "Per Kelas", icon: GraduationCap, count: classBreakdown.length },
   ];
@@ -465,9 +491,27 @@ export default function FinancialReportsPage() {
               <Landmark className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Laporan Keuangan</h1>
-              <p className="text-gray-500 text-xs md:text-sm font-medium mt-0.5">
-                Ringkasan pembayaran SPP dan kondisi keuangan sekolah — Data real-time dari database
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Laporan Keuangan</h1>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
+                  <Calendar className="w-3.5 h-3.5" />
+                  TA {activeAcademicYear} • {activeSemester}
+                </span>
+                {isArchiveMode && (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                    <span>Arsip</span>
+                    <button
+                      onClick={resetToSchoolDefault}
+                      className="inline-flex items-center gap-1 text-[11px] underline hover:text-amber-950 font-bold ml-1 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Reset ke Aktif
+                    </button>
+                  </div>
+                )}
+              </div>
+              <p className="text-gray-500 text-xs md:text-sm font-medium mt-1">
+                Ringkasan SPP, kas non-SPP, dan kondisi keuangan sekolah — Otomatis tersinkronisasi per Periode Akademik Aktif
               </p>
             </div>
           </div>
@@ -604,7 +648,7 @@ export default function FinancialReportsPage() {
       </div>
 
       {/* ═══════════════════════ FILTER BAR ═══════════════════════ */}
-      {mainTab !== "ringkasan" && (
+      {mainTab !== "ringkasan" && mainTab !== "dana_masuk" && (
         <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-xs space-y-3 print:hidden">
           {/* Search + Toggle */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -921,6 +965,9 @@ export default function FinancialReportsPage() {
           </div>
         </div>
       )}
+
+      {/* ═══════════════════════ TAB: DANA MASUK (NON-SPP) ═══════════════════════ */}
+      {mainTab === "dana_masuk" && <DanaMasukTab />}
 
       {/* ═══════════════════════ TAB: TRANSAKSI ═══════════════════════ */}
       {mainTab === "transaksi" && (() => {

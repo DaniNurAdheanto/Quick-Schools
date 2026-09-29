@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { usePathname } from "next/navigation";
+import React, { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layouts/sidebar";
 import { Header } from "@/components/layouts/header";
 import { AcademicYearProvider } from "@/context/AcademicYearContext";
@@ -9,13 +9,34 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { NotificationBadgeProvider } from "@/context/NotificationBadgeContext";
 import { ShieldAlert, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { AuthRequiredState } from "@/components/ui/auth-required-state";
 import { LogoutLoadingState } from "@/components/ui/logout-loading-state";
 import { IdleTimeoutManager } from "@/components/auth/idle-timeout-manager";
+import { isUserOnboardingComplete } from "@/lib/auth-helpers";
 
 function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
-  const { user, isAuthLoading, isLoggingOut, role, isSuperAdmin, isStudent, isParent } = useAuth();
+  const { user, userData, isAuthLoading, isLoggingOut, role, isSuperAdmin, isStudent, isParent } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
+
+  // Redirect unauthenticated visitors automatically to login
+  useEffect(() => {
+    if (!isAuthLoading && !user && !isLoggingOut) {
+      const redirectUrl = pathname && pathname !== "/"
+        ? `/login?redirect=${encodeURIComponent(pathname)}`
+        : "/login";
+      router.replace(redirectUrl);
+    }
+  }, [isAuthLoading, user, isLoggingOut, pathname, router]);
+
+  // Check onboarding completion
+  const isOnboardingComplete = isUserOnboardingComplete(userData);
+  useEffect(() => {
+    if (!isAuthLoading && user && !isLoggingOut) {
+      if (!isOnboardingComplete && !isSuperAdmin) {
+        router.replace("/onboarding");
+      }
+    }
+  }, [isAuthLoading, user, isOnboardingComplete, isSuperAdmin, isLoggingOut, router]);
 
   // 0. Logout state: NEVER render empty state or previous content while logging out
   if (isLoggingOut) {
@@ -109,18 +130,60 @@ function getPageTitleFromPath(pathname: string | null): string {
   return "Area Manajemen Sekolah";
 }
 
-  // 2. Unauthenticated state: Render statement & empty state with Back to Home & Login buttons
+  // 2. Unauthenticated state: Clean verifying / redirecting state while transition to login occurs
   if (!user) {
     const pageTitle = getPageTitleFromPath(pathname);
+    const loginTarget = `/login?redirect=${encodeURIComponent(pathname || "/dashboard")}`;
     return (
-      <AuthRequiredState
-        pageName={pageTitle}
-        title="Autentikasi Akun Diperlukan"
-        description={`Halaman ${pageTitle} merupakan area terproteksi sistem Smart School OS. Silakan masuk (login) dengan akun terdaftar untuk melihat atau mengelola data pada menu ini.`}
-        loginHref={`/login?redirect=${encodeURIComponent(pathname || "/dashboard")}`}
-        homeHref="/"
-        showRegisterLink={true}
-      />
+      <div className="min-h-screen bg-[#F8F9FC] flex flex-col items-center justify-center p-6 selection:bg-[#531FFF]/20">
+        <div className="flex flex-col items-center gap-6 max-w-sm text-center animate-in fade-in zoom-in-95 duration-300">
+          <div className="w-16 h-16 rounded-xl bg-white border border-gray-100 shadow-xl shadow-[#531FFF]/10 flex items-center justify-center">
+            <Lock className="w-7 h-7 text-[#531FFF] animate-pulse" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-base font-extrabold text-gray-900 tracking-tight">Sesi Belum Terverifikasi</h2>
+            <p className="text-xs text-gray-500 font-medium">Mengarahkan Anda ke halaman masuk untuk mengakses {pageTitle}...</p>
+          </div>
+          <div className="w-36 h-1.5 bg-gray-200/80 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-[#531FFF] to-indigo-500 rounded-full animate-indeterminate" />
+          </div>
+          <div className="pt-2 flex items-center gap-3">
+            <Link
+              href="/"
+              className="text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors"
+            >
+              Halaman Utama
+            </Link>
+            <span className="text-gray-300">•</span>
+            <Link
+              href={loginTarget}
+              className="text-xs font-bold text-[#531FFF] hover:underline"
+            >
+              Klik jika tidak dialihkan
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2b. Incomplete onboarding state: Prevent flash of protected views and redirect to onboarding
+  if (user && !isOnboardingComplete && !isSuperAdmin) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FC] flex flex-col items-center justify-center p-6 selection:bg-[#531FFF]/20">
+        <div className="flex flex-col items-center gap-6 max-w-sm text-center animate-in fade-in zoom-in-95 duration-300">
+          <div className="w-16 h-16 rounded-xl bg-white border border-gray-100 shadow-xl shadow-[#531FFF]/10 flex items-center justify-center">
+            <Lock className="w-7 h-7 text-[#531FFF] animate-pulse" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-base font-extrabold text-gray-900 tracking-tight">Lengkapi Data Akun</h2>
+            <p className="text-xs text-gray-500 font-medium">Mengarahkan Anda ke formulir Onboarding untuk melengkapi data...</p>
+          </div>
+          <div className="w-36 h-1.5 bg-gray-200/80 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-[#531FFF] to-indigo-500 rounded-full animate-indeterminate" />
+          </div>
+        </div>
+      </div>
     );
   }
 
