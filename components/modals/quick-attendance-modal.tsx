@@ -23,6 +23,13 @@ import { formatDistance } from "@/lib/geofence-utils";
 import { acquireCurrentLocation, type GeolocationErrorState } from "@/lib/geolocation-service";
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { FaceEnrolmentModal } from "@/components/attendance/face-enrolment-modal";
+import { 
+  getUserFaceBiometric, 
+  analyzeCameraFrame, 
+  compareFaceDescriptors, 
+  FaceBiometricData 
+} from "@/lib/face-biometric-service";
 
 interface AttendanceConfig {
   schoolStartTime: string;
@@ -31,6 +38,9 @@ interface AttendanceConfig {
   schoolCenterLng: number;
   geofenceRadiusMeters: number;
   requireRadius: boolean;
+  studentAttendanceMode: "selfie_only" | "face_recognition";
+  minFaceMatchScore: number;
+  requireLiveness: boolean;
 }
 
 const DEFAULT_CONFIG: AttendanceConfig = {
@@ -40,6 +50,9 @@ const DEFAULT_CONFIG: AttendanceConfig = {
   schoolCenterLng: 106.816666,
   geofenceRadiusMeters: 100,
   requireRadius: true,
+  studentAttendanceMode: "face_recognition",
+  minFaceMatchScore: 80,
+  requireLiveness: true,
 };
 
 export function QuickAttendanceModal({
@@ -111,6 +124,29 @@ export function QuickAttendanceModal({
   const [verifiedTime, setVerifiedTime] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Biometric Face ID states
+  const [faceBiometric, setFaceBiometric] = useState<FaceBiometricData | null>(null);
+  const [isFaceModalOpen, setIsFaceModalOpen] = useState(false);
+  const [faceVerificationResult, setFaceVerificationResult] = useState<{
+    tested: boolean;
+    match: boolean;
+    similarity: number;
+    error?: string;
+  } | null>(null);
+
+  // Fetch biometric on open
+  useEffect(() => {
+    if (!isOpen) return;
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      getUserFaceBiometric(uid).then((bio) => {
+        if (bio && bio.isEnrolled) {
+          setFaceBiometric(bio);
+        }
+      });
+    }
+  }, [isOpen, studentId]);
+
   // 1. Fetch real-time attendance config from Firestore & localStorage
   useEffect(() => {
     if (!isOpen) return;
@@ -127,6 +163,9 @@ export function QuickAttendanceModal({
           schoolCenterLng: Number(d.schoolCenterLng ?? DEFAULT_CONFIG.schoolCenterLng),
           geofenceRadiusMeters: Number(d.geofenceRadiusMeters ?? DEFAULT_CONFIG.geofenceRadiusMeters),
           requireRadius: d.requireRadius ?? DEFAULT_CONFIG.requireRadius,
+          studentAttendanceMode: (d.studentAttendanceMode || d.attendanceMode || DEFAULT_CONFIG.studentAttendanceMode) as "selfie_only" | "face_recognition",
+          minFaceMatchScore: Number(d.minFaceMatchScore ?? DEFAULT_CONFIG.minFaceMatchScore),
+          requireLiveness: d.requireLiveness ?? DEFAULT_CONFIG.requireLiveness,
         });
       }
     } catch (e) {}
@@ -144,6 +183,9 @@ export function QuickAttendanceModal({
             schoolCenterLng: Number(d.schoolCenterLng ?? DEFAULT_CONFIG.schoolCenterLng),
             geofenceRadiusMeters: Number(d.geofenceRadiusMeters ?? DEFAULT_CONFIG.geofenceRadiusMeters),
             requireRadius: d.requireRadius ?? DEFAULT_CONFIG.requireRadius,
+            studentAttendanceMode: (d.studentAttendanceMode || d.attendanceMode || DEFAULT_CONFIG.studentAttendanceMode) as "selfie_only" | "face_recognition",
+            minFaceMatchScore: Number(d.minFaceMatchScore ?? DEFAULT_CONFIG.minFaceMatchScore),
+            requireLiveness: d.requireLiveness ?? DEFAULT_CONFIG.requireLiveness,
           });
           try {
             localStorage.setItem("quick_schools_attendance_config", JSON.stringify(d));
@@ -273,6 +315,67 @@ export function QuickAttendanceModal({
       ctx.scale(-1, 1);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+      // Biometric extraction if mode is face_recognition
+      if (config.studentAttendanceMode === "face_recognition") {
+        if (!faceBiometric?.isEnrolled) {
+          showError?.("Wajah master belum terdaftar. Silakan rekam wajah master Anda terlebih dahulu.", "Face ID Belum Terdaftar");
+          setFaceVerificationResult({
+            tested: true,
+            match: false,
+            similarity: 0,
+            error: "Wajah master belum terdaftar.",
+          });
+          setIsFaceModalOpen(true);
+          return;
+        }
+
+        const analysis = analyzeCameraFrame(canvas, ctx);
+        const liveDescriptor = analysis.descriptor;
+        if (!liveDescriptor) {
+          showError?.("Wajah tidak terdeteksi dengan jelas di kamera. Pastikan posisi wajah tegak dan pencahayaan terang.", "Wajah Tidak Terdeteksi");
+          setFaceVerificationResult({
+            tested: true,
+            match: false,
+            similarity: 0,
+            error: "Wajah tidak terdeteksi jelas.",
+          });
+          return;
+        }
+
+        const comp = compareFaceDescriptors(
+          faceBiometric.faceDescriptor,
+          liveDescriptor,
+          config.minFaceMatchScore || 70
+        );
+
+        if (!comp.match) {
+          setFaceVerificationResult({
+            tested: true,
+            match: false,
+            similarity: comp.similarity,
+            error: `Kecocokan (${comp.similarity}%) belum memenuhi syarat (Min: ${config.minFaceMatchScore || 70}%).`,
+          });
+          showError?.(
+            `Wajah tidak cocok dengan data master (${comp.similarity}% / Min ${config.minFaceMatchScore || 70}%). Silakan posisikan wajah Anda dan foto ulang.`,
+            "Verifikasi Wajah Gagal"
+          );
+          return;
+        } else {
+          setFaceVerificationResult({
+            tested: true,
+            match: true,
+            similarity: comp.similarity,
+          });
+          showSuccess?.(`Wajah cocok ${comp.similarity}%! Terverifikasi AI.`, "Verifikasi Sukses");
+        }
+      } else {
+        setFaceVerificationResult({
+          tested: false,
+          match: true,
+          similarity: 100,
+        });
+      }
+
       // Add watermark overlay
       ctx.scale(-1, 1);
       ctx.translate(-canvas.width, 0);
@@ -294,6 +397,7 @@ export function QuickAttendanceModal({
   // Retake photo
   const handleRetakePhoto = () => {
     setCapturedPhoto(null);
+    setFaceVerificationResult(null);
     startCamera();
   };
 
@@ -307,6 +411,11 @@ export function QuickAttendanceModal({
       const result = event.target?.result as string;
       if (result) {
         setCapturedPhoto(result);
+        setFaceVerificationResult({
+          tested: false,
+          match: true,
+          similarity: 100,
+        });
         stopCamera();
       }
     };
@@ -319,7 +428,8 @@ export function QuickAttendanceModal({
     !gpsLoading &&
     (!config.requireRadius || locationData.inRadius) &&
     !isSubmitting &&
-    !alreadyAttendedToday
+    !alreadyAttendedToday &&
+    (config.studentAttendanceMode !== "face_recognition" || faceVerificationResult?.match)
   );
 
   const handleSubmitAttendance = async () => {
@@ -400,9 +510,10 @@ export function QuickAttendanceModal({
         schoolLng: config.schoolCenterLng,
         radiusLimit: config.geofenceRadiusMeters,
       },
-      faceVerified: true,
-      faceMatchScore: 98.5,
-      source: "biometric",
+      attendanceMode: config.studentAttendanceMode,
+      faceVerified: config.studentAttendanceMode === "face_recognition" ? (faceVerificationResult?.match ?? true) : false,
+      faceMatchScore: config.studentAttendanceMode === "face_recognition" ? (faceVerificationResult?.similarity ?? 95) : null,
+      source: config.studentAttendanceMode === "face_recognition" ? "face_recognition_ai" : "selfie_photo",
       createdAt: new Date().toISOString(),
     };
 
@@ -611,6 +722,28 @@ export function QuickAttendanceModal({
                   )}
                 </div>
 
+                {/* Face Biometric Enrollment Prompt */}
+                {config.studentAttendanceMode === "face_recognition" && !faceBiometric?.isEnrolled && (
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-purple-900 to-indigo-900 text-white border border-purple-400/40 flex items-center justify-between gap-3 text-xs shadow-md">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                        <ScanFace className="w-4 h-4 text-purple-300" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-extrabold text-xs">Wajah Master Belum Terdaftar</p>
+                        <p className="text-[10px] text-purple-200 truncate">Daftarkan wajah acuan Anda untuk absensi AI.</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsFaceModalOpen(true)}
+                      className="px-3 py-1.5 rounded-lg bg-white text-[#531FFF] font-extrabold text-[11px] hover:bg-purple-50 transition-colors shrink-0 shadow-xs cursor-pointer"
+                    >
+                      Daftar Wajah
+                    </button>
+                  </div>
+                )}
+
                 {/* Viewport Box (Camera or Map) */}
                 {activeTab === "camera" ? (
                   <div className="relative aspect-4/3 w-full rounded-xl overflow-hidden bg-slate-950 border border-gray-200 shadow-inner flex items-center justify-center">
@@ -643,6 +776,13 @@ export function QuickAttendanceModal({
                           alt="Foto Absensi"
                           className="w-full h-full object-cover"
                         />
+                        {/* Biometric Match HUD Overlay */}
+                        {config.studentAttendanceMode === "face_recognition" && faceVerificationResult?.match && (
+                          <div className="absolute top-2.5 left-2.5 z-10 px-2.5 py-1 bg-emerald-950/85 border border-emerald-500/60 rounded-lg text-emerald-300 text-[10px] font-bold flex items-center gap-1.5 backdrop-blur-xs shadow-md">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Wajah Cocok ({faceVerificationResult.similarity}%)</span>
+                          </div>
+                        )}
                         <div className="absolute top-2.5 right-2.5 z-10">
                           <button
                             type="button"
@@ -926,6 +1066,11 @@ export function QuickAttendanceModal({
                         <Camera className="w-4 h-4 text-gray-400" />
                         <span>Ambil Foto Terlebih Dahulu</span>
                       </>
+                    ) : config.studentAttendanceMode === "face_recognition" && !faceVerificationResult?.match ? (
+                      <>
+                        <ScanFace className="w-4 h-4 text-purple-400" />
+                        <span>{!faceBiometric?.isEnrolled ? "Daftarkan Wajah Terlebih Dahulu" : "Verifikasi Wajah Belum Cocok"}</span>
+                      </>
                     ) : !locationData.inRadius ? (
                       <>
                         <XCircle className="w-4 h-4 text-rose-500" />
@@ -1025,6 +1170,22 @@ export function QuickAttendanceModal({
 
         </div>
       </div>
+
+      {/* Face Enrolment Modal */}
+      <FaceEnrolmentModal
+        isOpen={isFaceModalOpen}
+        onClose={() => setIsFaceModalOpen(false)}
+        userUid={auth.currentUser?.uid || ""}
+        userName={userName || "Siswa"}
+        userRole="siswa"
+        studentId={studentId}
+        onSuccess={(bio) => {
+          setFaceBiometric(bio);
+          setIsFaceModalOpen(false);
+          showSuccess?.("Wajah master biometrik berhasil didaftarkan! Silakan ambil foto presensi.", "Face ID Siap");
+          startCamera();
+        }}
+      />
     </div>
   );
 }

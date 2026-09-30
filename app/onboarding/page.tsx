@@ -32,7 +32,8 @@ import {
   GraduationCap,
   RotateCcw,
   Save,
-  AlertCircle
+  AlertCircle,
+  ScanFace
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { auth, db, storage } from "@/lib/firebase";
@@ -46,6 +47,8 @@ import { syncParentWithStudents } from "@/lib/parent-student-sync";
 import { AuthRequiredState } from "@/components/ui/auth-required-state";
 import { INDONESIAN_CITIES_BY_REGION, INDONESIAN_PARENT_JOBS } from "@/lib/indonesian-cities";
 import { isUserOnboardingComplete } from "@/lib/auth-helpers";
+import { FaceEnrolmentModal } from "@/components/attendance/face-enrolment-modal";
+import { getUserFaceBiometric, FaceBiometricData } from "@/lib/face-biometric-service";
 
 function cleanFirestoreData<T>(obj: T): T {
   if (obj === null || obj === undefined) {
@@ -190,6 +193,21 @@ export default function StudentOnboardingPage() {
 
   // Step State: 0 (Welcome), 1 (Pribadi), 2 (Akademik), 3 (OrangTua), 4 (Darurat), 5 (Review), 6 (Selesai)
   const [step, setStep] = useState<number>(0);
+
+  // Biometric Face Registration State (Step 6)
+  const [isFaceModalOpen, setIsFaceModalOpen] = useState(false);
+  const [faceBiometric, setFaceBiometric] = useState<FaceBiometricData | null>(null);
+
+  // Check if biometric is already enrolled when landing on Step 6
+  useEffect(() => {
+    if (step === 6 && currentUser?.uid) {
+      getUserFaceBiometric(currentUser.uid).then((bio) => {
+        if (bio && bio.isEnrolled) {
+          setFaceBiometric(bio);
+        }
+      });
+    }
+  }, [step, currentUser]);
 
   // Auto-Save & Draft Recovery States
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -2440,10 +2458,120 @@ export default function StudentOnboardingPage() {
               </div>
             )}
 
-            <div className="pt-4">
+            {/* FACE BIOMETRIC ENROLMENT CARD */}
+            <div className="max-w-lg mx-auto text-left w-full">
+              {faceBiometric?.isEnrolled ? (
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50 via-white to-emerald-50/50 border border-emerald-200/90 shadow-sm space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/20">
+                        <CheckCircle2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
+                          Wajah Master Absensi Terdaftar
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                            Aktif
+                          </span>
+                        </h4>
+                        <p className="text-[11px] text-emerald-800 font-medium">
+                          Presisi AI: {faceBiometric.qualityScore || 95}% • 128-Vektor Terenkripsi
+                        </p>
+                      </div>
+                    </div>
+                    {faceBiometric.photoUrl && (
+                      <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-emerald-400 shadow-xs shrink-0">
+                        <img src={faceBiometric.photoUrl} alt="Master Face" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Data wajah acuan Anda telah tersimpan resmi. Saat melakukan absensi masuk atau pulang menggunakan mode <strong>Face Recognition (AI)</strong>, kamera akan memvalidasi kehadiran Anda secara instan.
+                  </p>
+
+                  <div className="pt-1 flex items-center justify-between text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setIsFaceModalOpen(true)}
+                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Rekam Ulang Wajah
+                    </button>
+                    <span className="text-[10px] text-slate-400">Siap untuk absensi harian</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="relative overflow-hidden rounded-2xl p-5 sm:p-6 bg-gradient-to-br from-slate-900 via-[#1b1035] to-[#2d0f5e] border border-purple-500/30 text-white shadow-xl shadow-purple-950/20 space-y-4">
+                  {/* Subtle decorative glowing blob */}
+                  <div className="absolute top-0 right-0 -mr-8 -mt-8 w-36 h-36 bg-[#531FFF]/25 rounded-full blur-2xl pointer-events-none" />
+
+                  <div className="flex items-start justify-between gap-3 relative z-10">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#531FFF] to-[#7942FF] text-white flex items-center justify-center shrink-0 shadow-lg shadow-[#531FFF]/30">
+                        <ScanFace className="w-6 h-6 animate-pulse" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-400/30 text-[9px] font-black uppercase tracking-wider">
+                            Rekomendasi Utama
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[9px] font-bold">
+                            Face ID AI
+                          </span>
+                        </div>
+                        <h4 className="font-extrabold text-sm sm:text-base text-white mt-1">
+                          Daftarkan Wajah Master untuk Absensi
+                        </h4>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-300 leading-relaxed relative z-10">
+                    Satu langkah terakhir! Rekam acuan wajah Anda (<strong>hanya 5 detik</strong>) agar Anda bisa langsung absensi otomatis melalui kamera tanpa kartu fisik maupun antrean manual.
+                  </p>
+
+                  <div className="grid grid-cols-3 gap-2 py-1 text-center relative z-10">
+                    <div className="p-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
+                      <p className="text-[11px] font-black text-purple-300">⚡ &lt; 1 Detik</p>
+                      <p className="text-[9px] text-slate-400">Verifikasi Kilat</p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
+                      <p className="text-[11px] font-black text-emerald-300">🔒 128 Vektor</p>
+                      <p className="text-[9px] text-slate-400">Anti-Titip Absen</p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
+                      <p className="text-[11px] font-black text-blue-300">📍 GPS Geofence</p>
+                      <p className="text-[9px] text-slate-400">Area Sekolah</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex flex-col sm:flex-row items-center gap-3 relative z-10">
+                    <button
+                      type="button"
+                      onClick={() => setIsFaceModalOpen(true)}
+                      className="w-full sm:w-auto flex-1 py-3 px-5 rounded-xl bg-gradient-to-r from-[#531FFF] to-[#7942FF] hover:from-[#4416d8] hover:to-[#6a34ea] text-white font-extrabold text-xs shadow-lg shadow-[#531FFF]/40 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+                    >
+                      <ScanFace className="w-4 h-4" />
+                      <span>Daftarkan Wajah Sekarang</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push("/dashboard")}
+                      className="w-full sm:w-auto py-3 px-4 text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer text-center"
+                    >
+                      Daftarkan Nanti
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2">
               <button
                 onClick={() => router.push("/dashboard")}
-                className="px-8 py-4 bg-[#531FFF] hover:bg-[#4314cc] text-white font-bold rounded-lg text-sm transition-all shadow-lg shadow-[#531FFF]/25 hover:shadow-xl hover:shadow-[#531FFF]/30 inline-flex items-center gap-2 active:scale-95 cursor-pointer"
+                className="px-8 py-4 bg-[#531FFF] hover:bg-[#4314cc] text-white font-bold rounded-xl text-sm transition-all shadow-lg shadow-[#531FFF]/25 hover:shadow-xl hover:shadow-[#531FFF]/30 inline-flex items-center gap-2 active:scale-95 cursor-pointer"
               >
                 Masuk ke Dashboard Siswa <ArrowRight className="w-4 h-4" />
               </button>
@@ -2451,6 +2579,21 @@ export default function StudentOnboardingPage() {
           </div>
         )}
       </div>
+
+      {/* FACE ENROLMENT MODAL */}
+      <FaceEnrolmentModal
+        isOpen={isFaceModalOpen}
+        onClose={() => setIsFaceModalOpen(false)}
+        userUid={currentUser?.uid || ""}
+        userName={pribadi.fullName || "Siswa"}
+        userRole="siswa"
+        studentId={pribadi.nisn || currentUser?.uid}
+        onSuccess={(bio) => {
+          setFaceBiometric(bio);
+          setIsFaceModalOpen(false);
+          toast.showSuccess("Wajah master biometrik berhasil didaftarkan!", "Pendaftaran Sukses");
+        }}
+      />
     </div>
   );
 }

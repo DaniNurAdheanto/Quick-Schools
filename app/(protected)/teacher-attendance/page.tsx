@@ -55,6 +55,13 @@ import {
 } from "@/lib/teacher-attendance";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { FaceEnrolmentModal } from "@/components/attendance/face-enrolment-modal";
+import {
+  getUserFaceBiometric,
+  analyzeCameraFrame,
+  compareFaceDescriptors,
+  FaceBiometricData,
+} from "@/lib/face-biometric-service";
 
 export default function TeacherAttendancePage() {
   const { showSuccess, showError } = useToast();
@@ -139,6 +146,28 @@ export default function TeacherAttendancePage() {
   const [actionNotes, setActionNotes] = useState("");
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Biometric Face ID states
+  const [faceBiometric, setFaceBiometric] = useState<FaceBiometricData | null>(null);
+  const [isFaceModalOpen, setIsFaceModalOpen] = useState(false);
+  const [faceVerificationResult, setFaceVerificationResult] = useState<{
+    tested: boolean;
+    match: boolean;
+    similarity: number;
+    error?: string;
+  } | null>(null);
+
+  // Fetch teacher face biometric
+  useEffect(() => {
+    const targetUid = activeTeacherUid || authUser?.uid || currentUser?.uid;
+    if (targetUid) {
+      getUserFaceBiometric(targetUid).then((bio) => {
+        if (bio && bio.isEnrolled) {
+          setFaceBiometric(bio);
+        }
+      });
+    }
+  }, [activeTeacherUid, authUser?.uid, currentUser?.uid]);
 
   // Drawer state for viewing teacher attendance detail & verification photos
   const [selectedDetailRecord, setSelectedDetailRecord] = useState<{
@@ -290,6 +319,73 @@ export default function TeacherAttendancePage() {
       ctx.scale(-1, 1);
       ctx.drawImage(video, 0, 0, targetW, targetH);
 
+      // Biometric extraction if mode is face_recognition
+      if (config.attendanceMode === "face_recognition") {
+        if (!faceBiometric?.isEnrolled) {
+          showError(
+            "Wajah master guru belum terdaftar. Silakan rekam acuan wajah master Anda terlebih dahulu.",
+            "Face ID Belum Terdaftar"
+          );
+          setFaceVerificationResult({
+            tested: true,
+            match: false,
+            similarity: 0,
+            error: "Wajah master guru belum terdaftar.",
+          });
+          setIsFaceModalOpen(true);
+          return;
+        }
+
+        const analysis = analyzeCameraFrame(canvas, ctx);
+        const liveDescriptor = analysis.descriptor;
+        if (!liveDescriptor) {
+          showError(
+            "Wajah tidak terdeteksi dengan jelas di kamera. Pastikan posisi wajah tegak dan pencahayaan terang.",
+            "Wajah Tidak Terdeteksi"
+          );
+          setFaceVerificationResult({
+            tested: true,
+            match: false,
+            similarity: 0,
+            error: "Wajah tidak terdeteksi jelas.",
+          });
+          return;
+        }
+
+        const comp = compareFaceDescriptors(
+          faceBiometric.faceDescriptor,
+          liveDescriptor,
+          config.minFaceMatchScore || 70
+        );
+
+        if (!comp.match) {
+          setFaceVerificationResult({
+            tested: true,
+            match: false,
+            similarity: comp.similarity,
+            error: `Kecocokan (${comp.similarity}%) belum memenuhi syarat (Min: ${config.minFaceMatchScore || 70}%).`,
+          });
+          showError(
+            `Verifikasi wajah tidak cocok (${comp.similarity}% / Min ${config.minFaceMatchScore || 70}%). Silakan posisikan wajah Anda dan foto ulang.`,
+            "Verifikasi Wajah Gagal"
+          );
+          return;
+        } else {
+          setFaceVerificationResult({
+            tested: true,
+            match: true,
+            similarity: comp.similarity,
+          });
+          showSuccess(`Wajah cocok ${comp.similarity}%! Terverifikasi AI.`);
+        }
+      } else {
+        setFaceVerificationResult({
+          tested: false,
+          match: true,
+          similarity: 100,
+        });
+      }
+
       // Watermark bar at the bottom
       ctx.scale(-1, 1);
       ctx.translate(-canvas.width, 0);
@@ -322,6 +418,7 @@ export default function TeacherAttendancePage() {
 
   const handleRetakePhoto = () => {
     setPhotoPreview(null);
+    setFaceVerificationResult(null);
     startCamera();
   };
 
@@ -672,6 +769,15 @@ export default function TeacherAttendancePage() {
       return;
     }
 
+    // Biometric Face Match Validation
+    if (config.attendanceMode === "face_recognition" && !faceVerificationResult?.match) {
+      showError(
+        "Verifikasi biometrik wajah wajib cocok dengan data acuan master Anda sebelum Clock In.",
+        "Verifikasi Wajah Belum Valid"
+      );
+      return;
+    }
+
     // Geofence Radius Validation (Strict enforcement matching Student Attendance)
     if (config.geofenceEnabled && !locationData.inRadius) {
       const radiusLimit = Number(config.geofenceCenter?.radiusMeters ?? 100);
@@ -743,6 +849,15 @@ export default function TeacherAttendancePage() {
       showError(
         "Foto selfie kepulangan wajib diambil terlebih dahulu sebelum melakukan konfirmasi absensi pulang.",
         "Foto Belum Diambil"
+      );
+      return;
+    }
+
+    // Biometric Face Match Validation
+    if (config.attendanceMode === "face_recognition" && !faceVerificationResult?.match) {
+      showError(
+        "Verifikasi biometrik wajah wajib cocok dengan data acuan master Anda sebelum Clock Out.",
+        "Verifikasi Wajah Belum Valid"
       );
       return;
     }
@@ -958,6 +1073,43 @@ export default function TeacherAttendancePage() {
               <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
                 Sistem Clock In & Clock Out
               </span>
+              <Link
+                href="/admin/settings?tab=attendance"
+                title="Klik untuk mengubah mode absensi di Pengaturan"
+                className={cn(
+                  "text-xs font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 transition-all hover:opacity-80 cursor-pointer",
+                  config.attendanceMode === "selfie_only"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-purple-50 text-[#531FFF] border-purple-200"
+                )}
+              >
+                {config.attendanceMode === "selfie_only" ? (
+                  <>
+                    <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Mode: Foto Selfie + GPS</span>
+                  </>
+                ) : (
+                  <>
+                    <ScanFace className="w-3.5 h-3.5 text-[#531FFF]" />
+                    <span>Mode: Face Recognition (AI) + GPS</span>
+                  </>
+                )}
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => setIsFaceModalOpen(true)}
+                className={cn(
+                  "text-xs font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 transition-all cursor-pointer",
+                  faceBiometric?.isEnrolled
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                    : "bg-purple-50 text-[#531FFF] border-purple-200 hover:bg-purple-100"
+                )}
+                title="Pendaftaran Wajah Master Biometrik Guru"
+              >
+                <ScanFace className="w-3.5 h-3.5" />
+                <span>{faceBiometric?.isEnrolled ? `Face ID Master (${faceBiometric.qualityScore || 90}%)` : "Daftar Face ID Guru"}</span>
+              </button>
             </div>
             <p className="text-xs md:text-sm text-gray-500 font-medium mt-0.5">
               Pencatatan jam masuk, jam pulang, verifikasi kehadiran, dan rekapitulasi kerja staf pendidik sekolah.
@@ -1977,11 +2129,38 @@ export default function TeacherAttendancePage() {
                     ) : null}
                   </div>
 
+                  {/* Face Biometric Enrollment Prompt */}
+                  {config.attendanceMode === "face_recognition" && !faceBiometric?.isEnrolled && (
+                    <div className="p-3 rounded-xl bg-gradient-to-r from-purple-900 to-indigo-900 text-white border border-purple-400/40 flex items-center justify-between gap-3 text-xs shadow-md">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <ScanFace className="w-4 h-4 text-purple-300 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-extrabold text-[11px]">Wajah Master Guru Belum Terdaftar</p>
+                          <p className="text-[10px] text-purple-200 truncate">Daftarkan acuan wajah untuk Clock In Face ID.</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsFaceModalOpen(true)}
+                        className="px-2.5 py-1 rounded-lg bg-white text-[#531FFF] font-extrabold text-[10px] hover:bg-purple-50 transition-colors shrink-0 cursor-pointer"
+                      >
+                        Daftar Sekarang
+                      </button>
+                    </div>
+                  )}
+
                   {/* Camera Frame */}
                   <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden border border-gray-200 bg-slate-950 shadow-inner flex items-center justify-center">
                     {photoPreview ? (
                       <div className="relative w-full h-full flex items-center justify-center bg-black">
                         <img src={photoPreview} alt="Selfie preview" className="w-full h-full object-cover" />
+                        {/* Biometric Match HUD Overlay */}
+                        {config.attendanceMode === "face_recognition" && faceVerificationResult?.match && (
+                          <div className="absolute top-2.5 left-2.5 z-10 px-2.5 py-1 bg-emerald-950/85 border border-emerald-500/60 rounded-lg text-emerald-300 text-[10px] font-bold flex items-center gap-1.5 backdrop-blur-xs shadow-md">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Wajah Guru Cocok ({faceVerificationResult.similarity}%)</span>
+                          </div>
+                        )}
                         <div className="absolute top-2.5 right-2.5 z-10">
                           <button
                             type="button"
@@ -2318,11 +2497,38 @@ export default function TeacherAttendancePage() {
                     ) : null}
                   </div>
 
+                  {/* Face Biometric Enrollment Prompt */}
+                  {config.attendanceMode === "face_recognition" && !faceBiometric?.isEnrolled && (
+                    <div className="p-3 rounded-xl bg-gradient-to-r from-purple-900 to-indigo-900 text-white border border-purple-400/40 flex items-center justify-between gap-3 text-xs shadow-md">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <ScanFace className="w-4 h-4 text-purple-300 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-extrabold text-[11px]">Wajah Master Guru Belum Terdaftar</p>
+                          <p className="text-[10px] text-purple-200 truncate">Daftarkan acuan wajah untuk Clock Out Face ID.</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsFaceModalOpen(true)}
+                        className="px-2.5 py-1 rounded-lg bg-white text-[#531FFF] font-extrabold text-[10px] hover:bg-purple-50 transition-colors shrink-0 cursor-pointer"
+                      >
+                        Daftar Sekarang
+                      </button>
+                    </div>
+                  )}
+
                   {/* Camera Frame */}
                   <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden border border-gray-200 bg-slate-950 shadow-inner flex items-center justify-center">
                     {photoPreview ? (
                       <div className="relative w-full h-full flex items-center justify-center bg-black">
                         <img src={photoPreview} alt="Selfie preview" className="w-full h-full object-cover" />
+                        {/* Biometric Match HUD Overlay */}
+                        {config.attendanceMode === "face_recognition" && faceVerificationResult?.match && (
+                          <div className="absolute top-2.5 left-2.5 z-10 px-2.5 py-1 bg-emerald-950/85 border border-emerald-500/60 rounded-lg text-emerald-300 text-[10px] font-bold flex items-center gap-1.5 backdrop-blur-xs shadow-md">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Wajah Guru Cocok ({faceVerificationResult.similarity}%)</span>
+                          </div>
+                        )}
                         <div className="absolute top-2.5 right-2.5 z-10">
                           <button
                             type="button"
@@ -3190,6 +3396,22 @@ export default function TeacherAttendancePage() {
           </div>
         </div>
       )}
+
+      {/* Face Enrolment Modal for Teacher */}
+      <FaceEnrolmentModal
+        isOpen={isFaceModalOpen}
+        onClose={() => setIsFaceModalOpen(false)}
+        userUid={activeTeacherUid || authUser?.uid || currentUser?.uid || ""}
+        userName={currentTeacherInfo?.name || authUserData?.fullName || authUserName || "Bapak/Ibu Guru"}
+        userRole="guru"
+        nip={currentTeacherInfo?.nip || authUserData?.nip || ""}
+        onSuccess={(bio) => {
+          setFaceBiometric(bio);
+          setIsFaceModalOpen(false);
+          showSuccess("Wajah master guru berhasil didaftarkan! Anda siap menggunakan absensi Face ID.");
+          startCamera();
+        }}
+      />
     </div>
   );
 }

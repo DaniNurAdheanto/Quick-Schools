@@ -8,7 +8,6 @@ import {
   Palette, 
   Sliders, 
   Award, 
-  FileCheck, 
   UserCog, 
   ShieldAlert, 
   History, 
@@ -28,6 +27,7 @@ import {
   Compass,
   Map,
   ScanFace,
+  Camera,
   CheckCircle2,
   MessageSquare,
   Smartphone,
@@ -75,6 +75,7 @@ type SettingCategory =
   | "academic_year"
   | "grading" 
   | "attendance"
+  | "geofence"
   | "time_presets"
   | "spp_config";
 
@@ -121,7 +122,8 @@ const SETTINGS_GROUPS: NavGroup[] = [
   {
     groupTitle: "OPERASIONAL & JADWAL",
     items: [
-      { id: "attendance", label: "Absensi & Geofence", desc: "Face ID, toleransi & radius GPS", icon: FileCheck },
+      { id: "attendance", label: "Mode Absensi & Face AI", desc: "Dual mode Face ID, toleransi & jam presensi", icon: ScanFace, badge: "AI Powered" },
+      { id: "geofence", label: "Lokasi & Geofence GPS", desc: "Peta sekolah, koordinat & radius validasi", icon: Compass, badge: "GPS" },
       { id: "time_presets", label: "Template Jam & Sesi", desc: "Preset sesi jam pelajaran & ujian", icon: Clock }
     ]
   }
@@ -197,7 +199,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (tabParam && ["profile", "academic_stage", "grading", "attendance", "time_presets", "spp_config"].includes(tabParam)) {
+    if (tabParam && ["profile", "academic_stage", "academic_year", "grading", "attendance", "geofence", "time_presets", "spp_config"].includes(tabParam)) {
       setActiveTab(tabParam as SettingCategory);
     }
   }, [tabParam]);
@@ -427,6 +429,9 @@ export default function SettingsPage() {
   });
 
   const [attendance, setAttendance] = useState({
+    teacherAttendanceMode: "face_recognition" as "face_recognition" | "selfie_only",
+    studentAttendanceMode: "face_recognition" as "face_recognition" | "selfie_only",
+    attendanceMode: "face_recognition", // fallback alias
     methodFaceId: true,
     methodQr: true,
     methodManual: true,
@@ -461,6 +466,8 @@ export default function SettingsPage() {
       const tabParam = params.get("tab");
       if (tabParam === "attendance" || tabParam === "absensi") {
         setActiveTab("attendance");
+      } else if (tabParam === "geofence" || tabParam === "gps" || tabParam === "lokasi") {
+        setActiveTab("geofence");
       }
       if (tabParam === "time_presets" || tabParam === "preset" || tabParam === "jam" || tabParam === "jadwal") {
         setActiveTab("time_presets");
@@ -873,8 +880,16 @@ export default function SettingsPage() {
       100
     );
 
+    const teacherMode = attendance.teacherAttendanceMode || "face_recognition";
+    const studentMode = attendance.studentAttendanceMode || "face_recognition";
+
     const payload = {
       ...attendance,
+      teacherAttendanceMode: teacherMode,
+      studentAttendanceMode: studentMode,
+      attendanceMode: studentMode, // fallback alias
+      minFaceMatchScore: Number(attendance.minFaceMatchScore ?? 80),
+      requireLiveness: Boolean(attendance.requireLiveness),
       schoolCenterLat: targetLat,
       schoolCenterLng: targetLng,
       schoolLat: targetLat,
@@ -927,6 +942,11 @@ export default function SettingsPage() {
         await setDoc(
           doc(db, "roles", "teacher_attendance_config"),
           {
+            attendanceMode: teacherMode,
+            requirePhoto: true,
+            minFaceMatchScore: Number(attendance.minFaceMatchScore ?? 80),
+            requireLiveness: Boolean(attendance.requireLiveness),
+            geofenceEnabled: Boolean(attendance.requireRadius),
             geofenceCenter: {
               lat: targetLat,
               lng: targetLng,
@@ -2745,7 +2765,7 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* TAB 3: Attendance & Geofence Settings (Redesigned) */}
+          {/* TAB 3: Attendance Settings (Mode Absensi & Face Recognition AI) */}
           {activeTab === "attendance" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               {/* Header Card with Instant Save */}
@@ -2753,12 +2773,561 @@ export default function SettingsPage() {
                 <div>
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#531FFF] to-[#7344FF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/20">
+                      <ScanFace className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                          Pengaturan Mode Absensi &amp; Face Recognition AI
+                        </h2>
+                        <span className="px-2.5 py-0.5 text-xs font-extrabold bg-purple-50 text-[#531FFF] rounded-full border border-purple-200 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#531FFF] animate-pulse" />
+                          Dual Mode System
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 font-medium mt-0.5">
+                        Pilih metode validasi presensi (Face Recognition AI vs Foto Selfie Biasa) untuk Guru &amp; Siswa, jam operasional sekolah, dan metode notifikasi.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleSaveAttendanceConfig}
+                    disabled={savingAttendance}
+                    className="px-5 py-2.5 bg-[#531FFF] hover:bg-[#4316D0] active:scale-[0.98] text-white text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
+                  >
+                    {savingAttendance ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Menyimpan...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Simpan Pengaturan Absensi
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* CARD 1: Mode Validasi Presensi & Kamera AI (Dual Mode: Face Recognition vs Foto Selfie Biasa) */}
+              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-[#531FFF] text-white flex items-center justify-center shadow-sm">
+                      <ScanFace className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-gray-900 text-base">Mode Validasi Presensi &amp; Kamera AI</h3>
+                        <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-purple-50 text-[#531FFF] border border-purple-200">
+                          Dual Mode System
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Pilih metode verifikasi kehadiran untuk Guru dan Siswa: <strong>Face Recognition (AI)</strong> untuk proteksi biometrik atau <strong>Foto Selfie Biasa</strong> untuk kecepatan &amp; perangkat standar.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 1. SELEKTOR MODE GURU & TENAGA PENDIDIK */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-[#531FFF]" />
+                      <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                        1. Mode Validasi Absensi Guru &amp; Staf (Pendidik)
+                      </h4>
+                    </div>
+                    <span className="text-[11px] font-bold text-gray-500">
+                      Aktif: <strong className={attendance.teacherAttendanceMode === "face_recognition" ? "text-[#531FFF]" : "text-emerald-700"}>
+                        {attendance.teacherAttendanceMode === "face_recognition" ? "Face Recognition (AI) + GPS" : "Foto Selfie Biasa + GPS"}
+                      </strong>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {/* Option Guru 1: Face Recognition AI */}
+                    <div
+                      onClick={() => setAttendance((prev) => ({ ...prev, teacherAttendanceMode: "face_recognition" }))}
+                      className={cn(
+                        "p-4 rounded-xl border-2 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between",
+                        attendance.teacherAttendanceMode === "face_recognition"
+                          ? "bg-purple-50/50 border-[#531FFF] shadow-sm shadow-[#531FFF]/10"
+                          : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/60"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
+                            attendance.teacherAttendanceMode === "face_recognition"
+                              ? "bg-[#531FFF] text-white"
+                              : "bg-gray-100 text-gray-600"
+                          )}>
+                            <ScanFace className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h5 className="font-extrabold text-sm text-gray-900">Face Recognition (AI)</h5>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-[#531FFF]/10 text-[#531FFF]">
+                                Rekomendasi
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-0.5">Verifikasi biometrik wajah master + GPS</p>
+                          </div>
+                        </div>
+
+                        <div className={cn(
+                          "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                          attendance.teacherAttendanceMode === "face_recognition"
+                            ? "border-[#531FFF] bg-[#531FFF] text-white"
+                            : "border-gray-300 bg-white"
+                        )}>
+                          {attendance.teacherAttendanceMode === "face_recognition" && (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-gray-100/80 text-[11px] text-gray-600 space-y-1">
+                        <p className="flex items-center gap-1.5 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          Mencocokkan wajah guru langsung dengan data master wajah terdaftar.
+                        </p>
+                        <p className="flex items-center gap-1.5 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          Anti-titip absen 100% &amp; mencatat titik koordinat GPS radius sekolah.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Option Guru 2: Foto Selfie Biasa */}
+                    <div
+                      onClick={() => setAttendance((prev) => ({ ...prev, teacherAttendanceMode: "selfie_only" }))}
+                      className={cn(
+                        "p-4 rounded-xl border-2 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between",
+                        attendance.teacherAttendanceMode === "selfie_only"
+                          ? "bg-emerald-50/40 border-emerald-600 shadow-sm shadow-emerald-500/10"
+                          : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/60"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
+                            attendance.teacherAttendanceMode === "selfie_only"
+                              ? "bg-emerald-600 text-white"
+                              : "bg-gray-100 text-gray-600"
+                          )}>
+                            <Camera className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h5 className="font-extrabold text-sm text-gray-900">Hanya Foto Selfie Biasa</h5>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800">
+                                Ringan &amp; Cepat
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-0.5">Foto selfie visual + watermark GPS &amp; Jam</p>
+                          </div>
+                        </div>
+
+                        <div className={cn(
+                          "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                          attendance.teacherAttendanceMode === "selfie_only"
+                            ? "border-emerald-600 bg-emerald-600 text-white"
+                            : "border-gray-300 bg-white"
+                        )}>
+                          {attendance.teacherAttendanceMode === "selfie_only" && (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-gray-100/80 text-[11px] text-gray-600 space-y-1">
+                        <p className="flex items-center gap-1.5 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          Tidak memerlukan pencocokan wajah AI (sangat ringan untuk HP apapun).
+                        </p>
+                        <p className="flex items-center gap-1.5 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          Watermark otomatis Nama, NIP, Jam WIB, dan GPS tetap dicetak pada foto.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. SELEKTOR MODE SISWA */}
+                <div className="space-y-3 pt-4 border-t border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-600" />
+                      <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                        2. Mode Validasi Absensi Siswa
+                      </h4>
+                    </div>
+                    <span className="text-[11px] font-bold text-gray-500">
+                      Aktif: <strong className={attendance.studentAttendanceMode === "face_recognition" ? "text-[#531FFF]" : "text-emerald-700"}>
+                        {attendance.studentAttendanceMode === "face_recognition" ? "Face Recognition (AI) + GPS" : "Foto Selfie Biasa + GPS"}
+                      </strong>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {/* Option Siswa 1: Face Recognition AI */}
+                    <div
+                      onClick={() => setAttendance((prev) => ({ ...prev, studentAttendanceMode: "face_recognition" }))}
+                      className={cn(
+                        "p-4 rounded-xl border-2 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between",
+                        attendance.studentAttendanceMode === "face_recognition"
+                          ? "bg-purple-50/50 border-[#531FFF] shadow-sm shadow-[#531FFF]/10"
+                          : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/60"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
+                            attendance.studentAttendanceMode === "face_recognition"
+                              ? "bg-[#531FFF] text-white"
+                              : "bg-gray-100 text-gray-600"
+                          )}>
+                            <ScanFace className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h5 className="font-extrabold text-sm text-gray-900">Face Recognition (AI)</h5>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-[#531FFF]/10 text-[#531FFF]">
+                                Anti-Titip Absen
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-0.5">Siswa wajib scan wajah langsung di kamera</p>
+                          </div>
+                        </div>
+
+                        <div className={cn(
+                          "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                          attendance.studentAttendanceMode === "face_recognition"
+                            ? "border-[#531FFF] bg-[#531FFF] text-white"
+                            : "border-gray-300 bg-white"
+                        )}>
+                          {attendance.studentAttendanceMode === "face_recognition" && (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-gray-100/80 text-[11px] text-gray-600 space-y-1">
+                        <p className="flex items-center gap-1.5 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          Mencegah siswa saling titip login akun ke teman sekelas.
+                        </p>
+                        <p className="flex items-center gap-1.5 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          Mencocokkan wajah siswa dengan database biometrik induk siswa.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Option Siswa 2: Foto Selfie Biasa */}
+                    <div
+                      onClick={() => setAttendance((prev) => ({ ...prev, studentAttendanceMode: "selfie_only" }))}
+                      className={cn(
+                        "p-4 rounded-xl border-2 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between",
+                        attendance.studentAttendanceMode === "selfie_only"
+                          ? "bg-emerald-50/40 border-emerald-600 shadow-sm shadow-emerald-500/10"
+                          : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/60"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
+                            attendance.studentAttendanceMode === "selfie_only"
+                              ? "bg-emerald-600 text-white"
+                              : "bg-gray-100 text-gray-600"
+                          )}>
+                            <Camera className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h5 className="font-extrabold text-sm text-gray-900">Hanya Foto Selfie Biasa</h5>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800">
+                                Fleksibel &amp; Praktis
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-0.5">Siswa cukup mengambil foto selfie bukti hadir</p>
+                          </div>
+                        </div>
+
+                        <div className={cn(
+                          "w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all",
+                          attendance.studentAttendanceMode === "selfie_only"
+                            ? "border-emerald-600 bg-emerald-600 text-white"
+                            : "border-gray-300 bg-white"
+                        )}>
+                          {attendance.studentAttendanceMode === "selfie_only" && (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-gray-100/80 text-[11px] text-gray-600 space-y-1">
+                        <p className="flex items-center gap-1.5 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          Siswa dapat absen tanpa perlu perekaman wajah master terlebih dahulu.
+                        </p>
+                        <p className="flex items-center gap-1.5 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          Tetap dilengkapi watermark Nama, NISN, Jam, dan Validasi Geofence GPS.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. PARAMETER AI & PROTEKSI BIOMETRIK */}
+                {(attendance.teacherAttendanceMode === "face_recognition" || attendance.studentAttendanceMode === "face_recognition") && (
+                  <div className="p-4 sm:p-5 rounded-xl bg-purple-50/60 border border-purple-200/80 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-[#531FFF]" />
+                      <h4 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                        Konfigurasi Parameter AI Face Recognition
+                      </h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="font-bold text-gray-700">Ambang Batas Skor Kemiripan AI</label>
+                          <span className="font-black text-[#531FFF] text-sm">{attendance.minFaceMatchScore}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={60}
+                          max={98}
+                          value={attendance.minFaceMatchScore}
+                          onChange={(e) => setAttendance({ ...attendance, minFaceMatchScore: Number(e.target.value) })}
+                          className="w-full accent-[#531FFF] cursor-pointer"
+                        />
+                        <p className="text-[10px] text-gray-500 mt-1">
+                          Nilai standar 80%. Wajah dinyatakan cocok jika skor kemiripan sama atau lebih tinggi dari angka ini.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3.5 rounded-lg bg-white border border-purple-100">
+                        <div>
+                          <p className="font-bold text-gray-900">Anti-Spoofing &amp; Liveness Detection</p>
+                          <p className="text-[11px] text-gray-500">Mencegah penggunaan foto cetak atau layar HP lain saat scan.</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={attendance.requireLiveness}
+                            onChange={(e) => setAttendance({ ...attendance, requireLiveness: e.target.checked })}
+                            className="sr-only peer"
+                          />
+                          <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#531FFF]" />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Notice Info Box */}
+                    <div className="flex items-start gap-2.5 p-3 rounded-lg bg-white/80 border border-purple-200/60 text-[11px] text-purple-950 font-medium">
+                      <Sparkles className="w-4 h-4 text-[#531FFF] shrink-0 mt-0.5" />
+                      <div>
+                        <strong>Pendaftaran Data Wajah Master (Face Enrolment):</strong>
+                        {" "}Guru dan siswa merekam foto wajah master sekali saja melalui menu Profil Saya. Data vektor biometrik (~1 KB) akan menjadi acuan tetap saat melakukan absensi harian.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* CARD 2: Jadwal & Jam Operasional Presensi */}
+              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
+                <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+                  <div className="w-9 h-9 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-gray-900 text-sm">Jadwal &amp; Jam Presensi Sekolah</h3>
+                    <p className="text-xs text-gray-500">Aturan jam masuk sekolah, masa tenggang toleransi keterlambatan, dan jam kepulangan.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Jam Masuk Sekolah</label>
+                    <input
+                      type="time"
+                      required
+                      value={attendance.schoolStartTime || attendance.checkInStart}
+                      onChange={(e) => setAttendance((prev) => ({ ...prev, schoolStartTime: e.target.value, checkInStart: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Siswa/guru dihitung tepat waktu jika sebelum jam ini.</p>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Toleransi Keterlambatan (Menit)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={60}
+                      required
+                      value={attendance.lateToleranceMinutes || attendance.lateToleranceMin}
+                      onChange={(e) => setAttendance((prev) => ({ ...prev, lateToleranceMinutes: Number(e.target.value), lateToleranceMin: Number(e.target.value) }))}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Masa toleransi sebelum status berubah menjadi Terlambat.</p>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Batas Maksimal Dihitung Alpa</label>
+                    <input
+                      type="time"
+                      required
+                      value={attendance.absentThresholdTime || attendance.autoAbsentTime}
+                      onChange={(e) => setAttendance((prev) => ({ ...prev, absentThresholdTime: e.target.value, autoAbsentTime: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Belum hadir lewat jam ini otomatis berstatus Alpa.</p>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Jam Kepulangan Sekolah</label>
+                    <input
+                      type="time"
+                      required
+                      value={attendance.schoolEndTime || attendance.checkOutEnd}
+                      onChange={(e) => setAttendance((prev) => ({ ...prev, schoolEndTime: e.target.value, checkOutEnd: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Presensi kepulangan dibuka setelah jam ini.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 3: Metode Cadangan & Notifikasi */}
+              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
+                <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+                  <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center">
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-gray-900 text-sm">Metode Presensi Cadangan &amp; Notifikasi</h3>
+                    <p className="text-xs text-gray-500">Konfigurasi opsi alternatif jika kamera kendala dan integrasi pesan instan.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3.5 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                        <Smartphone className="w-4 h-4 text-cyan-600" />
+                        QR Code Kartu Siswa
+                      </p>
+                      <p className="text-[10px] text-gray-500">Scan QR fisik di kartu pelajar jika kamera bermasalah</p>
+                    </div>
+                    <input 
+                      type="checkbox" 
+                      checked={attendance.methodQr}
+                      onChange={(e) => setAttendance({ ...attendance, methodQr: e.target.checked })}
+                      className="w-5 h-5 accent-[#531FFF] rounded cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="p-3.5 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                        <UserCog className="w-4 h-4 text-emerald-600" />
+                        Manual Guru / Wali Kelas
+                      </p>
+                      <p className="text-[10px] text-gray-500">Wali kelas dapat mengabsenkan siswa langsung di kelas</p>
+                    </div>
+                    <input 
+                      type="checkbox" 
+                      checked={attendance.methodManual}
+                      onChange={(e) => setAttendance({ ...attendance, methodManual: e.target.checked })}
+                      className="w-5 h-5 accent-[#531FFF] rounded cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {/* WhatsApp Notification Toggle */}
+                <div className="flex items-center justify-between p-3.5 rounded-lg bg-purple-50/50 border border-purple-100">
+                  <div className="flex items-center gap-2.5">
+                    <MessageSquare className="w-4 h-4 text-[#531FFF]" />
+                    <div>
+                      <p className="text-xs font-bold text-gray-900">Notifikasi WhatsApp Otomatis ke Orang Tua</p>
+                      <p className="text-[11px] text-gray-500">Kirim pemberitahuan langsung saat absensi anak berhasil dicatat atau terlambat.</p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={attendance.sendWaNotificationToParent}
+                      onChange={(e) => setAttendance({ ...attendance, sendWaNotificationToParent: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#531FFF]" />
+                  </label>
+                </div>
+              </div>
+
+              {/* Bottom Sticky Action Bar */}
+              <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="text-xs text-gray-500 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  <span>Semua perubahan mode absensi tersimpan secara aman ke server dan sesi aktif.</span>
+                </div>
+
+                <div className="flex items-center gap-2.5 self-end sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={handleSaveAttendanceConfig}
+                    disabled={savingAttendance}
+                    className="px-5 py-2.5 bg-[#531FFF] hover:bg-[#4316D0] active:scale-[0.98] text-white text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
+                  >
+                    {savingAttendance ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Menyimpan Perubahan...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Simpan Pengaturan Absensi
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3.5: Geofence GPS Settings (Peta & Radius Lokasi Sekolah) */}
+          {activeTab === "geofence" && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Header Card with Instant Save */}
+              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
                       <Compass className="w-5 h-5" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <h2 className="text-xl font-black text-gray-900 tracking-tight">
-                          Pengaturan Absensi & Geofence GPS
+                          Pengaturan Lokasi &amp; Geofence GPS Sekolah
                         </h2>
                         <span className="px-2.5 py-0.5 text-xs font-extrabold bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200 flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -2766,7 +3335,7 @@ export default function SettingsPage() {
                         </span>
                       </div>
                       <p className="text-xs text-gray-500 font-medium mt-0.5">
-                        Tentukan titik sekolah pada peta interaktif, batas radius wilayah absensi, toleransi keterlambatan, dan parameter biometrik AI.
+                        Tentukan titik pusat sekolah pada peta interaktif, batas radius wilayah absensi (meter), dan validasi radius kehadiran.
                       </p>
                     </div>
                   </div>
@@ -2776,7 +3345,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={handleDetectCurrentLocation}
-                    className="px-3.5 py-2.5 bg-purple-50 hover:bg-purple-100 text-[#531FFF] text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 border border-purple-200/60 shadow-xs"
+                    className="px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 border border-emerald-200/60 shadow-xs"
                   >
                     <MapPin className="w-4 h-4" />
                     Deteksi Lokasi Saya
@@ -2796,14 +3365,14 @@ export default function SettingsPage() {
                     ) : (
                       <>
                         <Save className="w-4 h-4" />
-                        Simpan Pengaturan
+                        Simpan Pengaturan Geofence
                       </>
                     )}
                   </button>
                 </div>
               </div>
 
-              {/* CARD 1: Peta Interaktif & Dynamic Radius Geofencing (Hero Component) */}
+              {/* CARD 1: Peta Interaktif & Dynamic Radius Geofencing */}
               <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
                   <div className="flex items-center gap-3">
@@ -2811,7 +3380,7 @@ export default function SettingsPage() {
                       <Map className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="font-extrabold text-gray-900 text-sm">Pratinjau Peta Interaktif & Batas Radius Geofence</h3>
+                      <h3 className="font-extrabold text-gray-900 text-sm">Pratinjau Peta Interaktif &amp; Batas Radius Geofence</h3>
                       <p className="text-xs text-gray-500">
                         Marker lokasi sekolah dan area lingkaran dinamis otomatis diperbarui saat koordinat atau radius diubah.
                       </p>
@@ -2863,7 +3432,7 @@ export default function SettingsPage() {
                 <div className="space-y-4 pt-3 border-t border-gray-100">
                   <div>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-                      <label className="font-bold text-gray-700 text-xs">Radius Absensi Siswa (Meter)</label>
+                      <label className="font-bold text-gray-700 text-xs">Radius Absensi Sekolah (Meter)</label>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-[11px] text-gray-400 font-medium mr-1">Preset Cepat:</span>
                         {[50, 100, 250, 500, 1000].map((val) => (
@@ -2981,194 +3550,11 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* CARD 2: Jadwal & Jam Operasional Presensi */}
-              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
-                <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
-                  <div className="w-9 h-9 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center">
-                    <Clock className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-gray-900 text-sm">Jadwal & Jam Presensi Sekolah</h3>
-                    <p className="text-xs text-gray-500">Aturan jam masuk sekolah, masa tenggang toleransi keterlambatan, dan jam kepulangan.</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-                  <div>
-                    <label className="font-bold text-gray-700 block mb-1">Jam Masuk Sekolah</label>
-                    <input
-                      type="time"
-                      required
-                      value={attendance.schoolStartTime || attendance.checkInStart}
-                      onChange={(e) => setAttendance((prev) => ({ ...prev, schoolStartTime: e.target.value, checkInStart: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
-                    />
-                    <p className="text-[10px] text-gray-400 mt-1">Siswa dihitung tepat waktu jika sebelum jam ini.</p>
-                  </div>
-
-                  <div>
-                    <label className="font-bold text-gray-700 block mb-1">Toleransi Keterlambatan (Menit)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={60}
-                      required
-                      value={attendance.lateToleranceMinutes || attendance.lateToleranceMin}
-                      onChange={(e) => setAttendance((prev) => ({ ...prev, lateToleranceMinutes: Number(e.target.value), lateToleranceMin: Number(e.target.value) }))}
-                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
-                    />
-                    <p className="text-[10px] text-gray-400 mt-1">Masa toleransi sebelum status berubah menjadi Terlambat.</p>
-                  </div>
-
-                  <div>
-                    <label className="font-bold text-gray-700 block mb-1">Batas Maksimal Dihitung Alpa</label>
-                    <input
-                      type="time"
-                      required
-                      value={attendance.absentThresholdTime || attendance.autoAbsentTime}
-                      onChange={(e) => setAttendance((prev) => ({ ...prev, absentThresholdTime: e.target.value, autoAbsentTime: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
-                    />
-                    <p className="text-[10px] text-gray-400 mt-1">Belum hadir lewat jam ini otomatis berstatus Alpa.</p>
-                  </div>
-
-                  <div>
-                    <label className="font-bold text-gray-700 block mb-1">Jam Kepulangan Sekolah</label>
-                    <input
-                      type="time"
-                      required
-                      value={attendance.schoolEndTime || attendance.checkOutEnd}
-                      onChange={(e) => setAttendance((prev) => ({ ...prev, schoolEndTime: e.target.value, checkOutEnd: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
-                    />
-                    <p className="text-[10px] text-gray-400 mt-1">Presensi kepulangan dibuka setelah jam ini.</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* CARD 3: Metode Presensi & Biometrik Kamera AI */}
-              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
-                <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
-                  <div className="w-9 h-9 rounded-lg bg-cyan-50 text-cyan-700 flex items-center justify-center">
-                    <ScanFace className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-gray-900 text-sm">Metode Presensi & Biometrik Kamera AI</h3>
-                    <p className="text-xs text-gray-500">Konfigurasi kamera perangkat, verifikasi kemiripan wajah, dan anti-spoofing.</p>
-                  </div>
-                </div>
-
-                {/* Methods checkboxes */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="p-4 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-                        <ScanFace className="w-4 h-4 text-[#531FFF]" />
-                        Kamera Foto AI
-                      </p>
-                      <p className="text-[10px] text-gray-500">Scan wajah biometrik perangkat</p>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      checked={attendance.methodFaceId}
-                      onChange={(e) => setAttendance({ ...attendance, methodFaceId: e.target.checked })}
-                      className="w-5 h-5 accent-[#531FFF] rounded cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-                        <Smartphone className="w-4 h-4 text-cyan-600" />
-                        QR Code Kartu
-                      </p>
-                      <p className="text-[10px] text-gray-500">Scan kartu identitas siswa</p>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      checked={attendance.methodQr}
-                      onChange={(e) => setAttendance({ ...attendance, methodQr: e.target.checked })}
-                      className="w-5 h-5 accent-[#531FFF] rounded cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-                        <UserCog className="w-4 h-4 text-emerald-600" />
-                        Manual Guru / Wali
-                      </p>
-                      <p className="text-[10px] text-gray-500">Input presensi oleh wali kelas</p>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      checked={attendance.methodManual}
-                      onChange={(e) => setAttendance({ ...attendance, methodManual: e.target.checked })}
-                      className="w-5 h-5 accent-[#531FFF] rounded cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-2">
-                  <div>
-                    <div className="flex justify-between items-center mb-1">
-                      <label className="font-bold text-gray-700">Ambang Batas Skor Kemiripan AI</label>
-                      <span className="font-black text-[#531FFF] text-sm">{attendance.minFaceMatchScore}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={60}
-                      max={98}
-                      value={attendance.minFaceMatchScore}
-                      onChange={(e) => setAttendance({ ...attendance, minFaceMatchScore: Number(e.target.value) })}
-                      className="w-full accent-[#531FFF] cursor-pointer"
-                    />
-                    <p className="text-[10px] text-gray-400 mt-1">Presensi ditolak jika skor verifikasi wajah di bawah batas ini.</p>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3.5 rounded-lg bg-gray-50 border border-gray-200">
-                    <div>
-                      <p className="font-bold text-gray-900">Anti-Spoofing & Liveness Detection</p>
-                      <p className="text-[11px] text-gray-500">Mencegah penggunaan foto cetak atau layar perangkat lain.</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                      <input
-                        type="checkbox"
-                        checked={attendance.requireLiveness}
-                        onChange={(e) => setAttendance({ ...attendance, requireLiveness: e.target.checked })}
-                        className="sr-only peer"
-                      />
-                      <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#531FFF]" />
-                    </label>
-                  </div>
-                </div>
-
-                {/* WhatsApp Notification Toggle */}
-                <div className="flex items-center justify-between p-3.5 rounded-lg bg-purple-50/50 border border-purple-100">
-                  <div className="flex items-center gap-2.5">
-                    <MessageSquare className="w-4 h-4 text-[#531FFF]" />
-                    <div>
-                      <p className="text-xs font-bold text-gray-900">Notifikasi WhatsApp Otomatis ke Orang Tua</p>
-                      <p className="text-[11px] text-gray-500">Kirim pemberitahuan langsung saat absensi anak berhasil dicatat atau terlambat.</p>
-                    </div>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                    <input
-                      type="checkbox"
-                      checked={attendance.sendWaNotificationToParent}
-                      onChange={(e) => setAttendance({ ...attendance, sendWaNotificationToParent: e.target.checked })}
-                      className="sr-only peer"
-                    />
-                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#531FFF]" />
-                  </label>
-                </div>
-              </div>
-
               {/* Bottom Sticky Action Bar */}
               <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="text-xs text-gray-500 flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span>Semua perubahan tersimpan secara aman ke server dan sesi aktif.</span>
+                  <span>Pengaturan titik koordinat dan radius geofence akan disinkronkan ke seluruh modul presensi.</span>
                 </div>
 
                 <div className="flex items-center gap-2.5 self-end sm:self-auto">
@@ -3186,7 +3572,7 @@ export default function SettingsPage() {
                     ) : (
                       <>
                         <Save className="w-4 h-4" />
-                        Simpan Pengaturan Absensi
+                        Simpan Pengaturan Geofence
                       </>
                     )}
                   </button>

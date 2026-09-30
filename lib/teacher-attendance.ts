@@ -73,6 +73,9 @@ export interface TeacherAttendanceConfig {
   standardClockOut: string; // e.g. "15:30" (Sebelum ini dianggap pulang awal)
   workDays: string[]; // ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"]
   requirePhoto: boolean;
+  attendanceMode: "selfie_only" | "face_recognition"; // Mode verifikasi kehadiran: Foto Biasa atau AI Face Recognition
+  minFaceMatchScore?: number; // Ambang batas skor kemiripan AI (persen, misal 80)
+  requireLiveness?: boolean; // Anti-spoofing / deteksi liveness
   geofenceEnabled: boolean;
   geofenceCenter: {
     lat: number;
@@ -88,6 +91,9 @@ export const DEFAULT_TEACHER_ATTENDANCE_CONFIG: TeacherAttendanceConfig = {
   standardClockOut: "15:30",
   workDays: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
   requirePhoto: true,
+  attendanceMode: "face_recognition",
+  minFaceMatchScore: 80,
+  requireLiveness: true,
   geofenceEnabled: true,
   geofenceCenter: {
     lat: -6.200000,
