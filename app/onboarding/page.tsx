@@ -47,8 +47,13 @@ import { syncParentWithStudents } from "@/lib/parent-student-sync";
 import { AuthRequiredState } from "@/components/ui/auth-required-state";
 import { INDONESIAN_CITIES_BY_REGION, INDONESIAN_PARENT_JOBS } from "@/lib/indonesian-cities";
 import { isUserOnboardingComplete } from "@/lib/auth-helpers";
-import { FaceEnrolmentModal } from "@/components/attendance/face-enrolment-modal";
+import dynamic from "next/dynamic";
 import { getUserFaceBiometric, FaceBiometricData } from "@/lib/face-biometric-service";
+
+const FaceEnrolmentModal = dynamic(
+  () => import("@/components/attendance/face-enrolment-modal").then((mod) => mod.FaceEnrolmentModal),
+  { ssr: false }
+);
 
 function cleanFirestoreData<T>(obj: T): T {
   if (obj === null || obj === undefined) {

@@ -231,6 +231,25 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
         const schoolSaved = localStorage.getItem("quick_schools_attendance_config");
         if (schoolSaved) {
           const s = JSON.parse(schoolSaved);
+          const mode = s.teacherAttendanceMode || s.attendanceMode;
+          if (mode) {
+            base = {
+              ...base,
+              attendanceMode: mode === "selfie_only" ? "selfie_only" : "face_recognition",
+            };
+          }
+          if (s.minFaceMatchScore) {
+            base.minFaceMatchScore = Number(s.minFaceMatchScore);
+          }
+          if (s.requireLiveness !== undefined) {
+            base.requireLiveness = Boolean(s.requireLiveness);
+          }
+          if (s.schoolStartTime || s.checkInStart) {
+            base.standardClockIn = s.schoolStartTime || s.checkInStart;
+          }
+          if (s.schoolEndTime || s.checkOutEnd) {
+            base.standardClockOut = s.schoolEndTime || s.checkOutEnd;
+          }
           const sLat = Number(s.schoolCenterLat ?? s.schoolLat);
           const sLng = Number(s.schoolCenterLng ?? s.schoolLng);
           const sRadius = Number(s.geofenceRadiusMeters ?? s.gpsRadiusMeter);
@@ -370,15 +389,23 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
         if (!isMounted) return;
         if (docSnap.exists()) {
           const d = docSnap.data();
+          const mode = d.teacherAttendanceMode || d.attendanceMode;
           setConfig((prev) => {
             const merged: TeacherAttendanceConfig = {
               ...prev,
+              attendanceMode: mode ? (mode === "selfie_only" ? "selfie_only" : "face_recognition") : prev.attendanceMode,
+              minFaceMatchScore: Number(d.minFaceMatchScore ?? prev.minFaceMatchScore ?? 80),
+              requireLiveness: d.requireLiveness !== undefined ? Boolean(d.requireLiveness) : prev.requireLiveness,
+              standardClockIn: d.schoolStartTime || d.checkInStart || prev.standardClockIn,
+              standardClockOut: d.schoolEndTime || d.checkOutEnd || prev.standardClockOut,
+              lateThreshold: d.absentThresholdTime || d.lateThreshold || prev.lateThreshold,
               geofenceEnabled: d.requireRadius !== undefined ? Boolean(d.requireRadius) : prev.geofenceEnabled,
               geofenceCenter: {
                 ...prev.geofenceCenter,
                 lat: Number(d.schoolCenterLat ?? d.schoolLat ?? prev.geofenceCenter.lat),
                 lng: Number(d.schoolCenterLng ?? d.schoolLng ?? prev.geofenceCenter.lng),
                 radiusMeters: Number(d.geofenceRadiusMeters ?? d.gpsRadiusMeter ?? prev.geofenceCenter.radiusMeters),
+                address: d.address || d.schoolAddress || prev.geofenceCenter.address,
               },
             };
             try {

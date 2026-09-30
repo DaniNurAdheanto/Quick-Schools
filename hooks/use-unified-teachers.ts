@@ -74,11 +74,12 @@ export function useUnifiedTeachers() {
         if (docId && (k === docId || existing._firestoreId === docId || existing._allDocIds?.includes(docId))) {
           return k;
         }
-        // 3. Match by clean NIP (must be valid, at least 3 chars)
+        // 3. Match by clean NIP (case-insensitive, must be valid, at least 3 chars)
         if (cleanNip && cleanNip.length >= 3) {
-          const exNip = (!isDocId(existing.nip) && existing.nip && existing.nip !== "-") ? String(existing.nip).trim() : "";
-          const exId = (!isDocId(existing.id) && existing.id && existing.id !== "-") ? String(existing.id).trim() : "";
-          if (cleanNip === exNip || cleanNip === exId) {
+          const exNip = (!isDocId(existing.nip) && existing.nip && existing.nip !== "-") ? String(existing.nip).trim().toLowerCase() : "";
+          const exId = (!isDocId(existing.id) && existing.id && existing.id !== "-") ? String(existing.id).trim().toLowerCase() : "";
+          const lowerCleanNip = cleanNip.toLowerCase();
+          if (lowerCleanNip === exNip || lowerCleanNip === exId) {
             return k;
           }
         }
@@ -99,9 +100,38 @@ export function useUnifiedTeachers() {
 
     // 1. Process items from `teachers` collection
     rawTeachersRef.current.forEach((item) => {
-      const cleanNip = (!isDocId(item.nip) && item.nip && item.nip !== "-") ? String(item.nip).trim()
+      let cleanNip = (!isDocId(item.nip) && item.nip && item.nip !== "-") ? String(item.nip).trim()
         : (!isDocId(item.id) && item.id && item.id !== "-") ? String(item.id).trim()
         : "";
+
+      let itemName = item.name || item.fullName || "";
+      let email = (item.email || "").toLowerCase().trim();
+      let itemUid = item.uid || (isDocId(item._firestoreId) ? item._firestoreId : "");
+
+      // If document in `teachers` collection has no name or no NIP, check if it maps to a user by UID/docId
+      if (!itemName || !cleanNip) {
+        const matchingUser = rawUsersRef.current.find(
+          (u) => u._firestoreId === item._firestoreId || (itemUid && u.uid === itemUid) || (u.uid === item._firestoreId)
+        );
+        if (matchingUser) {
+          if (!itemName) itemName = matchingUser.name || matchingUser.fullName || "";
+          if (!cleanNip) {
+            const uNip = (!isDocId(matchingUser.nip) && matchingUser.nip && matchingUser.nip !== "-") ? String(matchingUser.nip).trim()
+              : (!isDocId(matchingUser.id) && matchingUser.id && matchingUser.id !== "-") ? String(matchingUser.id).trim()
+              : "";
+            if (uNip) cleanNip = uNip;
+          }
+          if (!email && matchingUser.email) email = matchingUser.email.toLowerCase().trim();
+          if (!itemUid && (matchingUser.uid || matchingUser._firestoreId)) itemUid = matchingUser.uid || matchingUser._firestoreId;
+        }
+      }
+
+      // If after resolving from users, it STILL has no name AND no NIP AND no email, it is an invalid/ghost doc: SKIP!
+      if (!itemName && !cleanNip && !email) {
+        return;
+      }
+
+      const finalItemName = itemName || "Guru Pengajar";
 
       const rawPhoto = item.imageUrl || item.photoUrl || "";
       const validPhoto = (typeof rawPhoto === "string" && !rawPhoto.startsWith("blob:")) ? rawPhoto : "";
@@ -111,11 +141,8 @@ export function useUnifiedTeachers() {
       const primarySubject = item.subject || item.role || (rawSubjects.length > 0 ? rawSubjects[0] : "Mata Pelajaran Umum");
 
       const phone = item.contact || item.phone || "";
-      const email = (item.email || "").toLowerCase().trim();
-      const itemUid = item.uid || (isDocId(item._firestoreId) ? item._firestoreId : "");
-      const itemName = item.name || item.fullName || "Guru Pengajar";
 
-      const existingKey = findExistingKey(itemUid, email, cleanNip, itemName, item._firestoreId);
+      const existingKey = findExistingKey(itemUid, email, cleanNip, finalItemName, item._firestoreId);
 
       if (existingKey) {
         const existing = teacherMap.get(existingKey)!;
@@ -139,6 +166,9 @@ export function useUnifiedTeachers() {
           existing.imageUrl = validPhoto;
           existing.photoUrl = validPhoto;
         }
+        if (item.faceBiometric && !existing.faceBiometric) {
+          existing.faceBiometric = item.faceBiometric;
+        }
         if (rawSubjectIds.length > 0) {
           existing.subjectIds = Array.from(new Set([...existing.subjectIds, ...rawSubjectIds]));
         }
@@ -158,8 +188,8 @@ export function useUnifiedTeachers() {
           uid: itemUid,
           id: cleanNip || item.id || item._firestoreId,
           nip: cleanNip || "-",
-          name: itemName,
-          fullName: item.fullName || itemName,
+          name: finalItemName,
+          fullName: item.fullName || finalItemName,
           email: email,
           phone: phone,
           contact: phone,
@@ -225,6 +255,10 @@ export function useUnifiedTeachers() {
           if (validUPhoto) {
             existing.imageUrl = validUPhoto;
             existing.photoUrl = validUPhoto;
+          }
+
+          if (u.faceBiometric && !existing.faceBiometric) {
+            existing.faceBiometric = u.faceBiometric;
           }
 
           // Merge subjects if available

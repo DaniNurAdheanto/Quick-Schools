@@ -43,8 +43,13 @@ import {
 } from "firebase/firestore";
 import { ROLES } from "@/lib/roles-config";
 import { syncStudentRecord, syncTeacherRecord } from "@/lib/unified-sync-service";
-import { FaceEnrolmentModal } from "@/components/attendance/face-enrolment-modal";
+import dynamic from "next/dynamic";
 import { getUserFaceBiometric, deleteUserFaceBiometric, FaceBiometricData } from "@/lib/face-biometric-service";
+
+const FaceEnrolmentModal = dynamic(
+  () => import("@/components/attendance/face-enrolment-modal").then((mod) => mod.FaceEnrolmentModal),
+  { ssr: false }
+);
 
 type ProfileTab = "biodata" | "security" | "biometric";
 

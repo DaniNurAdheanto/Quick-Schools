@@ -1,3 +1,9 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Quick Schools Next.js Configuration
 const nextConfig = {
   reactStrictMode: true,
@@ -66,10 +72,28 @@ const nextConfig = {
       { source: '/super-admin/:path*', destination: '/:path*', permanent: false },
     ];
   },
-  webpack: (config, {dev}) => {
+  webpack: (config, { dev, isServer }) => {
     if (dev && process.env.DISABLE_HMR === 'true') {
       config.watchOptions = {
         ignored: /.*/,
+      };
+    }
+    // Prevent server-side crash on optional native tfjs-node
+    config.externals = [...(config.externals || []), '@tensorflow/tfjs-node'];
+
+    // Resolve @vladmandic/human to the browser ESM build and neutralize tfjs-node
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@vladmandic/human': path.resolve(__dirname, 'node_modules/@vladmandic/human/dist/human.esm.js'),
+      '@tensorflow/tfjs-node': false,
+    };
+
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
       };
     }
     return config;

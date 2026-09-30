@@ -33,9 +33,30 @@ import {
   AlertTriangle,
   ShieldAlert,
   XCircle,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
+
+const playShutterSound = () => {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    const now = ctx.currentTime;
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.exponentialRampToValueAtTime(1320, now + 0.12);
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+    osc.start(now);
+    osc.stop(now + 0.15);
+  } catch (e) {}
+};
 
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
@@ -55,13 +76,25 @@ import {
 } from "@/lib/teacher-attendance";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import { useAcademicYear } from "@/context/AcademicYearContext";
-import { FaceEnrolmentModal } from "@/components/attendance/face-enrolment-modal";
+import dynamic from "next/dynamic";
+
+const FaceEnrolmentModal = dynamic(
+  () => import("@/components/attendance/face-enrolment-modal").then((mod) => mod.FaceEnrolmentModal),
+  { ssr: false }
+);
 import {
   getUserFaceBiometric,
   analyzeCameraFrame,
   compareFaceDescriptors,
   FaceBiometricData,
 } from "@/lib/face-biometric-service";
+import {
+  detectFaceWithHuman,
+  HumanFaceDetection,
+  createLivenessHistory,
+  evaluateFaceLiveness,
+  FaceLivenessHistory,
+} from "@/lib/human-service";
 
 export default function TeacherAttendancePage() {
   const { showSuccess, showError } = useToast();
@@ -203,6 +236,16 @@ export default function TeacherAttendancePage() {
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
+  // Auto-scan Face ID states & refs
+  const [autoScanStatus, setAutoScanStatus] = useState<"idle" | "searching" | "verifying" | "blinking" | "matched" | "unmatched" | "spoof">("idle");
+  const [autoScanFeedback, setAutoScanFeedback] = useState<string>("");
+  const [autoScanScore, setAutoScanScore] = useState<number | null>(null);
+
+  const isAutoScanningRef = useRef(false);
+  const hasAutoCapturedRef = useRef(false);
+  const matchStreakRef = useRef(0);
+  const livenessHistoryRef = useRef<FaceLivenessHistory>(createLivenessHistory());
+
   // Live Location Tracker with two-tier fallback and friendly Indonesian error messages
   const refreshLocation = useCallback(async () => {
     setGpsLoading(true);
@@ -297,8 +340,9 @@ export default function TeacherAttendancePage() {
   }, [stream, isClockInModalOpen, isClockOutModalOpen]);
 
   // Take Snapshot from live video feed into canvas with watermark (scaled to max 480px for Firestore safety)
-  const handleCapturePhoto = (type: "CLOCK IN" | "CLOCK OUT") => {
+  const handleCapturePhoto = async (type: "CLOCK IN" | "CLOCK OUT") => {
     if (!videoRef.current) return;
+    hasAutoCapturedRef.current = true;
     try {
       const video = videoRef.current;
       const vWidth = video.videoWidth || 640;
@@ -336,9 +380,25 @@ export default function TeacherAttendancePage() {
           return;
         }
 
-        const analysis = analyzeCameraFrame(canvas, ctx);
-        const liveDescriptor = analysis.descriptor;
-        if (!liveDescriptor) {
+        // Smart Biometric Extraction: Detect via Human.js ArcFace AI or fallback to spatial analyzer
+        // Smart Biometric Extraction: Detect via Human.js ArcFace AI with Anti-Spoofing
+        let liveDescriptor: number[] | null = null;
+        let humanResult: HumanFaceDetection | null = null;
+
+        try {
+          humanResult = await detectFaceWithHuman(canvas, { fastScan: false, requireAntiSpoof: true });
+        } catch (e) {
+          console.warn("detectFaceWithHuman error in teacher attendance:", e);
+        }
+
+        if (humanResult?.embedding && humanResult.embedding.length > 0) {
+          liveDescriptor = humanResult.embedding;
+        } else {
+          const analysis = analyzeCameraFrame(canvas, ctx);
+          liveDescriptor = analysis.descriptor ?? null;
+        }
+
+        if (!liveDescriptor || liveDescriptor.length === 0) {
           showError(
             "Wajah tidak terdeteksi dengan jelas di kamera. Pastikan posisi wajah tegak dan pencahayaan terang.",
             "Wajah Tidak Terdeteksi"
@@ -352,8 +412,39 @@ export default function TeacherAttendancePage() {
           return;
         }
 
+        // Strict Anti-Spoofing and Active Liveness check on manual capture
+        const realScore = humanResult?.liveness?.realScore ?? 85;
+        if (humanResult && (humanResult.liveness?.isLive === false || realScore < 45 || humanResult.screenArtifacts?.isScreenSpoof)) {
+          showError(
+            `Presensi guru ditolak: Wajah terdeteksi sebagai foto atau layar digital (${humanResult.screenArtifacts?.reason || `Keaslian: ${realScore}%`}). Harap hadirkan wajah asli langsung di depan kamera.`,
+            "Terdeteksi Foto / Layar (Anti-Spoofing)"
+          );
+          setFaceVerificationResult({
+            tested: true,
+            match: false,
+            similarity: 0,
+            error: `Wajah terdeteksi sebagai foto atau layar digital.`,
+          });
+          return;
+        }
+
+        // Active Liveness: user must perform a live action (blink or head turn)
+        if (!livenessHistoryRef.current.isLivenessPassed) {
+          showError(
+            "Presensi ditolak: Wajib mengedipkan mata di depan kamera langsung untuk membuktikan kehadiran fisik asli (bukan foto/layar ponsel).",
+            "Verifikasi Keaslian Wajah Gagal"
+          );
+          setFaceVerificationResult({
+            tested: true,
+            match: false,
+            similarity: 0,
+            error: "Wajah wajib mengedipkan mata di kamera.",
+          });
+          return;
+        }
+
         const comp = compareFaceDescriptors(
-          faceBiometric.faceDescriptor,
+          faceBiometric,
           liveDescriptor,
           config.minFaceMatchScore || 70
         );
@@ -376,7 +467,7 @@ export default function TeacherAttendancePage() {
             match: true,
             similarity: comp.similarity,
           });
-          showSuccess(`Wajah cocok ${comp.similarity}%! Terverifikasi AI.`);
+          showSuccess(`Wajah cocok ${comp.similarity}%! Terverifikasi AI asli.`);
         }
       } else {
         setFaceVerificationResult({
@@ -408,6 +499,7 @@ export default function TeacherAttendancePage() {
       ctx.fillText(`Presensi • ${shortAddr} • GPS: ${locationData.lat.toFixed(4)}, ${locationData.lng.toFixed(4)}`, 10, canvas.height - 4);
 
       // Compressed JPEG at 0.65 quality (~20KB payload) to prevent Firestore 1MB document limit
+      playShutterSound();
       const dataUrl = canvas.toDataURL("image/jpeg", 0.65);
       setPhotoPreview(dataUrl);
       stopCamera();
@@ -417,6 +509,13 @@ export default function TeacherAttendancePage() {
   };
 
   const handleRetakePhoto = () => {
+    hasAutoCapturedRef.current = false;
+    matchStreakRef.current = 0;
+    livenessHistoryRef.current = createLivenessHistory();
+    isAutoScanningRef.current = false;
+    setAutoScanStatus("idle");
+    setAutoScanFeedback("");
+    setAutoScanScore(null);
     setPhotoPreview(null);
     setFaceVerificationResult(null);
     startCamera();
@@ -454,6 +553,14 @@ export default function TeacherAttendancePage() {
   // Modal Openers with camera & GPS activation
   const openClockInModal = () => {
     setPhotoPreview(null);
+    setFaceVerificationResult(null);
+    hasAutoCapturedRef.current = false;
+    matchStreakRef.current = 0;
+    livenessHistoryRef.current = createLivenessHistory();
+    isAutoScanningRef.current = false;
+    setAutoScanStatus("idle");
+    setAutoScanFeedback("");
+    setAutoScanScore(null);
     setActionNotes("");
     setIsClockInModalOpen(true);
     refreshLocation();
@@ -468,6 +575,14 @@ export default function TeacherAttendancePage() {
 
   const openClockOutModal = () => {
     setPhotoPreview(null);
+    setFaceVerificationResult(null);
+    hasAutoCapturedRef.current = false;
+    matchStreakRef.current = 0;
+    livenessHistoryRef.current = createLivenessHistory();
+    isAutoScanningRef.current = false;
+    setAutoScanStatus("idle");
+    setAutoScanFeedback("");
+    setAutoScanScore(null);
     setActionNotes("");
     setIsClockOutModalOpen(true);
     refreshLocation();
@@ -575,6 +690,208 @@ export default function TeacherAttendancePage() {
 
     return null;
   }, [authUser, authUserData, authUserName, authUserEmail, currentUser, teachersList]);
+
+  // Continuous Auto-Scan Face ID Loop for Teacher Clock In & Clock Out
+  useEffect(() => {
+    const isModalOpen = isClockInModalOpen || isClockOutModalOpen;
+    if (
+      !isModalOpen ||
+      !cameraActive ||
+      photoPreview ||
+      config.attendanceMode !== "face_recognition" ||
+      !faceBiometric?.isEnrolled
+    ) {
+      return;
+    }
+
+    const type = isClockInModalOpen ? "CLOCK IN" : "CLOCK OUT";
+    hasAutoCapturedRef.current = false;
+    matchStreakRef.current = 0;
+    livenessHistoryRef.current = createLivenessHistory();
+    isAutoScanningRef.current = false;
+    setAutoScanStatus("searching");
+    setAutoScanFeedback("Posisikan wajah tepat di dalam bingkai...");
+
+    const scanInterval = setInterval(async () => {
+      if (
+        isAutoScanningRef.current ||
+        hasAutoCapturedRef.current ||
+        !videoRef.current ||
+        videoRef.current.readyState < 2
+      ) {
+        return;
+      }
+
+      const video = videoRef.current;
+      if (!video || video.videoWidth === 0 || video.videoHeight === 0) return;
+
+      isAutoScanningRef.current = true;
+
+      try {
+        // Fast offscreen scan canvas downscaled to 320px for high-speed WebGL AI inference (<40ms)
+        const vWidth = video.videoWidth || 640;
+        const vHeight = video.videoHeight || 480;
+        const scanW = 320;
+        const scanH = Math.round(scanW * (vHeight / vWidth));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = scanW;
+        canvas.height = scanH;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) {
+          isAutoScanningRef.current = false;
+          return;
+        }
+
+        ctx.translate(scanW, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, 0, 0, scanW, scanH);
+
+        // High-speed ArcFace embedding extraction with Anti-Spoofing & Liveness neural models
+        let humanResult: HumanFaceDetection | null = null;
+        try {
+          humanResult = await detectFaceWithHuman(canvas, { fastScan: true, requireAntiSpoof: true });
+        } catch (e) {
+          // fallback
+        }
+
+        let liveDescriptor: number[] | null = null;
+        if (humanResult?.embedding && humanResult.embedding.length > 0) {
+          liveDescriptor = humanResult.embedding;
+        } else {
+          const analysis = analyzeCameraFrame(canvas, ctx);
+          liveDescriptor = analysis.descriptor ?? null;
+        }
+
+        if (hasAutoCapturedRef.current) {
+          isAutoScanningRef.current = false;
+          return;
+        }
+
+        if (!liveDescriptor || liveDescriptor.length === 0) {
+          matchStreakRef.current = 0;
+          livenessHistoryRef.current = createLivenessHistory();
+          setAutoScanStatus("searching");
+          setAutoScanFeedback("Posisikan wajah tepat di dalam bingkai");
+          setAutoScanScore(null);
+          isAutoScanningRef.current = false;
+          return;
+        }
+
+        // Strict Anti-Spoofing & Motion Liveness Validation
+        if (humanResult) {
+          const livenessCheck = evaluateFaceLiveness(livenessHistoryRef.current, humanResult, canvas);
+          if (livenessCheck.isSpoof) {
+            matchStreakRef.current = 0;
+            setAutoScanStatus("spoof");
+            setAutoScanFeedback(livenessCheck.reason || "Terdeteksi foto/layar digital! Hadirkan wajah asli.");
+            setAutoScanScore(livenessCheck.realScore);
+            isAutoScanningRef.current = false;
+            return;
+          }
+        }
+
+        setAutoScanStatus("verifying");
+        const minScore = config.minFaceMatchScore || 70;
+        const comp = compareFaceDescriptors(faceBiometric, liveDescriptor, minScore);
+        setAutoScanScore(comp.similarity);
+
+        if (comp.match) {
+          matchStreakRef.current += 1;
+
+          // Active Liveness Challenge: Require Live Human Action (Blink OR Head Turn)
+          if (!livenessHistoryRef.current.isLivenessPassed) {
+            setAutoScanStatus("blinking");
+            setAutoScanFeedback(`Wajah Cocok (${comp.similarity}%)! Silakan KEDIP 👁️ atau TENGOK 👤`);
+            isAutoScanningRef.current = false;
+            return;
+          }
+
+          // Both Biometric Matched AND Live Action Confirmed!
+          setAutoScanStatus("matched");
+          const livenessNote = livenessHistoryRef.current.livenessReason || "Wajah Asli Cocok";
+          setAutoScanFeedback(`${livenessNote} (${comp.similarity}%)! Memproses presensi...`);
+
+          // Confirmed match: Auto-capture!
+          hasAutoCapturedRef.current = true;
+          playShutterSound();
+
+          // Official Attendance photo canvas (scaled to max 480px for Firestore safety)
+          const maxDimension = 480;
+          const ratio = vHeight / vWidth;
+          const targetW = Math.min(maxDimension, vWidth);
+          const targetH = Math.round(targetW * ratio);
+
+          const fullCanvas = document.createElement("canvas");
+          fullCanvas.width = targetW;
+          fullCanvas.height = targetH;
+          const fullCtx = fullCanvas.getContext("2d");
+          if (fullCtx) {
+            fullCtx.translate(fullCanvas.width, 0);
+            fullCtx.scale(-1, 1);
+            fullCtx.drawImage(video, 0, 0, targetW, targetH);
+
+            // Watermark bar at the bottom
+            fullCtx.scale(-1, 1);
+            fullCtx.translate(-fullCanvas.width, 0);
+            const barHeight = Math.max(38, Math.round(targetH * 0.16));
+            fullCtx.fillStyle = "rgba(15, 23, 42, 0.85)";
+            fullCtx.fillRect(0, fullCanvas.height - barHeight, fullCanvas.width, barHeight);
+
+            // Watermark text line 1: Name, NIP, Type, Time
+            fullCtx.fillStyle = "#ffffff";
+            fullCtx.font = "bold 11px sans-serif";
+            const nowTimeStr = new Date().toLocaleTimeString("id-ID");
+            const teacherName = currentTeacherInfo?.name || "Bapak/Ibu Guru";
+            const teacherNip = currentTeacherInfo?.nip || "-";
+            fullCtx.fillText(`${teacherName} (${teacherNip}) • ${type} • ${nowTimeStr} WIB`, 10, fullCanvas.height - (barHeight / 2) - 2);
+
+            // Watermark text line 2: Address & GPS coordinate
+            fullCtx.fillStyle = "#a5b4fc";
+            fullCtx.font = "9px sans-serif";
+            const shortAddr = (config.geofenceCenter.address || "Area Sekolah").slice(0, 40);
+            fullCtx.fillText(`Presensi • ${shortAddr} • GPS: ${locationData.lat.toFixed(4)}, ${locationData.lng.toFixed(4)}`, 10, fullCanvas.height - 4);
+
+            const dataUrl = fullCanvas.toDataURL("image/jpeg", 0.65);
+            setPhotoPreview(dataUrl);
+          }
+
+          setFaceVerificationResult({
+            tested: true,
+            match: true,
+            similarity: comp.similarity,
+          });
+          showSuccess(`Wajah cocok ${comp.similarity}%! Presensi diverifikasi otomatis.`, "Auto-Scan Berhasil");
+          stopCamera();
+        } else {
+          matchStreakRef.current = 0;
+          setAutoScanStatus("unmatched");
+          setAutoScanFeedback(`Kecocokan ${comp.similarity}% (Min: ${minScore}%)`);
+        }
+      } catch (err) {
+        console.warn("Auto-scan teacher attendance error:", err);
+      } finally {
+        isAutoScanningRef.current = false;
+      }
+    }, 180);
+
+    return () => {
+      clearInterval(scanInterval);
+      isAutoScanningRef.current = false;
+    };
+  }, [
+    isClockInModalOpen,
+    isClockOutModalOpen,
+    cameraActive,
+    photoPreview,
+    config.attendanceMode,
+    config.minFaceMatchScore,
+    faceBiometric,
+    currentTeacherInfo,
+    config.geofenceCenter,
+    locationData,
+    showSuccess,
+  ]);
 
   // Today string
   const todayDateStr = useMemo(() => getTodayDateString(), []);
@@ -2114,8 +2431,17 @@ export default function TeacherAttendancePage() {
                 <div className="md:col-span-6 flex flex-col justify-between space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-                      <Camera className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Verifikasi Wajah (Selfie)</span>
+                      {config.attendanceMode === "face_recognition" ? (
+                        <>
+                          <ScanFace className="w-3.5 h-3.5 text-[#531FFF]" />
+                          <span className="text-[#531FFF]">Verifikasi Wajah (Face Recognition AI)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Verifikasi Wajah (Selfie)</span>
+                        </>
+                      )}
                     </label>
                     {photoPreview ? (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -2181,27 +2507,124 @@ export default function TeacherAttendancePage() {
                           muted
                           className="w-full h-full object-cover transform -scale-x-100"
                         />
-                        {/* Compact Face Frame */}
+                        {/* Top Auto-Scan Status Pill */}
+                        {config.attendanceMode === "face_recognition" && (
+                          <div className="absolute top-2.5 inset-x-2 z-20 flex items-center justify-center pointer-events-none">
+                            <div
+                              className={cn(
+                                "px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 backdrop-blur-md border shadow-lg transition-all duration-300",
+                                autoScanStatus === "matched"
+                                  ? "bg-emerald-950/85 text-emerald-300 border-emerald-500/60 shadow-emerald-500/20"
+                                  : autoScanStatus === "blinking"
+                                  ? "bg-cyan-950/90 text-cyan-200 border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.35)] animate-pulse"
+                                  : autoScanStatus === "verifying"
+                                  ? "bg-cyan-950/85 text-cyan-300 border-cyan-500/60 shadow-cyan-500/20"
+                                  : autoScanStatus === "spoof"
+                                  ? "bg-rose-950/90 text-rose-300 border-rose-500/80 shadow-rose-500/30"
+                                  : autoScanStatus === "unmatched"
+                                  ? "bg-amber-950/85 text-amber-300 border-amber-500/60"
+                                  : "bg-slate-900/85 text-white/90 border-white/20"
+                              )}
+                            >
+                              {autoScanStatus === "matched" ? (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />
+                              ) : autoScanStatus === "blinking" ? (
+                                <Eye className="w-3.5 h-3.5 text-cyan-300 animate-bounce" />
+                              ) : autoScanStatus === "verifying" ? (
+                                <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+                              ) : autoScanStatus === "spoof" ? (
+                                <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+                              ) : autoScanStatus === "unmatched" ? (
+                                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                              ) : (
+                                <ScanFace className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                              )}
+                              <span className="truncate max-w-[200px] sm:max-w-xs">
+                                {autoScanFeedback || (faceBiometric?.isEnrolled ? "Auto-Scan Aktif: Arahkan wajah..." : "Wajah master belum terdaftar")}
+                              </span>
+                              {autoScanScore !== null && (
+                                <span className={cn(
+                                  "text-[10px] px-1.5 py-0.5 rounded-md font-mono",
+                                  autoScanStatus === "spoof" ? "bg-rose-500/20 text-rose-200" : autoScanStatus === "blinking" ? "bg-cyan-400/20 text-cyan-200" : "bg-white/10"
+                                )}>
+                                  {autoScanStatus === "spoof" ? `Fake: ${autoScanScore}%` : `${autoScanScore}%`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Centered HUD Bounding Box */}
                         <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                          <div className="w-36 h-44 sm:w-40 sm:h-48 border-2 border-dashed border-emerald-400/80 rounded-2xl relative flex items-center justify-center">
-                            <div className="absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 border-emerald-400" />
-                            <div className="absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 border-emerald-400" />
-                            <div className="absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 border-emerald-400" />
-                            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 border-emerald-400" />
-                            <ScanFace className="w-7 h-7 text-emerald-400/50" />
+                          <div
+                            className={cn(
+                              "w-36 h-44 sm:w-42 sm:h-52 border-2 rounded-2xl relative flex items-center justify-center transition-all duration-300",
+                              autoScanStatus === "matched"
+                                ? "border-emerald-400 bg-emerald-500/10 shadow-[0_0_25px_rgba(52,211,153,0.35)] ring-4 ring-emerald-400/30"
+                                : autoScanStatus === "blinking"
+                                ? "border-cyan-400 bg-cyan-500/15 shadow-[0_0_30px_rgba(34,211,238,0.4)] ring-4 ring-cyan-400/30"
+                                : autoScanStatus === "verifying"
+                                ? "border-cyan-400 bg-cyan-500/10 shadow-[0_0_20px_rgba(34,211,238,0.25)]"
+                                : autoScanStatus === "spoof"
+                                ? "border-rose-500 bg-rose-500/15 shadow-[0_0_25px_rgba(244,63,94,0.35)] ring-4 ring-rose-500/30"
+                                : autoScanStatus === "unmatched"
+                                ? "border-amber-400/80 bg-amber-500/10"
+                                : "border-dashed border-emerald-400/80"
+                            )}
+                          >
+                            <div className={cn("absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-emerald-400")} />
+                            <div className={cn("absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-emerald-400")} />
+                            <div className={cn("absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-emerald-400")} />
+                            <div className={cn("absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-emerald-400")} />
+
+                            {config.attendanceMode === "face_recognition" && (
+                              <div className={cn(
+                                "absolute inset-x-2 top-2 h-0.5 bg-gradient-to-r from-transparent to-transparent animate-pulse",
+                                autoScanStatus === "spoof"
+                                  ? "via-rose-500 shadow-[0_0_8px_#f43f5e]"
+                                  : "via-cyan-400 shadow-[0_0_8px_#22d3ee]"
+                              )} />
+                            )}
+
+                            {autoScanStatus === "blinking" ? (
+                              <Eye className="w-8 h-8 text-cyan-300 animate-pulse" />
+                            ) : (
+                              <ScanFace className={cn("w-7 h-7 transition-colors", autoScanStatus === "matched" ? "text-emerald-400/60" : autoScanStatus === "spoof" ? "text-rose-400/80" : "text-emerald-400/50")} />
+                            )}
                           </div>
                         </div>
 
-                        {/* Floating Shutter Button */}
-                        <div className="absolute bottom-2.5 inset-x-0 flex items-center justify-center px-4 z-10">
-                          <button
-                            type="button"
-                            onClick={() => handleCapturePhoto("CLOCK IN")}
-                            className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-500/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
-                          >
-                            <Camera className="w-3.5 h-3.5" />
-                            <span>Ambil Foto Masuk</span>
-                          </button>
+                        {/* Bottom Action HUD: Auto-Scan indicator + Instant manual trigger */}
+                        <div className="absolute bottom-2.5 inset-x-0 flex items-center justify-center px-4 z-10 gap-2">
+                          {config.attendanceMode === "face_recognition" ? (
+                            <div className="flex items-center gap-2">
+                              <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-xl border border-white/10 text-white/90 text-[11px] font-medium flex items-center gap-1.5 shadow-md">
+                                <span className="relative flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                                <span>Auto-Scan Aktif</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleCapturePhoto("CLOCK IN")}
+                                className="px-3 py-1.5 bg-[#531FFF]/85 hover:bg-[#531FFF] text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 border border-purple-400/30 backdrop-blur-xs"
+                                title="Ambil foto langsung tanpa menunggu auto-scan"
+                              >
+                                <ScanFace className="w-3.5 h-3.5" />
+                                <span>Ambil Manual</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleCapturePhoto("CLOCK IN")}
+                              className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-500/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                              <span>Ambil Foto Masuk</span>
+                            </button>
+                          )}
                         </div>
                       </>
                     ) : (
@@ -2229,16 +2652,23 @@ export default function TeacherAttendancePage() {
                     )}
                   </div>
 
-                  {/* Fallback upload text */}
-                  <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
-                    <span>Posisi wajah di tengah bingkai</span>
-                    <label
-                      htmlFor="clockInFileFallback"
-                      className="text-emerald-600 hover:underline font-semibold cursor-pointer"
-                    >
-                      Unggah Foto dari Galeri
-                    </label>
-                  </div>
+                  {/* Fallback upload text - only in selfie mode */}
+                  {config.attendanceMode !== "face_recognition" ? (
+                    <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
+                      <span>Posisi wajah di tengah bingkai</span>
+                      <label
+                        htmlFor="clockInFileFallback"
+                        className="text-emerald-600 hover:underline font-semibold cursor-pointer"
+                      >
+                        Unggah Foto dari Galeri
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-purple-600 font-semibold pt-0.5 flex items-center gap-1">
+                      <ScanFace className="w-3 h-3" />
+                      <span>Mode Face Recognition AI aktif • Verifikasi langsung lewat kamera</span>
+                    </div>
+                  )}
 
                   <input
                     type="file"
@@ -2482,8 +2912,17 @@ export default function TeacherAttendancePage() {
                 <div className="md:col-span-6 flex flex-col justify-between space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-                      <Camera className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Verifikasi Pulang (Selfie)</span>
+                      {config.attendanceMode === "face_recognition" ? (
+                        <>
+                          <ScanFace className="w-3.5 h-3.5 text-[#531FFF]" />
+                          <span className="text-[#531FFF]">Verifikasi Wajah (Face Recognition AI)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>Verifikasi Pulang (Selfie)</span>
+                        </>
+                      )}
                     </label>
                     {photoPreview ? (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
@@ -2549,27 +2988,126 @@ export default function TeacherAttendancePage() {
                           muted
                           className="w-full h-full object-cover transform -scale-x-100"
                         />
-                        {/* Compact Face Frame */}
+                        {/* Top Auto-Scan Status Pill */}
+                        {config.attendanceMode === "face_recognition" && (
+                          <div className="absolute top-2.5 inset-x-2 z-20 flex items-center justify-center pointer-events-none">
+                            <div
+                              className={cn(
+                                "px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 backdrop-blur-md border shadow-lg transition-all duration-300",
+                                autoScanStatus === "matched"
+                                  ? "bg-emerald-950/85 text-emerald-300 border-emerald-500/60 shadow-emerald-500/20"
+                                  : autoScanStatus === "blinking"
+                                  ? "bg-cyan-950/90 text-cyan-200 border-cyan-400 shadow-cyan-500/30 animate-pulse"
+                                  : autoScanStatus === "verifying"
+                                  ? "bg-indigo-950/85 text-indigo-300 border-indigo-500/60 shadow-indigo-500/20"
+                                  : autoScanStatus === "spoof"
+                                  ? "bg-rose-950/90 text-rose-300 border-rose-500/80 shadow-rose-500/30"
+                                  : autoScanStatus === "unmatched"
+                                  ? "bg-amber-950/85 text-amber-300 border-amber-500/60"
+                                  : "bg-slate-900/85 text-white/90 border-white/20"
+                              )}
+                            >
+                              {autoScanStatus === "matched" ? (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />
+                              ) : autoScanStatus === "blinking" ? (
+                                <Eye className="w-3.5 h-3.5 text-cyan-300 animate-bounce" />
+                              ) : autoScanStatus === "verifying" ? (
+                                <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
+                              ) : autoScanStatus === "spoof" ? (
+                                <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+                              ) : autoScanStatus === "unmatched" ? (
+                                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                              ) : (
+                                <ScanFace className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+                              )}
+                              <span className="truncate max-w-[200px] sm:max-w-xs">
+                                {autoScanFeedback || (faceBiometric?.isEnrolled ? "Auto-Scan Aktif: Arahkan wajah..." : "Wajah master belum terdaftar")}
+                              </span>
+                              {autoScanScore !== null && (
+                                <span className={cn(
+                                  "text-[10px] px-1.5 py-0.5 rounded-md font-mono",
+                                  autoScanStatus === "spoof" ? "bg-rose-500/20 text-rose-200" : "bg-white/10"
+                                )}>
+                                  {autoScanStatus === "spoof" ? `Fake: ${autoScanScore}%` : `${autoScanScore}%`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Centered HUD Bounding Box */}
                         <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                          <div className="w-36 h-44 sm:w-40 sm:h-48 border-2 border-dashed border-indigo-400/80 rounded-2xl relative flex items-center justify-center">
-                            <div className="absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 border-indigo-400" />
-                            <div className="absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 border-indigo-400" />
-                            <div className="absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 border-indigo-400" />
-                            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 border-indigo-400" />
-                            <ScanFace className="w-7 h-7 text-indigo-400/50" />
+                          <div
+                            className={cn(
+                              "w-36 h-44 sm:w-42 sm:h-52 border-2 rounded-2xl relative flex items-center justify-center transition-all duration-300",
+                              autoScanStatus === "matched"
+                                ? "border-emerald-400 bg-emerald-500/10 shadow-[0_0_25px_rgba(52,211,153,0.35)] ring-4 ring-emerald-400/30"
+                                : autoScanStatus === "blinking"
+                                ? "border-cyan-400 bg-cyan-500/15 shadow-[0_0_25px_rgba(6,182,212,0.4)] ring-4 ring-cyan-400/40 animate-pulse"
+                                : autoScanStatus === "verifying"
+                                ? "border-indigo-400 bg-indigo-500/10 shadow-[0_0_20px_rgba(99,102,241,0.25)]"
+                                : autoScanStatus === "spoof"
+                                ? "border-rose-500 bg-rose-500/15 shadow-[0_0_25px_rgba(244,63,94,0.35)] ring-4 ring-rose-500/30"
+                                : autoScanStatus === "unmatched"
+                                ? "border-amber-400/80 bg-amber-500/10"
+                                : "border-dashed border-indigo-400/80"
+                            )}
+                          >
+                            <div className={cn("absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "blinking" ? "border-cyan-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-indigo-400")} />
+                            <div className={cn("absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "blinking" ? "border-cyan-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-indigo-400")} />
+                            <div className={cn("absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "blinking" ? "border-cyan-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-indigo-400")} />
+                            <div className={cn("absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "blinking" ? "border-cyan-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-indigo-400")} />
+
+                            {config.attendanceMode === "face_recognition" && (
+                              <div className={cn(
+                                "absolute inset-x-2 top-2 h-0.5 bg-gradient-to-r from-transparent to-transparent animate-pulse",
+                                autoScanStatus === "spoof"
+                                  ? "via-rose-500 shadow-[0_0_8px_#f43f5e]"
+                                  : autoScanStatus === "blinking"
+                                  ? "via-cyan-400 shadow-[0_0_8px_#22d3ee]"
+                                  : "via-indigo-400 shadow-[0_0_8px_#818cf8]"
+                              )} />
+                            )}
+
+                            {autoScanStatus === "blinking" ? (
+                              <Eye className="w-8 h-8 text-cyan-300 animate-bounce" />
+                            ) : (
+                              <ScanFace className={cn("w-7 h-7 transition-colors", autoScanStatus === "matched" ? "text-emerald-400/60" : autoScanStatus === "spoof" ? "text-rose-400/80" : "text-indigo-400/50")} />
+                            )}
                           </div>
                         </div>
 
-                        {/* Floating Shutter Button */}
-                        <div className="absolute bottom-2.5 inset-x-0 flex items-center justify-center px-4 z-10">
-                          <button
-                            type="button"
-                            onClick={() => handleCapturePhoto("CLOCK OUT")}
-                            className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-500/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
-                          >
-                            <Camera className="w-3.5 h-3.5" />
-                            <span>Ambil Foto Pulang</span>
-                          </button>
+                        {/* Bottom Action HUD: Auto-Scan indicator + Instant manual trigger */}
+                        <div className="absolute bottom-2.5 inset-x-0 flex items-center justify-center px-4 z-10 gap-2">
+                          {config.attendanceMode === "face_recognition" ? (
+                            <div className="flex items-center gap-2">
+                              <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-xl border border-white/10 text-white/90 text-[11px] font-medium flex items-center gap-1.5 shadow-md">
+                                <span className="relative flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                                <span>Auto-Scan Aktif</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleCapturePhoto("CLOCK OUT")}
+                                className="px-3 py-1.5 bg-[#531FFF]/85 hover:bg-[#531FFF] text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 border border-purple-400/30 backdrop-blur-xs"
+                                title="Ambil foto langsung tanpa menunggu auto-scan"
+                              >
+                                <ScanFace className="w-3.5 h-3.5" />
+                                <span>Ambil Manual</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleCapturePhoto("CLOCK OUT")}
+                              className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-500/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                              <span>Ambil Foto Pulang</span>
+                            </button>
+                          )}
                         </div>
                       </>
                     ) : (
@@ -2597,16 +3135,23 @@ export default function TeacherAttendancePage() {
                     )}
                   </div>
 
-                  {/* Fallback upload text */}
-                  <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
-                    <span>Posisi wajah di tengah bingkai</span>
-                    <label
-                      htmlFor="clockOutFileFallback"
-                      className="text-indigo-600 hover:underline font-semibold cursor-pointer"
-                    >
-                      Unggah Foto dari Galeri
-                    </label>
-                  </div>
+                  {/* Fallback upload text - only in selfie mode */}
+                  {config.attendanceMode !== "face_recognition" ? (
+                    <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
+                      <span>Posisi wajah di tengah bingkai</span>
+                      <label
+                        htmlFor="clockOutFileFallback"
+                        className="text-indigo-600 hover:underline font-semibold cursor-pointer"
+                      >
+                        Unggah Foto dari Galeri
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-purple-600 font-semibold pt-0.5 flex items-center gap-1">
+                      <ScanFace className="w-3 h-3" />
+                      <span>Mode Face Recognition AI aktif • Verifikasi langsung lewat kamera</span>
+                    </div>
+                  )}
 
                   <input
                     type="file"

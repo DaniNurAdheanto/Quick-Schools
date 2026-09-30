@@ -1,7 +1,7 @@
 "use client";
 
 import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, updateDoc, deleteField, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
 
 // -------------------------------------------------------------
 // Types & Interfaces
@@ -288,7 +288,26 @@ export function compareFaceDescriptors(
     }
     const denom = Math.sqrt(magA) * Math.sqrt(magB);
     if (denom === 0) return 0;
-    return Math.max(0, Math.min(1, dot / denom));
+    const cosSim = Math.max(-1, Math.min(1, dot / denom));
+    if (len > 200) {
+      // Calibrated ArcFace Cosine Similarity:
+      // In 512-dim ArcFace unit embeddings:
+      // - Random / Different persons: cosSim is typically < 0.22 (mean ~0.08)
+      // - Borderline / Unsure: 0.22 - 0.32
+      // - Same person: cosSim is >= 0.33 (industry standard match threshold is 0.35)
+      // We map cosSim smoothly:
+      // cosSim < 0.22 => 0% - 35%
+      // cosSim 0.22 - 0.32 => 35% - 64%
+      // cosSim >= 0.33 => 70% - 99% (satisfies default 70% threshold immediately)
+      if (cosSim < 0.22) {
+        return Math.max(0, (cosSim / 0.22) * 0.35);
+      } else if (cosSim < 0.33) {
+        return 0.35 + ((cosSim - 0.22) / 0.11) * 0.29;
+      } else {
+        return Math.min(0.99, 0.70 + Math.min(0.29, ((cosSim - 0.33) / 0.28) * 0.29));
+      }
+    }
+    return Math.max(0, cosSim);
   };
 
   // If passed as FaceBiometricData object with poses
@@ -367,8 +386,8 @@ export async function saveUserFaceBiometric(
       nip: biometric.nip || "",
       updatedAt: new Date().toISOString(),
     },
-    photoUrl: biometric.photoUrl,
-    imageUrl: biometric.photoUrl,
+    // IMPORTANT: Do NOT overwrite photoUrl or imageUrl here.
+    // The user's uploaded profile photo (pas foto) must remain intact!
     updatedAt: serverTimestamp(),
   };
 
@@ -390,16 +409,81 @@ export async function saveUserFaceBiometric(
   const resolvedRole = (role || "").toLowerCase();
   if (resolvedRole.includes("guru") || resolvedRole.includes("teacher")) {
     try {
-      await setDoc(
-        doc(db, "teachers", uid),
-        {
-          faceBiometric: payload.faceBiometric,
-          photoUrl: biometric.photoUrl,
-          imageUrl: biometric.photoUrl,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      let targetTeacherDocId = uid;
+      const targetNip = biometric.nip || "";
+      const targetName = biometric.userName || "";
+
+      // 1. Check if direct doc with uid exists
+      const directDoc = await getDoc(doc(db, "teachers", uid));
+      if (directDoc.exists()) {
+        targetTeacherDocId = uid;
+      } else if (targetNip) {
+        // Look up by nip or id
+        const qNip = query(collection(db, "teachers"), where("nip", "==", targetNip));
+        const snapNip = await getDocs(qNip);
+        if (!snapNip.empty) {
+          targetTeacherDocId = snapNip.docs[0].id;
+        } else {
+          const qId = query(collection(db, "teachers"), where("id", "==", targetNip));
+          const snapId = await getDocs(qId);
+          if (!snapId.empty) {
+            targetTeacherDocId = snapId.docs[0].id;
+          }
+        }
+      }
+
+      if (targetTeacherDocId === uid && !directDoc.exists() && targetName) {
+        const qName = query(collection(db, "teachers"), where("name", "==", targetName));
+        const snapName = await getDocs(qName);
+        if (!snapName.empty) {
+          targetTeacherDocId = snapName.docs[0].id;
+        }
+      }
+
+      // If document exists, update it. If new, provide complete teacher attributes, never a bare ghost doc!
+      const targetDocRef = doc(db, "teachers", targetTeacherDocId);
+      const targetSnap = await getDoc(targetDocRef);
+      if (targetSnap.exists()) {
+        await setDoc(
+          targetDocRef,
+          {
+            faceBiometric: payload.faceBiometric,
+            uid: uid,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } else {
+        await setDoc(
+          targetDocRef,
+          {
+            faceBiometric: payload.faceBiometric,
+            uid: uid,
+            id: targetNip || uid,
+            nip: targetNip || "-",
+            name: targetName || "Guru Pengajar",
+            fullName: targetName || "Guru Pengajar",
+            role: "Guru Pengajar",
+            subject: "Mata Pelajaran Umum",
+            status: "Aktif",
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
+
+      // Clean up any ghost duplicate document created under uid if real doc has different ID
+      if (targetTeacherDocId !== uid) {
+        try {
+          const ghostDoc = await getDoc(doc(db, "teachers", uid));
+          if (ghostDoc.exists()) {
+            const gData = ghostDoc.data();
+            if (!gData?.name && !gData?.fullName) {
+              await deleteDoc(doc(db, "teachers", uid));
+            }
+          }
+        } catch (delErr) {}
+      }
     } catch (e) {
       console.warn("Could not sync biometric to teachers collection:", e);
     }
@@ -408,16 +492,58 @@ export async function saveUserFaceBiometric(
   // 4. If student role, synchronize to students collection
   if (resolvedRole.includes("siswa") || resolvedRole.includes("student")) {
     try {
-      await setDoc(
-        doc(db, "students", uid),
-        {
-          faceBiometric: payload.faceBiometric,
-          photoUrl: biometric.photoUrl,
-          imageUrl: biometric.photoUrl,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      let targetStudentDocId = uid;
+      const targetNisn = biometric.studentId || "";
+
+      const directDoc = await getDoc(doc(db, "students", uid));
+      if (!directDoc.exists() && targetNisn) {
+        const qNisn = query(collection(db, "students"), where("nisn", "==", targetNisn));
+        const snapNisn = await getDocs(qNisn);
+        if (!snapNisn.empty) {
+          targetStudentDocId = snapNisn.docs[0].id;
+        }
+      }
+
+      const targetDocRef = doc(db, "students", targetStudentDocId);
+      const targetSnap = await getDoc(targetDocRef);
+      if (targetSnap.exists()) {
+        await setDoc(
+          targetDocRef,
+          {
+            faceBiometric: payload.faceBiometric,
+            uid: uid,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } else {
+        await setDoc(
+          targetDocRef,
+          {
+            faceBiometric: payload.faceBiometric,
+            uid: uid,
+            nisn: targetNisn || "-",
+            id: targetNisn || uid,
+            name: biometric.userName || "Siswa",
+            fullName: biometric.userName || "Siswa",
+            status: "Aktif",
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
+
+      if (targetStudentDocId !== uid) {
+        try {
+          const ghostDoc = await getDoc(doc(db, "students", uid));
+          if (ghostDoc.exists()) {
+            const gData = ghostDoc.data();
+            if (!gData?.name && !gData?.fullName) {
+              await deleteDoc(doc(db, "students", uid));
+            }
+          }
+        } catch (delErr) {}
+      }
     } catch (e) {
       console.warn("Could not sync biometric to students collection:", e);
     }
@@ -428,38 +554,88 @@ export async function saveUserFaceBiometric(
 
 /**
  * Retrieves enrolled biometric face master data from cache or Firestore
+ * Supports checking by Auth UID, Student NISN, or Student Document ID
  */
-export async function getUserFaceBiometric(uid: string): Promise<FaceBiometricData | null> {
-  if (!uid) return null;
+export async function getUserFaceBiometric(
+  uid: string,
+  alternateId?: string
+): Promise<FaceBiometricData | null> {
+  if (!uid && !alternateId) return null;
 
-  // Check localStorage cache first
-  try {
-    const cached = localStorage.getItem(`${STORAGE_KEY_PREFIX}${uid}`);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (parsed && parsed.isEnrolled && Array.isArray(parsed.faceDescriptor)) {
-        return parsed as FaceBiometricData;
-      }
-    }
-  } catch (e) {}
+  const candidateIds = Array.from(new Set([uid, alternateId].filter(Boolean))) as string[];
 
-  // Fetch from Firestore users
-  try {
-    const userSnap = await getDoc(doc(db, "users", uid));
-    if (userSnap.exists()) {
-      const data = userSnap.data();
-      if (data?.faceBiometric?.isEnrolled) {
-        try {
-          localStorage.setItem(
-            `${STORAGE_KEY_PREFIX}${uid}`,
-            JSON.stringify(data.faceBiometric)
-          );
-        } catch (e) {}
-        return data.faceBiometric as FaceBiometricData;
+  // 1. Check localStorage cache first for all candidate keys
+  for (const cid of candidateIds) {
+    try {
+      const cached = localStorage.getItem(`${STORAGE_KEY_PREFIX}${cid}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && parsed.isEnrolled && Array.isArray(parsed.faceDescriptor) && parsed.faceDescriptor.length > 0) {
+          return parsed as FaceBiometricData;
+        }
       }
-    }
-  } catch (err) {
-    console.warn("Error fetching user biometric:", err);
+    } catch (e) {}
+  }
+
+  // 2. Fetch from Firestore users collection
+  for (const cid of candidateIds) {
+    try {
+      const userSnap = await getDoc(doc(db, "users", cid));
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        if (data?.faceBiometric?.isEnrolled) {
+          try {
+            localStorage.setItem(`${STORAGE_KEY_PREFIX}${cid}`, JSON.stringify(data.faceBiometric));
+          } catch (e) {}
+          return data.faceBiometric as FaceBiometricData;
+        }
+      }
+    } catch (err) {}
+  }
+
+  // 3. Fetch from Firestore students collection by direct doc ID
+  for (const cid of candidateIds) {
+    try {
+      const studentSnap = await getDoc(doc(db, "students", cid));
+      if (studentSnap.exists()) {
+        const data = studentSnap.data();
+        if (data?.faceBiometric?.isEnrolled) {
+          try {
+            localStorage.setItem(`${STORAGE_KEY_PREFIX}${cid}`, JSON.stringify(data.faceBiometric));
+          } catch (e) {}
+          return data.faceBiometric as FaceBiometricData;
+        }
+      }
+    } catch (err) {}
+  }
+
+  // 4. Query students collection by uid or nisn field
+  for (const cid of candidateIds) {
+    try {
+      const qUid = query(collection(db, "students"), where("uid", "==", cid));
+      const snapUid = await getDocs(qUid);
+      for (const d of snapUid.docs) {
+        const data = d.data();
+        if (data?.faceBiometric?.isEnrolled) {
+          try {
+            localStorage.setItem(`${STORAGE_KEY_PREFIX}${cid}`, JSON.stringify(data.faceBiometric));
+          } catch (e) {}
+          return data.faceBiometric as FaceBiometricData;
+        }
+      }
+
+      const qNisn = query(collection(db, "students"), where("nisn", "==", cid));
+      const snapNisn = await getDocs(qNisn);
+      for (const d of snapNisn.docs) {
+        const data = d.data();
+        if (data?.faceBiometric?.isEnrolled) {
+          try {
+            localStorage.setItem(`${STORAGE_KEY_PREFIX}${cid}`, JSON.stringify(data.faceBiometric));
+          } catch (e) {}
+          return data.faceBiometric as FaceBiometricData;
+        }
+      }
+    } catch (err) {}
   }
 
   return null;

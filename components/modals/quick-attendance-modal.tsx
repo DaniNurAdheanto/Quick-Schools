@@ -14,7 +14,29 @@ import {
   Clock,
   MapPin,
   X,
+  Loader2,
+  Eye,
 } from "lucide-react";
+
+const playShutterSound = () => {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    const now = ctx.currentTime;
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.exponentialRampToValueAtTime(1320, now + 0.12);
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+    osc.start(now);
+    osc.stop(now + 0.15);
+  } catch (e) {}
+};
 import { cn, getTodayDateString } from "@/lib/utils";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc, getDoc, onSnapshot } from "firebase/firestore";
@@ -23,13 +45,25 @@ import { formatDistance } from "@/lib/geofence-utils";
 import { acquireCurrentLocation, type GeolocationErrorState } from "@/lib/geolocation-service";
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
 import { useAcademicYear } from "@/context/AcademicYearContext";
-import { FaceEnrolmentModal } from "@/components/attendance/face-enrolment-modal";
+import dynamic from "next/dynamic";
+
+const FaceEnrolmentModal = dynamic(
+  () => import("@/components/attendance/face-enrolment-modal").then((mod) => mod.FaceEnrolmentModal),
+  { ssr: false }
+);
 import { 
   getUserFaceBiometric, 
   analyzeCameraFrame, 
   compareFaceDescriptors, 
   FaceBiometricData 
 } from "@/lib/face-biometric-service";
+import {
+  detectFaceWithHuman,
+  HumanFaceDetection,
+  createLivenessHistory,
+  evaluateFaceLiveness,
+  FaceLivenessHistory,
+} from "@/lib/human-service";
 
 interface AttendanceConfig {
   schoolStartTime: string;
@@ -88,6 +122,16 @@ export function QuickAttendanceModal({
   // Photo capture state
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
 
+  // Auto-scan Face ID states & refs
+  const [autoScanStatus, setAutoScanStatus] = useState<"idle" | "searching" | "verifying" | "blinking" | "matched" | "unmatched" | "spoof">("idle");
+  const [autoScanFeedback, setAutoScanFeedback] = useState<string>("");
+  const [autoScanScore, setAutoScanScore] = useState<number | null>(null);
+
+  const isAutoScanningRef = useRef(false);
+  const hasAutoCapturedRef = useRef(false);
+  const matchStreakRef = useRef(0);
+  const livenessHistoryRef = useRef<FaceLivenessHistory>(createLivenessHistory());
+
   // Real-time school attendance configuration from Firestore
   const [config, setConfig] = useState<AttendanceConfig>(DEFAULT_CONFIG);
 
@@ -138,13 +182,12 @@ export function QuickAttendanceModal({
   useEffect(() => {
     if (!isOpen) return;
     const uid = auth.currentUser?.uid;
-    if (uid) {
-      getUserFaceBiometric(uid).then((bio) => {
-        if (bio && bio.isEnrolled) {
-          setFaceBiometric(bio);
-        }
-      });
-    }
+    const altId = studentId && studentId !== "-" ? studentId : undefined;
+    getUserFaceBiometric(uid || "", altId).then((bio) => {
+      if (bio && bio.isEnrolled) {
+        setFaceBiometric(bio);
+      }
+    });
   }, [isOpen, studentId]);
 
   // 1. Fetch real-time attendance config from Firestore & localStorage
@@ -163,7 +206,7 @@ export function QuickAttendanceModal({
           schoolCenterLng: Number(d.schoolCenterLng ?? DEFAULT_CONFIG.schoolCenterLng),
           geofenceRadiusMeters: Number(d.geofenceRadiusMeters ?? DEFAULT_CONFIG.geofenceRadiusMeters),
           requireRadius: d.requireRadius ?? DEFAULT_CONFIG.requireRadius,
-          studentAttendanceMode: (d.studentAttendanceMode || d.attendanceMode || DEFAULT_CONFIG.studentAttendanceMode) as "selfie_only" | "face_recognition",
+          studentAttendanceMode: (d.teacherAttendanceMode || d.studentAttendanceMode || d.attendanceMode || DEFAULT_CONFIG.studentAttendanceMode) as "selfie_only" | "face_recognition",
           minFaceMatchScore: Number(d.minFaceMatchScore ?? DEFAULT_CONFIG.minFaceMatchScore),
           requireLiveness: d.requireLiveness ?? DEFAULT_CONFIG.requireLiveness,
         });
@@ -183,7 +226,7 @@ export function QuickAttendanceModal({
             schoolCenterLng: Number(d.schoolCenterLng ?? DEFAULT_CONFIG.schoolCenterLng),
             geofenceRadiusMeters: Number(d.geofenceRadiusMeters ?? DEFAULT_CONFIG.geofenceRadiusMeters),
             requireRadius: d.requireRadius ?? DEFAULT_CONFIG.requireRadius,
-            studentAttendanceMode: (d.studentAttendanceMode || d.attendanceMode || DEFAULT_CONFIG.studentAttendanceMode) as "selfie_only" | "face_recognition",
+            studentAttendanceMode: (d.teacherAttendanceMode || d.studentAttendanceMode || d.attendanceMode || DEFAULT_CONFIG.studentAttendanceMode) as "selfie_only" | "face_recognition",
             minFaceMatchScore: Number(d.minFaceMatchScore ?? DEFAULT_CONFIG.minFaceMatchScore),
             requireLiveness: d.requireLiveness ?? DEFAULT_CONFIG.requireLiveness,
           });
@@ -281,6 +324,14 @@ export function QuickAttendanceModal({
     if (isOpen) {
       setStep("input");
       setCapturedPhoto(null);
+      setFaceVerificationResult(null);
+      hasAutoCapturedRef.current = false;
+      matchStreakRef.current = 0;
+      livenessHistoryRef.current = createLivenessHistory();
+      isAutoScanningRef.current = false;
+      setAutoScanStatus("idle");
+      setAutoScanFeedback("");
+      setAutoScanScore(null);
       startCamera();
     } else {
       stopCamera();
@@ -297,9 +348,201 @@ export function QuickAttendanceModal({
     }
   }, [stream]);
 
+  // Continuous Auto-Scan Face ID Loop: automatically scans and captures when face matches
+  useEffect(() => {
+    if (
+      !isOpen ||
+      !cameraActive ||
+      capturedPhoto ||
+      config.studentAttendanceMode !== "face_recognition" ||
+      !faceBiometric?.isEnrolled
+    ) {
+      return;
+    }
+
+    hasAutoCapturedRef.current = false;
+    matchStreakRef.current = 0;
+    livenessHistoryRef.current = createLivenessHistory();
+    isAutoScanningRef.current = false;
+    setAutoScanStatus("searching");
+    setAutoScanFeedback("Posisikan wajah tepat di dalam bingkai...");
+
+    const scanInterval = setInterval(async () => {
+      if (
+        isAutoScanningRef.current ||
+        hasAutoCapturedRef.current ||
+        !videoRef.current ||
+        videoRef.current.readyState < 2
+      ) {
+        return;
+      }
+
+      const video = videoRef.current;
+      if (!video || video.videoWidth === 0 || video.videoHeight === 0) return;
+
+      isAutoScanningRef.current = true;
+
+      try {
+        // Fast offscreen scan canvas downscaled to 320px for high-speed WebGL AI inference (<40ms)
+        const vW = video.videoWidth || 640;
+        const vH = video.videoHeight || 480;
+        const scanW = 320;
+        const scanH = Math.round(scanW * (vH / vW));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = scanW;
+        canvas.height = scanH;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) {
+          isAutoScanningRef.current = false;
+          return;
+        }
+
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, 0, 0, scanW, scanH);
+
+        // High-speed ArcFace embedding extraction with Anti-Spoofing & Liveness neural models
+        let humanResult: HumanFaceDetection | null = null;
+        try {
+          humanResult = await detectFaceWithHuman(canvas, { fastScan: true, requireAntiSpoof: true });
+        } catch (e) {
+          // fallback
+        }
+
+        let liveDescriptor: number[] | null = null;
+        if (humanResult?.embedding && humanResult.embedding.length > 0) {
+          liveDescriptor = humanResult.embedding;
+        } else {
+          // Fallback to spatial analyzer only if ArcFace was not detected
+          const analysis = analyzeCameraFrame(canvas, ctx);
+          liveDescriptor = analysis.descriptor ?? null;
+        }
+
+        if (hasAutoCapturedRef.current) {
+          isAutoScanningRef.current = false;
+          return;
+        }
+
+        if (!liveDescriptor || liveDescriptor.length === 0) {
+          matchStreakRef.current = 0;
+          livenessHistoryRef.current = createLivenessHistory();
+          setAutoScanStatus("searching");
+          setAutoScanFeedback("Posisikan wajah tepat di dalam bingkai");
+          setAutoScanScore(null);
+          isAutoScanningRef.current = false;
+          return;
+        }
+
+        // Strict Anti-Spoofing & Motion Liveness Validation:
+        // Neural network analyzes photo/screen artifacts & temporal micro-movement
+        if (humanResult) {
+          const livenessCheck = evaluateFaceLiveness(livenessHistoryRef.current, humanResult, canvas);
+          if (livenessCheck.isSpoof) {
+            matchStreakRef.current = 0;
+            setAutoScanStatus("spoof");
+            setAutoScanFeedback(livenessCheck.reason || "Terdeteksi foto/layar digital! Hadirkan wajah asli.");
+            setAutoScanScore(livenessCheck.realScore);
+            isAutoScanningRef.current = false;
+            return;
+          }
+        }
+
+        setAutoScanStatus("verifying");
+        const minScore = config.minFaceMatchScore || 70;
+        const comp = compareFaceDescriptors(faceBiometric, liveDescriptor, minScore);
+        setAutoScanScore(comp.similarity);
+
+        if (comp.match) {
+          // If human hasn't verified liveness yet, prompt them: Blink OR Head turn
+          if (!livenessHistoryRef.current.isLivenessPassed) {
+            setAutoScanStatus("blinking");
+            setAutoScanFeedback(`Wajah Cocok (${comp.similarity}%)! Silakan KEDIP 👁️ atau TENGOK 👤`);
+            isAutoScanningRef.current = false;
+            return;
+          }
+
+          // Require at least 2 consecutive matching & live frames (~360ms) after verified liveness
+          matchStreakRef.current += 1;
+
+          if (matchStreakRef.current < 2) {
+            setAutoScanStatus("verifying");
+            setAutoScanFeedback(`Wajah Cocok (${comp.similarity}%)! Mengonfirmasi presensi...`);
+            isAutoScanningRef.current = false;
+            return;
+          }
+
+          setAutoScanStatus("matched");
+          const livenessNote = livenessHistoryRef.current.livenessReason || "Wajah Asli Cocok";
+          setAutoScanFeedback(`${livenessNote} (${comp.similarity}%)! Memproses presensi...`);
+
+          // Confirmed match across multi-frame liveness streak: Auto-capture!
+          hasAutoCapturedRef.current = true;
+          playShutterSound();
+
+          // High-resolution capture canvas for final attendance photo
+          const fullCanvas = document.createElement("canvas");
+          fullCanvas.width = vW;
+          fullCanvas.height = vH;
+          const fullCtx = fullCanvas.getContext("2d");
+          if (fullCtx) {
+            fullCtx.translate(fullCanvas.width, 0);
+            fullCtx.scale(-1, 1);
+            fullCtx.drawImage(video, 0, 0, fullCanvas.width, fullCanvas.height);
+
+            // Watermark overlay
+            fullCtx.scale(-1, 1);
+            fullCtx.translate(-fullCanvas.width, 0);
+            fullCtx.fillStyle = "rgba(0, 0, 0, 0.4)";
+            fullCtx.fillRect(0, fullCanvas.height - 36, fullCanvas.width, 36);
+            fullCtx.fillStyle = "#ffffff";
+            fullCtx.font = "bold 13px sans-serif";
+            const nowStr = new Date().toLocaleString("id-ID");
+            fullCtx.fillText(`${userName} (${studentId}) • ${nowStr}`, 14, fullCanvas.height - 13);
+
+            const dataUrl = fullCanvas.toDataURL("image/jpeg", 0.85);
+            setCapturedPhoto(dataUrl);
+          }
+
+          setFaceVerificationResult({
+            tested: true,
+            match: true,
+            similarity: comp.similarity,
+          });
+          showSuccess?.(`Wajah terverifikasi asli & cocok (${comp.similarity}%)!`, "Presensi Face ID Sukses");
+          stopCamera();
+        } else {
+          matchStreakRef.current = 0;
+          setAutoScanStatus("unmatched");
+          setAutoScanFeedback(`Kecocokan ${comp.similarity}% (Min: ${minScore}%)`);
+        }
+      } catch (err) {
+        console.warn("Auto-scan frame error:", err);
+      } finally {
+        isAutoScanningRef.current = false;
+      }
+    }, 180);
+
+    return () => {
+      clearInterval(scanInterval);
+      isAutoScanningRef.current = false;
+    };
+  }, [
+    isOpen,
+    cameraActive,
+    capturedPhoto,
+    config.studentAttendanceMode,
+    config.minFaceMatchScore,
+    faceBiometric,
+    userName,
+    studentId,
+    showSuccess,
+  ]);
+
   // 4. Capture photo from live video feed into base64 data URL
-  const handleCapturePhoto = () => {
+  const handleCapturePhoto = async () => {
     if (!videoRef.current) return;
+    hasAutoCapturedRef.current = true;
 
     try {
       const video = videoRef.current;
@@ -329,9 +572,24 @@ export function QuickAttendanceModal({
           return;
         }
 
-        const analysis = analyzeCameraFrame(canvas, ctx);
-        const liveDescriptor = analysis.descriptor;
-        if (!liveDescriptor) {
+        // Smart Biometric Extraction: Detect via Human.js ArcFace AI with Anti-Spoofing
+        let liveDescriptor: number[] | null = null;
+        let humanResult: HumanFaceDetection | null = null;
+
+        try {
+          humanResult = await detectFaceWithHuman(canvas, { fastScan: false, requireAntiSpoof: true });
+        } catch (e) {
+          console.warn("detectFaceWithHuman error in quick attendance:", e);
+        }
+
+        if (humanResult?.embedding && humanResult.embedding.length > 0) {
+          liveDescriptor = humanResult.embedding;
+        } else {
+          const analysis = analyzeCameraFrame(canvas, ctx);
+          liveDescriptor = analysis.descriptor ?? null;
+        }
+
+        if (!liveDescriptor || liveDescriptor.length === 0) {
           showError?.("Wajah tidak terdeteksi dengan jelas di kamera. Pastikan posisi wajah tegak dan pencahayaan terang.", "Wajah Tidak Terdeteksi");
           setFaceVerificationResult({
             tested: true,
@@ -342,8 +600,43 @@ export function QuickAttendanceModal({
           return;
         }
 
+        // Strict Anti-Spoofing & Screen Glare Artifacts check on manual capture
+        const realScore = humanResult?.liveness?.realScore ?? 85;
+        if (humanResult && (humanResult.liveness?.isLive === false || realScore < 45 || humanResult.screenArtifacts?.isScreenSpoof)) {
+          const reason = humanResult.screenArtifacts?.isScreenSpoof
+            ? "Terdeteksi pantulan cahaya layar smartphone / digital (Screen Glare Artifacts)"
+            : `Terdeteksi foto atau layar digital (Keaslian: ${realScore}% / Min 45%)`;
+          showError?.(
+            `Presensi ditolak: ${reason}. Harap hadirkan wajah asli langsung di depan kamera.`,
+            "Terdeteksi Foto / Layar (Anti-Spoofing)"
+          );
+          setFaceVerificationResult({
+            tested: true,
+            match: false,
+            similarity: 0,
+            error: reason,
+          });
+          return;
+        }
+
+        // Must have verified liveness (blink, 3D head turn, or mouth) in live session
+        if (!livenessHistoryRef.current.isLivenessPassed) {
+          showError?.(
+            "Presensi ditolak: Wajib mengedipkan mata atau menengokkan kepala sedikit di depan kamera langsung untuk membuktikan kehadiran fisik asli (Bukan Foto/Layar).",
+            "Verifikasi Keaktifan (Liveness)"
+          );
+          setFaceVerificationResult({
+            tested: true,
+            match: false,
+            similarity: 0,
+            error: "Wajib kedipkan mata atau tengokkan kepala di depan kamera.",
+          });
+          return;
+        }
+
+        // Compare against ALL 5 recorded poses (front, left, right, up, down)
         const comp = compareFaceDescriptors(
-          faceBiometric.faceDescriptor,
+          faceBiometric,
           liveDescriptor,
           config.minFaceMatchScore || 70
         );
@@ -366,7 +659,7 @@ export function QuickAttendanceModal({
             match: true,
             similarity: comp.similarity,
           });
-          showSuccess?.(`Wajah cocok ${comp.similarity}%! Terverifikasi AI.`, "Verifikasi Sukses");
+          showSuccess?.(`Wajah cocok ${comp.similarity}%! Terverifikasi AI asli.`, "Verifikasi Sukses");
         }
       } else {
         setFaceVerificationResult({
@@ -375,6 +668,8 @@ export function QuickAttendanceModal({
           similarity: 100,
         });
       }
+
+      playShutterSound();
 
       // Add watermark overlay
       ctx.scale(-1, 1);
@@ -396,6 +691,13 @@ export function QuickAttendanceModal({
 
   // Retake photo
   const handleRetakePhoto = () => {
+    hasAutoCapturedRef.current = false;
+    matchStreakRef.current = 0;
+    livenessHistoryRef.current = createLivenessHistory();
+    isAutoScanningRef.current = false;
+    setAutoScanStatus("idle");
+    setAutoScanFeedback("");
+    setAutoScanScore(null);
     setCapturedPhoto(null);
     setFaceVerificationResult(null);
     startCamera();
@@ -403,6 +705,15 @@ export function QuickAttendanceModal({
 
   // Fallback file capture for devices without WebRTC camera access
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (config.studentAttendanceMode === "face_recognition") {
+      showError?.(
+        "Presensi Face Recognition wajib menggunakan kamera langsung (Live AI) untuk verifikasi anti-spoofing.",
+        "Unggah Galeri Dinonaktifkan"
+      );
+      if (e.target) e.target.value = "";
+      return;
+    }
+
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -829,29 +1140,128 @@ export function QuickAttendanceModal({
                       </div>
                     )}
 
-                    {/* HUD Bounding Box Overlay (while camera is live) */}
+                    {/* Live Camera HUD Overlays */}
                     {!capturedPhoto && cameraActive && (
                       <>
+                        {/* Top Auto-Scan Status Pill */}
+                        {config.studentAttendanceMode === "face_recognition" && (
+                          <div className="absolute top-2.5 inset-x-2 z-20 flex items-center justify-center pointer-events-none">
+                            <div
+                              className={cn(
+                                "px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 backdrop-blur-md border shadow-lg transition-all duration-300",
+                                autoScanStatus === "matched"
+                                  ? "bg-emerald-950/85 text-emerald-300 border-emerald-500/60 shadow-emerald-500/20"
+                                  : autoScanStatus === "blinking"
+                                  ? "bg-cyan-950/90 text-cyan-200 border-cyan-400 shadow-cyan-500/30 animate-pulse"
+                                  : autoScanStatus === "verifying"
+                                  ? "bg-cyan-950/85 text-cyan-300 border-cyan-500/60 shadow-cyan-500/20"
+                                  : autoScanStatus === "spoof"
+                                  ? "bg-rose-950/90 text-rose-300 border-rose-500/80 shadow-rose-500/30"
+                                  : autoScanStatus === "unmatched"
+                                  ? "bg-amber-950/85 text-amber-300 border-amber-500/60"
+                                  : "bg-slate-900/85 text-white/90 border-white/20"
+                              )}
+                            >
+                              {autoScanStatus === "matched" ? (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />
+                              ) : autoScanStatus === "blinking" ? (
+                                <Eye className="w-3.5 h-3.5 text-cyan-300 animate-bounce" />
+                              ) : autoScanStatus === "verifying" ? (
+                                <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+                              ) : autoScanStatus === "spoof" ? (
+                                <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+                              ) : autoScanStatus === "unmatched" ? (
+                                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                              ) : (
+                                <ScanFace className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                              )}
+                              <span className="truncate max-w-[200px] sm:max-w-xs">
+                                {autoScanFeedback || (faceBiometric?.isEnrolled ? "Auto-Scan Aktif: Arahkan wajah..." : "Wajah master belum terdaftar")}
+                              </span>
+                              {autoScanScore !== null && (
+                                <span className={cn(
+                                  "text-[10px] px-1.5 py-0.5 rounded-md font-mono",
+                                  autoScanStatus === "spoof" ? "bg-rose-500/20 text-rose-200" : "bg-white/10"
+                                )}>
+                                  {autoScanStatus === "spoof" ? `Fake: ${autoScanScore}%` : `${autoScanScore}%`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Centered HUD Bounding Box */}
                         <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                          <div className="w-36 h-44 sm:w-40 sm:h-48 border-2 border-dashed border-cyan-400/70 rounded-2xl relative flex items-center justify-center">
-                            <div className="absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 border-cyan-400" />
-                            <div className="absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 border-cyan-400" />
-                            <div className="absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 border-cyan-400" />
-                            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 border-cyan-400" />
-                            <ScanFace className="w-7 h-7 text-cyan-400/40" />
+                          <div
+                            className={cn(
+                              "w-36 h-44 sm:w-42 sm:h-52 border-2 rounded-2xl relative flex items-center justify-center transition-all duration-300",
+                              autoScanStatus === "matched"
+                                ? "border-emerald-400 bg-emerald-500/10 shadow-[0_0_25px_rgba(52,211,153,0.35)] ring-4 ring-emerald-400/30"
+                                : autoScanStatus === "blinking"
+                                ? "border-cyan-400 bg-cyan-500/15 shadow-[0_0_25px_rgba(6,182,212,0.4)] ring-4 ring-cyan-400/40 animate-pulse"
+                                : autoScanStatus === "verifying"
+                                ? "border-cyan-400 bg-cyan-500/10 shadow-[0_0_20px_rgba(34,211,238,0.25)]"
+                                : autoScanStatus === "spoof"
+                                ? "border-rose-500 bg-rose-500/15 shadow-[0_0_25px_rgba(244,63,94,0.35)] ring-4 ring-rose-500/30"
+                                : autoScanStatus === "unmatched"
+                                ? "border-amber-400/80 bg-amber-500/10"
+                                : "border-dashed border-cyan-400/70"
+                            )}
+                          >
+                            <div className={cn("absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "blinking" ? "border-cyan-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-cyan-400")} />
+                            <div className={cn("absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "blinking" ? "border-cyan-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-cyan-400")} />
+                            <div className={cn("absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "blinking" ? "border-cyan-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-cyan-400")} />
+                            <div className={cn("absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "blinking" ? "border-cyan-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-cyan-400")} />
+
+                            {/* Scanning laser line animation */}
+                            {config.studentAttendanceMode === "face_recognition" && (
+                              <div className={cn(
+                                "absolute inset-x-2 top-2 h-0.5 bg-gradient-to-r from-transparent to-transparent animate-pulse",
+                                autoScanStatus === "spoof"
+                                  ? "via-rose-500 shadow-[0_0_8px_#f43f5e]"
+                                  : "via-cyan-400 shadow-[0_0_8px_#22d3ee]"
+                              )} />
+                            )}
+
+                            {autoScanStatus === "blinking" ? (
+                              <Eye className="w-8 h-8 text-cyan-300 animate-bounce" />
+                            ) : (
+                              <ScanFace className={cn("w-8 h-8 transition-colors", autoScanStatus === "matched" ? "text-emerald-400/60" : autoScanStatus === "spoof" ? "text-rose-400/80" : "text-cyan-400/40")} />
+                            )}
                           </div>
                         </div>
 
-                        {/* Floating Shutter Button inside camera */}
-                        <div className="absolute bottom-2.5 inset-x-0 flex items-center justify-center px-4 z-10">
-                          <button
-                            type="button"
-                            onClick={handleCapturePhoto}
-                            className="px-4 py-2 bg-gradient-to-r from-[#531FFF] via-[#6E3BFF] to-[#8F94FB] text-white font-extrabold text-xs rounded-xl shadow-lg shadow-[#531FFF]/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
-                          >
-                            <Camera className="w-3.5 h-3.5" />
-                            <span>Ambil Foto Absensi</span>
-                          </button>
+                        {/* Bottom Action HUD: Auto-Scan indicator + Instant manual trigger */}
+                        <div className="absolute bottom-2.5 inset-x-0 flex items-center justify-center px-4 z-10 gap-2">
+                          {config.studentAttendanceMode === "face_recognition" ? (
+                            <div className="flex items-center gap-2">
+                              <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-xl border border-white/10 text-white/90 text-[11px] font-medium flex items-center gap-1.5 shadow-md">
+                                <span className="relative flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                                <span>Auto-Scan Aktif</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={handleCapturePhoto}
+                                className="px-3 py-1.5 bg-[#531FFF]/85 hover:bg-[#531FFF] text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 border border-purple-400/30 backdrop-blur-xs"
+                                title="Ambil foto langsung tanpa menunggu auto-scan"
+                              >
+                                <ScanFace className="w-3.5 h-3.5" />
+                                <span>Ambil Manual</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleCapturePhoto}
+                              className="px-4 py-2 bg-gradient-to-r from-[#531FFF] via-[#6E3BFF] to-[#8F94FB] text-white font-extrabold text-xs rounded-xl shadow-lg shadow-[#531FFF]/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                              <span>Ambil Foto Absensi</span>
+                            </button>
+                          )}
                         </div>
                       </>
                     )}
@@ -889,21 +1299,25 @@ export function QuickAttendanceModal({
                 {/* Sub-bar Helper */}
                 <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
                   <span>Posisikan wajah di tengah bingkai</span>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-[#531FFF] hover:underline font-semibold cursor-pointer"
-                  >
-                    Unggah dari HP / Galeri
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="user"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
+                  {config.studentAttendanceMode === "selfie_only" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-[#531FFF] hover:underline font-semibold cursor-pointer"
+                      >
+                        Unggah dari HP / Galeri
+                      </button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="user"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                    </>
+                  )}
                 </div>
               </div>
 

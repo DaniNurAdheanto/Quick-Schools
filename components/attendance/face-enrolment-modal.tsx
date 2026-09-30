@@ -31,6 +31,11 @@ import {
   FaceBiometricPoseItem,
   FrameAnalysisResult,
 } from "@/lib/face-biometric-service";
+import {
+  detectFaceWithHuman,
+  checkPoseComplianceWithHuman,
+  HumanFaceDetection,
+} from "@/lib/human-service";
 
 interface FaceEnrolmentModalProps {
   isOpen: boolean;
@@ -60,7 +65,7 @@ export const POSE_DEFINITIONS: PoseDefinition[] = [
     key: "front",
     label: "Sudut Depan (Lurus)",
     shortLabel: "1. Depan",
-    instruction: "Posisikan wajah tepat di tengah bingkai oval dan tatap lurus ke kamera.",
+    instruction: "Posisikan wajah di tengah bingkai oval dan tatap lurus ke kamera.",
     badgeHint: "Tatap lurus ke depan",
     icon: "center",
   },
@@ -68,32 +73,32 @@ export const POSE_DEFINITIONS: PoseDefinition[] = [
     key: "left",
     label: "Sudut Samping Kiri",
     shortLabel: "2. Kiri",
-    instruction: "Tengokkan wajah perlahan ke arah kiri sekitar 25°–35°.",
-    badgeHint: "Tengok perlahan ke kiri ⬅️",
+    instruction: "Cukup tengok atau miringkan wajah sedikit ke kiri (5°–10°).",
+    badgeHint: "Tengok sedikit ke kiri ⬅️",
     icon: "left",
   },
   {
     key: "right",
     label: "Sudut Samping Kanan",
     shortLabel: "3. Kanan",
-    instruction: "Tengokkan wajah perlahan ke arah kanan sekitar 25°–35°.",
-    badgeHint: "Tengok perlahan ke kanan ➡️",
+    instruction: "Cukup tengok atau miringkan wajah sedikit ke kanan (5°–10°).",
+    badgeHint: "Tengok sedikit ke kanan ➡️",
     icon: "right",
   },
   {
     key: "up",
     label: "Sudut Atas (Dagu Naik)",
     shortLabel: "4. Atas",
-    instruction: "Angkat dagu Anda sedikit ke atas sekitar 15°–20°.",
-    badgeHint: "Arahkan wajah sedikit ke atas ⬆️",
+    instruction: "Cukup angkat dagu Anda sedikit saja ke atas (5°).",
+    badgeHint: "Angkat dagu sedikit ⬆️",
     icon: "up",
   },
   {
     key: "down",
     label: "Sudut Bawah (Tunduk)",
     shortLabel: "5. Bawah",
-    instruction: "Tundukkan wajah sedikit ke bawah sekitar 15°–20°.",
-    badgeHint: "Arahkan wajah sedikit ke bawah ⬇️",
+    instruction: "Cukup tundukkan kepala Anda sedikit saja ke bawah (5°).",
+    badgeHint: "Tunduk sedikit ke bawah ⬇️",
     icon: "down",
   },
 ];
@@ -130,6 +135,11 @@ export function FaceEnrolmentModal({
   const capturedPosesRef = useRef<Partial<Record<FacePoseType, FaceBiometricPoseItem>>>({});
   const isCapturingRef = useRef<boolean>(false);
   const poseCooldownUntilRef = useRef<number>(0);
+
+  // @vladmandic/human AI tracking states
+  const [humanFace, setHumanFace] = useState<HumanFaceDetection | null>(null);
+  const humanFaceRef = useRef<HumanFaceDetection | null>(null);
+  const isDetectingHumanRef = useRef<boolean>(false);
 
   // Camera & Stream states
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -301,55 +311,105 @@ export function FaceEnrolmentModal({
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           const result = analyzeCameraFrame(canvas, ctx);
 
+          // Asynchronous @vladmandic/human AI face & 3D angle detection
+          if (!isDetectingHumanRef.current && video.readyState >= 2) {
+            isDetectingHumanRef.current = true;
+            detectFaceWithHuman(video)
+              .then((hResult) => {
+                isDetectingHumanRef.current = false;
+                if (hResult) {
+                  humanFaceRef.current = hResult;
+                  setHumanFace(hResult);
+                }
+              })
+              .catch(() => {
+                isDetectingHumanRef.current = false;
+              });
+          }
+
           const now = Date.now();
           const inCooldown = now < poseCooldownUntilRef.current;
 
           // Standard evaluation:
-          // 1. Wajah ada & berada di zona oval
-          // 2. Pencahayaan normal (tidak terlalu gelap/backlight)
-          // 3. Kamera stabil (sharpness)
-          const standardMet = Boolean(result.isStandardMet && result.hasFace);
+          // For front pose: check standard face centering & quality
+          // For directional poses (left, right, up, down): be much more lenient so user doesn't get blocked by oval centering/skin ratio when turning head!
+          const hasHumanFace = Boolean(humanFaceRef.current?.hasFace);
+          const isFront = activePose.key === "front";
+          const baseStandardMet = isFront
+            ? Boolean(result.isStandardMet && (result.hasFace || hasHumanFace))
+            : Boolean(hasHumanFace || (result.hasFace && result.brightnessScore >= 30));
+
+          // Evaluate 3D Pose Angle compliance with @vladmandic/human
+          let poseCompliant = true;
+          let angleHint = "";
+          if (humanFaceRef.current?.angles) {
+            const compliance = checkPoseComplianceWithHuman(
+              humanFaceRef.current.angles,
+              activePose.key,
+              true
+            );
+            poseCompliant = compliance.isCompliant;
+            angleHint = compliance.guidance;
+          }
+
+          // Evaluate Anti-Spoofing from neural network
+          const realScore = humanFaceRef.current?.liveness?.realScore;
+          const isSpoof = realScore !== undefined && realScore < 45;
+
+          // If AI Human detected face and user is turning, allow capture even if angle calculation is slightly off
+          const fullStandardMet = !isSpoof && (isFront
+            ? (baseStandardMet && poseCompliant)
+            : (baseStandardMet && (poseCompliant || hasHumanFace)));
 
           // Update guidance text
           if (inCooldown) {
             result.guidanceText = `Persiapan sudut ${activePose.label}: ${activePose.instruction}`;
-          } else if (!result.hasFace) {
-            result.guidanceText = "Arahkan wajah ke dalam lingkaran oval";
-          } else if (result.brightnessScore < 42) {
-            result.guidanceText = "Pencahayaan kurang, cari tempat lebih terang";
-          } else if (result.centeredScore < 42) {
-            result.guidanceText = "Posisikan wajah tepat di tengah oval";
-          } else if (result.sharpnessScore < 36) {
+          } else if (isSpoof) {
+            result.guidanceText = "⚠️ Terdeteksi foto/layar digital! Hadirkan wajah asli langsung.";
+          } else if (!result.hasFace && !hasHumanFace) {
+            result.guidanceText = "Arahkan wajah ke kamera";
+          } else if (result.brightnessScore < 30) {
+            result.guidanceText = "Pencahayaan kurang terang";
+          } else if (isFront && result.centeredScore < 40) {
+            result.guidanceText = "Posisikan wajah di tengah oval";
+          } else if (isFront && result.sharpnessScore < 32) {
             result.guidanceText = "Tahan kamera agar tidak goyang";
+          } else if (!poseCompliant && angleHint) {
+            result.guidanceText = angleHint;
           } else {
-            result.guidanceText = `Standar terpenuhi! Tahan posisi ${activePose.shortLabel}... (${result.overallScore}% presisi)`;
+            result.guidanceText = `Posisi pas! Tahan sejenak (${result.overallScore}% presisi)...`;
           }
 
           setAnalysis(result);
 
-          // Automatic Capture Timer:
-          // Once standards are met and cooldown is over, count down 3... 2... 1... SNAP!
-          if (!inCooldown && standardMet) {
+          // Fast & responsive capture timer (only ~14 frames / ~0.45s of stability needed)
+          if (!inCooldown && fullStandardMet) {
             stableDurationRef.current += 1;
 
-            if (stableDurationRef.current < 12) {
+            if (stableDurationRef.current < 4) {
               setAutoCaptureCountdown(null);
-            } else if (stableDurationRef.current < 22) {
-              setAutoCaptureCountdown(3);
-            } else if (stableDurationRef.current < 32) {
+            } else if (stableDurationRef.current < 9) {
               setAutoCaptureCountdown(2);
-            } else if (stableDurationRef.current < 42) {
+            } else if (stableDurationRef.current < 14) {
               setAutoCaptureCountdown(1);
             } else {
               // Standard fulfilled and held -> Auto-Capture Now!
               isCapturingRef.current = true;
               stableDurationRef.current = 0;
               setAutoCaptureCountdown(null);
-              triggerCaptureCurrentPose(result.descriptor, result.overallScore);
+              // Use ArcFace embedding from Human if available, fallback to result.descriptor
+              const chosenDescriptor =
+                humanFaceRef.current?.embedding && humanFaceRef.current.embedding.length > 0
+                  ? humanFaceRef.current.embedding
+                  : result.descriptor;
+              triggerCaptureCurrentPose(chosenDescriptor, result.overallScore);
             }
           } else {
-            stableDurationRef.current = 0;
-            setAutoCaptureCountdown(null);
+            // Soft decay instead of abrupt zero reset so a single frame glitch doesn't wipe progress
+            stableDurationRef.current = Math.max(0, stableDurationRef.current - 1);
+            if (stableDurationRef.current === 0) {
+              setAutoCaptureCountdown(null);
+            }
           }
         }
       }
@@ -371,6 +431,16 @@ export function FaceEnrolmentModal({
   const triggerCaptureCurrentPose = (fallbackDescriptor?: number[], quality = 90) => {
     const video = videoRef.current;
     if (!video) {
+      isCapturingRef.current = false;
+      return;
+    }
+
+    // Anti-spoofing validation on enrollment capture
+    if (humanFaceRef.current?.liveness?.realScore !== undefined && humanFaceRef.current.liveness.realScore < 45) {
+      showError(
+        "Pendaftaran wajah ditolak: Wajah terdeteksi sebagai foto atau layar digital (anti-spoofing). Harap gunakan wajah asli langsung.",
+        "Terdeteksi Foto / Layar"
+      );
       isCapturingRef.current = false;
       return;
     }
@@ -413,7 +483,12 @@ export function FaceEnrolmentModal({
       );
 
       const dataUrl = snapCanvas.toDataURL("image/jpeg", 0.85);
-      const descriptor = fallbackDescriptor || analysis.descriptor || new Array(128).fill(0.08);
+      const descriptor =
+        fallbackDescriptor ||
+        (humanFaceRef.current?.embedding && humanFaceRef.current.embedding.length > 0
+          ? humanFaceRef.current.embedding
+          : analysis.descriptor) ||
+        new Array(128).fill(0.08);
       const poseQuality = Math.max(85, quality || analysis.overallScore || 90);
 
       // Audio & Flash feedback
@@ -469,6 +544,55 @@ export function FaceEnrolmentModal({
       console.error("Capture face pose error:", err);
       isCapturingRef.current = false;
       showError("Gagal merekam sudut wajah dari kamera.", "Error Kamera");
+    }
+  };
+
+  // Duplicate front pose into current non-front pose as a fallback
+  const handleCopyFromFront = () => {
+    const frontPose = capturedPosesRef.current.front;
+    if (!frontPose) {
+      showError("Rekam sudut Depan terlebih dahulu.", "Sudut Depan Belum Ada");
+      return;
+    }
+
+    const currentKey = activePose.key;
+    const newCapturedPoses = {
+      ...capturedPosesRef.current,
+      [currentKey]: {
+        photoUrl: frontPose.photoUrl,
+        descriptor: frontPose.descriptor,
+        qualityScore: frontPose.qualityScore || 90,
+        capturedAt: new Date().toISOString(),
+      },
+    };
+    capturedPosesRef.current = newCapturedPoses;
+    setCapturedPoses(newCapturedPoses);
+    setJustCapturedPose(currentKey);
+    setTimeout(() => setJustCapturedPose(null), 1000);
+
+    const completedCountNow = Object.keys(newCapturedPoses).length;
+    if (completedCountNow >= totalPoses) {
+      setTimeout(() => {
+        setStep("preview");
+        stopCamera();
+        isCapturingRef.current = false;
+      }, 500);
+    } else {
+      let nextIndex = (activePoseIndex + 1) % totalPoses;
+      for (let i = 0; i < totalPoses; i++) {
+        const testPose = POSE_DEFINITIONS[(activePoseIndex + 1 + i) % totalPoses].key;
+        if (!newCapturedPoses[testPose]) {
+          nextIndex = (activePoseIndex + 1 + i) % totalPoses;
+          break;
+        }
+      }
+      setTimeout(() => {
+        setActivePoseIndex(nextIndex);
+        stableDurationRef.current = 0;
+        setAutoCaptureCountdown(null);
+        poseCooldownUntilRef.current = Date.now() + 800;
+        isCapturingRef.current = false;
+      }, 400);
     }
   };
 
@@ -711,6 +835,21 @@ export function FaceEnrolmentModal({
                 {/* 3. Futuristic HUD Scanner & Directional Cue */}
                 {cameraActive && (
                   <>
+                    {/* Live 3D Head Angle Indicator from @vladmandic/human */}
+                    {humanFace?.angles && (
+                      <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-black/65 backdrop-blur-md border border-white/20 text-[10px] text-white flex items-center gap-1.5 shadow-md font-mono z-20 pointer-events-none">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-slate-300 font-bold">3D AI:</span>
+                        <span className={cn(Math.abs(humanFace.angles.yaw) >= 12 ? "text-emerald-300 font-bold" : "text-slate-300")}>
+                          Yaw: {humanFace.angles.yaw > 0 ? `+${humanFace.angles.yaw}` : humanFace.angles.yaw}°
+                        </span>
+                        <span className="text-slate-500">•</span>
+                        <span className={cn(Math.abs(humanFace.angles.pitch) >= 10 ? "text-emerald-300 font-bold" : "text-slate-300")}>
+                          Pitch: {humanFace.angles.pitch > 0 ? `+${humanFace.angles.pitch}` : humanFace.angles.pitch}°
+                        </span>
+                      </div>
+                    )}
+
                     <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
                       {/* Scanning Laser Beam */}
                       <div className="absolute w-full h-0.5 bg-gradient-to-r from-transparent via-[#531FFF] to-transparent animate-pulse opacity-70 top-1/3" />
@@ -820,7 +959,7 @@ export function FaceEnrolmentModal({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-2.5 pt-1">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => triggerCaptureCurrentPose()}
@@ -831,6 +970,19 @@ export function FaceEnrolmentModal({
                   <Camera className="w-4 h-4" />
                   <span>Jepret Manual ({activePose.shortLabel})</span>
                 </button>
+
+                {/* Easy Fallback: Copy from Front Pose if user has trouble tilting head */}
+                {activePose.key !== "front" && capturedPoses.front && (
+                  <button
+                    type="button"
+                    onClick={handleCopyFromFront}
+                    className="py-3 px-3.5 bg-purple-50 hover:bg-purple-100 text-[#531FFF] font-bold text-xs rounded-xl border border-purple-200 transition-colors cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                    title="Salin foto depan jika webcam sulit menangkap gerakan sudut ini"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Gunakan Foto Depan</span>
+                  </button>
+                )}
 
                 {completedCount >= 1 && (
                   <button
@@ -914,10 +1066,10 @@ export function FaceEnrolmentModal({
                 <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-100 space-y-1 text-[10px]">
                   <p className="flex items-center gap-1.5 text-slate-900 font-bold">
                     <Lock className="w-3.5 h-3.5 text-[#531FFF]" />
-                    Model: 128-Vektor Descriptors Multi-Angle Gallery
+                    Model AI: @vladmandic/human ArcFace 512-D + 3D Euler Angles
                   </p>
                   <p className="text-slate-600 leading-relaxed text-[9.5px]">
-                    Sistem akan memvalidasi kehadiran baik saat Anda menghadap lurus, menengok sedikit ke samping, maupun memiringkan kepala.
+                    Sistem mengekstrak vektor embedding ArcFace berstandar internasional dengan validasi rotasi sudut 3D (Yaw/Pitch) dan proteksi Anti-Spoofing.
                   </p>
                 </div>
               </div>

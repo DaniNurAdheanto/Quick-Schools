@@ -930,6 +930,20 @@ export default function SettingsPage() {
       // 3. Client-side localStorage persistence
       try {
         localStorage.setItem("quick_schools_attendance_config", JSON.stringify(payload));
+        localStorage.setItem("smart_school_teacher_attendance_config_v1", JSON.stringify({
+          attendanceMode: teacherMode,
+          minFaceMatchScore: Number(attendance.minFaceMatchScore ?? 80),
+          requireLiveness: Boolean(attendance.requireLiveness),
+          geofenceEnabled: Boolean(attendance.requireRadius),
+          geofenceCenter: {
+            lat: targetLat,
+            lng: targetLng,
+            radiusMeters: targetRadius,
+            address: profile.address || profile.locationAddress || "Area Utama Sekolah",
+          },
+          standardClockIn: attendance.schoolStartTime || "07:00",
+          standardClockOut: attendance.schoolEndTime || "15:30",
+        }));
       } catch (e) {}
 
       // 4. Background attempt to attendance_config/general
