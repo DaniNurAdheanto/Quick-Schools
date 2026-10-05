@@ -1185,54 +1185,83 @@ export default function ClassesPage() {
         onEditRequested={isReadOnly ? undefined : () => setCrudState(s => ({ ...s, mode: "edit" }))}
       />
 
-      {/* ================= HEADER SECTION ================= */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/40 p-6 rounded-xl border border-purple-100/60 shadow-2xs">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/25">
-              <Users className="w-5 h-5" />
+      {/* ================= HEADER BANNER - Clean 2-Row Architecture ================= */}
+      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4 mb-6">
+        {/* Top Row: Icon, Title, Status & Quick Info Chip */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/20 shrink-0 mt-0.5 sm:mt-0">
+              <GraduationCap className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black text-gray-900 tracking-tight">
-                  Manajemen Kelas &amp; Siswa
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                  Manajemen Kelas &amp; Rombel
                 </h1>
-                {isReadOnly && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                {isReadOnly ? (
+                  <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-amber-50 text-amber-700 rounded-full border border-amber-200 flex items-center gap-1.5 shrink-0">
                     Mode Lihat (Read-Only)
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200 flex items-center gap-1.5 shrink-0">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    Rombongan Belajar Aktif
                   </span>
                 )}
               </div>
-              <p className="text-[13px] text-gray-500 font-medium">
-                Kelola rombongan belajar, penugasan wali kelas, dan pembagian siswa ke dalam setiap kelas.
+              <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
+                Kelola rombongan belajar, penugasan guru wali kelas, dan pembagian alokasi siswa ke dalam setiap kelas.
               </p>
+            </div>
+          </div>
+
+          {/* Quick Context Chip */}
+          <div className="hidden lg:flex items-center gap-2 self-start lg:self-center shrink-0">
+            <div className="px-3.5 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center gap-2 text-xs">
+              <span className="text-gray-400 font-medium">Terdaftar:</span>
+              <strong className="text-gray-900 font-bold">{classes.length} Rombel</strong>
+              <span className="text-gray-300">•</span>
+              <span className="text-[#531FFF] font-bold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200 text-[10px]">
+                Kapasitas Terkelola
+              </span>
             </div>
           </div>
         </div>
 
-        {!isReadOnly && (
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* New Class Button */}
-            <button 
-              type="button"
-              onClick={() => setCrudState({ 
-                open: true, 
-                mode: "create",
-                data: {
-                  level: gradeLevels[0] || "Kelas 10",
-                  major: majorOptions[0]?.value || "Umum",
-                  homeroom: "",
-                  maxCapacity: 36,
-                  status: "Aktif"
-                }
-              })}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg text-[13px] font-bold shadow-md shadow-[#531FFF]/25 transition-all active:scale-95 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Tambah Kelas Baru</span>
-            </button>
+        {/* Bottom Row / Toolbar: Helper Info on Left + Action Buttons on Right */}
+        <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-600 text-[11px] font-bold shrink-0">
+              💡
+            </span>
+            <span className="line-clamp-1">
+              Struktur rombel kelas otomatis menentukan jadwal KBM, daftar presensi harian, dan pencetakan rapor digital.
+            </span>
           </div>
-        )}
+
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-end md:self-auto">
+            {!isReadOnly && (
+              <button 
+                type="button"
+                onClick={() => setCrudState({ 
+                  open: true, 
+                  mode: "create",
+                  data: {
+                    level: gradeLevels[0] || "Kelas 10",
+                    major: majorOptions[0]?.value || "Umum",
+                    homeroom: "",
+                    maxCapacity: 36,
+                    status: "Aktif"
+                  }
+                })}
+                className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25"
+              >
+                <Plus className="w-3.5 h-3.5 text-white" />
+                <span>Tambah Kelas Baru</span>
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ================= QUICK PRESET TEMPLATES BAR ================= */}

@@ -27,7 +27,8 @@ import {
   BadgeCheck,
   Users,
   MessageSquare,
-  Lock
+  Lock,
+  Calendar
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
@@ -2342,25 +2343,26 @@ export default function GradesPage() {
         onEditRequested={canMutateGrades ? () => setCrudState(s => ({ ...s, mode: "edit" })) : undefined}
       />
 
-      {/* ================= HEADER SECTION ================= */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/40 p-6 rounded-xl border border-purple-100/60 shadow-2xs">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/25">
+      {/* ================= HEADER SECTION (Unified 2-Row Layout) ================= */}
+      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4 mb-6">
+        {/* Row 1: Title, Icon, Status Badges & Quick Indicators */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/20 shrink-0">
               <Award className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
                   Penilaian Akademik
                 </h1>
                 {isStudentRole ? (
-                  <span className="px-2.5 py-0.5 text-xs font-bold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20 flex items-center gap-1">
+                  <span className="px-2.5 py-0.5 text-xs font-bold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20 flex items-center gap-1 shrink-0">
                     <ShieldCheck className="w-3.5 h-3.5" /> Portal Siswa
                   </span>
                 ) : isGuru ? (
                   <span className={cn(
-                    "px-2.5 py-0.5 text-xs font-bold rounded-full border flex items-center gap-1.5",
+                    "px-2.5 py-0.5 text-xs font-bold rounded-full border flex items-center gap-1.5 shrink-0",
                     hasAnyGradingAccess
                       ? "bg-purple-50 text-[#531FFF] border-purple-200"
                       : "bg-amber-50 text-amber-700 border-amber-200"
@@ -2375,80 +2377,100 @@ export default function GradesPage() {
                           : "Guru (Belum Ada Penugasan)"}
                   </span>
                 ) : (
-                  <span className="px-2.5 py-0.5 text-xs font-bold bg-purple-50 text-[#531FFF] rounded-full border border-purple-200">
+                  <span className="px-2.5 py-0.5 text-xs font-bold bg-purple-50 text-[#531FFF] rounded-full border border-purple-200 shrink-0">
                     Input Cepat Multi-Penilaian
                   </span>
                 )}
                 {isArchiveMode && (
-                  <span className="px-2.5 py-0.5 text-xs font-extrabold bg-amber-100 text-amber-800 rounded-full border border-amber-300 flex items-center gap-1">
-                    Mode Arsip: TA {activeAcademicYear} ({activeSemester})
+                  <span className="px-2.5 py-0.5 text-xs font-extrabold bg-amber-100 text-amber-800 rounded-full border border-amber-300 flex items-center gap-1 shrink-0">
+                    Mode Arsip
                   </span>
                 )}
               </div>
-              <p className="text-[13px] text-gray-500 font-medium">
+              <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
                 {isStudentRole
                   ? "Lihat riwayat capaian hasil belajar, nilai ujian, dan progres KKM Anda."
                   : isGuru
                     ? "Penginputan dan pengelolaan nilai untuk kelas dan mata pelajaran yang menjadi tanggung jawab Anda."
-                    : "Input seluruh atau sebagian nilai siswa (Tugas, Kuis, UH, PTS, PAS, Asesmen Akhir) dalam satu tampilan spreadsheet yang fleksibel."}
+                    : "Input seluruh atau sebagian nilai siswa (Tugas, Kuis, UH, PTS, PAS, Asesmen Akhir) dalam satu spreadsheet terpadu."}
               </p>
             </div>
           </div>
+
+          {/* Quick Context Indicator on Right */}
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
+            <span className="px-3 py-1.5 text-xs font-bold rounded-xl bg-purple-50 text-[#531FFF] border border-purple-200 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-[#531FFF]" />
+              TA {activeAcademicYear} ({activeSemester})
+            </span>
+            <span className="px-3 py-1.5 text-xs font-bold rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
+              <Award className="w-3.5 h-3.5 text-emerald-600" />
+              KKM Acuan: {schoolGrading?.kkmScore || 75}
+            </span>
+          </div>
         </div>
 
-        {/* Action Buttons for Teachers & Admins */}
-        {canMutateGrades && (
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Save Matrix Button when in Matrix view */}
-            {viewMode === "matrix" && (
+        {/* Row 2: Tips & Action Toolbar */}
+        <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+            <span className="w-2 h-2 rounded-full bg-[#531FFF] shrink-0 animate-pulse" />
+            <span>💡 Tips: Gunakan mode spreadsheet matrix untuk mengisi nilai seluruh siswa per kelas secara cepat atau entri per komponen.</span>
+          </div>
+
+          {/* Action Buttons for Teachers & Admins */}
+          {canMutateGrades && (
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {/* Save Matrix Button when in Matrix view */}
+              {viewMode === "matrix" && (
+                <button
+                  type="button"
+                  onClick={handleSaveMatrix}
+                  disabled={isSavingMatrix || (isGuru && (!hasAnyGradingAccess || !isTeacherAuthorizedFor(matrixClassId, matrixSubject)))}
+                  className={cn(
+                    "inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold shadow-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
+                    hasUnsavedChanges
+                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-500/25 ring-2 ring-emerald-400/50 animate-pulse"
+                      : "bg-[#531FFF] hover:bg-[#4314cc] text-white shadow-[#531FFF]/25"
+                  )}
+                >
+                  {isSavingMatrix ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Menyimpan ke Database...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Simpan Semua Nilai ({matrixClassId || "Kelas"})</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {/* Single Entry Button */}
               <button
                 type="button"
-                onClick={handleSaveMatrix}
-                disabled={isSavingMatrix || (isGuru && (!hasAnyGradingAccess || !isTeacherAuthorizedFor(matrixClassId, matrixSubject)))}
-                className={cn(
-                  "flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs sm:text-[13px] font-extrabold shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
-                  hasUnsavedChanges
-                    ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-500/25 ring-2 ring-emerald-400/50 animate-pulse"
-                    : "bg-[#531FFF] hover:bg-[#4314cc] text-white shadow-[#531FFF]/25"
-                )}
+                disabled={isGuru && !hasAnyGradingAccess}
+                onClick={() => setCrudState({
+                  open: true,
+                  mode: "create",
+                  data: {
+                    kkm: schoolGrading?.kkmScore || 75,
+                    semester: matrixSemester || activeSemester || "Ganjil",
+                    academicYear: matrixAcademicYear || activeAcademicYear || "2025/2026",
+                    type: "Tugas",
+                    classId: matrixClassId || primaryTeacherClass || availableClassOptions[0]?.value || "",
+                    subject: matrixSubject || (matrixClassId ? getAuthorizedSubjectsForClass(matrixClassId)[0] : "") || ""
+                  }
+                })}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold shadow-2xs transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSavingMatrix ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Menyimpan ke Database...</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    <span>Simpan Semua Nilai ({matrixClassId || "Kelas"})</span>
-                  </>
-                )}
+                <Plus className="w-3.5 h-3.5" />
+                <span>Entri Nilai Tunggal</span>
               </button>
-            )}
-
-            {/* Single Entry Button */}
-            <button
-              type="button"
-              disabled={isGuru && !hasAnyGradingAccess}
-              onClick={() => setCrudState({
-                open: true,
-                mode: "create",
-                data: {
-                  kkm: schoolGrading?.kkmScore || 75,
-                  semester: matrixSemester || activeSemester || "Ganjil",
-                  academicYear: matrixAcademicYear || activeAcademicYear || "2025/2026",
-                  type: "Tugas",
-                  classId: matrixClassId || primaryTeacherClass || availableClassOptions[0]?.value || "",
-                  subject: matrixSubject || (matrixClassId ? getAuthorizedSubjectsForClass(matrixClassId)[0] : "") || ""
-                }
-              })}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 rounded-lg text-xs sm:text-[13px] font-bold shadow-2xs transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Entri Nilai Tunggal</span>
-            </button>
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Warning Notice for Guru who has no assigned classes or subjects */}

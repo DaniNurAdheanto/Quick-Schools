@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { 
   Plus, PenTool, Trash2, Loader2, Calendar, Clock, LayoutGrid, List, Table,
   Search, Filter, AlertTriangle, User, BookOpen, GraduationCap, X,
-  BadgeCheck, AlertCircle, Settings
+  BadgeCheck, AlertCircle, Settings, Sparkles
 } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
@@ -983,38 +983,68 @@ export default function SchedulePage() {
   return (
     <div className="p-6 md:p-8 max-w-full mx-auto w-full flex-1 flex flex-col h-full animate-in fade-in duration-300">
       
-      {/* Header Section */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Jadwal Pelajaran</h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#531FFF]/10 text-[#531FFF]">
-              {filteredSchedules.length} Sesi ({activeAcademicYear} - {activeSemester})
-            </span>
-            {isArchiveMode && (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                Mode Arsip
-              </span>
-            )}
+      {/* Header Banner - Clean 2-Row Architecture */}
+      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4 mb-6">
+        {/* Top Row: Icon, Title, Status & Clock Quick Chip */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/20 shrink-0 mt-0.5 sm:mt-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                  Jadwal Pelajaran &amp; KBM
+                </h1>
+                <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-purple-50 text-[#531FFF] rounded-full border border-purple-200/80 flex items-center gap-1.5 shrink-0">
+                  <Sparkles className="w-3.5 h-3.5 text-[#531FFF]" />
+                  {filteredSchedules.length} Sesi ({activeAcademicYear} - {activeSemester})
+                </span>
+                {isArchiveMode && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                    Mode Arsip
+                  </span>
+                )}
+              </div>
+              <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
+                Kelola dan atur alokasi mata pelajaran mingguan, jam belajar mengajar (KBM), dan penugasan kelas.
+              </p>
+            </div>
           </div>
-          <p className="text-gray-500 text-sm font-medium mt-1">Kelola dan atur alokasi mata pelajaran mingguan dengan cepat.</p>
+
+          {/* Quick Context Chip */}
+          <div className="hidden lg:flex items-center gap-2 self-start lg:self-center shrink-0">
+            <div className="px-3.5 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center gap-2 text-xs">
+              <Clock className="w-3.5 h-3.5 text-[#531FFF]" />
+              <strong className="text-gray-900 font-mono font-bold">
+                {mounted ? `${currentDayString}, ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : "WIB"}
+              </strong>
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          <div className="flex items-center gap-2 bg-white px-3.5 py-2 rounded-lg border border-gray-200 shadow-sm text-sm font-semibold text-gray-700">
-             <Clock className="w-4 h-4 text-[#531FFF]" />
-             <span>{mounted ? `${currentDayString}, ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : ""}</span>
+        {/* Bottom Row / Toolbar: Helper Info on Left + Action Buttons on Right */}
+        <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-600 text-[11px] font-bold shrink-0">
+              💡
+            </span>
+            <span className="line-clamp-1">
+              Jadwal pelajaran otomatis menyelaraskan jam absensi guru dan pengingat kelas bagi siswa.
+            </span>
           </div>
-          
-          {canMutateSchedule && (
-            <button 
-              onClick={() => handleOpenAddModal()}
-              className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Tambah Jadwal</span>
-            </button>
-          )}
+
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-end md:self-auto">
+            {canMutateSchedule && (
+              <button 
+                onClick={() => handleOpenAddModal()}
+                className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25"
+              >
+                <Plus className="w-3.5 h-3.5 text-white" />
+                <span>Tambah Jadwal</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

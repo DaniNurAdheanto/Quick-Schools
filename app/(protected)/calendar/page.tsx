@@ -431,39 +431,73 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* Header Bar */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 bg-white p-5 md:p-6 rounded-lg border border-gray-100 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Kalender Akademik</h1>
-            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
-              Tahun Ajaran {academicYearText} ({currentSemester})
-            </span>
+      {/* Header Banner - Clean 2-Row Architecture */}
+      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4 mb-6">
+        {/* Top Row: Icon, Title, Status & Quick Info Chip */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/20 shrink-0 mt-0.5 sm:mt-0">
+              <CalendarIcon className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                  Kalender Akademik
+                </h1>
+                <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-purple-50 text-[#531FFF] rounded-full border border-purple-200/80 flex items-center gap-1.5 shrink-0">
+                  <Sparkles className="w-3.5 h-3.5 text-[#531FFF]" />
+                  T.A. {academicYearText} ({currentSemester})
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
+                Manajemen agenda kegiatan sekolah, jadwal ujian semester, libur nasional, dan acara akademik terpadu.
+              </p>
+            </div>
           </div>
-          <p className="text-gray-500 text-xs md:text-sm font-medium mt-1">
-            Manajemen agenda kegiatan sekolah, jadwal ujian, libur nasional, dan acara akademik terpadu.
-          </p>
+
+          {/* Quick Context Chip */}
+          <div className="hidden lg:flex items-center gap-2 self-start lg:self-center shrink-0">
+            <div className="px-3.5 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center gap-2 text-xs">
+              <span className="text-gray-400 font-medium">Bulan Aktif:</span>
+              <strong className="text-gray-900 font-bold">{format(currentDate, 'MMMM yyyy', { locale: idLocale })}</strong>
+              <span className="text-gray-300">•</span>
+              <span className="text-[#531FFF] font-bold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200 text-[10px]">
+                {events.length} Agenda Terdata
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          <button
-            onClick={() => setIsPrintModalOpen(true)}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-lg text-xs font-bold shadow-xs transition-all active:scale-[0.98] cursor-pointer"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Cetak Kalender (PDF)</span>
-          </button>
+        {/* Bottom Row / Toolbar: Helper Info on Left + Action Buttons on Right */}
+        <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-600 text-[11px] font-bold shrink-0">
+              💡
+            </span>
+            <span className="line-clamp-1">
+              Seluruh agenda sekolah yang ditambahkan otomatis terintegrasi ke portal guru, orang tua, dan siswa.
+            </span>
+          </div>
 
-          {!isReadOnly && (
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-end md:self-auto">
             <button
-              onClick={() => handleOpenAdd()}
-              className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              onClick={() => setIsPrintModalOpen(true)}
+              className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
             >
-              <Plus className="w-4 h-4" />
-              <span>Tambah Agenda Baru</span>
+              <Printer className="w-3.5 h-3.5 text-gray-500" />
+              <span>Cetak Kalender (PDF)</span>
             </button>
-          )}
+
+            {!isReadOnly && (
+              <button
+                onClick={() => handleOpenAdd()}
+                className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25"
+              >
+                <Plus className="w-3.5 h-3.5 text-white" />
+                <span>Tambah Agenda Baru</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -498,46 +498,80 @@ export default function TeachersPage() {
         onEditRequested={isReadOnly ? undefined : () => setCrudState(s => ({ ...s, mode: "edit", open: true }))}
       />
 
-      {/* Page Header Card */}
-      <div className="bg-white rounded-lg p-6 border border-gray-100 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-[#531FFF]/10 flex items-center justify-center text-[#531FFF] shrink-0 font-bold">
-            <Users className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Staff Guru</h1>
-              {isReadOnly && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                  Mode Lihat (Read-Only)
-                </span>
-              )}
+      {/* Page Header Banner - Clean 2-Row Architecture */}
+      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4 mb-6">
+        {/* Top Row: Icon, Title, Status & Quick Info Chip */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/20 shrink-0 mt-0.5 sm:mt-0">
+              <Users className="w-5 h-5" />
             </div>
-            <p className="text-gray-500 text-xs md:text-sm font-medium mt-0.5">
-              Kelola direktori pengajar, penetapan mata pelajaran, dan informasi kontak resmi.
-            </p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                  Data Guru &amp; Tenaga Pendidik
+                </h1>
+                {isReadOnly ? (
+                  <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-amber-50 text-amber-700 rounded-full border border-amber-200 flex items-center gap-1.5 shrink-0">
+                    Mode Lihat (Read-Only)
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200 flex items-center gap-1.5 shrink-0">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    Direktori Pengajar Resmi
+                  </span>
+                )}
+              </div>
+              <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
+                Kelola data dewan guru, penugasan mata pelajaran, nomor kontak resmi, dan status kepegawaian.
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Context Chip */}
+          <div className="hidden lg:flex items-center gap-2 self-start lg:self-center shrink-0">
+            <div className="px-3.5 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center gap-2 text-xs">
+              <span className="text-gray-400 font-medium">Terdaftar:</span>
+              <strong className="text-gray-900 font-bold">{filteredTeachers.length} Guru</strong>
+              <span className="text-gray-300">•</span>
+              <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-[10px]">
+                Aktif Mengajar
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {!isReadOnly && (
+        {/* Bottom Row / Toolbar: Helper Info on Left + Action Buttons on Right */}
+        <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-600 text-[11px] font-bold shrink-0">
+              💡
+            </span>
+            <span className="line-clamp-1">
+              Data guru otomatis tersinkronisasi pada jadwal pelajaran mingguan, presensi harian, dan e-rapor.
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-end md:self-auto">
             <button 
-              onClick={() => openTeacherCrud("create")}
-              className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              onClick={handleExportCSV}
+              disabled={filteredTeachers.length === 0}
+              className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
             >
-              <Plus className="w-4 h-4" />
-              <span>Tambah Guru</span>
+              <Download className="w-3.5 h-3.5 text-[#531FFF]" />
+              <span>Export CSV</span>
             </button>
-          )}
-          
-          <button 
-            onClick={handleExportCSV}
-            disabled={filteredTeachers.length === 0}
-            className="flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-bold border border-gray-200 shadow-xs transition-colors disabled:opacity-50"
-          >
-            <Download className="w-4 h-4 text-[#531FFF]" />
-            <span className="hidden sm:inline">Export CSV</span>
-          </button>
+
+            {!isReadOnly && (
+              <button 
+                onClick={() => openTeacherCrud("create")}
+                className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25"
+              >
+                <Plus className="w-3.5 h-3.5 text-white" />
+                <span>Tambah Guru</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

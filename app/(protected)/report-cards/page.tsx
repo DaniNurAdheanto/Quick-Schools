@@ -15,7 +15,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart,
   PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Cell, Legend
 } from "recharts";
-import { collection, onSnapshot, doc, setDoc, addDoc, serverTimestamp, query, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, addDoc, serverTimestamp, query, orderBy, where } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
@@ -237,6 +237,18 @@ function getStudentNisn(student: any): string {
   return "-";
 }
 
+// Attendance records merger ensuring deduplication by document ID
+const mergeAttendanceRecords = (base: any[], incoming: any[]): any[] => {
+  const map: Record<string, any> = {};
+  base.forEach((r) => {
+    if (r && r.id) map[r.id] = r;
+  });
+  incoming.forEach((r) => {
+    if (r && r.id) map[r.id] = r;
+  });
+  return Object.values(map);
+};
+
 export default function ReportCardsPage() {
   const { profile: schoolProfile, majorOptions, currentStage } = useSchoolProfile();
   const [alertState, setAlertState] = useState<{
@@ -454,9 +466,58 @@ export default function ReportCardsPage() {
       setSchedules(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    const unsubAttendance = onSnapshot(collection(db, "attendance"), (snap) => {
-      setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    // 1. Initial read from localStorage (same storage key as attendance page)
+    try {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("quick_schools_attendance_records");
+        if (stored) {
+          const localList: any[] = JSON.parse(stored);
+          const cleanLocalList = localList.filter(
+            (rec) => rec && !rec.id?.startsWith("ATT-100") && !rec.id?.startsWith("MOCK")
+          );
+          if (cleanLocalList.length > 0) {
+            setAttendanceRecords((prev) => mergeAttendanceRecords(prev, cleanLocalList));
+          }
+        }
+      }
+    } catch (e) {}
+
+    // 2. Subscribe to attendance records in 'roles' collection (type == 'attendance_record')
+    const qRolesAtt = query(collection(db, "roles"), where("type", "==", "attendance_record"));
+    const unsubRolesAtt = onSnapshot(
+      qRolesAtt,
+      (snap) => {
+        if (!snap.empty) {
+          const list: any[] = [];
+          snap.forEach((d) => {
+            if (d.id?.startsWith("ATT-100") || d.id?.startsWith("MOCK")) return;
+            list.push({ id: d.id, ...d.data() });
+          });
+          setAttendanceRecords((prev) => mergeAttendanceRecords(prev, list));
+        }
+      },
+      (err) => {
+        console.warn("Roles attendance snapshot in report cards error:", err);
+      }
+    );
+
+    // 3. Subscribe to Firestore 'attendance' collection
+    const unsubAttendance = onSnapshot(
+      collection(db, "attendance"),
+      (snap) => {
+        if (!snap.empty) {
+          const list: any[] = [];
+          snap.forEach((d) => {
+            if (d.id?.startsWith("ATT-100") || d.id?.startsWith("MOCK")) return;
+            list.push({ id: d.id, ...d.data() });
+          });
+          setAttendanceRecords((prev) => mergeAttendanceRecords(prev, list));
+        }
+      },
+      (err) => {
+        console.warn("Attendance snapshot in report cards error:", err);
+      }
+    );
 
     const unsubReportCards = onSnapshot(collection(db, "reportCards"), (snap) => {
       const map: Record<string, any> = {};
@@ -473,6 +534,7 @@ export default function ReportCardsPage() {
       unsubSubjects();
       unsubSubjectGroups();
       unsubSchedules();
+      unsubRolesAtt();
       unsubAttendance();
       unsubReportCards();
     };
@@ -559,34 +621,125 @@ export default function ReportCardsPage() {
     };
   }, [isGuru, currentUserData, currentStudent, classes, teachers]);
 
-  // Realtime attendance stats calculated directly from Firestore 'attendance' collection
+  // Realtime attendance stats calculated directly from Firestore 'roles' & 'attendance' collections and localStorage
   const dbAttendanceStats = useMemo(() => {
     if (!currentStudent) return { sick: 0, permit: 0, alpha: 0, present: 0, late: 0, total: 0 };
 
+    const studentIds = [
+      currentStudent.id,
+      currentStudent.uid,
+      currentStudent._firestoreId,
+      currentStudent.nis,
+      currentStudent.nisn,
+      currentStudent.nis_nasional,
+      ...(currentStudent._allDocIds || [])
+    ].filter(Boolean).map(id => String(id).trim().toLowerCase());
+
+    const normStudentName = (currentStudent.name || currentStudent.fullName || "").trim().toLowerCase();
+
     const studentRecords = attendanceRecords.filter((rec: any) => {
-      const matchId = rec.studentId && (
-        rec.studentId === currentStudent.id ||
-        rec.studentId === currentStudent.uid ||
-        rec.studentId === currentStudent.nis ||
-        rec.studentId === currentStudent.nisn ||
-        rec.studentId === currentStudent._firestoreId ||
-        (currentStudent._allDocIds && currentStudent._allDocIds.includes(rec.studentId))
+      if (!rec) return false;
+
+      const recIds = [
+        rec.studentId,
+        rec.studentUid,
+        rec.uid,
+        rec.nisn,
+        rec.nis
+      ].filter(Boolean).map(id => String(id).trim().toLowerCase());
+
+      const matchId = recIds.some(rId => studentIds.includes(rId)) ||
+        (rec.id && studentIds.some(sId => String(rec.id).toLowerCase().includes(sId)));
+
+      const normRecName = (rec.studentName || rec.name || "").trim().toLowerCase();
+      const matchName = Boolean(
+        normStudentName &&
+        normRecName &&
+        (normStudentName === normRecName ||
+         normStudentName.includes(normRecName) ||
+         normRecName.includes(normStudentName))
       );
-      const matchName = rec.studentName && currentStudent.name && (
-        rec.studentName.toLowerCase().trim() === currentStudent.name.toLowerCase().trim() ||
-        (currentStudent.fullName && rec.studentName.toLowerCase().trim() === currentStudent.fullName.toLowerCase().trim())
-      );
-      return Boolean(matchId || matchName);
+
+      if (!matchId && !matchName) return false;
+
+      // Filter by academicYear and semester if both are defined
+      if (rec.academicYear && academicYear) {
+        const normRecYear = String(rec.academicYear).replace(/\//g, "-").trim();
+        const normCurrYear = String(academicYear).replace(/\//g, "-").trim();
+        if (normRecYear !== normCurrYear) return false;
+      }
+      if (rec.semester && semester) {
+        if (String(rec.semester).toLowerCase().trim() !== String(semester).toLowerCase().trim()) return false;
+      }
+
+      return true;
     });
 
-    const sick = studentRecords.filter((r: any) => (r.status || "").toLowerCase() === "sakit").length;
-    const permit = studentRecords.filter((r: any) => (r.status || "").toLowerCase() === "izin").length;
-    const alpha = studentRecords.filter((r: any) => {
-      const s = (r.status || "").toLowerCase();
-      return s === "alpa" || s === "alpha" || s === "tanpa keterangan";
-    }).length;
-    const present = studentRecords.filter((r: any) => (r.status || "").toLowerCase() === "hadir").length;
-    const late = studentRecords.filter((r: any) => (r.status || "").toLowerCase() === "terlambat").length;
+    // Deduplicate records for this student by date (e.g. from both roles and attendance collections)
+    const dateMap: Record<string, any> = {};
+    studentRecords.forEach((r: any) => {
+      const key = r.date || r.id || Math.random().toString();
+      if (!dateMap[key]) {
+        dateMap[key] = r;
+      } else {
+        const existingStatus = (dateMap[key].status || "").toLowerCase();
+        const newStatus = (r.status || "").toLowerCase();
+        if ((!existingStatus || existingStatus === "hadir") && newStatus && newStatus !== "hadir") {
+          dateMap[key] = r;
+        }
+      }
+    });
+    const uniqueRecords = Object.values(dateMap);
+
+    const isAlpa = (statusStr: string, notesStr: string = ""): boolean => {
+      const s = (statusStr || "").trim().toLowerCase();
+      const n = (notesStr || "").trim().toLowerCase();
+      if (!s) return false;
+      return (
+        s === "alpa" ||
+        s === "alpha" ||
+        s === "a" ||
+        s.includes("alpa") ||
+        s.includes("alpha") ||
+        s === "ditolak" ||
+        s.includes("ditolak") ||
+        s === "tanpa keterangan" ||
+        s.includes("tanpa keterangan") ||
+        s === "belum absen" ||
+        s.includes("belum absen") ||
+        s === "tidak hadir" ||
+        s === "mangkir" ||
+        s === "absent" ||
+        n.includes("alpa") ||
+        n.includes("tanpa keterangan")
+      );
+    };
+
+    const isSick = (statusStr: string): boolean => {
+      const s = (statusStr || "").trim().toLowerCase();
+      return s === "sakit" || s === "s" || s.includes("sakit") || s.includes("sick");
+    };
+
+    const isPermit = (statusStr: string): boolean => {
+      const s = (statusStr || "").trim().toLowerCase();
+      return s === "izin" || s === "ijin" || s === "i" || s.includes("izin") || s.includes("ijin") || s.includes("permit");
+    };
+
+    const isLate = (statusStr: string): boolean => {
+      const s = (statusStr || "").trim().toLowerCase();
+      return s === "terlambat" || s === "telat" || s === "t" || s.includes("terlambat") || s.includes("late");
+    };
+
+    const isPresent = (statusStr: string): boolean => {
+      const s = (statusStr || "").trim().toLowerCase();
+      return s === "hadir" || s === "h" || s.includes("hadir") || s.includes("present");
+    };
+
+    const sick = uniqueRecords.filter((r: any) => isSick(r.status)).length;
+    const permit = uniqueRecords.filter((r: any) => isPermit(r.status)).length;
+    const alpha = uniqueRecords.filter((r: any) => isAlpa(r.status, r.notes)).length;
+    const present = uniqueRecords.filter((r: any) => isPresent(r.status)).length;
+    const late = uniqueRecords.filter((r: any) => isLate(r.status)).length;
 
     return {
       sick,
@@ -594,9 +747,9 @@ export default function ReportCardsPage() {
       alpha,
       present,
       late,
-      total: studentRecords.length
+      total: uniqueRecords.length
     };
-  }, [currentStudent, attendanceRecords]);
+  }, [currentStudent, attendanceRecords, academicYear, semester]);
 
   // Sync saved report card details when current student changes (sanitize slashes in year for Firestore doc id)
   const sanitizedAcademicYear = academicYear.replace(/\//g, "-");
@@ -1368,13 +1521,146 @@ export default function ReportCardsPage() {
     return rate;
   }, [sickCount, permitCount, alphaCount]);
 
-  // Sync attendance with Firestore attendance collection
+  // Sync attendance with Firestore attendance collection & localStorage
   const handleSyncAttendanceFromDb = () => {
-    if (isReadOnly) return;
-    setSickCount(dbAttendanceStats.sick);
-    setPermitCount(dbAttendanceStats.permit);
-    setAlphaCount(dbAttendanceStats.alpha);
-    triggerAlert("success", `Data presensi berhasil disinkronkan dari database presensi harian (${dbAttendanceStats.total} log: ${dbAttendanceStats.present} Hadir, ${dbAttendanceStats.sick} Sakit, ${dbAttendanceStats.permit} Izin, ${dbAttendanceStats.alpha} Alpa).`, "Sinkronisasi Berhasil");
+    if (isReadOnly || !currentStudent) return;
+
+    // 1. Immediately read latest records from localStorage if present
+    let pool = [...attendanceRecords];
+    try {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("quick_schools_attendance_records");
+        if (stored) {
+          const localList: any[] = JSON.parse(stored);
+          const cleanLocalList = localList.filter(
+            (rec) => rec && !rec.id?.startsWith("ATT-100") && !rec.id?.startsWith("MOCK")
+          );
+          if (cleanLocalList.length > 0) {
+            pool = mergeAttendanceRecords(pool, cleanLocalList);
+            setAttendanceRecords(pool);
+          }
+        }
+      }
+    } catch (e) {}
+
+    const studentIds = [
+      currentStudent.id,
+      currentStudent.uid,
+      currentStudent._firestoreId,
+      currentStudent.nis,
+      currentStudent.nisn,
+      currentStudent.nis_nasional,
+      ...(currentStudent._allDocIds || [])
+    ].filter(Boolean).map(id => String(id).trim().toLowerCase());
+
+    const normStudentName = (currentStudent.name || currentStudent.fullName || "").trim().toLowerCase();
+
+    const studentRecords = pool.filter((rec: any) => {
+      if (!rec) return false;
+
+      const recIds = [
+        rec.studentId,
+        rec.studentUid,
+        rec.uid,
+        rec.nisn,
+        rec.nis
+      ].filter(Boolean).map(id => String(id).trim().toLowerCase());
+
+      const matchId = recIds.some(rId => studentIds.includes(rId)) ||
+        (rec.id && studentIds.some(sId => String(rec.id).toLowerCase().includes(sId)));
+
+      const normRecName = (rec.studentName || rec.name || "").trim().toLowerCase();
+      const matchName = Boolean(
+        normStudentName &&
+        normRecName &&
+        (normStudentName === normRecName ||
+         normStudentName.includes(normRecName) ||
+         normRecName.includes(normStudentName))
+      );
+
+      if (!matchId && !matchName) return false;
+
+      // Filter by academicYear and semester if both are defined
+      if (rec.academicYear && academicYear) {
+        const normRecYear = String(rec.academicYear).replace(/\//g, "-").trim();
+        const normCurrYear = String(academicYear).replace(/\//g, "-").trim();
+        if (normRecYear !== normCurrYear) return false;
+      }
+      if (rec.semester && semester) {
+        if (String(rec.semester).toLowerCase().trim() !== String(semester).toLowerCase().trim()) return false;
+      }
+
+      return true;
+    });
+
+    const dateMap: Record<string, any> = {};
+    studentRecords.forEach((r: any) => {
+      const key = r.date || r.id || Math.random().toString();
+      if (!dateMap[key]) {
+        dateMap[key] = r;
+      } else {
+        const existingStatus = (dateMap[key].status || "").toLowerCase();
+        const newStatus = (r.status || "").toLowerCase();
+        if ((!existingStatus || existingStatus === "hadir") && newStatus && newStatus !== "hadir") {
+          dateMap[key] = r;
+        }
+      }
+    });
+    const uniqueRecords = Object.values(dateMap);
+
+    const isAlpa = (statusStr: string, notesStr: string = ""): boolean => {
+      const s = (statusStr || "").trim().toLowerCase();
+      const n = (notesStr || "").trim().toLowerCase();
+      if (!s) return false;
+      return (
+        s === "alpa" ||
+        s === "alpha" ||
+        s === "a" ||
+        s.includes("alpa") ||
+        s.includes("alpha") ||
+        s === "ditolak" ||
+        s.includes("ditolak") ||
+        s === "tanpa keterangan" ||
+        s.includes("tanpa keterangan") ||
+        s === "belum absen" ||
+        s.includes("belum absen") ||
+        s === "tidak hadir" ||
+        s === "mangkir" ||
+        s === "absent" ||
+        n.includes("alpa") ||
+        n.includes("tanpa keterangan")
+      );
+    };
+
+    const isSick = (statusStr: string): boolean => {
+      const s = (statusStr || "").trim().toLowerCase();
+      return s === "sakit" || s === "s" || s.includes("sakit") || s.includes("sick");
+    };
+
+    const isPermit = (statusStr: string): boolean => {
+      const s = (statusStr || "").trim().toLowerCase();
+      return s === "izin" || s === "ijin" || s === "i" || s.includes("izin") || s.includes("ijin") || s.includes("permit");
+    };
+
+    const isPresent = (statusStr: string): boolean => {
+      const s = (statusStr || "").trim().toLowerCase();
+      return s === "hadir" || s === "h" || s.includes("hadir") || s.includes("present");
+    };
+
+    const freshSick = uniqueRecords.filter((r: any) => isSick(r.status)).length;
+    const freshPermit = uniqueRecords.filter((r: any) => isPermit(r.status)).length;
+    const freshAlpha = uniqueRecords.filter((r: any) => isAlpa(r.status, r.notes)).length;
+    const freshPresent = uniqueRecords.filter((r: any) => isPresent(r.status)).length;
+
+    setSickCount(freshSick);
+    setPermitCount(freshPermit);
+    setAlphaCount(freshAlpha);
+
+    triggerAlert(
+      "success",
+      `Data presensi berhasil disinkronkan dari database presensi (${uniqueRecords.length} log: ${freshPresent} Hadir, ${freshSick} Sakit, ${freshPermit} Izin, ${freshAlpha} Alpa).`,
+      "Sinkronisasi Berhasil"
+    );
   };
 
   // Save Complete Report Card to Firestore with Draft or Published status

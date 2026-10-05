@@ -66,6 +66,7 @@ import {
 interface AttendanceConfig {
   schoolStartTime: string;
   lateToleranceMinutes: number;
+  absentThresholdTime: string;
   schoolCenterLat: number;
   schoolCenterLng: number;
   geofenceRadiusMeters: number;
@@ -79,6 +80,7 @@ interface AttendanceConfig {
 const DEFAULT_CONFIG: AttendanceConfig = {
   schoolStartTime: "07:00",
   lateToleranceMinutes: 15,
+  absentThresholdTime: "08:30",
   schoolCenterLat: -6.200000,
   schoolCenterLng: 106.816666,
   geofenceRadiusMeters: 100,
@@ -167,6 +169,7 @@ export function QuickAttendanceModal({
   // Step state: "input" | "processing" | "success"
   const [step, setStep] = useState<"input" | "processing" | "success">("input");
   const [verifiedTime, setVerifiedTime] = useState<string>("");
+  const [recordedStatus, setRecordedStatus] = useState<"Hadir" | "Terlambat" | "Alpa">("Hadir");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Biometric Face ID states
@@ -203,6 +206,7 @@ export function QuickAttendanceModal({
         setConfig({
           schoolStartTime: d.schoolStartTime || DEFAULT_CONFIG.schoolStartTime,
           lateToleranceMinutes: d.lateToleranceMinutes ?? DEFAULT_CONFIG.lateToleranceMinutes,
+          absentThresholdTime: d.absentThresholdTime || d.autoAbsentTime || DEFAULT_CONFIG.absentThresholdTime,
           schoolCenterLat: Number(d.schoolCenterLat ?? DEFAULT_CONFIG.schoolCenterLat),
           schoolCenterLng: Number(d.schoolCenterLng ?? DEFAULT_CONFIG.schoolCenterLng),
           geofenceRadiusMeters: Number(d.geofenceRadiusMeters ?? DEFAULT_CONFIG.geofenceRadiusMeters),
@@ -224,6 +228,7 @@ export function QuickAttendanceModal({
           setConfig({
             schoolStartTime: d.schoolStartTime || DEFAULT_CONFIG.schoolStartTime,
             lateToleranceMinutes: d.lateToleranceMinutes ?? DEFAULT_CONFIG.lateToleranceMinutes,
+            absentThresholdTime: d.absentThresholdTime || d.autoAbsentTime || DEFAULT_CONFIG.absentThresholdTime,
             schoolCenterLat: Number(d.schoolCenterLat ?? DEFAULT_CONFIG.schoolCenterLat),
             schoolCenterLng: Number(d.schoolCenterLng ?? DEFAULT_CONFIG.schoolCenterLng),
             geofenceRadiusMeters: Number(d.geofenceRadiusMeters ?? DEFAULT_CONFIG.geofenceRadiusMeters),
@@ -807,11 +812,30 @@ export function QuickAttendanceModal({
     const readableDate = now.toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
     setVerifiedTime(timeStr);
 
-    // Calculate late status
+    // Calculate late & automatic Alpa status based on Batas Maksimal Dihitung Alpa
     const [startH, startM] = config.schoolStartTime.split(":").map(Number);
     const startTotalMinutes = (startH || 7) * 60 + (startM || 0) + config.lateToleranceMinutes;
     const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
     const isLate = currentTotalMinutes > startTotalMinutes;
+
+    // Batas Maksimal Dihitung Alpa
+    const [absentH, absentM] = (config.absentThresholdTime || "08:30").split(":").map(Number);
+    const absentTotalMinutes = (isNaN(absentH) ? 8 : absentH) * 60 + (isNaN(absentM) ? 30 : absentM);
+    const isAlpa = currentTotalMinutes >= absentTotalMinutes;
+
+    const resolvedStatus: "Hadir" | "Terlambat" | "Alpa" = isAlpa
+      ? "Alpa"
+      : isLate
+      ? "Terlambat"
+      : "Hadir";
+
+    const resolvedNotes = isAlpa
+      ? `Otomatis Alpa (Melewati Batas Maksimal ${config.absentThresholdTime || "08:30"} WIB)`
+      : isLate
+      ? "Terlambat Hadir"
+      : "Hadir Tepat Waktu";
+
+    setRecordedStatus(resolvedStatus);
 
     const user = auth.currentUser;
     const studentUid = user?.uid || "";
@@ -836,7 +860,8 @@ export function QuickAttendanceModal({
       timestamp: timeStr,
       time: cleanTimeHM,
       jamMasuk: cleanTimeHM,
-      status: isLate ? "Terlambat" : "Hadir",
+      status: resolvedStatus,
+      notes: resolvedNotes,
       capturedImage: capturedPhoto,
       location: {
         lat: locationData.lat,
@@ -913,10 +938,17 @@ export function QuickAttendanceModal({
       }
 
       if (showSuccess) {
-        showSuccess(
-          `Absensi berhasil dicatat! Status: ${isLate ? "Terlambat" : "Hadir"} (Jarak: ${locationData.distance}m).`,
-          "Presensi Terverifikasi"
-        );
+        if (isAlpa) {
+          showSuccess(
+            `Presensi berhasil dicatat! Status: ALPA karena telah melewati batas maksimal waktu presensi (${config.absentThresholdTime || "08:30"} WIB). Jarak GPS: ${locationData.distance}m.`,
+            "Status: Alpa"
+          );
+        } else {
+          showSuccess(
+            `Absensi berhasil dicatat! Status: ${isLate ? "Terlambat" : "Hadir"} (Jarak: ${locationData.distance}m).`,
+            "Presensi Terverifikasi"
+          );
+        }
       }
       onAttendanceSuccess?.(recordPayload);
       setStep("success");
@@ -929,10 +961,17 @@ export function QuickAttendanceModal({
         list.unshift(recordPayload);
         localStorage.setItem("quick_schools_attendance_records", JSON.stringify(list.slice(0, 100)));
         if (showSuccess) {
-          showSuccess(
-            `Absensi berhasil dicatat secara lokal! Status: ${isLate ? "Terlambat" : "Hadir"}.`,
-            "Presensi Tersimpan"
-          );
+          if (isAlpa) {
+            showSuccess(
+              `Presensi dicatat secara lokal dengan status: ALPA (Melewati Batas Maksimal: ${config.absentThresholdTime || "08:30"} WIB).`,
+              "Presensi Tersimpan: Alpa"
+            );
+          } else {
+            showSuccess(
+              `Absensi berhasil dicatat secara lokal! Status: ${isLate ? "Terlambat" : "Hadir"}.`,
+              "Presensi Tersimpan"
+            );
+          }
         }
         onAttendanceSuccess?.(recordPayload);
         setStep("success");
@@ -1591,17 +1630,45 @@ export function QuickAttendanceModal({
           {/* ------------------------------------------------------------- */}
           {step === "success" && (
             <div className="py-6 flex flex-col items-center justify-center space-y-5 text-center">
-              <div className="w-16 h-16 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                <CheckCircle2 className="w-10 h-10" />
+              <div className={cn(
+                "w-16 h-16 rounded-lg flex items-center justify-center shadow-lg",
+                recordedStatus === "Alpa"
+                  ? "bg-rose-100 text-rose-600 shadow-rose-500/20"
+                  : recordedStatus === "Terlambat"
+                  ? "bg-amber-100 text-amber-600 shadow-amber-500/20"
+                  : "bg-emerald-100 text-emerald-600 shadow-emerald-500/20"
+              )}>
+                {recordedStatus === "Alpa" ? (
+                  <X className="w-10 h-10" />
+                ) : (
+                  <CheckCircle2 className="w-10 h-10" />
+                )}
               </div>
 
               <div>
-                <span className="px-3 py-1 bg-emerald-50 text-emerald-700 font-extrabold text-xs rounded-md border border-emerald-200">
-                  ABSENSI BERHASIL DICATAT
+                <span className={cn(
+                  "px-3 py-1 font-extrabold text-xs rounded-md border",
+                  recordedStatus === "Alpa"
+                    ? "bg-rose-50 text-rose-700 border-rose-200"
+                    : recordedStatus === "Terlambat"
+                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                )}>
+                  {recordedStatus === "Alpa"
+                    ? "STATUS: ALPA (MELEWATI BATAS MAKSIMAL)"
+                    : recordedStatus === "Terlambat"
+                    ? "STATUS: TERLAMBAT"
+                    : "ABSENSI BERHASIL DICATAT (HADIR)"}
                 </span>
-                <h4 className="text-xl font-extrabold text-gray-900 mt-2">Presensi Kehadiran Terverifikasi!</h4>
+                <h4 className="text-xl font-extrabold text-gray-900 mt-2">
+                  {recordedStatus === "Alpa"
+                    ? "Presensi Dicatat Sebagai Alpa"
+                    : "Presensi Kehadiran Terverifikasi!"}
+                </h4>
                 <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-                  Foto dan lokasi Anda telah terekam secara real-time dan terverifikasi di dalam wilayah sekolah.
+                  {recordedStatus === "Alpa"
+                    ? `Waktu presensi telah melewati Batas Maksimal Dihitung Alpa (${config.absentThresholdTime || "08:30"} WIB). Status kehadiran otomatis ditetapkan sebagai Alpa.`
+                    : "Foto dan lokasi Anda telah terekam secara real-time dan terverifikasi di dalam wilayah sekolah."}
                 </p>
               </div>
 

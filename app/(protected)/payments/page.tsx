@@ -1166,113 +1166,156 @@ export default function PaymentsPage() {
       {/* ========================================================================= */}
       {/* 1. TOP MAIN HEADER CARD                                                   */}
       {/* ========================================================================= */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 md:p-6 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center shrink-0 shadow-2xs">
-            <CreditCard className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">
-                Pembayaran & Tagihan SPP
-              </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
-                T.A 2026/2027
-              </span>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live Sync
-              </span>
+      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4 mb-6">
+        {/* Row 1: Title, Icon, Status Badges & Quick Indicators */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/20 shrink-0">
+              <CreditCard className="w-5 h-5" />
             </div>
-            <p className="text-gray-500 text-xs md:text-sm mt-0.5 font-medium">
-              {isStudent
-                ? `Informasi tagihan SPP, status pembayaran, dan riwayat transaksi resmi untuk ${matchedStudent ? matchedStudent.name : "Siswa"}.`
-                : isGuru
-                ? `Monitoring pembayaran SPP siswa khusus kelas binaan (${teacherHomeroomClasses.join(", ") || "12 MIPA 1"}). Akses bersifat read-only.`
-                : "Sistem otomasi tagihan SPP sekolah, pencatatan kasir, riwayat cicilan, dan analisis tunggakan."}
-            </p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                  Pembayaran & Tagihan SPP
+                </h1>
+                <span className="px-2.5 py-0.5 text-xs font-bold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20 flex items-center gap-1.5 shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Sync
+                </span>
+                {isStudent && (
+                  <span className="px-2.5 py-0.5 text-xs font-bold bg-purple-50 text-[#531FFF] rounded-full border border-purple-200 shrink-0">
+                    Portal Siswa
+                  </span>
+                )}
+                {isGuru && (
+                  <span className="px-2.5 py-0.5 text-xs font-bold bg-amber-50 text-amber-800 rounded-full border border-amber-200 shrink-0">
+                    Wali Kelas
+                  </span>
+                )}
+              </div>
+              <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
+                {isStudent
+                  ? `Informasi tagihan SPP, status pembayaran, dan riwayat transaksi resmi untuk ${matchedStudent ? matchedStudent.name : "Siswa"}.`
+                  : isGuru
+                  ? `Monitoring pembayaran SPP siswa khusus kelas binaan (${teacherHomeroomClasses.join(", ") || "Kelas Binaan"}). Akses bersifat read-only.`
+                  : "Sistem otomasi tagihan SPP sekolah, pencatatan kasir, riwayat cicilan, dan analisis tunggakan."}
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Context Indicator on Right */}
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
+            <span className="px-3 py-1.5 text-xs font-bold rounded-xl bg-purple-50 text-[#531FFF] border border-purple-200 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-[#531FFF]" />
+              T.A 2026/2027
+            </span>
+            {sppConfig && (
+              <span className={cn(
+                "px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 shadow-2xs",
+                sppConfig.isSystemActive !== false
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : "bg-rose-50 text-rose-700 border-rose-200"
+              )}>
+                <span className={cn("w-1.5 h-1.5 rounded-full", sppConfig.isSystemActive !== false ? "bg-emerald-500" : "bg-rose-500")} />
+                {sppConfig.isSystemActive !== false ? "Sistem Aktif" : "Maintenance"}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Action Controls based on Role */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {canManagePayments && (
-            <>
-              <Link
-                href="/admin/settings?tab=spp_config"
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-purple-50/50 hover:border-[#531FFF]/40 hover:text-[#531FFF] rounded-lg shadow-2xs transition-all cursor-pointer"
-                title="Kelola seluruh konfigurasi pembayaran SPP di Pengaturan Sekolah"
-              >
-                <Settings className="w-3.5 h-3.5 text-[#531FFF]" />
-                <span>Pengaturan SPP</span>
-              </Link>
+        {/* Row 2: Tips & Action Toolbar */}
+        <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+            <span className="w-2 h-2 rounded-full bg-[#531FFF] shrink-0 animate-pulse" />
+            <span>💡 Tips: Terbitkan tagihan berkala setiap awal bulan dan pantau rekonsiliasi kas masuk secara transparan.</span>
+          </div>
 
-              <button
-                onClick={handleOpenRatesModal}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg shadow-2xs transition-all cursor-pointer"
-                title="Atur tarif SPP per tingkat"
-              >
-                <DollarSign className="w-3.5 h-3.5 text-gray-500" />
-                <span>Tarif SPP</span>
-              </button>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {canManagePayments && (
+              <>
+                <Link
+                  href="/admin/settings?tab=spp_config"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-purple-50 hover:border-[#531FFF]/40 hover:text-[#531FFF] rounded-xl shadow-2xs transition-all cursor-pointer"
+                  title="Kelola seluruh konfigurasi pembayaran SPP di Pengaturan Sekolah"
+                >
+                  <Settings className="w-3.5 h-3.5 text-[#531FFF]" />
+                  <span>Pengaturan SPP</span>
+                </Link>
 
-              <button
-                onClick={handleExportCSV}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg shadow-2xs transition-all cursor-pointer"
-                title="Ekspor data ke file CSV / Excel"
-              >
-                <Download className="w-3.5 h-3.5 text-gray-500" />
-                <span>Ekspor CSV</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={handleOpenRatesModal}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl shadow-2xs transition-all cursor-pointer"
+                  title="Atur tarif SPP per tingkat"
+                >
+                  <DollarSign className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Tarif SPP</span>
+                </button>
 
+                <button
+                  type="button"
+                  onClick={handleExportCSV}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl shadow-2xs transition-all cursor-pointer"
+                  title="Ekspor data ke file CSV / Excel"
+                >
+                  <Download className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Ekspor CSV</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl shadow-2xs transition-all cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Cetak Rekap</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenAddModal}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-white bg-gradient-to-r from-[#531FFF] to-[#7B42FF] hover:opacity-95 rounded-xl shadow-sm shadow-[#531FFF]/25 transition-all hover:scale-[1.01] active:scale-[0.98] cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Terbitkan Tagihan</span>
+                </button>
+              </>
+            )}
+
+            {isGuru && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleExportCSV}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-xl shadow-2xs transition-all cursor-pointer"
+                  title="Ekspor rekap SPP kelas binaan"
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Ekspor CSV Kelas</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl shadow-2xs transition-all cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Cetak Rekap Kelas</span>
+                </button>
+              </>
+            )}
+
+            {isStudent && (
               <button
+                type="button"
                 onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg shadow-2xs transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl shadow-2xs transition-all cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5 text-gray-500" />
-                <span>Cetak Rekap</span>
+                <span>Cetak Riwayat</span>
               </button>
-
-              <button
-                onClick={handleOpenAddModal}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4216d6] rounded-lg shadow-sm shadow-[#531FFF]/25 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Terbitkan Tagihan</span>
-              </button>
-            </>
-          )}
-
-          {isGuru && (
-            <>
-              <button
-                onClick={handleExportCSV}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-amber-900 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-lg shadow-2xs transition-all cursor-pointer"
-                title="Ekspor rekap SPP kelas binaan"
-              >
-                <Download className="w-3.5 h-3.5 text-amber-700" />
-                <span>Ekspor CSV Kelas</span>
-              </button>
-
-              <button
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg shadow-2xs transition-all cursor-pointer"
-              >
-                <Printer className="w-3.5 h-3.5 text-gray-500" />
-                <span>Cetak Rekap Kelas</span>
-              </button>
-            </>
-          )}
-
-          {isStudent && (
-            <button
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg shadow-2xs transition-all cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5 text-gray-500" />
-              <span>Cetak Riwayat</span>
-            </button>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

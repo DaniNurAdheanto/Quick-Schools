@@ -1396,103 +1396,122 @@ export default function TeacherAttendancePage() {
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full space-y-6 pb-24 animate-in fade-in duration-200">
       {/* ========================================================================= */}
-      {/* 1. TOP HEADER & ROLE SIMULATOR BAR                                         */}
+      {/* 1. TOP HEADER BANNER - Clean 2-Row Architecture                           */}
       {/* ========================================================================= */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 md:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center shrink-0 shadow-2xs">
-            <UserCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">
-                Absensi Guru & Tenaga Kependidikan
-              </h1>
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
-                Sistem Clock In & Clock Out
-              </span>
-              <Link
-                href="/admin/settings?tab=attendance"
-                title="Klik untuk mengubah mode absensi di Pengaturan"
-                className={cn(
-                  "text-xs font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 transition-all hover:opacity-80 cursor-pointer",
-                  config.attendanceMode === "selfie_only"
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                    : "bg-purple-50 text-[#531FFF] border-purple-200"
-                )}
-              >
-                {config.attendanceMode === "selfie_only" ? (
-                  <>
-                    <Camera className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Mode: Foto Selfie + GPS</span>
-                  </>
-                ) : (
-                  <>
-                    <ScanFace className="w-3.5 h-3.5 text-[#531FFF]" />
-                    <span>Mode: Face Recognition (AI) + GPS</span>
-                  </>
-                )}
-              </Link>
-
-              <button
-                type="button"
-                onClick={() => setIsFaceModalOpen(true)}
-                className={cn(
-                  "text-xs font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 transition-all cursor-pointer",
-                  faceBiometric?.isEnrolled
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                    : "bg-purple-50 text-[#531FFF] border-purple-200 hover:bg-purple-100"
-                )}
-                title="Pendaftaran Wajah Master Biometrik Guru"
-              >
-                <ScanFace className="w-3.5 h-3.5" />
-                <span>{faceBiometric?.isEnrolled ? `Face ID Master (${faceBiometric.qualityScore || 90}%)` : "Daftar Face ID Guru"}</span>
-              </button>
+      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4 mb-6">
+        {/* Top Row: Icon, Title, Status & Mode Chips */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/20 shrink-0 mt-0.5 sm:mt-0">
+              <UserCheck className="w-5 h-5" />
             </div>
-            <p className="text-xs md:text-sm text-gray-500 font-medium mt-0.5">
-              Pencatatan jam masuk, jam pulang, verifikasi kehadiran, dan rekapitulasi kerja staf pendidik sekolah.
-            </p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                  Absensi Guru &amp; Tenaga Kependidikan
+                </h1>
+                <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-purple-50 text-[#531FFF] rounded-full border border-purple-200/80 flex items-center gap-1.5 shrink-0">
+                  <Clock className="w-3.5 h-3.5 text-[#531FFF]" />
+                  Sistem Clock In &amp; Clock Out
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
+                Pencatatan jam masuk, jam pulang, verifikasi biometrik presensi, dan rekapitulasi kerja staf pendidik sekolah.
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Context & Mode Chips */}
+          <div className="hidden lg:flex items-center gap-2 self-start lg:self-center shrink-0">
+            <Link
+              href="/admin/settings?tab=attendance"
+              title="Klik untuk mengubah mode absensi di Pengaturan"
+              className={cn(
+                "px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all hover:opacity-85 shadow-2xs",
+                config.attendanceMode === "selfie_only"
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : "bg-purple-50 text-[#531FFF] border-purple-200"
+              )}
+            >
+              {config.attendanceMode === "selfie_only" ? (
+                <>
+                  <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Foto + GPS</span>
+                </>
+              ) : (
+                <>
+                  <ScanFace className="w-3.5 h-3.5 text-[#531FFF]" />
+                  <span>Face AI + GPS</span>
+                </>
+              )}
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => setIsFaceModalOpen(true)}
+              className={cn(
+                "px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs",
+                faceBiometric?.isEnrolled
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                  : "bg-purple-50 text-[#531FFF] border-purple-200 hover:bg-purple-100"
+              )}
+              title="Pendaftaran Wajah Master Biometrik Guru"
+            >
+              <ScanFace className="w-3.5 h-3.5" />
+              <span>{faceBiometric?.isEnrolled ? `Face ID Master (${faceBiometric.qualityScore || 90}%)` : "Daftar Face ID Guru"}</span>
+            </button>
           </div>
         </div>
 
-        {/* View Switcher / Role Simulator (Hidden on role Guru) */}
-        <div className="flex items-center gap-2 self-start lg:self-auto flex-wrap">
-          {!isUserGuru && (
-            <div className="flex items-center p-1 bg-gray-100 rounded-xl border border-gray-200 text-xs font-bold">
-              <button
-                onClick={() => setPreviewRole("admin")}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5",
-                  previewRole === "admin"
-                    ? "bg-[#531FFF] text-white shadow-xs"
-                    : "text-gray-600 hover:text-gray-900"
-                )}
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Monitoring Admin</span>
-              </button>
-              <button
-                onClick={() => setPreviewRole("guru")}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5",
-                  previewRole === "guru"
-                    ? "bg-[#531FFF] text-white shadow-xs"
-                    : "text-gray-600 hover:text-gray-900"
-                )}
-              >
-                <Clock className="w-3.5 h-3.5" />
-                <span>Portal Presensi Guru</span>
-              </button>
-            </div>
-          )}
+        {/* Bottom Row / Toolbar: Helper Info on Left + Action Buttons & Switcher on Right */}
+        <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-600 text-[11px] font-bold shrink-0">
+              💡
+            </span>
+            <span className="line-clamp-1">
+              Kehadiran divalidasi dengan radius GPS sekolah serta deteksi anti-spoofing biometrik wajah.
+            </span>
+          </div>
 
-          <Link
-            href="/admin/attendance"
-            className="px-3.5 py-2 text-xs font-bold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-all inline-flex items-center gap-1.5"
-          >
-            <span>Buka Absensi Siswa</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </Link>
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-end md:self-auto">
+            {!isUserGuru && (
+              <div className="flex items-center p-1 bg-gray-100/80 rounded-xl border border-gray-200 text-xs font-bold">
+                <button
+                  onClick={() => setPreviewRole("admin")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5",
+                    previewRole === "admin"
+                      ? "bg-[#531FFF] text-white shadow-xs font-extrabold"
+                      : "text-gray-600 hover:text-gray-900"
+                  )}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Monitoring Admin</span>
+                </button>
+                <button
+                  onClick={() => setPreviewRole("guru")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5",
+                    previewRole === "guru"
+                      ? "bg-[#531FFF] text-white shadow-xs font-extrabold"
+                      : "text-gray-600 hover:text-gray-900"
+                  )}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Portal Guru</span>
+                </button>
+              </div>
+            )}
+
+            <Link
+              href="/admin/attendance"
+              className="px-3.5 py-2 text-xs font-bold text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl transition-all inline-flex items-center gap-1.5 shadow-2xs"
+            >
+              <span>Absensi Siswa</span>
+              <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+            </Link>
+          </div>
         </div>
       </div>
 

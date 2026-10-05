@@ -326,6 +326,20 @@ export default function AttendancePage() {
   const [isSavingBatch, setIsSavingBatch] = useState(false);
   const [searchTermDaily, setSearchTermDaily] = useState("");
 
+  // Clock ticker to refresh time-based status (e.g. automatically moving from Belum Absen to Alpa when passing absentThresholdTime)
+  const [currentMinutesTick, setCurrentMinutesTick] = useState<number>(() => {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const d = new Date();
+      setCurrentMinutesTick(d.getHours() * 60 + d.getMinutes());
+    }, 30000); // Check every 30 seconds
+    return () => clearInterval(timer);
+  }, []);
+
   // Tab 2: Biometric Log State
   const [biometricSearch, setBiometricSearch] = useState("");
   const [biometricStatusFilter, setBiometricStatusFilter] = useState("Semua");
@@ -495,14 +509,23 @@ export default function AttendancePage() {
     try {
       const cached = localStorage.getItem("quick_schools_attendance_config");
       if (cached) {
-        setConfig((prev) => ({ ...prev, ...JSON.parse(cached) }));
+        const d = JSON.parse(cached);
+        setConfig((prev) => ({
+          ...prev,
+          ...d,
+          absentThresholdTime: d.absentThresholdTime || d.autoAbsentTime || prev.absentThresholdTime || "08:30"
+        }));
       }
     } catch (e) {}
 
     const unsubConfig = onSnapshot(doc(db, "roles", "attendance_config"), (dSnap) => {
       if (dSnap.exists()) {
         const data = dSnap.data();
-        setConfig((prev) => ({ ...prev, ...data }));
+        setConfig((prev) => ({
+          ...prev,
+          ...data,
+          absentThresholdTime: data.absentThresholdTime || data.autoAbsentTime || prev.absentThresholdTime || "08:30"
+        }));
         try {
           localStorage.setItem("quick_schools_attendance_config", JSON.stringify(data));
         } catch (e) {}
@@ -691,9 +714,20 @@ export default function AttendancePage() {
     return filtered;
   }, [studentsList, selectedClass, isGuru, teacherHomeroomClasses, scopedStudentsList, primaryTeacherClass]);
 
-  // Synchronize classAttendanceMap when class, date, or records change
+  // Synchronize classAttendanceMap when class, date, records, config, or clock tick changes
   useEffect(() => {
     const map: Record<string, StudentDailyAttendance> = {};
+
+    const todayStr = getTodayDateString();
+    const isPastDate = selectedDate < todayStr;
+    const isToday = selectedDate === todayStr;
+
+    const thresholdStr = config.absentThresholdTime || (config as any).autoAbsentTime || "08:30";
+    const [absentH, absentM] = thresholdStr.split(":").map(Number);
+    const absentTotalMinutes = (isNaN(absentH) ? 8 : absentH) * 60 + (isNaN(absentM) ? 30 : absentM);
+
+    const isTodayPastAbsentThreshold = isToday && currentMinutesTick >= absentTotalMinutes;
+    const shouldAutoMarkAlpa = isPastDate || isTodayPastAbsentThreshold;
 
     classStudents.forEach((student) => {
       // Check if there is an existing record for this student on this date
@@ -733,19 +767,30 @@ export default function AttendancePage() {
           record: existing
         };
       } else {
-        // Default to "Belum Absen" for clear monitoring
-        map[student.id] = {
-          status: "Belum Absen",
-          notes: "",
-          time: "-",
-          isRecorded: false,
-          source: "manual"
-        };
+        if (shouldAutoMarkAlpa) {
+          // Melewati batas waktu maksimal absensi -> otomatis berstatus Alpa
+          map[student.id] = {
+            status: "Alpa",
+            notes: `Otomatis Alpa (Melewati Batas Maksimal ${thresholdStr} WIB)`,
+            time: "-",
+            isRecorded: false,
+            source: "manual"
+          };
+        } else {
+          // Default to "Belum Absen" for clear monitoring
+          map[student.id] = {
+            status: "Belum Absen",
+            notes: "",
+            time: "-",
+            isRecorded: false,
+            source: "manual"
+          };
+        }
       }
     });
 
     setClassAttendanceMap(map);
-  }, [selectedClass, selectedDate, classStudents, attendanceRecords]);
+  }, [selectedClass, selectedDate, classStudents, attendanceRecords, config.absentThresholdTime, currentMinutesTick]);
 
   // Class Level KPI & Monitoring Statistics
   const classStats = useMemo(() => {
@@ -982,6 +1027,27 @@ export default function AttendancePage() {
   const todayDateStr = useMemo(() => getTodayDateString(), []);
 
   const statsToday = useMemo(() => {
+    // If classAttendanceMap has items for the classStudents, compute stats from classAttendanceMap
+    if (classStudents.length > 0 && Object.keys(classAttendanceMap).length > 0) {
+      const total = classStudents.length;
+      let hadir = 0;
+      let terlambat = 0;
+      let sakit = 0;
+      let izin = 0;
+      let alpa = 0;
+
+      Object.values(classAttendanceMap).forEach((val) => {
+        if (val.status === "Hadir") hadir++;
+        else if (val.status === "Terlambat") terlambat++;
+        else if (val.status === "Sakit") sakit++;
+        else if (val.status === "Izin") izin++;
+        else if (val.status === "Alpa" || val.status === "Ditolak") alpa++;
+      });
+
+      const attendanceRate = total > 0 ? (((hadir + terlambat) / total) * 100).toFixed(1) : "100.0";
+      return { total, hadir, terlambat, sakit, izin, alpa, attendanceRate };
+    }
+
     const todayRecords = scopedAttendanceRecords.filter((r) => r.date === todayDateStr || r.date === selectedDate);
     const total = todayRecords.length || classStudents.length;
 
@@ -998,15 +1064,6 @@ export default function AttendancePage() {
         else if (r.status === "Sakit") sakit++;
         else if (r.status === "Izin") izin++;
         else if (r.status === "Alpa" || r.status === "Ditolak") alpa++;
-      });
-    } else {
-      // Use classAttendanceMap for current class
-      Object.values(classAttendanceMap).forEach((val) => {
-        if (val.status === "Hadir") hadir++;
-        else if (val.status === "Terlambat") terlambat++;
-        else if (val.status === "Sakit") sakit++;
-        else if (val.status === "Izin") izin++;
-        else if (val.status === "Alpa") alpa++;
       });
     }
 
@@ -1280,50 +1337,35 @@ export default function AttendancePage() {
         </div>
       ) : (
         <>
-          {/* 1. Header & Executive Controls */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-2 border-b border-gray-100">
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#531FFF] to-[#7344FF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/20">
+          {/* 1. Header Banner & Executive Controls */}
+          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4 mb-6">
+            {/* Row 1: Title, Icon, Status Badges & Quick Indicators */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#7344FF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/20 shrink-0">
                   {isGuru ? <GraduationCap className="w-5 h-5" /> : <CalendarDays className="w-5 h-5" />}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+                    <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
                       {isGuru ? "Absensi Siswa Kelas Binaan (Wali Kelas)" : "Manajemen & Monitoring Absensi Siswa"}
                     </h1>
-                    <span className="px-2.5 py-0.5 text-xs font-bold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20 flex items-center gap-1.5">
+                    <span className="px-2.5 py-0.5 text-xs font-bold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20 flex items-center gap-1.5 shrink-0">
                       <span className={cn("w-1.5 h-1.5 rounded-full", loading ? "bg-amber-400 animate-ping" : "bg-emerald-500 animate-pulse")} />
                       {loading ? "Memuat Data..." : "Live Sync"}
                     </span>
-                    {isGuru && (
-                      <span className={cn(
-                        "px-2.5 py-0.5 text-xs font-bold rounded-full border flex items-center gap-1.5 shadow-2xs",
-                        isTeacherWaliKelas
-                          ? "bg-purple-100/80 text-[#531FFF] border-[#531FFF]/30"
-                          : "bg-amber-50 text-amber-700 border-amber-300"
-                      )}>
-                        <GraduationCap className="w-3.5 h-3.5" />
-                        {isTeacherWaliKelas
-                          ? `Wali Kelas: ${teacherHomeroomClasses.join(", ")}`
-                          : "Guru (Belum Ditugaskan Sebagai Wali Kelas)"}
-                      </span>
-                    )}
                     {previewAsGuru && (
-                      <span className="px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200">
+                      <span className="px-2 py-0.5 text-[11px] font-bold bg-amber-100 text-amber-800 rounded border border-amber-200 shrink-0">
                         Pratinjau Role Guru
                       </span>
                     )}
-                    <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-purple-50 text-[#531FFF] border border-purple-200/80">
-                      TA {activeAcademicYear} ({activeSemester})
-                    </span>
                     {isArchiveMode && (
-                      <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                      <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-300 shrink-0">
                         Mode Arsip
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 font-medium mt-0.5">
+                  <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
                     {isGuru
                       ? isTeacherWaliKelas
                         ? `Memantau dan mengelola rekap absensi harian dan bulanan siswa di kelas ${teacherHomeroomClasses.join(", ")}.`
@@ -1332,78 +1374,110 @@ export default function AttendancePage() {
                   </p>
                 </div>
               </div>
+
+              {/* Status / Scope Chip on Right */}
+              <div className="hidden sm:flex items-center gap-2 shrink-0">
+                {isGuru && (
+                  <span className={cn(
+                    "px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 shadow-2xs",
+                    isTeacherWaliKelas
+                      ? "bg-purple-50 text-[#531FFF] border-purple-200"
+                      : "bg-amber-50 text-amber-700 border-amber-300"
+                  )}>
+                    <GraduationCap className="w-3.5 h-3.5" />
+                    {isTeacherWaliKelas
+                      ? `Wali: ${teacherHomeroomClasses.join(", ")}`
+                      : "Belum Ditugaskan"}
+                  </span>
+                )}
+                <span className="px-3 py-1.5 text-xs font-bold rounded-xl bg-purple-50 text-[#531FFF] border border-purple-200 flex items-center gap-1.5">
+                  <CalendarDays className="w-3.5 h-3.5 text-[#531FFF]" />
+                  TA {activeAcademicYear} ({activeSemester})
+                </span>
+              </div>
             </div>
 
-            {/* Action Controls */}
-            <div className="flex flex-wrap items-center gap-2.5">
-              <Link
-                href="/admin/teacher-attendance"
-                className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-all text-xs font-bold shadow-2xs cursor-pointer"
-                title="Buka Sistem Absensi Guru (Clock In & Clock Out)"
-              >
-                <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Absensi Guru (Clock In/Out)</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
-              {!isGuru && (
+            {/* Row 2: Tips & Action Toolbar */}
+            <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+                <span>💡 Tips: Gunakan filter kelas atau pemindai Wajah/GPS untuk verifikasi kehadiran harian siswa secara akurat.</span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <Link
+                  href="/admin/teacher-attendance"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition-all text-xs font-bold shadow-2xs cursor-pointer"
+                  title="Buka Sistem Absensi Guru (Clock In & Clock Out)"
+                >
+                  <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Absensi Guru</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+
+                {!isGuru && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewAsGuru(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-purple-50 text-[#531FFF] border border-purple-200/80 rounded-xl hover:bg-purple-100 active:scale-[0.98] transition-all text-xs font-bold shadow-2xs cursor-pointer"
+                    title="Pratinjau tampilan khusus Wali Kelas (Role Guru)"
+                  >
+                    <GraduationCap className="w-3.5 h-3.5" />
+                    <span>Preview Guru</span>
+                  </button>
+                )}
+
+                {previewAsGuru && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreviewAsGuru(false);
+                      setSelectedClass("Semua Kelas");
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-50 text-rose-700 border border-rose-200 rounded-xl hover:bg-rose-100 active:scale-[0.98] transition-all text-xs font-bold shadow-2xs cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Keluar Preview Guru</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
-                  onClick={() => setPreviewAsGuru(true)}
-                  className="flex items-center gap-2 px-3.5 py-2.5 bg-purple-50 text-[#531FFF] border border-purple-200/80 rounded-lg hover:bg-purple-100 active:scale-[0.98] transition-all text-xs font-extrabold shadow-xs cursor-pointer"
-                  title="Pratinjau tampilan khusus Wali Kelas (Role Guru)"
+                  onClick={() => setPreviewAsStudent(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-purple-50 text-[#531FFF] border border-purple-200/80 rounded-xl hover:bg-purple-100 active:scale-[0.98] transition-all text-xs font-bold shadow-2xs cursor-pointer"
+                  title="Pratinjau tampilan portal absensi siswa"
                 >
-                  <GraduationCap className="w-4 h-4" />
-                  <span>Preview Guru</span>
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Preview Siswa</span>
                 </button>
-              )}
 
-              {previewAsGuru && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setPreviewAsGuru(false);
-                    setSelectedClass("Semua Kelas");
-                  }}
-                  className="flex items-center gap-2 px-3.5 py-2.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg hover:bg-rose-100 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
+                  onClick={() => setShowScanModal(true)}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:shadow-md hover:shadow-emerald-500/25 active:scale-[0.98] transition-all text-xs font-extrabold shadow-xs cursor-pointer border border-white/20"
                 >
-                  <X className="w-4 h-4" />
-                  <span>Keluar Preview Guru</span>
+                  <ScanFace className="w-3.5 h-3.5 text-white animate-pulse" />
+                  <span>Kamera & GPS Scan</span>
                 </button>
-              )}
 
-              <button
-                type="button"
-                onClick={() => setPreviewAsStudent(true)}
-                className="flex items-center gap-2 px-3.5 py-2.5 bg-purple-50 text-[#531FFF] border border-purple-200/80 rounded-lg hover:bg-purple-100 active:scale-[0.98] transition-all text-xs font-extrabold shadow-xs cursor-pointer"
-                title="Pratinjau tampilan portal absensi siswa"
-              >
-                <Eye className="w-4 h-4" />
-                <span>Preview Siswa</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={handleExportCSV}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-2xs cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Ekspor CSV</span>
+                </button>
 
-              <button
-                onClick={() => setShowScanModal(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:shadow-lg hover:shadow-emerald-500/25 active:scale-[0.98] transition-all text-xs font-extrabold shadow-sm cursor-pointer border border-white/20"
-              >
-                <ScanFace className="w-4 h-4 text-white animate-pulse" />
-                <span>Kamera & GPS Scan</span>
-              </button>
-
-              <button
-                onClick={handleExportCSV}
-                className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-xs cursor-pointer"
-              >
-                <Download className="w-4 h-4 text-gray-500" />
-                <span>Ekspor CSV</span>
-              </button>
-
-              <button
-                onClick={handlePrint}
-                className="flex items-center gap-2 px-3.5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-xs print:hidden cursor-pointer"
-              >
-                <Printer className="w-4 h-4 text-gray-500" />
-                <span>Cetak Rekap</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-2xs print:hidden cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Cetak Rekap</span>
+                </button>
+              </div>
             </div>
           </div>
 

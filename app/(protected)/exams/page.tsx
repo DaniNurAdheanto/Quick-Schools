@@ -874,91 +874,118 @@ export default function ExamSchedulePage() {
         </div>
       ) : null}
 
-      {/* ========================================================================= */}
-      {/* 2. MAIN HEADER BAR                                                        */}
-      {/* ========================================================================= */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 bg-white p-5 md:p-6 rounded-lg border border-gray-100 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">
-              {currentGroup ? currentGroup.name : "Jadwal Ujian & Evaluasi"}
-            </h1>
-            
-            {currentGroup ? (
-              <>
-                <span className={cn(
-                  "px-3 py-0.5 rounded-full text-xs font-extrabold border uppercase",
-                  currentGroup.examType === "PTS" && "bg-purple-50 text-[#531FFF] border-purple-200",
-                  currentGroup.examType === "PAS" && "bg-blue-50 text-blue-700 border-blue-200",
-                  currentGroup.examType === "PAT" && "bg-emerald-50 text-emerald-700 border-emerald-200",
-                  currentGroup.examType === "Praktik" && "bg-amber-50 text-amber-700 border-amber-200",
-                  !["PTS", "PAS", "PAT", "Praktik"].includes(currentGroup.examType) && "bg-gray-100 text-gray-700 border-gray-200"
-                )}>
-                  {currentGroup.examType}
-                </span>
+      {/* ================= HEADER BANNER - Clean 2-Row Architecture ================= */}
+      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4 mb-6">
+        {/* Top Row: Icon, Title, Status & Quick Info Chip */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/20 shrink-0 mt-0.5 sm:mt-0">
+              <CalendarRange className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                  {currentGroup ? currentGroup.name : "Jadwal & Kelompok Ujian"}
+                </h1>
+                
+                {currentGroup ? (
+                  <>
+                    <span className={cn(
+                      "px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border uppercase",
+                      currentGroup.examType === "PTS" && "bg-purple-50 text-[#531FFF] border-purple-200",
+                      currentGroup.examType === "PAS" && "bg-blue-50 text-blue-700 border-blue-200",
+                      currentGroup.examType === "PAT" && "bg-emerald-50 text-emerald-700 border-emerald-200",
+                      currentGroup.examType === "Praktik" && "bg-amber-50 text-amber-700 border-amber-200",
+                      !["PTS", "PAS", "PAT", "Praktik"].includes(currentGroup.examType) && "bg-gray-100 text-gray-700 border-gray-200"
+                    )}>
+                      {currentGroup.examType}
+                    </span>
 
-                <span className="px-3 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700 border border-gray-200 flex items-center gap-1.5">
-                  <School className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Kelas: {currentGroup.targetClass}</span>
-                </span>
-              </>
-            ) : (
-              <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
-                Sistem Kelompok Ujian
-              </span>
-            )}
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-gray-100 text-gray-700 border border-gray-200 flex items-center gap-1.5">
+                      <School className="w-3.5 h-3.5 text-gray-500" />
+                      <span>Kelas: {currentGroup.targetClass}</span>
+                    </span>
+                  </>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
+                    Sistem Kelompok Ujian
+                  </span>
+                )}
 
-            {isStudentRole && (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/20 flex items-center gap-1">
-                <School className="w-3.5 h-3.5" />
-                <span>{isParent ? "Portal Orang Tua • " : ""}Kelas {studentClass || "10 MIPA 1"}</span>
-              </span>
-            )}
+                {isStudentRole && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/20 flex items-center gap-1">
+                    <School className="w-3.5 h-3.5" />
+                    <span>{isParent ? "Portal Orang Tua • " : ""}Kelas {studentClass || "10 MIPA 1"}</span>
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
+                {currentGroup ? (
+                  currentGroup.description || `Daftar seluruh jadwal mata pelajaran pada kelompok ujian ${currentGroup.name}.`
+                ) : (
+                  isStudentRole 
+                    ? `Pilih kelompok ujian resmi (PTS, PAS, UTS, UAS) yang terjadwal untuk kelas ${studentClass || "Anda"}.`
+                    : "Kelola kelompok ujian langsung terintegrasi dengan database Firestore Quick Schools."
+                )}
+              </p>
+            </div>
           </div>
 
-          <p className="text-gray-500 text-xs md:text-sm font-medium mt-1.5">
-            {currentGroup ? (
-              currentGroup.description || `Daftar seluruh jadwal mata pelajaran pada kelompok ujian ${currentGroup.name}.`
-            ) : (
-              isStudentRole 
-                ? `Pilih kelompok ujian resmi (PTS, PAS, UTS, UAS) yang terjadwal untuk kelas ${studentClass || "Anda"}.`
-                : "Kelola kelompok ujian langsung terintegrasi dengan database Firestore Quick Schools."
-            )}
-          </p>
+          {/* Quick Context Chip */}
+          <div className="hidden lg:flex items-center gap-2 self-start lg:self-center shrink-0">
+            <div className="px-3.5 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center gap-2 text-xs">
+              <span className="text-gray-400 font-medium">Terjadwal:</span>
+              <strong className="text-gray-900 font-bold">{allGroups.length} Kelompok</strong>
+              <span className="text-gray-300">•</span>
+              <span className="text-[#531FFF] font-bold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200 text-[10px]">
+                {allSchedules.length} Sesi Ujian
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          {/* Print PDF Button */}
-          <button
-            onClick={() => setIsPrintModalOpen(true)}
-            disabled={currentGroup ? currentGroupSchedules.length === 0 : allSchedules.length === 0}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-lg text-xs font-bold shadow-xs transition-all active:scale-[0.98] cursor-pointer disabled:opacity-40"
-          >
-            <Printer className="w-4 h-4" />
-            <span>{currentGroup ? "Cetak Kelompok Ini (PDF)" : "Cetak Jadwal (PDF)"}</span>
-          </button>
+        {/* Bottom Row / Toolbar: Helper Info on Left + Action Buttons on Right */}
+        <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-600 text-[11px] font-bold shrink-0">
+              💡
+            </span>
+            <span className="line-clamp-1">
+              Jadwal ujian otomatis disinkronkan ke kalender siswa dan kartu peserta ujian resmi.
+            </span>
+          </div>
 
-          {/* Primary Action */}
-          {canMutateExams && (
-            currentGroup ? (
-              <button
-                onClick={handleOpenAddSchedule}
-                className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Tambah Jadwal Mapel</span>
-              </button>
-            ) : (
-              <button
-                onClick={handleOpenAddGroup}
-                className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md shadow-[#531FFF]/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              >
-                <FolderPlus className="w-4 h-4" />
-                <span>Buat Kelompok Ujian Baru</span>
-              </button>
-            )
-          )}
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-end md:self-auto">
+            <button
+              onClick={() => setIsPrintModalOpen(true)}
+              disabled={currentGroup ? currentGroupSchedules.length === 0 : allSchedules.length === 0}
+              className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs disabled:opacity-40"
+            >
+              <Printer className="w-3.5 h-3.5 text-gray-500" />
+              <span>{currentGroup ? "Cetak Kelompok (PDF)" : "Cetak Jadwal (PDF)"}</span>
+            </button>
+
+            {canMutateExams && (
+              currentGroup ? (
+                <button
+                  onClick={handleOpenAddSchedule}
+                  className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25"
+                >
+                  <Plus className="w-3.5 h-3.5 text-white" />
+                  <span>Tambah Jadwal Mapel</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleOpenAddGroup}
+                  className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25"
+                >
+                  <FolderPlus className="w-3.5 h-3.5 text-white" />
+                  <span>Buat Kelompok Ujian Baru</span>
+                </button>
+              )
+            )}
+          </div>
         </div>
       </div>
 

@@ -280,44 +280,55 @@ export default function AcademicYearsPage() {
         </div>
       )}
 
-      {/* ── 1. HEADER HERO BAR ── */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-5 md:p-6 rounded-xl border border-gray-200/90 shadow-2xs">
-        <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight">
-              Tahun Ajaran & Kenaikan Kelas
-            </h1>
-            <span className="px-3 py-1 rounded-full text-xs font-black bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20">
-              Aktif: {schoolDefaultYear} ({schoolDefaultSemester})
-            </span>
-            {isArchiveMode && (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400 text-slate-900">
-                Menjelajah Arsip ({activeAcademicYear} - {activeSemester})
-              </span>
-            )}
+      {/* ── 1. HEADER BANNER - Clean 2-Row Architecture ── */}
+      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4 mb-6">
+        {/* Top Row: Icon, Title, Status & Quick Info Chip */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/20 shrink-0 mt-0.5 sm:mt-0">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                  Tahun Ajaran &amp; Kenaikan Kelas
+                </h1>
+                <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-purple-50 text-[#531FFF] rounded-full border border-purple-200/80 flex items-center gap-1.5 shrink-0">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#531FFF]" />
+                  Aktif: T.A. {schoolDefaultYear} ({schoolDefaultSemester})
+                </span>
+                {isArchiveMode && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-400 text-slate-900">
+                    Mode Arsip ({activeAcademicYear} - {activeSemester})
+                  </span>
+                )}
+              </div>
+              <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
+                Data periode tersinkronisasi langsung sebagai konteks utama seluruh operasional absensi, jadwal KBM, nilai rapor, dan SPP.
+              </p>
+            </div>
           </div>
-          <p className="text-gray-500 text-xs md:text-sm font-medium mt-1">
-            Data tersinkronisasi langsung dengan Pengaturan Sekolah sebagai konteks utama seluruh operasional dan akademik.
-          </p>
+
+          {/* Quick Context Chip */}
+          <div className="hidden lg:flex items-center gap-2 self-start lg:self-center shrink-0">
+            <div className="px-3.5 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center gap-2 text-xs">
+              <span className="text-gray-400 font-medium">Terdaftar:</span>
+              <strong className="text-gray-900 font-bold">{availableYears.length} Periode</strong>
+              <span className="text-gray-300">•</span>
+              <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-[10px]">
+                Multi-Tahun Aman
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* Action Controls & Tab Switcher */}
-        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          {isArchiveMode && (
-            <button
-              onClick={resetToSchoolDefault}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Reset ke Periode Aktif</span>
-            </button>
-          )}
-
-          <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200 w-full sm:w-auto">
+        {/* Bottom Row / Toolbar: Tab Switcher on Left + Action Buttons on Right */}
+        <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center bg-gray-100/80 p-1 rounded-xl border border-gray-200/80 self-start">
             <button
               onClick={() => setActiveTab("list")}
               className={cn(
-                "flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer",
+                "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
                 activeTab === "list" ? "bg-white text-gray-900 shadow-2xs font-extrabold" : "text-gray-600 hover:text-gray-900"
               )}
             >
@@ -327,29 +338,41 @@ export default function AcademicYearsPage() {
             <button
               onClick={() => setActiveTab("promotion")}
               className={cn(
-                "flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer",
+                "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
                 activeTab === "promotion" ? "bg-white text-[#531FFF] shadow-2xs font-extrabold" : "text-gray-600 hover:text-gray-900"
               )}
             >
               <GraduationCap className="w-3.5 h-3.5" />
-              <span>Kenaikan Kelas & Kelulusan</span>
+              <span>Kenaikan Kelas &amp; Kelulusan</span>
             </button>
           </div>
 
-          <button
-            onClick={() => {
-              setNewYearName("");
-              setNewYearSemester("Ganjil");
-              setNewYearStartDate("");
-              setNewYearEndDate("");
-              setNewYearSetAsActive(false);
-              setIsAddModalOpen(true);
-            }}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#4314cc] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah Tahun Ajaran Baru</span>
-          </button>
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-end md:self-auto">
+            {isArchiveMode && (
+              <button
+                onClick={resetToSchoolDefault}
+                className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Reset ke Periode Aktif</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                setNewYearName("");
+                setNewYearSemester("Ganjil");
+                setNewYearStartDate("");
+                setNewYearEndDate("");
+                setNewYearSetAsActive(false);
+                setIsAddModalOpen(true);
+              }}
+              className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25"
+            >
+              <Plus className="w-3.5 h-3.5 text-white" />
+              <span>Tambah Tahun Ajaran Baru</span>
+            </button>
+          </div>
         </div>
       </div>
 
