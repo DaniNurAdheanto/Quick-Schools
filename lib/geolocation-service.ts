@@ -108,7 +108,8 @@ export function formatGeolocationError(err: any): GeolocationErrorState {
 export async function acquireCurrentLocation(
   schoolLat: number = -6.200000,
   schoolLng: number = 106.816666,
-  radiusMeters: number = 100
+  radiusMeters: number = 100,
+  options?: { forceFresh?: boolean; timeout?: number }
 ): Promise<GeolocationResult> {
   if (typeof window === "undefined" || !("geolocation" in navigator)) {
     throw {
@@ -122,21 +123,22 @@ export async function acquireCurrentLocation(
   }
 
   // Helper promise for getCurrentPosition
-  const getPos = (options: PositionOptions): Promise<GeolocationPosition> => {
+  const getPos = (posOptions: PositionOptions): Promise<GeolocationPosition> => {
     return new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, options);
+      navigator.geolocation.getCurrentPosition(resolve, reject, posOptions);
     });
   };
 
   let position: GeolocationPosition | null = null;
   let firstError: any = null;
+  const isFresh = options?.forceFresh !== false; // Default true: always force real-time fresh coordinates
 
-  // Tier 1: Try High-Accuracy GPS first
+  // Tier 1: Try High-Accuracy GPS first (forcing 0 cache age for real-time accuracy)
   try {
     position = await getPos({
       enableHighAccuracy: true,
-      timeout: 7000,
-      maximumAge: 10000,
+      timeout: options?.timeout || 8000,
+      maximumAge: isFresh ? 0 : 10000,
     });
   } catch (err: any) {
     firstError = err;
@@ -146,13 +148,13 @@ export async function acquireCurrentLocation(
     }
   }
 
-  // Tier 2: Fallback to standard/cached accuracy if high-accuracy timed out or unavailable
+  // Tier 2: Fallback to standard network/WiFi triangulation if high-accuracy timed out
   if (!position) {
     try {
       position = await getPos({
         enableHighAccuracy: false,
         timeout: 10000,
-        maximumAge: 60000,
+        maximumAge: isFresh ? 0 : 30000,
       });
     } catch (err: any) {
       // Both attempts failed, format final error

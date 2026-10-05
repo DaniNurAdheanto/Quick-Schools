@@ -259,98 +259,179 @@ export function analyzeCameraFrame(
  * Supports both single vector comparison and multi-pose gallery matching
  * Returns percentage (0% - 100%), match boolean, and best matched pose
  */
+export interface FaceCompareResult {
+  match: boolean;
+  similarity: number;
+  distance: number;
+  bestPose?: string;
+  isLegacy?: boolean;
+  error?: string;
+}
+
+/**
+ * Calculates Euclidean distance between two face descriptors using the official algorithm from @vladmandic/human.
+ * Standard parameters for faceres model: order = 2, multiplier = 25.
+ */
+export function calculateHumanDistance(
+  descriptor1: number[],
+  descriptor2: number[],
+  options = { order: 2, multiplier: 25 }
+): number {
+  if (!descriptor1 || !descriptor2 || descriptor1.length === 0 || descriptor2.length === 0) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  const len = Math.min(descriptor1.length, descriptor2.length);
+  let sum = 0;
+  for (let i = 0; i < len; i++) {
+    const diff = !options.order || options.order === 2 ? descriptor1[i] - descriptor2[i] : Math.abs(descriptor1[i] - descriptor2[i]);
+    sum += !options.order || options.order === 2 ? diff * diff : diff ** options.order;
+  }
+  return Math.round(100 * (options.multiplier || 25) * sum) / 100;
+}
+
+/**
+ * Normalizes Euclidean distance to similarity in 0..1 range using official @vladmandic/human algorithm.
+ * Default faceres normalization range: min = 0.2, max = 0.8.
+ */
+export function normalizeHumanDistance(
+  dist: number,
+  order = 2,
+  min = 0.2,
+  max = 0.8
+): number {
+  if (dist === 0) return 1;
+  const root = order === 2 ? Math.sqrt(dist) : dist ** (1 / order);
+  const norm = (1 - root / 100 - min) / (max - min);
+  return Math.round(100 * Math.max(Math.min(norm, 1), 0)) / 100;
+}
+
+/**
+ * Computes official @vladmandic/human similarity between two face descriptors.
+ * Returns raw similarity in 0..1 range (0.50+ is official match threshold for the same person).
+ */
+export function calculateHumanSimilarity(
+  descriptor1: number[],
+  descriptor2: number[],
+  options = { order: 2, multiplier: 25, min: 0.2, max: 0.8 }
+): { distance: number; rawSimilarity: number } {
+  const dist = calculateHumanDistance(descriptor1, descriptor2, options);
+  const rawSim = normalizeHumanDistance(dist, options.order || 2, options.min || 0.2, options.max || 0.8);
+  return { distance: dist, rawSimilarity: rawSim };
+}
+
+/**
+ * Calculates high-accuracy biometric similarity for 1024-dimensional HSE-FaceRes AI neural embeddings,
+ * precisely adapting the official @vladmandic/human Face Recognition API.
+ * - Genuine registered user (Human rawSimilarity >= 0.50): maps smoothly to 75% - 99% (passes minFaceMatchScore)
+ * - Different person (Human rawSimilarity < 0.50): maps strictly to <= 55% (fails minFaceMatchScore)
+ * - Rejects legacy 128-element histograms with `isLegacy: true`
+ */
 export function compareFaceDescriptors(
   masterDataOrVector: number[] | FaceBiometricData | undefined | null,
   liveVector: number[] | undefined | null,
   minMatchScore = 70
-): { match: boolean; similarity: number; distance: number; bestPose?: string } {
-  if (
-    !masterDataOrVector ||
-    !liveVector ||
-    !Array.isArray(liveVector) ||
-    liveVector.length === 0
-  ) {
+): FaceCompareResult {
+  if (!masterDataOrVector || !liveVector || !Array.isArray(liveVector) || liveVector.length === 0) {
     return { match: false, similarity: 0, distance: 1.0 };
   }
 
-  const calcSim = (vecA: number[], vecB: number[]): number => {
-    if (!Array.isArray(vecA) || !Array.isArray(vecB) || vecA.length === 0 || vecB.length === 0) return 0;
-    const len = Math.min(vecA.length, vecB.length);
-    let dot = 0;
-    let magA = 0;
-    let magB = 0;
-    for (let i = 0; i < len; i++) {
-      const a = vecA[i] || 0;
-      const b = vecB[i] || 0;
-      dot += a * b;
-      magA += a * a;
-      magB += b * b;
+  // Live vector must be a genuine deep AI embedding (>= 512 dimensions)
+  if (liveVector.length < 512) {
+    return { match: false, similarity: 0, distance: 1.0, error: "Vektor biometrik kamera belum siap." };
+  }
+
+  // Helper to calculate calibrated application score from official Human.js distance & similarity
+  const evaluatePair = (vecMaster: number[], vecLive: number[]) => {
+    if (!Array.isArray(vecMaster) || vecMaster.length < 512) {
+      return { rawSim: 0, dist: Number.MAX_SAFE_INTEGER, score: 0 };
     }
-    const denom = Math.sqrt(magA) * Math.sqrt(magB);
-    if (denom === 0) return 0;
-    const cosSim = Math.max(-1, Math.min(1, dot / denom));
-    if (len > 200) {
-      // Calibrated ArcFace Cosine Similarity:
-      // In 512-dim ArcFace unit embeddings:
-      // - Random / Different persons: cosSim is typically < 0.22 (mean ~0.08)
-      // - Borderline / Unsure: 0.22 - 0.32
-      // - Same person: cosSim is >= 0.33 (industry standard match threshold is 0.35)
-      // We map cosSim smoothly:
-      // cosSim < 0.22 => 0% - 35%
-      // cosSim 0.22 - 0.32 => 35% - 64%
-      // cosSim >= 0.33 => 70% - 99% (satisfies default 70% threshold immediately)
-      if (cosSim < 0.22) {
-        return Math.max(0, (cosSim / 0.22) * 0.35);
-      } else if (cosSim < 0.33) {
-        return 0.35 + ((cosSim - 0.22) / 0.11) * 0.29;
-      } else {
-        return Math.min(0.99, 0.70 + Math.min(0.29, ((cosSim - 0.33) / 0.28) * 0.29));
-      }
+
+    const { distance: dist, rawSimilarity: rawSim } = calculateHumanSimilarity(vecMaster, vecLive);
+
+    let score = 0;
+    if (rawSim >= 0.50) {
+      // Official Vladimir Mandic match zone: same person (rawSim >= 0.50)
+      // Scale smoothly to guarantee passing the configured minimum threshold (e.g., 70% or 80%)
+      const basePass = Math.max(minMatchScore, 75);
+      const factor = Math.min(1, (rawSim - 0.50) / 0.30);
+      score = Math.round(basePass + factor * (99 - basePass));
+    } else {
+      // Official Vladimir Mandic non-match zone: different person (rawSim < 0.50)
+      // Scale strictly below minMatchScore (maximum 55%, typically 10% - 35%)
+      const maxFail = Math.min(minMatchScore - 15, 55);
+      score = Math.round((rawSim / 0.50) * maxFail);
     }
-    return Math.max(0, cosSim);
+
+    return { rawSim, dist, score };
   };
 
   // If passed as FaceBiometricData object with poses
   if (typeof masterDataOrVector === "object" && !Array.isArray(masterDataOrVector)) {
     const bio = masterDataOrVector as FaceBiometricData;
-    let bestSim = 0;
+
+    // Check for legacy/invalid descriptor (e.g. 128-element histogram)
+    const hasFront = Array.isArray(bio.faceDescriptor) && bio.faceDescriptor.length > 0;
+    const isLegacy = (hasFront && bio.faceDescriptor.length < 512) ||
+      (bio.poses && Object.values(bio.poses).some(p => p?.descriptor && p.descriptor.length < 512));
+
+    if (isLegacy) {
+      return {
+        match: false,
+        similarity: 0,
+        distance: 1.0,
+        isLegacy: true,
+        error: "Data wajah master terdaftar dengan format lama. Harap lakukan pendaftaran ulang wajah Anda.",
+      };
+    }
+
+    let bestScore = 0;
+    let lowestDist = Number.MAX_SAFE_INTEGER;
     let bestPoseName = "front";
 
-    if (Array.isArray(bio.faceDescriptor) && bio.faceDescriptor.length > 0) {
-      bestSim = calcSim(bio.faceDescriptor, liveVector);
+    if (hasFront && bio.faceDescriptor.length >= 512) {
+      const res = evaluatePair(bio.faceDescriptor, liveVector);
+      bestScore = res.score;
+      lowestDist = res.dist;
     }
 
     if (bio.poses) {
       for (const [poseKey, poseData] of Object.entries(bio.poses)) {
-        if (poseData && Array.isArray(poseData.descriptor) && poseData.descriptor.length > 0) {
-          const sim = calcSim(poseData.descriptor, liveVector);
-          if (sim > bestSim) {
-            bestSim = sim;
+        if (poseData && Array.isArray(poseData.descriptor) && poseData.descriptor.length >= 512) {
+          const res = evaluatePair(poseData.descriptor, liveVector);
+          if (res.score > bestScore) {
+            bestScore = res.score;
+            lowestDist = res.dist;
             bestPoseName = poseKey;
           }
         }
       }
     }
 
-    const similarityPercent = Math.round(bestSim * 100);
-    const distance = Number((1 - bestSim).toFixed(4));
     return {
-      match: similarityPercent >= minMatchScore,
-      similarity: similarityPercent,
-      distance,
+      match: bestScore >= minMatchScore,
+      similarity: bestScore,
+      distance: Number(lowestDist === Number.MAX_SAFE_INTEGER ? 999 : lowestDist.toFixed(2)),
       bestPose: bestPoseName,
     };
   }
 
   // If masterDataOrVector is raw number[] array
   if (Array.isArray(masterDataOrVector)) {
-    const sim = calcSim(masterDataOrVector, liveVector);
-    const similarityPercent = Math.round(sim * 100);
-    const distance = Number((1 - sim).toFixed(4));
+    if (masterDataOrVector.length < 512) {
+      return {
+        match: false,
+        similarity: 0,
+        distance: 1.0,
+        isLegacy: true,
+        error: "Data wajah master terdaftar dengan format lama. Harap daftar ulang wajah Anda.",
+      };
+    }
+
+    const res = evaluatePair(masterDataOrVector, liveVector);
     return {
-      match: similarityPercent >= minMatchScore,
-      similarity: similarityPercent,
-      distance,
+      match: res.score >= minMatchScore,
+      similarity: res.score,
+      distance: Number(res.dist === Number.MAX_SAFE_INTEGER ? 999 : res.dist.toFixed(2)),
       bestPose: "front",
     };
   }
@@ -371,6 +452,10 @@ export async function saveUserFaceBiometric(
   role?: string
 ): Promise<boolean> {
   if (!uid) return false;
+  if (!biometric.faceDescriptor || biometric.faceDescriptor.length < 512) {
+    console.error("Refusing to save biometric: faceDescriptor is not a valid >= 512-d AI embedding");
+    return false;
+  }
 
   const payload = {
     faceBiometric: {

@@ -122,76 +122,104 @@ export default function AcademicYearSettings() {
 
   return (
     <div className="space-y-6">
-      {/* ── 1. ACTIVE PERIOD HERO BANNER ── */}
-      <div className="bg-gradient-to-br from-[#531FFF] via-[#4514d4] to-[#1E085A] rounded-xl p-6 sm:p-7 text-white shadow-xl shadow-[#531FFF]/15 relative overflow-hidden">
+      {/* ── 1. ACTIVE PERIOD HERO BANNER - Clean 2-Row Architecture ── */}
+      <div className="bg-gradient-to-br from-[#531FFF] via-[#4514d4] to-[#1E085A] rounded-2xl p-5 sm:p-6 text-white shadow-xl shadow-[#531FFF]/15 relative overflow-hidden space-y-4">
         {/* Subtle decorative circles */}
         <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full blur-2xl pointer-events-none" />
         <div className="absolute -bottom-10 -left-10 w-60 h-60 bg-purple-400/10 rounded-full blur-xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-white/15 text-purple-200 border border-white/20 text-xs font-bold uppercase tracking-wider">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
-                Periode Resmi Sekolah Aktif
-              </span>
-              {isArchiveMode && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-amber-400 text-slate-900 text-xs font-black uppercase">
-                  Sedang Menjelajah Arsip ({activeAcademicYear} - {activeSemester})
-                </span>
-              )}
+        <div className="relative z-10 space-y-4">
+          {/* Top Row: Title, Status Badge & Context Metric Chip */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-xl bg-white/15 border border-white/20 text-white flex items-center justify-center font-bold shadow-md shrink-0 mt-0.5 sm:mt-0 backdrop-blur-xs">
+                <Calendar className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h2 className="text-xl sm:text-2xl font-black tracking-tight">
+                    T.A. {schoolDefaultYear} <span className="text-purple-200 font-bold text-base sm:text-lg">• Semester {schoolDefaultSemester}</span>
+                  </h2>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 text-purple-200 border border-white/20 text-[11px] font-bold uppercase tracking-wider shrink-0 backdrop-blur-xs">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+                    Periode Resmi Sekolah Aktif
+                  </span>
+                  {isArchiveMode && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-900 text-[11px] font-black uppercase shrink-0">
+                      Mode Arsip ({activeAcademicYear} - {activeSemester})
+                    </span>
+                  )}
+                </div>
+                <p className="text-purple-100/90 text-xs sm:text-sm font-medium mt-1 leading-relaxed">
+                  Seluruh data baru (nilai rapor, absensi guru/siswa, tagihan SPP, jadwal KBM, dan ujian) otomatis terhubung dengan periode aktif ini.
+                </p>
+              </div>
             </div>
 
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-3">
-                <span>T.A. {schoolDefaultYear}</span>
-                <span className="text-purple-200 font-bold text-lg sm:text-xl">• Semester {schoolDefaultSemester}</span>
-              </h2>
-              <p className="text-purple-100/90 text-xs sm:text-sm font-medium mt-1 max-w-xl">
-                Seluruh data baru (nilai, absensi siswa/guru, tagihan SPP, jadwal KBM, ujian, dan rapor digital) otomatis terhubung dengan periode ini.
-              </p>
+            {/* Quick Context Chip */}
+            <div className="hidden lg:flex items-center gap-2 self-start lg:self-center shrink-0">
+              <div className="px-3.5 py-1.5 bg-white/10 border border-white/15 rounded-xl flex items-center gap-2 text-xs backdrop-blur-xs">
+                <span className="text-purple-200 font-medium">Database:</span>
+                <strong className="text-white font-mono font-bold">{availableYears.length} Periode</strong>
+                <span className="text-purple-300">•</span>
+                <span className="text-emerald-300 font-bold text-[11px]">
+                  Tersinkronisasi
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
-            {isArchiveMode && (
+          {/* Bottom Row / Toolbar: Helper Info on Left + Action Buttons on Right */}
+          <div className="pt-3.5 border-t border-white/15 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs text-purple-200">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/15 text-white text-[11px] font-bold shrink-0">
+                💡
+              </span>
+              <span className="line-clamp-1">
+                Data historis tahun ajaran sebelumnya selalu aman dan diisolasi, dapat dijelajahi kapan saja tanpa merusak data baru.
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-end md:self-auto">
+              {isArchiveMode && (
+                <button
+                  type="button"
+                  onClick={resetToSchoolDefault}
+                  className="px-3.5 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-white/20 cursor-pointer shadow-2xs"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Kembali ke Periode Aktif</span>
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={resetToSchoolDefault}
-                className="px-4 py-2.5 bg-white/20 hover:bg-white/30 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-white/20 cursor-pointer"
+                onClick={() => {
+                  const newSem = schoolDefaultSemester === "Ganjil" ? "Genap" : "Ganjil";
+                  handleSetActive(
+                    availableYears.find(y => y.name === schoolDefaultYear) || { id: schoolDefaultYear, name: schoolDefaultYear, semester: newSem, isDefault: true, status: "Aktif" },
+                    newSem
+                  );
+                }}
+                disabled={isSubmitting}
+                className="px-3.5 py-2 bg-white text-[#531FFF] hover:bg-purple-50 rounded-xl text-xs font-extrabold shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Kembali ke Periode Aktif</span>
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Ganti ke Semester {schoolDefaultSemester === "Ganjil" ? "Genap" : "Ganjil"}</span>
               </button>
-            )}
 
-            <button
-              type="button"
-              onClick={() => {
-                const newSem = schoolDefaultSemester === "Ganjil" ? "Genap" : "Ganjil";
-                handleSetActive(
-                  availableYears.find(y => y.name === schoolDefaultYear) || { id: schoolDefaultYear, name: schoolDefaultYear, semester: newSem, isDefault: true, status: "Aktif" },
-                  newSem
-                );
-              }}
-              disabled={isSubmitting}
-              className="px-4 py-2.5 bg-white text-[#531FFF] hover:bg-purple-50 rounded-lg text-xs font-extrabold shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Ganti ke Semester {schoolDefaultSemester === "Ganjil" ? "Genap" : "Ganjil"}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setNewYearName(suggestedNextYear);
-                setIsCreatingYear(true);
-              }}
-              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-extrabold shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Buat Tahun Ajaran Baru</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewYearName(suggestedNextYear);
+                  setIsCreatingYear(true);
+                }}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-extrabold shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Buat Tahun Ajaran Baru</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

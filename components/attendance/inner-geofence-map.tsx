@@ -70,7 +70,8 @@ export interface AttendanceMarkerItem {
 export interface AttendanceGeofenceMapProps {
   centerLat: number;
   centerLng: number;
-  radius: number; // in meters
+  radius?: number; // in meters
+  showRadiusCircle?: boolean; // if false, renders purely the school location pin without radius circle
   onLocationChange?: (lat: number, lng: number) => void;
   interactive?: boolean; // allow drag/click to change location
   studentLocation?: {
@@ -124,7 +125,8 @@ function MapController({
 export default function InnerGeofenceMap({
   centerLat,
   centerLng,
-  radius,
+  radius = 100,
+  showRadiusCircle = true,
   onLocationChange,
   interactive = true,
   studentLocation,
@@ -180,18 +182,20 @@ export default function InnerGeofenceMap({
           maxZoom={19}
         />
 
-        {/* Dynamic Radius Circle */}
-        <Circle
-          center={schoolPosition}
-          radius={Math.max(10, radius || 100)}
-          pathOptions={{
-            color: circleColor,
-            fillColor: circleColor,
-            fillOpacity: 0.18,
-            weight: 2,
-            dashArray: studentLocation && !isInRadius ? "6, 6" : undefined,
-          }}
-        />
+        {/* Dynamic Radius Circle (rendered only when showRadiusCircle is true) */}
+        {showRadiusCircle && (
+          <Circle
+            center={schoolPosition}
+            radius={Math.max(10, radius || 100)}
+            pathOptions={{
+              color: circleColor,
+              fillColor: circleColor,
+              fillOpacity: 0.18,
+              weight: 2,
+              dashArray: studentLocation && !isInRadius ? "6, 6" : undefined,
+            }}
+          />
+        )}
 
         {/* School Center Marker */}
         <Marker
@@ -204,17 +208,19 @@ export default function InnerGeofenceMap({
             <div className="p-1 min-w-[190px] text-xs">
               <div className="flex items-center gap-1.5 font-bold text-gray-900 border-b border-gray-100 pb-1.5 mb-1.5">
                 <span className="text-base">🏫</span>
-                <span>Titik Pusat Sekolah</span>
+                <span>Titik Lokasi Sekolah</span>
               </div>
               <div className="space-y-1 text-[11px] text-gray-600">
                 <p className="flex justify-between">
                   <span className="text-gray-400">Koordinat:</span>
                   <span className="font-mono font-bold text-gray-800">{centerLat.toFixed(5)}, {centerLng.toFixed(5)}</span>
                 </p>
-                <p className="flex justify-between">
-                  <span className="text-gray-400">Radius Absensi:</span>
-                  <span className="font-bold text-[#531FFF]">{radius} Meter</span>
-                </p>
+                {showRadiusCircle && (
+                  <p className="flex justify-between">
+                    <span className="text-gray-400">Radius Absensi:</span>
+                    <span className="font-bold text-[#531FFF]">{radius} Meter</span>
+                  </p>
+                )}
                 {interactive && (
                   <p className="mt-1 text-[10px] text-purple-700 bg-purple-50 p-1 rounded font-medium text-center">
                     💡 Geser marker atau klik peta untuk menyesuaikan lokasi

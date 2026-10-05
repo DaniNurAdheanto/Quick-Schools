@@ -368,6 +368,7 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
                 lat: Number(d.geofenceCenter?.lat ?? prev.geofenceCenter.lat),
                 lng: Number(d.geofenceCenter?.lng ?? prev.geofenceCenter.lng),
                 radiusMeters: Number(d.geofenceCenter?.radiusMeters ?? prev.geofenceCenter.radiusMeters),
+                address: d.geofenceCenter?.address || d.schoolAddress || d.address || prev.geofenceCenter.address,
               },
             };
             try {
@@ -405,7 +406,7 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
                 lat: Number(d.schoolCenterLat ?? d.schoolLat ?? prev.geofenceCenter.lat),
                 lng: Number(d.schoolCenterLng ?? d.schoolLng ?? prev.geofenceCenter.lng),
                 radiusMeters: Number(d.geofenceRadiusMeters ?? d.gpsRadiusMeter ?? prev.geofenceCenter.radiusMeters),
-                address: d.address || d.schoolAddress || prev.geofenceCenter.address,
+                address: d.geofenceCenter?.address || d.address || d.schoolAddress || d.locationAddress || prev.geofenceCenter.address,
               },
             };
             try {

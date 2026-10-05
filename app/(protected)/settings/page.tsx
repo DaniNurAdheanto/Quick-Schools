@@ -59,6 +59,7 @@ import { db, auth } from "@/lib/firebase";
 import { doc, setDoc, onSnapshot } from "firebase/firestore";
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
 import { acquireCurrentLocation } from "@/lib/geolocation-service";
+import { reverseGeocodeGps } from "@/lib/geocoding-service";
 import { useTimePresets, TimePreset } from "@/lib/time-presets";
 import SPPPaymentSettings from "@/components/settings/spp-payment-settings";
 import AcademicYearSettings from "@/components/settings/academic-year-settings";
@@ -228,6 +229,7 @@ export default function SettingsPage() {
   const [showCustomLogoUrl, setShowCustomLogoUrl] = useState(false);
   const [customLogoUrlInput, setCustomLogoUrlInput] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
+  const [isGeocodingAddress, setIsGeocodingAddress] = useState(false);
 
   // Vocational Programs CRUD Modal State (for SMK)
   const [showVocationalModal, setShowVocationalModal] = useState(false);
@@ -772,6 +774,52 @@ export default function SettingsPage() {
     reader.readAsDataURL(file);
   };
 
+  // Synchronize school address fields from GPS coordinates using reverse geocoding
+  const handleSyncAddressFromCoordinates = async (customLat?: number, customLng?: number) => {
+    const targetLat = Number(customLat ?? profile.latitude ?? attendance.schoolCenterLat ?? -6.200000);
+    const targetLng = Number(customLng ?? profile.longitude ?? attendance.schoolCenterLng ?? 106.816666);
+
+    if (isNaN(targetLat) || isNaN(targetLng) || (targetLat === 0 && targetLng === 0)) {
+      if (showError) showError("Koordinat GPS tidak valid untuk mendeteksi alamat.", "Koordinat Kosong");
+      return;
+    }
+
+    setIsGeocodingAddress(true);
+    try {
+      const geo = await reverseGeocodeGps(targetLat, targetLng);
+      if (geo && (geo.street || geo.fullAddress)) {
+        setProfile((prev) => ({
+          ...prev,
+          address: geo.street || geo.fullAddress,
+          city: geo.city || prev.city,
+          province: geo.province || prev.province,
+          postalCode: geo.postalCode || prev.postalCode,
+          locationAddress: geo.locationAddress || prev.locationAddress,
+        }));
+        if (showSuccess) {
+          if (geo.hasRtRw) {
+            showSuccess(
+              `Alamat lengkap terdeteksi: ${geo.street}`,
+              "Alamat Lengkap (RT/RW) Terdeteksi dari GPS"
+            );
+          } else {
+            showSuccess(
+              `Alamat terdeteksi: ${geo.street}. Anda dapat melengkapi RT/RW jika belum tercantum di data satelit.`,
+              "Alamat Berhasil Disesuaikan dari GPS"
+            );
+          }
+        }
+      } else {
+        if (showError) showError("Tidak dapat mendeteksi alamat jalan dari titik koordinat ini.", "Geocoding Gagal");
+      }
+    } catch (err: any) {
+      console.error("Reverse geocoding error:", err);
+      if (showError) showError("Gagal mengambil alamat dari GPS: " + (err.message || "Timeout"), "Error");
+    } finally {
+      setIsGeocodingAddress(false);
+    }
+  };
+
   // Detect current admin geolocation with two-tier fallback
   const handleDetectCurrentLocation = async () => {
     try {
@@ -791,6 +839,9 @@ export default function SettingsPage() {
         schoolLng: lng,
       }));
       if (showSuccess) showSuccess(`Titik sekolah disesuaikan dengan koordinat GPS Anda: ${lat}, ${lng}`, "Lokasi GPS Terdeteksi");
+      
+      // Otomatis sinkronisasi alamat dari koordinat GPS yang baru terdeteksi
+      await handleSyncAddressFromCoordinates(lat, lng);
     } catch (err: any) {
       const errMsg = err?.message || "Gagal mengambil lokasi GPS dari perangkat.";
       if (showError) showError(`${errMsg} ${err?.instruction || ""}`, err?.title || "GPS Gagal");
@@ -838,6 +889,32 @@ export default function SettingsPage() {
               schoolLng: targetLng,
               geofenceRadiusMeters: targetRadius,
               gpsRadiusMeter: targetRadius,
+              address: profilePayload.address,
+              schoolAddress: profilePayload.address,
+              locationAddress: profilePayload.locationAddress,
+              geofenceCenter: {
+                lat: targetLat,
+                lng: targetLng,
+                radiusMeters: targetRadius,
+                address: profilePayload.address || profilePayload.locationAddress || "Area Utama Sekolah",
+              },
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+        } catch (e) {}
+
+        // Also ensure teacher_attendance_config in roles collection is updated
+        try {
+          await setDoc(
+            doc(db, "roles", "teacher_attendance_config"),
+            {
+              geofenceCenter: {
+                lat: targetLat,
+                lng: targetLng,
+                radiusMeters: targetRadius,
+                address: profilePayload.address || profilePayload.locationAddress || "Area Utama Sekolah",
+              },
               updatedAt: new Date().toISOString(),
             },
             { merge: true }
@@ -883,6 +960,7 @@ export default function SettingsPage() {
     const teacherMode = attendance.teacherAttendanceMode || "face_recognition";
     const studentMode = attendance.studentAttendanceMode || "face_recognition";
 
+    const schoolAddr = profile.address || profile.locationAddress || "Area Utama Sekolah";
     const payload = {
       ...attendance,
       teacherAttendanceMode: teacherMode,
@@ -896,6 +974,15 @@ export default function SettingsPage() {
       schoolLng: targetLng,
       geofenceRadiusMeters: targetRadius,
       gpsRadiusMeter: targetRadius,
+      address: profile.address || "",
+      schoolAddress: schoolAddr,
+      locationAddress: profile.locationAddress || "",
+      geofenceCenter: {
+        lat: targetLat,
+        lng: targetLng,
+        radiusMeters: targetRadius,
+        address: schoolAddr,
+      },
       schoolStartTime: attendance.schoolStartTime || attendance.checkInStart || "07:00",
       lateToleranceMinutes: Number(attendance.lateToleranceMinutes || attendance.lateToleranceMin || 15),
       absentThresholdTime: attendance.absentThresholdTime || attendance.autoAbsentTime || "09:00",
@@ -925,6 +1012,8 @@ export default function SettingsPage() {
         latitude: targetLat,
         longitude: targetLng,
         radiusMeters: targetRadius,
+        address: profile.address,
+        locationAddress: profile.locationAddress,
       });
 
       // 3. Client-side localStorage persistence
@@ -939,7 +1028,7 @@ export default function SettingsPage() {
             lat: targetLat,
             lng: targetLng,
             radiusMeters: targetRadius,
-            address: profile.address || profile.locationAddress || "Area Utama Sekolah",
+            address: schoolAddr,
           },
           standardClockIn: attendance.schoolStartTime || "07:00",
           standardClockOut: attendance.schoolEndTime || "15:30",
@@ -965,7 +1054,7 @@ export default function SettingsPage() {
               lat: targetLat,
               lng: targetLng,
               radiusMeters: targetRadius,
-              address: profile.address || profile.locationAddress || "Area Utama Sekolah",
+              address: schoolAddr,
             },
             updatedAt: new Date().toISOString(),
           },
@@ -1245,58 +1334,88 @@ export default function SettingsPage() {
           {activeTab === "profile" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               
-              {/* Header Card with Quick Action */}
-              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <div className="w-10 h-10 rounded-lg bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-bold">
+              {/* Header Banner - Clean 2-Row Architecture */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4">
+                {/* Top Row: Icon, Title, Status & Quick Info Chip */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/20 shrink-0 mt-0.5 sm:mt-0">
                       <Building2 className="w-5 h-5" />
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-black text-gray-900 tracking-tight">
-                          Profil & Identitas Sekolah
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h2 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                          Profil &amp; Identitas Sekolah
                         </h2>
-                        <span className="px-2.5 py-0.5 text-xs font-extrabold bg-indigo-50 text-[#531FFF] rounded-full border border-indigo-200 flex items-center gap-1.5">
+                        <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-indigo-50 text-[#531FFF] rounded-full border border-indigo-200 flex items-center gap-1.5 shrink-0">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           Single Source of Truth
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 font-medium mt-0.5">
-                        Seluruh data identitas, kontak, logo, dan titik lokasi koordinat sekolah terhubung langsung ke database dan otomatis disinkronkan ke seluruh sistem.
+                      <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
+                        Seluruh data identitas, kontak, logo resmi, dan titik koordinat sekolah terhubung langsung ke database dan otomatis disinkronkan ke seluruh modul sistem.
                       </p>
+                    </div>
+                  </div>
+
+                  {/* NPSN & Akreditasi Quick Chip */}
+                  <div className="hidden lg:flex items-center gap-2 self-start lg:self-center shrink-0">
+                    <div className="px-3.5 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center gap-2 text-xs">
+                      <span className="text-gray-400 font-medium">NPSN:</span>
+                      <strong className="text-gray-900 font-mono font-bold">{profile.npsn || "Terdaftar"}</strong>
+                      <span className="text-gray-300">•</span>
+                      <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-[10px]">
+                        Akreditasi {profile.accreditation || "A"}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (confirm("Kembalikan seluruh data profil sekolah ke nilai standar default?")) {
-                        await resetSchoolProfileDefault();
-                        if (showInfo) showInfo("Profil sekolah direset ke default sistem.", "Reset Selesai");
-                      }
-                    }}
-                    className="px-3.5 py-2.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 text-gray-500" />
-                    Reset
-                  </button>
+                {/* Bottom Row / Toolbar: Helper Info on Left + Action Buttons on Right */}
+                <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-600 text-[11px] font-bold shrink-0">
+                      💡
+                    </span>
+                    <span className="line-clamp-1">
+                      Data ini otomatis digunakan resmi pada kop dokumen rapor, kartu pelajar, tagihan SPP, dan kuitansi pembayaran.
+                    </span>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={handleSaveProfileOnly}
-                    disabled={savingProfile}
-                    className="px-5 py-2.5 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-xs disabled:opacity-50"
-                  >
-                    {savingProfile ? (
-                      <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                    ) : (
-                      <Save className="w-4 h-4 text-white" />
-                    )}
-                    <span>Simpan Profil & Lokasi</span>
-                  </button>
+                  <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (confirm("Kembalikan seluruh data profil sekolah ke nilai standar default?")) {
+                          await resetSchoolProfileDefault();
+                          if (showInfo) showInfo("Profil sekolah direset ke default sistem.", "Reset Selesai");
+                        }
+                      }}
+                      className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-gray-400" />
+                      <span>Reset Default</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveProfileOnly}
+                      disabled={savingProfile}
+                      className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
+                    >
+                      {savingProfile ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
+                          <span>Menyimpan...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-3.5 h-3.5 text-white" />
+                          <span>Simpan Profil Sekolah</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1575,69 +1694,128 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Subsection C: Alamat Domisili Sekolah */}
+                {/* Subsection C: Alamat Domisili Sekolah (Berdasarkan Titik Maps) */}
                 <div className="space-y-4 pt-4 border-t border-gray-100">
-                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                    <MapPin className="w-4 h-4 text-[#531FFF]" />
-                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider">
-                      Alamat Domisili Sekolah
-                    </h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-gray-100">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                        <MapPin className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                          Alamat Domisili Sekolah (Titik Maps)
+                        </h3>
+                        <p className="text-[11px] text-gray-500 font-medium">
+                          Alamat sekolah ditentukan langsung dari titik koordinat peta &amp; GPS (tanpa input teks manual).
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleDetectCurrentLocation}
+                        className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 border border-emerald-200 shadow-2xs active:scale-95"
+                        title="Gunakan koordinat GPS perangkat saya saat ini dan sinkronkan alamat"
+                      >
+                        <Compass className="w-3.5 h-3.5 text-emerald-600" />
+                        Deteksi Lokasi Saya
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSyncAddressFromCoordinates()}
+                        disabled={isGeocodingAddress}
+                        className="px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-[#531FFF] text-xs font-bold rounded-lg border border-purple-200 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95 disabled:opacity-50"
+                        title="Perbarui alamat otomatis dari koordinat peta"
+                      >
+                        <RefreshCw className={cn("w-3.5 h-3.5", isGeocodingAddress && "animate-spin")} />
+                        {isGeocodingAddress ? "Menyesuaikan..." : "Perbarui Alamat"}
+                      </button>
+
+                      <span className="font-mono text-gray-800 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold">
+                        {Number(profile.latitude).toFixed(5)}, {Number(profile.longitude).toFixed(5)}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-medium">
-                    <div className="md:col-span-2">
-                      <label className="block text-gray-700 font-bold mb-1.5">Alamat Lengkap Jalan / Kompleks</label>
-                      <input 
-                        type="text" 
-                        value={profile.address}
-                        onChange={(e) => setProfile({ ...profile, address: e.target.value })}
-                        placeholder="Jl. Pendidikan No. 45, Kompleks Akademika"
-                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
-                      />
+                  {/* Leaflet Interactive Map View - Pure Point Picker */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs font-medium">
+                      <span className="text-[11px] text-gray-500 flex items-center gap-1.5">
+                        <Navigation className="w-3.5 h-3.5 text-[#531FFF]" />
+                        Klik pada peta atau seret marker sekolah (🏫) untuk menentukan titik lokasi alamat sekolah.
+                      </span>
                     </div>
 
-                    <div>
-                      <label className="block text-gray-700 font-bold mb-1.5">Kota / Kabupaten</label>
-                      <input 
-                        type="text" 
-                        value={profile.city}
-                        onChange={(e) => setProfile({ ...profile, city: e.target.value })}
-                        placeholder="Jakarta Selatan"
-                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
-                      />
+                    <AttendanceGeofenceMap
+                      centerLat={Number(profile.latitude || -6.200000)}
+                      centerLng={Number(profile.longitude || 106.816666)}
+                      radius={Number(profile.radiusMeters || 100)}
+                      showRadiusCircle={false}
+                      interactive={true}
+                      onLocationChange={(lat, lng) => {
+                        setProfile((prev) => ({
+                          ...prev,
+                          latitude: lat,
+                          longitude: lng,
+                        }));
+                        setAttendance((prev) => ({
+                          ...prev,
+                          schoolCenterLat: lat,
+                          schoolCenterLng: lng,
+                          schoolLat: lat,
+                          schoolLng: lng,
+                        }));
+                        handleSyncAddressFromCoordinates(lat, lng);
+                      }}
+                      height="380px"
+                    />
+                  </div>
+
+                  {/* Tampilan Hasil Alamat Otomatis Berdasarkan Titik Maps */}
+                  <div className="p-4 bg-gray-50/90 rounded-xl border border-gray-200/80 space-y-3">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center shrink-0 mt-0.5">
+                        <MapPin className="w-4 h-4" />
+                      </div>
+                      <div className="space-y-0.5 flex-1">
+                        <span className="text-[10px] uppercase tracking-wider text-gray-400 font-extrabold block">
+                          Alamat Domisili Sekolah (Hasil Titik Peta &amp; GPS):
+                        </span>
+                        <p className="text-xs font-bold text-gray-900 leading-relaxed">
+                          📍 {profile.address || "Geser pin pada peta untuk menentukan alamat sekolah secara otomatis."}
+                        </p>
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-gray-700 font-bold mb-1.5">Provinsi</label>
-                      <input 
-                        type="text" 
-                        value={profile.province}
-                        onChange={(e) => setProfile({ ...profile, province: e.target.value })}
-                        placeholder="DKI Jakarta"
-                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
-                      />
+                    {/* Derived Address Badges (Read-Only) */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-gray-200/60 text-xs">
+                      <div className="p-2.5 bg-white rounded-lg border border-gray-200/60 shadow-2xs">
+                        <span className="text-[10px] text-gray-400 font-bold block">Kota / Kabupaten</span>
+                        <span className="font-extrabold text-gray-800 text-xs truncate block">{profile.city || "-"}</span>
+                      </div>
+                      <div className="p-2.5 bg-white rounded-lg border border-gray-200/60 shadow-2xs">
+                        <span className="text-[10px] text-gray-400 font-bold block">Provinsi</span>
+                        <span className="font-extrabold text-gray-800 text-xs truncate block">{profile.province || "-"}</span>
+                      </div>
+                      <div className="p-2.5 bg-white rounded-lg border border-gray-200/60 shadow-2xs">
+                        <span className="text-[10px] text-gray-400 font-bold block">Kode Pos</span>
+                        <span className="font-mono font-extrabold text-gray-800 text-xs block">{profile.postalCode || "-"}</span>
+                      </div>
+                      <div className="p-2.5 bg-white rounded-lg border border-gray-200/60 shadow-2xs">
+                        <span className="text-[10px] text-gray-400 font-bold block">Titik Koordinat GPS</span>
+                        <span className="font-mono font-bold text-emerald-700 text-[11px] block">
+                          {Number(profile.latitude).toFixed(5)}, {Number(profile.longitude).toFixed(5)}
+                        </span>
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-gray-700 font-bold mb-1.5">Kode Pos</label>
-                      <input 
-                        type="text" 
-                        value={profile.postalCode}
-                        onChange={(e) => setProfile({ ...profile, postalCode: e.target.value })}
-                        placeholder="12430"
-                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] font-mono text-gray-900"
-                      />
-                    </div>
-
-                    <div className="md:col-span-3">
-                      <label className="block text-gray-700 font-bold mb-1.5">Keterangan Area / Kampus</label>
-                      <input 
-                        type="text" 
-                        value={profile.locationAddress}
-                        onChange={(e) => setProfile({ ...profile, locationAddress: e.target.value })}
-                        placeholder="Kampus Utama - Gerbang & Area Sekolah"
-                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
-                      />
+                    <div className="pt-2 border-t border-gray-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-gray-400">
+                      <span>💡 Koordinat otomatis diperbarui saat pin digeser atau menekan &quot;Deteksi Lokasi Saya&quot;.</span>
+                      <span className="font-medium text-gray-500">
+                        Batas radius geofence diatur pada tab <strong>Geofence Absensi</strong>.
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1689,194 +1867,18 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-              </div>
-
-              {/* CARD 3: Titik Lokasi Sekolah & Geofence GPS (Peta Interaktif) */}
-              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5">
-                
-                {/* Header & Geolocation Detector */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
-                      <Compass className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-extrabold text-gray-900 text-base">
-                          Titik Koordinat & Area Lokasi Sekolah (Peta Interaktif)
-                        </h3>
-                        <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200">
-                          Geofence Aktif
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Klik pada peta atau geser marker sekolah (🏫) untuk mengatur titik koordinat pusat sekolah dan batas radius absensi siswa & guru.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={handleDetectCurrentLocation}
-                      className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 border border-emerald-200 shadow-2xs active:scale-95"
-                      title="Gunakan koordinat GPS perangkat saya saat ini"
-                    >
-                      <MapPin className="w-4 h-4 text-emerald-600" />
-                      Deteksi Lokasi Saya
-                    </button>
-                    
-                    <span className="font-mono text-gray-800 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold">
-                      {Number(profile.latitude).toFixed(5)}, {Number(profile.longitude).toFixed(5)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Leaflet Interactive Map View */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs font-medium">
-                    <span className="text-[11px] text-gray-500 flex items-center gap-1.5">
-                      <Navigation className="w-3.5 h-3.5 text-[#531FFF]" />
-                      Klik pada peta atau seret marker sekolah (🏫) untuk memindahkan titik lokasi.
-                    </span>
-                    <span className="text-[11px] font-extrabold text-[#531FFF]">
-                      Batas Radius Absensi: {profile.radiusMeters || 100} Meter
-                    </span>
-                  </div>
-
-                  <AttendanceGeofenceMap
-                    centerLat={Number(profile.latitude || -6.200000)}
-                    centerLng={Number(profile.longitude || 106.816666)}
-                    radius={Number(profile.radiusMeters || 100)}
-                    interactive={true}
-                    onLocationChange={(lat, lng) => {
-                      setProfile((prev) => ({
-                        ...prev,
-                        latitude: lat,
-                        longitude: lng,
-                      }));
-                      setAttendance((prev) => ({
-                        ...prev,
-                        schoolCenterLat: lat,
-                        schoolCenterLng: lng,
-                        schoolLat: lat,
-                        schoolLng: lng,
-                      }));
-                    }}
-                    height="420px"
-                  />
-                </div>
-
-                {/* Radius Slider & Quick Presets */}
-                <div className="space-y-4 pt-3 border-t border-gray-100">
-                  <div>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-                      <label className="font-bold text-gray-700 text-xs">
-                        Batas Radius Geofence Presensi (Meter)
-                      </label>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[11px] text-gray-400 font-medium mr-1">Preset Cepat:</span>
-                        {[50, 100, 250, 500, 1000].map((val) => (
-                          <button
-                            key={val}
-                            type="button"
-                            onClick={() => {
-                              setProfile((prev) => ({ ...prev, radiusMeters: val }));
-                              setAttendance((prev) => ({ ...prev, geofenceRadiusMeters: val, gpsRadiusMeter: val }));
-                            }}
-                            className={cn(
-                              "px-2.5 py-1 text-[11px] font-bold rounded-md transition-all border cursor-pointer",
-                              profile.radiusMeters === val
-                                ? "bg-[#531FFF] text-white border-[#531FFF] shadow-xs"
-                                : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
-                            )}
-                          >
-                            {val}m
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <input 
-                        type="range" 
-                        min="20" 
-                        max="2000" 
-                        step="10" 
-                        value={profile.radiusMeters || 100}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setProfile((prev) => ({ ...prev, radiusMeters: val }));
-                          setAttendance((prev) => ({ ...prev, geofenceRadiusMeters: val, gpsRadiusMeter: val }));
-                        }}
-                        className="w-full accent-[#531FFF] cursor-pointer" 
-                      />
-                      <span className="text-xs font-bold font-mono text-[#531FFF] bg-[#F3F0FF] px-2.5 py-1 rounded-md shrink-0 border border-[#531FFF]/20">
-                        {profile.radiusMeters || 100} Meter
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Manual Coordinates Form */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                    <div>
-                      <label className="block text-gray-700 font-bold text-xs mb-1.5">
-                        Latitude (Garis Lintang)
-                      </label>
-                      <input 
-                        type="number" 
-                        step="any"
-                        value={profile.latitude}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setProfile((prev) => ({ ...prev, latitude: val }));
-                          setAttendance((prev) => ({ ...prev, schoolCenterLat: val, schoolLat: val }));
-                        }}
-                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-xs font-mono font-bold text-gray-900"
-                        placeholder="-6.200000"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-gray-700 font-bold text-xs mb-1.5">
-                        Longitude (Garis Bujur)
-                      </label>
-                      <input 
-                        type="number" 
-                        step="any"
-                        value={profile.longitude}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setProfile((prev) => ({ ...prev, longitude: val }));
-                          setAttendance((prev) => ({ ...prev, schoolCenterLng: val, schoolLng: val }));
-                        }}
-                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-xs font-mono font-bold text-gray-900"
-                        placeholder="106.816666"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Automated Sync Callout Info */}
-                  <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200/70 flex items-start gap-3 text-xs">
-                    <AlertCircle className="w-4 h-4 text-[#531FFF] shrink-0 mt-0.5" />
-                    <div className="space-y-1 text-gray-700">
-                      <p className="font-bold text-[#531FFF]">
-                        Sinkronisasi Otomatis Antar Sistem Presensi:
-                      </p>
-                      <p className="leading-relaxed">
-                        Titik koordinat dan radius yang Anda ubah di sini disimpan ke database sebagai <strong>Single Source of Truth</strong> dan langsung digunakan oleh modul <strong>Presensi Siswa</strong>, <strong>Presensi Guru</strong>, serta modal pemindai Face ID tanpa perlu mengubah konfigurasi secara manual di setiap halaman.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Card Action Footer */}
-                <div className="pt-4 border-t border-gray-100 flex items-center justify-end">
+                <div className="pt-6 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>Titik lokasi maps dan profil sekolah akan otomatis terhubung ke seluruh sistem absensi.</span>
+                  </div>
+
                   <button
                     type="button"
                     onClick={handleSaveProfileOnly}
                     disabled={savingProfile}
-                    className="px-6 py-3 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-sm disabled:opacity-50"
+                    className="px-6 py-3 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
                   >
                     {savingProfile ? (
                       <>
@@ -1886,7 +1888,7 @@ export default function SettingsPage() {
                     ) : (
                       <>
                         <Save className="w-4 h-4" />
-                        Simpan Seluruh Data Profil & Lokasi Sekolah
+                        Simpan Data Profil &amp; Lokasi Sekolah
                       </>
                     )}
                   </button>
@@ -1901,50 +1903,76 @@ export default function SettingsPage() {
             <div className="space-y-8 animate-in fade-in duration-300">
               
               {/* ================= HERO HEADER & LIVE STATUS KPI STRIP ================= */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] overflow-hidden">
                 <div className="h-1.5 w-full bg-gradient-to-r from-[#531FFF] via-[#8B5CF6] to-pink-500" />
                 
-                <div className="p-6 md:p-8 space-y-6">
-                  {/* Top Bar with Title and Action */}
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 pb-6 border-b border-gray-100">
-                    <div className="flex items-start sm:items-center gap-4">
-                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-bold shadow-lg shadow-[#531FFF]/25 shrink-0">
-                        <GraduationCap className="w-7 h-7" />
+                <div className="p-5 sm:p-6 space-y-4">
+                  {/* Top Row: Icon, Title, Status & Stage Quick Chip */}
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#7B42FF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/20 shrink-0 mt-0.5 sm:mt-0">
+                        <GraduationCap className="w-5 h-5" />
                       </div>
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2.5 flex-wrap">
-                          <h2 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">
-                            Jenjang Pendidikan & Struktur Kurikulum
+                          <h2 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                            Jenjang Pendidikan &amp; Struktur Kurikulum
                           </h2>
-                          <span className="px-3 py-1 text-xs font-black bg-purple-50 text-[#531FFF] rounded-full border border-purple-200/80 flex items-center gap-1.5 shadow-2xs">
+                          <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-purple-50 text-[#531FFF] rounded-full border border-purple-200/80 flex items-center gap-1.5 shadow-2xs shrink-0">
                             <Sparkles className="w-3.5 h-3.5 text-[#531FFF]" />
                             Konfigurasi Master Sekolah
                           </span>
                         </div>
-                        <p className="text-xs md:text-sm text-gray-500 font-medium mt-1 max-w-3xl leading-relaxed">
-                          Pilihan jenjang satuan pendidikan (SD, SMP, SMA, SMK) secara dinamis menyelaraskan rombel kelas, kurikulum mata pelajaran, standar ketuntasan (KKM), dan pengelolaan jurusan di seluruh ekosistem Smart School OS.
+                        <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
+                          Pilihan jenjang satuan pendidikan (SD, SMP, SMA, SMK) secara dinamis menyelaraskan rombel kelas, kurikulum mata pelajaran, standar ketuntasan (KKM), dan jurusan.
                         </p>
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleSaveProfileOnly}
-                      disabled={savingProfile}
-                      className="px-6 py-3 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-xl hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-black rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm shrink-0 disabled:opacity-50"
-                    >
-                      {savingProfile ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                          <span>Menyimpan Konfigurasi...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Save className="w-4 h-4 text-white" />
-                          <span>Simpan Konfigurasi Jenjang</span>
-                        </>
-                      )}
-                    </button>
+                    {/* Active Stage Indicator Chip */}
+                    <div className="hidden lg:flex items-center gap-2 self-start lg:self-center shrink-0">
+                      <div className="px-3.5 py-1.5 bg-purple-50/70 border border-purple-200/80 rounded-xl flex items-center gap-2 text-xs">
+                        <span className="text-purple-600 font-medium">Jenjang Aktif:</span>
+                        <strong className="text-purple-950 font-black text-xs">{stageConfig.id}</strong>
+                        <span className="text-purple-300">•</span>
+                        <span className="text-[#531FFF] font-extrabold text-[11px]">
+                          {stageConfig.name}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom Row / Toolbar: Helper Info on Left + Action Buttons on Right */}
+                  <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-600 text-[11px] font-bold shrink-0">
+                        💡
+                      </span>
+                      <span className="line-clamp-1">
+                        Perubahan jenjang otomatis menyelaraskan tingkat kelas dan kurikulum mata pelajaran di seluruh modul.
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 shrink-0 self-end md:self-auto">
+                      <button
+                        type="button"
+                        onClick={handleSaveProfileOnly}
+                        disabled={savingProfile}
+                        className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
+                      >
+                        {savingProfile ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
+                            <span>Menyimpan...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-3.5 h-3.5 text-white" />
+                            <span>Simpan Konfigurasi Jenjang</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   {/* 4 Live Summary KPI Tiles */}
@@ -2061,7 +2089,7 @@ export default function SettingsPage() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
                   {(["SD", "SMP", "SMA", "SMK"] as EducationalStage[]).map((stageKey) => {
                     const cfg = STAGE_CONFIGS[stageKey];
                     const isSelected = (profile.educationalStage || currentStage) === stageKey;
@@ -2071,73 +2099,74 @@ export default function SettingsPage() {
                         key={stageKey}
                         onClick={() => handleChangeStage(stageKey)}
                         className={cn(
-                          "relative rounded-2xl p-5 border-2 transition-all cursor-pointer flex flex-col justify-between group text-left",
+                          "relative rounded-2xl p-6 border-2 transition-all cursor-pointer flex flex-col justify-between group text-left",
                           isSelected
                             ? "bg-gradient-to-b from-purple-50/80 via-white to-indigo-50/30 border-[#531FFF] shadow-lg shadow-purple-500/10 ring-2 ring-[#531FFF]/20 scale-[1.01]"
                             : "bg-white border-gray-200/90 hover:border-purple-200 hover:shadow-md hover:bg-gray-50/30"
                         )}
                       >
-                        {/* Selected Live Badge */}
-                        {isSelected && (
-                          <div className="absolute top-3.5 right-3.5 flex items-center gap-1.5 bg-[#531FFF] text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full shadow-xs">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            <span>Sedang Aktif</span>
-                          </div>
-                        )}
+                        <div className="space-y-4">
+                          {/* Header: Stage Icon, Titles & Selected Badge */}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3.5 min-w-0">
+                              <div className={cn(
+                                "w-12 h-12 rounded-xl flex items-center justify-center font-black text-base shadow-xs shrink-0 border",
+                                cfg.badgeBg, cfg.badgeColor, cfg.borderColor
+                              )}>
+                                {stageKey}
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-base md:text-lg font-black text-gray-900 block leading-tight">
+                                  Jenjang {stageKey}
+                                </span>
+                                <span className="text-xs text-gray-500 font-medium block mt-0.5">
+                                  {cfg.fullName}
+                                </span>
+                              </div>
+                            </div>
 
-                        <div className="space-y-3.5">
-                          {/* Stage Icon & Titles */}
-                          <div className="flex items-center gap-3">
-                            <div className={cn(
-                              "w-12 h-12 rounded-xl flex items-center justify-center font-black text-base shadow-xs shrink-0 border",
-                              cfg.badgeBg, cfg.badgeColor, cfg.borderColor
-                            )}>
-                              {stageKey}
-                            </div>
-                            <div className="min-w-0">
-                              <span className="text-base font-black text-gray-900 block leading-tight">
-                                Jenjang {stageKey}
-                              </span>
-                              <span className="text-[11px] text-gray-400 font-medium block truncate">
-                                {cfg.fullName}
-                              </span>
-                            </div>
+                            {isSelected && (
+                              <div className="flex items-center gap-1.5 bg-[#531FFF] text-white text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full shadow-xs shrink-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                <span>Sedang Aktif</span>
+                              </div>
+                            )}
                           </div>
 
                           {/* Quick Spec Tags */}
-                          <div className="grid grid-cols-2 gap-2 pt-1">
-                            <div className="p-2 rounded-lg bg-gray-50 border border-gray-100">
-                              <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-wider block">
+                          <div className="grid grid-cols-2 gap-3 pt-1">
+                            <div className="p-2.5 rounded-xl bg-gray-50/80 border border-gray-100/90">
+                              <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">
                                 Rentang Kelas
                               </span>
-                              <span className="text-xs font-bold text-gray-800 block">
+                              <span className="text-xs md:text-sm font-bold text-gray-800 block mt-0.5">
                                 {cfg.levelRange}
                               </span>
                             </div>
 
-                            <div className="p-2 rounded-lg bg-emerald-50/60 border border-emerald-100">
-                              <span className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider block">
+                            <div className="p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-100/90">
+                              <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider block">
                                 KKM Acuan
                               </span>
-                              <span className="text-xs font-black text-emerald-800 block">
+                              <span className="text-xs md:text-sm font-black text-emerald-800 block mt-0.5">
                                 {cfg.defaultKkm} Poin
                               </span>
                             </div>
                           </div>
 
                           {/* Curriculum & Cycle Info */}
-                          <div className="p-2.5 rounded-xl bg-gray-50/90 border border-gray-100 space-y-1">
-                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider block flex items-center gap-1">
-                              <BookOpen className="w-3 h-3 text-[#531FFF]" />
+                          <div className="p-3 rounded-xl bg-gray-50/90 border border-gray-100 space-y-1">
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider block flex items-center gap-1.5">
+                              <BookOpen className="w-3.5 h-3.5 text-[#531FFF]" />
                               Siklus Kurikulum
                             </span>
-                            <span className="text-xs text-gray-700 font-bold block line-clamp-1">
+                            <span className="text-xs md:text-sm text-gray-800 font-bold block leading-snug">
                               {cfg.curriculumCycle}
                             </span>
                           </div>
 
                           {/* Description */}
-                          <p className="text-[11px] text-gray-500 leading-relaxed font-medium">
+                          <p className="text-xs text-gray-600 leading-relaxed font-medium">
                             {cfg.description}
                           </p>
                         </div>
@@ -2147,7 +2176,7 @@ export default function SettingsPage() {
                           <button
                             type="button"
                             className={cn(
-                              "w-full py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2",
+                              "w-full py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer",
                               isSelected
                                 ? "bg-[#531FFF] text-white shadow-sm"
                                 : "bg-gray-100 text-gray-700 hover:bg-purple-100 hover:text-[#531FFF]"
@@ -2782,49 +2811,76 @@ export default function SettingsPage() {
           {/* TAB 3: Attendance Settings (Mode Absensi & Face Recognition AI) */}
           {activeTab === "attendance" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              {/* Header Card with Instant Save */}
-              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#531FFF] to-[#7344FF] text-white flex items-center justify-center shadow-md shadow-[#531FFF]/20">
+              {/* Header Banner - Clean 2-Row Architecture */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4">
+                {/* Top Row: Icon, Title, Status & Mode Chip */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#7344FF] text-white flex items-center justify-center font-bold shadow-md shadow-[#531FFF]/20 shrink-0 mt-0.5 sm:mt-0">
                       <ScanFace className="w-5 h-5" />
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h2 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
                           Pengaturan Mode Absensi &amp; Face Recognition AI
                         </h2>
-                        <span className="px-2.5 py-0.5 text-xs font-extrabold bg-purple-50 text-[#531FFF] rounded-full border border-purple-200 flex items-center gap-1.5">
+                        <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-purple-50 text-[#531FFF] rounded-full border border-purple-200 flex items-center gap-1.5 shrink-0">
                           <span className="w-1.5 h-1.5 rounded-full bg-[#531FFF] animate-pulse" />
                           Dual Mode System
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 font-medium mt-0.5">
+                      <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
                         Pilih metode validasi presensi (Face Recognition AI vs Foto Selfie Biasa) untuk Guru &amp; Siswa, jam operasional sekolah, dan metode notifikasi.
                       </p>
                     </div>
                   </div>
+
+                  {/* Mode Aktif Quick Chip */}
+                  <div className="hidden lg:flex items-center gap-2 self-start lg:self-center shrink-0">
+                    <div className="px-3.5 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center gap-2 text-xs">
+                      <span className="text-gray-400 font-medium">Mode Siswa:</span>
+                      <strong className="text-gray-900 font-bold">
+                        {attendance.studentAttendanceMode === "face_recognition" ? "Face ID AI" : "Foto Selfie"}
+                      </strong>
+                      <span className="text-gray-300">•</span>
+                      <span className="text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200 text-[10px]">
+                        Toleransi {attendance.lateToleranceMinutes}m
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-3 shrink-0">
-                  <button
-                    type="button"
-                    onClick={handleSaveAttendanceConfig}
-                    disabled={savingAttendance}
-                    className="px-5 py-2.5 bg-[#531FFF] hover:bg-[#4316D0] active:scale-[0.98] text-white text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
-                  >
-                    {savingAttendance ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        Menyimpan...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" />
-                        Simpan Pengaturan Absensi
-                      </>
-                    )}
-                  </button>
+                {/* Bottom Row / Toolbar: Helper Info on Left + Action Buttons on Right */}
+                <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-600 text-[11px] font-bold shrink-0">
+                      💡
+                    </span>
+                    <span className="line-clamp-1">
+                      Mode Face ID AI dilengkapi liveness check anti-spoofing untuk mencegah kecurangan titip absen foto/layar HP.
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleSaveAttendanceConfig}
+                      disabled={savingAttendance}
+                      className="px-4 py-2 bg-[#531FFF] hover:bg-[#4316D0] active:scale-[0.98] text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
+                    >
+                      {savingAttendance ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Menyimpan...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-3.5 h-3.5" />
+                          <span>Simpan Pengaturan Absensi</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -3331,58 +3387,97 @@ export default function SettingsPage() {
           {/* TAB 3.5: Geofence GPS Settings (Peta & Radius Lokasi Sekolah) */}
           {activeTab === "geofence" && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              {/* Header Card with Instant Save */}
-              <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
+              {/* Header Banner - Clean 2-Row Architecture (No Text Squishing) */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4">
+                {/* Top Row: Icon, Title, Status & Radius Chip */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0 mt-0.5 sm:mt-0">
                       <Compass className="w-5 h-5" />
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-black text-gray-900 tracking-tight">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h2 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
                           Pengaturan Lokasi &amp; Geofence GPS Sekolah
                         </h2>
-                        <span className="px-2.5 py-0.5 text-xs font-extrabold bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200 flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          Geofence Aktif
-                        </span>
+                        {attendance.requireRadius ? (
+                          <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200 flex items-center gap-1.5 shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Geofence Aktif
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-amber-50 text-amber-700 rounded-full border border-amber-200 flex items-center gap-1.5 shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                            Geofence Toleransi
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-gray-500 font-medium mt-0.5">
+                      <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
                         Tentukan titik pusat sekolah pada peta interaktif, batas radius wilayah absensi (meter), dan validasi radius kehadiran.
                       </p>
                     </div>
                   </div>
+
+                  {/* Radius Quick Metric Chip on the right */}
+                  <div className="hidden lg:flex items-center gap-2 self-start lg:self-center shrink-0">
+                    <div className="px-3.5 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center gap-2 text-xs">
+                      <span className="text-gray-400 font-medium">Batas Radius:</span>
+                      <strong className="text-gray-900 font-black">{attendance.geofenceRadiusMeters || attendance.gpsRadiusMeter || 100}m</strong>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-3 shrink-0">
-                  <button
-                    type="button"
-                    onClick={handleDetectCurrentLocation}
-                    className="px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 border border-emerald-200/60 shadow-xs"
-                  >
-                    <MapPin className="w-4 h-4" />
-                    Deteksi Lokasi Saya
-                  </button>
+                {/* Bottom Row / Toolbar: Helper Info on Left + Action Buttons on Right */}
+                <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-600 text-[11px] font-bold shrink-0">
+                      💡
+                    </span>
+                    <span className="line-clamp-1">
+                      Geser marker sekolah pada peta atau gunakan tombol di samping untuk menyesuaikan posisi.
+                    </span>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={handleSaveAttendanceConfig}
-                    disabled={savingAttendance}
-                    className="px-5 py-2.5 bg-[#531FFF] hover:bg-[#4316D0] active:scale-[0.98] text-white text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
-                  >
-                    {savingAttendance ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        Menyimpan...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" />
-                        Simpan Pengaturan Geofence
-                      </>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleSyncAddressFromCoordinates()}
+                      disabled={isGeocodingAddress}
+                      className="px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-[#531FFF] text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border border-purple-200/70 shadow-2xs disabled:opacity-50"
+                      title="Perbarui alamat profil sekolah sesuai koordinat GPS"
+                    >
+                      <RefreshCw className={cn("w-3.5 h-3.5", isGeocodingAddress && "animate-spin")} />
+                      <span>{isGeocodingAddress ? "Mencari Alamat..." : "Sesuaikan Alamat GPS"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleDetectCurrentLocation}
+                      className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border border-emerald-200/70 shadow-2xs"
+                    >
+                      <MapPin className="w-3.5 h-3.5" />
+                      <span>Deteksi Lokasi Saya</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveAttendanceConfig}
+                      disabled={savingAttendance}
+                      className="px-4 py-2 bg-[#531FFF] hover:bg-[#4316D0] active:scale-[0.98] text-white text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
+                    >
+                      {savingAttendance ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Menyimpan...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-3.5 h-3.5" />
+                          <span>Simpan Pengaturan Geofence</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -3437,6 +3532,8 @@ export default function SettingsPage() {
                         latitude: lat,
                         longitude: lng,
                       }));
+                      // Automatically reverse-geocode and adjust address
+                      handleSyncAddressFromCoordinates(lat, lng);
                     }}
                     height="400px"
                   />
@@ -3561,6 +3658,39 @@ export default function SettingsPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Alamat Sekolah Lengkap Berdasarkan Titik GPS */}
+                  <div className="p-4 bg-purple-50/50 border border-purple-100 rounded-xl space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-[#531FFF]" />
+                        <span className="font-extrabold text-gray-900">Alamat Sekolah Berdasarkan Titik GPS</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSyncAddressFromCoordinates()}
+                        disabled={isGeocodingAddress}
+                        className="text-[11px] text-[#531FFF] hover:underline flex items-center gap-1 font-bold cursor-pointer disabled:opacity-50"
+                        title="Ambil data lengkap alamat dari koordinat GPS"
+                      >
+                        <RefreshCw className={cn("w-3 h-3", isGeocodingAddress && "animate-spin")} />
+                        <span>{isGeocodingAddress ? "Menyesuaikan..." : "Perbarui Alamat dari GPS"}</span>
+                      </button>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-lg border border-purple-200/60 shadow-2xs space-y-1">
+                      <span className="text-[10px] uppercase tracking-wider text-gray-400 font-extrabold block">Alamat Lengkap Digunakan untuk Absensi:</span>
+                      <p className="text-gray-800 font-medium leading-relaxed text-xs">
+                        📍 {profile.address || profile.locationAddress || "Alamat belum tersinkronisasi. Klik 'Perbarui Alamat dari GPS' atau geser pin pada peta."}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-gray-600 pt-0.5">
+                      <span><strong>Kota / Kab:</strong> {profile.city || "-"}</span>
+                      <span><strong>Provinsi:</strong> {profile.province || "-"}</span>
+                      <span><strong>Kode Pos:</strong> {profile.postalCode || "-"}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -3597,16 +3727,89 @@ export default function SettingsPage() {
 
           {/* TAB 4: Grading & Reports */}
           {activeTab === "grading" && (
-            <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
-              <div className="border-b border-gray-100 pb-4">
-                <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-                  <Award className="w-5 h-5 text-amber-500" />
-                  Penilaian, KKM & Kalkulasi Rapor
-                </h2>
-                <p className="text-xs text-gray-500 font-medium mt-1">
-                  Tentukan batas KKM sekolah, formula persentase bobot nilai akhir, dan pratinjau formula.
-                </p>
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Header Banner - Clean 2-Row Architecture */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4">
+                {/* Top Row: Icon, Title, Status & KKM Quick Chip */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white flex items-center justify-center font-bold shadow-md shadow-amber-500/20 shrink-0 mt-0.5 sm:mt-0">
+                      <Award className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h2 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                          Penilaian, KKM &amp; Kalkulasi Rapor
+                        </h2>
+                        <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-amber-50 text-amber-700 rounded-full border border-amber-200 flex items-center gap-1.5 shrink-0">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-amber-600" />
+                          Standar Kelulusan &amp; Asesmen
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
+                        Tentukan batas KKM sekolah, formula persentase bobot nilai akhir, dan kalkulasi otomatis rapor digital siswa.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* KKM Metric Indicator Chip */}
+                  <div className="hidden lg:flex items-center gap-2 self-start lg:self-center shrink-0">
+                    <div className="px-3.5 py-1.5 bg-amber-50/70 border border-amber-200/80 rounded-xl flex items-center gap-2 text-xs">
+                      <span className="text-amber-700 font-medium">Batas KKM:</span>
+                      <strong className="text-amber-950 font-black text-sm">{grading.kkmScore}</strong>
+                      <span className="text-amber-300">•</span>
+                      <span className="text-amber-800 font-bold text-[11px]">
+                        Total Bobot: {grading.assignmentWeight + grading.midtermWeight + grading.finalWeight}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Row / Toolbar: Helper Info on Left + Action Buttons on Right */}
+                <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-600 text-[11px] font-bold shrink-0">
+                      💡
+                    </span>
+                    <span className="line-clamp-1">
+                      Total persentase bobot (Tugas + UTS + UAS) idealnya berjumlah 100% untuk akurasi nilai akhir rapor.
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 shrink-0 self-end md:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setGrading(prev => ({ ...prev, kkmScore: 75, assignmentWeight: 30, midtermWeight: 30, finalWeight: 40 }))}
+                      className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-gray-400" />
+                      <span>Reset Standar</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSaveSettings()}
+                      disabled={saving}
+                      className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25 disabled:opacity-50"
+                    >
+                      {saving ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
+                          <span>Menyimpan...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-3.5 h-3.5 text-white" />
+                          <span>Simpan Penilaian &amp; KKM</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
+
+              {/* Main Content Card: Inputs & Formula */}
+              <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6">
 
               {/* KKM & Weight Slider Controls */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-medium">
@@ -3673,7 +3876,8 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
           {/* TAB 8: Roles & Permissions */}
           {(activeTab as string) === "roles" && (
@@ -3961,40 +4165,82 @@ export default function SettingsPage() {
           {/* 4. TAB TIME PRESETS (TEMPLATE JAM & SESI)                                 */}
           {/* ========================================================================= */}
           {activeTab === "time_presets" && (
-            <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6 animate-in fade-in duration-200">
-              {/* Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-5">
-                <div>
-                  <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-[#531FFF]" />
-                    Template Jam Pelajaran & Ujian
-                  </h2>
-                  <p className="text-xs text-gray-500 font-medium mt-1">
-                    Kelola pilihan preset jam cepat yang digunakan pada formulir Jadwal Ujian dan Jadwal Pelajaran (KBM) sekolah.
-                  </p>
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Header Banner - Clean 2-Row Architecture */}
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.04)] space-y-4">
+                {/* Top Row: Icon, Title, Status & Count Quick Chip */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white flex items-center justify-center font-bold shadow-md shadow-indigo-500/20 shrink-0 mt-0.5 sm:mt-0">
+                      <Clock className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h2 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                          Template Jam Pelajaran &amp; Ujian
+                        </h2>
+                        <span className="px-2.5 py-0.5 text-[11px] font-extrabold bg-indigo-50 text-indigo-700 rounded-full border border-indigo-200 flex items-center gap-1.5 shrink-0">
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                          Penjadwalan KBM &amp; Ujian
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1 leading-relaxed">
+                        Kelola pilihan preset jam cepat yang digunakan pada formulir Jadwal Ujian dan Jadwal Pelajaran (KBM) sekolah.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Preset Count Metric Chip */}
+                  <div className="hidden lg:flex items-center gap-2 self-start lg:self-center shrink-0">
+                    <div className="px-3.5 py-1.5 bg-indigo-50/70 border border-indigo-200/80 rounded-xl flex items-center gap-2 text-xs">
+                      <span className="text-indigo-600 font-medium">Preset Aktif:</span>
+                      <strong className="text-indigo-950 font-black text-sm">{timePresets.length}</strong>
+                      <span className="text-indigo-300">•</span>
+                      <span className="text-indigo-800 font-mono font-bold text-[11px]">
+                        {timePresets[0]?.startTime || "07:00"}–{timePresets[timePresets.length - 1]?.endTime || "16:00"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleResetPresets}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
-                    title="Kembalikan ke 5 preset standar sistem"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Reset Standar
-                  </button>
-                  {!isAddingPreset && !editingPresetId && (
+
+                {/* Bottom Row / Toolbar: Helper Info on Left + Action Buttons on Right */}
+                <div className="pt-3.5 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-50 text-amber-600 text-[11px] font-bold shrink-0">
+                      💡
+                    </span>
+                    <span className="line-clamp-1">
+                      Preset jam memudahkan guru dan admin saat menyusun jadwal pelajaran tanpa mengetik jam secara manual.
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 shrink-0 self-end md:self-auto">
                     <button
                       type="button"
-                      onClick={handleStartAddPreset}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4317CC] rounded-lg shadow-xs transition-colors cursor-pointer"
+                      onClick={handleResetPresets}
+                      className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                      title="Kembalikan ke 5 preset standar sistem"
                     >
-                      <Plus className="w-4 h-4" />
-                      Tambah Preset Baru
+                      <RotateCcw className="w-3.5 h-3.5 text-gray-400" />
+                      <span>Reset Standar</span>
                     </button>
-                  )}
+
+                    {!isAddingPreset && !editingPresetId && (
+                      <button
+                        type="button"
+                        onClick={handleStartAddPreset}
+                        className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-white" />
+                        <span>Tambah Preset Baru</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              {/* Main Content Card */}
+              <div className="bg-white p-6 md:p-8 rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-6">
 
               {/* Summary Stats Card */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
@@ -4225,7 +4471,8 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
           {/* ========================================================================= */}
           {/* 5. TAB PENGATURAN PEMBAYARAN SPP                                          */}

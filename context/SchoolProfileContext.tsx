@@ -261,7 +261,17 @@ export function SchoolProfileProvider({ children }: { children: ReactNode }) {
           await setDoc(doc(db, "settings", "school_profile"), merged, { merge: true });
         } catch (e) {}
 
-        // 3. Automatically sync location & radius into roles/attendance_config
+        // 3. Automatically sync location, radius, and address into roles/attendance_config and teacher config
+        const formattedCityProv = [
+          merged.city && !merged.address?.toLowerCase().includes(merged.city.toLowerCase()) ? merged.city : "",
+          merged.province && !merged.address?.toLowerCase().includes(merged.province.toLowerCase()) ? merged.province : "",
+          merged.postalCode && !merged.address?.includes(merged.postalCode) ? merged.postalCode : "",
+        ].filter(Boolean).join(", ");
+
+        const attendanceAddress = merged.address 
+          ? (formattedCityProv ? `${merged.address}, ${formattedCityProv}` : merged.address)
+          : merged.locationAddress || "Area Utama Sekolah";
+
         const attendancePayload = {
           schoolCenterLat: merged.latitude,
           schoolCenterLng: merged.longitude,
@@ -270,12 +280,37 @@ export function SchoolProfileProvider({ children }: { children: ReactNode }) {
           schoolLng: merged.longitude,
           gpsRadiusMeter: merged.radiusMeters,
           locationAddress: merged.locationAddress || merged.address,
+          address: attendanceAddress,
+          schoolAddress: attendanceAddress,
+          geofenceCenter: {
+            lat: merged.latitude,
+            lng: merged.longitude,
+            radiusMeters: merged.radiusMeters,
+            address: attendanceAddress,
+          },
           updatedAt: new Date().toISOString(),
           updatedBy: auth.currentUser?.email || "Admin",
         };
 
         try {
           await setDoc(doc(db, "roles", "attendance_config"), attendancePayload, { merge: true });
+        } catch (e) {}
+
+        // Also sync to teacher attendance config in Firestore
+        try {
+          await setDoc(
+            doc(db, "roles", "teacher_attendance_config"),
+            {
+              geofenceCenter: {
+                lat: merged.latitude,
+                lng: merged.longitude,
+                radiusMeters: merged.radiusMeters,
+                address: attendanceAddress,
+              },
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
         } catch (e) {}
 
         // 4. Update localStorage for instant offline hydration across pages
@@ -304,7 +339,7 @@ export function SchoolProfileProvider({ children }: { children: ReactNode }) {
                 lat: merged.latitude,
                 lng: merged.longitude,
                 radiusMeters: merged.radiusMeters,
-                address: merged.locationAddress || `${merged.schoolName} - Area Utama`,
+                address: attendanceAddress,
               },
             })
           );

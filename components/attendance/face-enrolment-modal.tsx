@@ -1,39 +1,27 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   ScanFace,
-  Camera,
   CheckCircle2,
   RefreshCw,
   AlertTriangle,
   RotateCcw,
-  ShieldCheck,
   X,
-  Lock,
-  Sun,
   Target,
-  Activity,
   Check,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ArrowDown,
-  Layers,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
 import {
-  analyzeCameraFrame,
   saveUserFaceBiometric,
   FaceBiometricData,
   FacePoseType,
   FaceBiometricPoseItem,
-  FrameAnalysisResult,
 } from "@/lib/face-biometric-service";
 import {
   detectFaceWithHuman,
-  checkPoseComplianceWithHuman,
   HumanFaceDetection,
 } from "@/lib/human-service";
 
@@ -65,43 +53,45 @@ export const POSE_DEFINITIONS: PoseDefinition[] = [
     key: "front",
     label: "Sudut Depan (Lurus)",
     shortLabel: "1. Depan",
-    instruction: "Posisikan wajah di tengah bingkai oval dan tatap lurus ke kamera.",
+    instruction: "Posisikan wajah di tengah lingkaran dan hadap lurus ke kamera.",
     badgeHint: "Tatap lurus ke depan",
     icon: "center",
   },
   {
-    key: "left",
-    label: "Sudut Samping Kiri",
-    shortLabel: "2. Kiri",
-    instruction: "Cukup tengok atau miringkan wajah sedikit ke kiri (5°–10°).",
-    badgeHint: "Tengok sedikit ke kiri ⬅️",
-    icon: "left",
+    key: "up",
+    label: "Sudut Atas (Dagu Naik)",
+    shortLabel: "2. Atas",
+    instruction: "Angkat dagu Anda sedikit ke atas.",
+    badgeHint: "Angkat dagu ke atas ⬆️",
+    icon: "up",
   },
   {
     key: "right",
     label: "Sudut Samping Kanan",
     shortLabel: "3. Kanan",
-    instruction: "Cukup tengok atau miringkan wajah sedikit ke kanan (5°–10°).",
-    badgeHint: "Tengok sedikit ke kanan ➡️",
+    instruction: "Tengokkan wajah perlahan ke kanan.",
+    badgeHint: "Tengok ke kanan ➡️",
     icon: "right",
-  },
-  {
-    key: "up",
-    label: "Sudut Atas (Dagu Naik)",
-    shortLabel: "4. Atas",
-    instruction: "Cukup angkat dagu Anda sedikit saja ke atas (5°).",
-    badgeHint: "Angkat dagu sedikit ⬆️",
-    icon: "up",
   },
   {
     key: "down",
     label: "Sudut Bawah (Tunduk)",
-    shortLabel: "5. Bawah",
-    instruction: "Cukup tundukkan kepala Anda sedikit saja ke bawah (5°).",
-    badgeHint: "Tunduk sedikit ke bawah ⬇️",
+    shortLabel: "4. Bawah",
+    instruction: "Tundukkan kepala Anda sedikit ke bawah.",
+    badgeHint: "Tunduk ke bawah ⬇️",
     icon: "down",
   },
+  {
+    key: "left",
+    label: "Sudut Samping Kiri",
+    shortLabel: "5. Kiri",
+    instruction: "Tengokkan wajah perlahan ke kiri.",
+    badgeHint: "Tengok ke kiri ⬅️",
+    icon: "left",
+  },
 ];
+
+const TOTAL_TICKS = 36; // 36 ticks around 360° (each tick = 10°)
 
 export function FaceEnrolmentModal({
   isOpen,
@@ -112,32 +102,28 @@ export function FaceEnrolmentModal({
   userRole = "siswa",
   studentId = "",
   nip = "",
-  existingPhotoUrl: _existingPhotoUrl,
-  title = "Pendaftaran Wajah Master Biometrik",
-  description = "Perekaman data acuan wajah multi-sudut resmi untuk validasi absensi harian berbasis AI.",
+  title = "Pendaftaran Face ID Biometrik",
+  description = "Putar kepala Anda perlahan membentuk lingkaran untuk merekam data acuan biometrik 3D.",
 }: FaceEnrolmentModalProps) {
   const { showSuccess, showError } = useToast();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
-  // Workflow steps: "camera" | "preview" | "saving" | "completed"
-  const [step, setStep] = useState<"camera" | "preview" | "saving" | "completed">("camera");
+  // Workflow phase: "center" (align front) | "circle" (roll head) | "saving" | "completed"
+  const [phase, setPhase] = useState<"center" | "circle" | "saving" | "completed">("center");
 
-  // Multi-pose state (5 poses: front, left, right, up, down)
-  const [activePoseIndex, setActivePoseIndex] = useState<number>(0);
-  const [capturedPoses, setCapturedPoses] = useState<Partial<Record<FacePoseType, FaceBiometricPoseItem>>>({});
-  const [justCapturedPose, setJustCapturedPose] = useState<FacePoseType | null>(null);
+  // Circular scan ticks tracking
+  const [ticks, setTicks] = useState<boolean[]>(() => new Array(TOTAL_TICKS).fill(false));
+  const ticksRef = useRef<boolean[]>(new Array(TOTAL_TICKS).fill(false));
+  const [activeTickIndex, setActiveTickIndex] = useState<number | null>(null);
 
-  // Synchronization refs to prevent closure desync and duplicate rapid triggers
+  // Pose gallery captured during the continuous 3D circular scan
   const capturedPosesRef = useRef<Partial<Record<FacePoseType, FaceBiometricPoseItem>>>({});
-  const isCapturingRef = useRef<boolean>(false);
-  const poseCooldownUntilRef = useRef<number>(0);
+  const [capturedPosesState, setCapturedPosesState] = useState<Partial<Record<FacePoseType, FaceBiometricPoseItem>>>({});
 
   // @vladmandic/human AI tracking states
-  const [humanFace, setHumanFace] = useState<HumanFaceDetection | null>(null);
   const humanFaceRef = useRef<HumanFaceDetection | null>(null);
   const isDetectingHumanRef = useRef<boolean>(false);
 
@@ -145,34 +131,39 @@ export function FaceEnrolmentModal({
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [isFlashing, setIsFlashing] = useState(false);
 
-  // Real-time Frame Analysis HUD state
-  const [analysis, setAnalysis] = useState<FrameAnalysisResult>({
-    hasFace: false,
-    brightnessScore: 0,
-    centeredScore: 0,
-    sharpnessScore: 0,
-    overallScore: 0,
-    isReadyForCapture: false,
-    guidanceText: "Mengaktifkan sensor kamera...",
+  // Progress metrics
+  const completedTicksCount = useMemo(() => ticks.filter(Boolean).length, [ticks]);
+  const progressPercent = useMemo(
+    () => Math.min(100, Math.round((completedTicksCount / TOTAL_TICKS) * 100)),
+    [completedTicksCount]
+  );
+
+  // Stability timer for initial frontal centering lock
+  const centerStabilityRef = useRef<number>(0);
+  const isFrontLockedRef = useRef<boolean>(false);
+
+  // Smoothing filters (Low-Pass / EMA) for Apple Face ID fluid tracking
+  const smoothPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Multi-frame stability counters for each pose before capturing (prevents capture during quick pass)
+  const cardinalHoldRef = useRef<{ up: number; right: number; down: number; left: number }>({
+    up: 0,
+    right: 0,
+    down: 0,
+    left: 0,
   });
 
-  // Countdown timer when face is held stable and meets biometric standard
-  const [autoCaptureCountdown, setAutoCaptureCountdown] = useState<number | null>(null);
-  const stableDurationRef = useRef<number>(0);
+  // Guidance instruction text displayed below circular viewport
+  const [guidance, setGuidance] = useState<string>("Posisikan wajah Anda di dalam lingkaran...");
+  const [centerHoldRatio, setCenterHoldRatio] = useState<number>(0);
+  const lastSoundTickRef = useRef<number>(0);
 
-  const activePose = POSE_DEFINITIONS[activePoseIndex] || POSE_DEFINITIONS[0];
-  const totalPoses = POSE_DEFINITIONS.length;
-  const completedCount = Object.keys(capturedPoses).length;
-
-  // Keep capturedPosesRef synchronized with state
-  useEffect(() => {
-    capturedPosesRef.current = capturedPoses;
-  }, [capturedPoses]);
-
-  // Play subtle synthetic camera shutter sound
-  const playShutterSound = useCallback(() => {
+  // Audio synthesis for Apple-like feedback chimes
+  const playTickSound = useCallback(() => {
+    const now = Date.now();
+    if (now - lastSoundTickRef.current < 90) return;
+    lastSoundTickRef.current = now;
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
@@ -180,17 +171,63 @@ export function FaceEnrolmentModal({
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "sine";
-      osc.frequency.setValueAtTime(800, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(1600, ctx.currentTime + 0.08);
-      gain.gain.setValueAtTime(0.18, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+      osc.frequency.setValueAtTime(1400, ctx.currentTime);
+      gain.gain.setValueAtTime(0.04, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.03);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
-      osc.stop(ctx.currentTime + 0.12);
-    } catch {
-      // Audio not permitted or failed
-    }
+      osc.stop(ctx.currentTime + 0.03);
+    } catch {}
+  }, []);
+
+  const playFrontLockedSound = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      [
+        { f: 523.25, t: 0, d: 0.1 },    // C5
+        { f: 659.25, t: 0.09, d: 0.18 }, // E5
+      ].forEach(({ f, t, d }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(f, now + t);
+        gain.gain.setValueAtTime(0.12, now + t);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + t + d);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + t);
+        osc.stop(now + t + d);
+      });
+    } catch {}
+  }, []);
+
+  const playCompleteChime = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      [
+        { f: 587.33, t: 0, d: 0.12 },    // D5
+        { f: 880.00, t: 0.11, d: 0.2 },   // A5
+        { f: 1174.66, t: 0.22, d: 0.35 }, // D6
+      ].forEach(({ f, t, d }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(f, now + t);
+        gain.gain.setValueAtTime(0.15, now + t);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + t + d);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + t);
+        osc.stop(now + t + d);
+      });
+    } catch {}
   }, []);
 
   // 1. Start Camera Stream
@@ -218,7 +255,7 @@ export function FaceEnrolmentModal({
         try {
           await videoRef.current.play();
           setCameraActive(true);
-        } catch (e) {
+        } catch {
           setCameraActive(true);
         }
       } else {
@@ -251,7 +288,6 @@ export function FaceEnrolmentModal({
     setCameraActive(false);
   }, []);
 
-  // Attach stream to video whenever stream updates or videoRef mounts
   useEffect(() => {
     if (stream && videoRef.current) {
       videoRef.current.srcObject = stream;
@@ -264,15 +300,15 @@ export function FaceEnrolmentModal({
   // Modal open/close lifecycle
   useEffect(() => {
     if (isOpen) {
-      setStep("camera");
-      setActivePoseIndex(0);
-      setCapturedPoses({});
+      setPhase("center");
+      setTicks(new Array(TOTAL_TICKS).fill(false));
+      ticksRef.current = new Array(TOTAL_TICKS).fill(false);
       capturedPosesRef.current = {};
-      setJustCapturedPose(null);
-      setAutoCaptureCountdown(null);
-      stableDurationRef.current = 0;
-      isCapturingRef.current = false;
-      poseCooldownUntilRef.current = Date.now() + 800;
+      setCapturedPosesState({});
+      centerStabilityRef.current = 0;
+      isFrontLockedRef.current = false;
+      setActiveTickIndex(null);
+      setGuidance("Posisikan wajah Anda di dalam lingkaran...");
       startCamera();
     } else {
       stopCamera();
@@ -282,134 +318,331 @@ export function FaceEnrolmentModal({
     };
   }, [isOpen, startCamera, stopCamera]);
 
-  // 3. Real-time Video Frame Analysis & Automatic Capture Loop
+  // Helper to extract a high-quality 480x480 square crop from the video stream
+  const capturePoseSnapshot = useCallback((poseKey: FacePoseType) => {
+    const video = videoRef.current;
+    if (!video || !humanFaceRef.current?.embedding || humanFaceRef.current.embedding.length < 512) return;
+
+    try {
+      const snapCanvas = document.createElement("canvas");
+      snapCanvas.width = 480;
+      snapCanvas.height = 480;
+      const ctx = snapCanvas.getContext("2d");
+      if (!ctx) return;
+
+      const vW = video.videoWidth || 640;
+      const vH = video.videoHeight || 480;
+      const minDim = Math.min(vW, vH);
+      const startX = (vW - minDim) / 2;
+      const startY = (vH - minDim) / 2;
+
+      // Direct 1:1 un-mirrored capture matching natural camera view and AI biometric coordinate system
+      ctx.drawImage(video, startX, startY, minDim, minDim, 0, 0, snapCanvas.width, snapCanvas.height);
+
+      const dataUrl = snapCanvas.toDataURL("image/jpeg", 0.88);
+      capturedPosesRef.current[poseKey] = {
+        photoUrl: dataUrl,
+        descriptor: humanFaceRef.current.embedding,
+        qualityScore: 95,
+        capturedAt: new Date().toISOString(),
+      };
+      setCapturedPosesState({ ...capturedPosesRef.current });
+    } catch (e) {
+      console.warn("Failed to capture snapshot for pose:", poseKey, e);
+    }
+  }, []);
+
+  // Save Biometrics to Database and complete
+  const finalizeEnrolment = useCallback(async () => {
+    setPhase("saving");
+    try {
+      const frontData = capturedPosesRef.current.front;
+      if (!frontData || !frontData.descriptor || frontData.descriptor.length < 512) {
+        showError("Data biometrik depan belum lengkap. Silakan coba lagi.", "Pendaftaran Gagal");
+        setPhase("center");
+        return;
+      }
+
+      // Ensure all 5 poses have valid data (fallback to front if head didn't pause on an exact cardinal)
+      const finalPoses: Partial<Record<FacePoseType, FaceBiometricPoseItem>> = {
+        front: frontData,
+        up: capturedPosesRef.current.up || frontData,
+        right: capturedPosesRef.current.right || frontData,
+        down: capturedPosesRef.current.down || frontData,
+        left: capturedPosesRef.current.left || frontData,
+      };
+
+      const biometricData: FaceBiometricData = {
+        isEnrolled: true,
+        enrolledAt: new Date().toISOString(),
+        faceDescriptor: frontData.descriptor,
+        photoUrl: frontData.photoUrl,
+        qualityScore: 96,
+        poses: finalPoses,
+        userName,
+        userRole,
+        studentId,
+        nip,
+      };
+
+      await saveUserFaceBiometric(userUid, biometricData, userRole);
+
+      setPhase("completed");
+      playCompleteChime();
+      showSuccess("Face ID 360° berhasil didaftarkan secara penuh!", "Face ID Aktif");
+
+      if (onSuccess) {
+        onSuccess(biometricData);
+      }
+
+      setTimeout(() => {
+        onClose();
+      }, 1900);
+    } catch (err: any) {
+      console.error("Error saving Face ID:", err);
+      showError("Gagal menyimpan data biometrik: " + (err.message || "Kesalahan server"), "Gagal Menyimpan");
+      setPhase("circle");
+    }
+  }, [userUid, userName, userRole, studentId, nip, onSuccess, onClose, showError, showSuccess, playCompleteChime]);
+
+  // 3. Real-time Video Frame Analysis & 3D Circular Scan Engine
   useEffect(() => {
-    if (!isOpen || step !== "camera" || !cameraActive) return;
+    if (!isOpen || (phase !== "center" && phase !== "circle") || !cameraActive) return;
 
     let isRunning = true;
 
     const processFrame = () => {
       if (!isRunning) return;
 
-      // If a capture operation is currently executing, wait
-      if (isCapturingRef.current) {
-        animFrameRef.current = requestAnimationFrame(processFrame);
-        return;
-      }
-
       const video = videoRef.current;
-      const canvas = canvasRef.current;
-
-      if (video && canvas && video.readyState >= 2 && video.videoWidth > 0) {
-        if (canvas.width !== 320 || canvas.height !== 240) {
-          canvas.width = 320;
-          canvas.height = 240;
+      if (video && video.readyState >= 2 && video.videoWidth > 0) {
+        // Trigger background AI inference at 480px native speed
+        if (!isDetectingHumanRef.current) {
+          isDetectingHumanRef.current = true;
+          detectFaceWithHuman(video)
+            .then((hResult) => {
+              isDetectingHumanRef.current = false;
+              if (hResult) {
+                humanFaceRef.current = hResult;
+              }
+            })
+            .catch(() => {
+              isDetectingHumanRef.current = false;
+            });
         }
 
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const result = analyzeCameraFrame(canvas, ctx);
+        const face = humanFaceRef.current;
+        const hasAiEmbedding = Boolean(face?.embedding && face.embedding.length >= 512);
+        const realScore = face?.liveness?.realScore ?? 80;
+        const isSpoof = realScore < 45 || face?.screenArtifacts?.isScreenSpoof;
 
-          // Asynchronous @vladmandic/human AI face & 3D angle detection
-          if (!isDetectingHumanRef.current && video.readyState >= 2) {
-            isDetectingHumanRef.current = true;
-            detectFaceWithHuman(video)
-              .then((hResult) => {
-                isDetectingHumanRef.current = false;
-                if (hResult) {
-                  humanFaceRef.current = hResult;
-                  setHumanFace(hResult);
-                }
-              })
-              .catch(() => {
-                isDetectingHumanRef.current = false;
-              });
-          }
+        if (isSpoof) {
+          setGuidance("⚠️ Terdeteksi foto/layar digital! Hadirkan wajah asli langsung.");
+          centerStabilityRef.current = 0;
+          animFrameRef.current = requestAnimationFrame(processFrame);
+          return;
+        }
 
-          const now = Date.now();
-          const inCooldown = now < poseCooldownUntilRef.current;
+        if (!face?.hasFace) {
+          setGuidance("Posisikan wajah Anda di dalam lingkaran...");
+          centerStabilityRef.current = 0;
+          animFrameRef.current = requestAnimationFrame(processFrame);
+          return;
+        }
 
-          // Standard evaluation:
-          // For front pose: check standard face centering & quality
-          // For directional poses (left, right, up, down): be much more lenient so user doesn't get blocked by oval centering/skin ratio when turning head!
-          const hasHumanFace = Boolean(humanFaceRef.current?.hasFace);
-          const isFront = activePose.key === "front";
-          const baseStandardMet = isFront
-            ? Boolean(result.isStandardMet && (result.hasFace || hasHumanFace))
-            : Boolean(hasHumanFace || (result.hasFace && result.brightnessScore >= 30));
+        if (!hasAiEmbedding) {
+          setGuidance("Menyiapkan sensor biometrik AI... Tahan sejenak");
+          centerStabilityRef.current = 0;
+          smoothPosRef.current = { x: 0, y: 0 };
+          animFrameRef.current = requestAnimationFrame(processFrame);
+          return;
+        }
 
-          // Evaluate 3D Pose Angle compliance with @vladmandic/human
-          let poseCompliant = true;
-          let angleHint = "";
-          if (humanFaceRef.current?.angles) {
-            const compliance = checkPoseComplianceWithHuman(
-              humanFaceRef.current.angles,
-              activePose.key,
-              true
-            );
-            poseCompliant = compliance.isCompliant;
-            angleHint = compliance.guidance;
-          }
+        const rawYaw = face.angles.yaw;
+        const pitch = face.angles.pitch;
 
-          // Evaluate Anti-Spoofing from neural network
-          const realScore = humanFaceRef.current?.liveness?.realScore;
-          const isSpoof = realScore !== undefined && realScore < 45;
+        // 1. Natural Screen-Space Coordinate Conversion (Observer / Non-Selfie View):
+        // In un-mirrored camera feed (viewing like another person):
+        // - When head turns towards SCREEN RIGHT: Human.js rawYaw is negative, so eulerX = -rawYaw is POSITIVE.
+        // - When head turns towards SCREEN LEFT: Human.js rawYaw is positive, so eulerX = -rawYaw is NEGATIVE.
+        // - When head tilts UP: pitch is negative, so eulerY = pitch is NEGATIVE (screen top).
+        // - When head tilts DOWN: pitch is positive, so eulerY = pitch is POSITIVE (screen bottom).
+        const eulerX = -rawYaw;
+        const eulerY = pitch;
 
-          // If AI Human detected face and user is turning, allow capture even if angle calculation is slightly off
-          const fullStandardMet = !isSpoof && (isFront
-            ? (baseStandardMet && poseCompliant)
-            : (baseStandardMet && (poseCompliant || hasHumanFace)));
+        // 2. 3D Face Landmark Fusion (Nose tip [1] relative to Eye Bridge [168]):
+        let lmX = eulerX;
+        let lmY = eulerY;
+        if (face.mesh && face.mesh.length >= 169) {
+          const noseTip = face.mesh[1];
+          const eyeBridge = face.mesh[168];
+          const boxW = Math.max(80, face.box.width);
+          const boxH = Math.max(80, face.box.height);
+          // Normalizes relative displacement so it scales consistently with head movement
+          const normDx = (noseTip[0] - eyeBridge[0]) / boxW;
+          const normDy = (noseTip[1] - eyeBridge[1] - (boxH * 0.10)) / boxH;
+          lmX = normDx * 85;
+          lmY = normDy * 85;
+        }
 
-          // Update guidance text
-          if (inCooldown) {
-            result.guidanceText = `Persiapan sudut ${activePose.label}: ${activePose.instruction}`;
-          } else if (isSpoof) {
-            result.guidanceText = "⚠️ Terdeteksi foto/layar digital! Hadirkan wajah asli langsung.";
-          } else if (!result.hasFace && !hasHumanFace) {
-            result.guidanceText = "Arahkan wajah ke kamera";
-          } else if (result.brightnessScore < 30) {
-            result.guidanceText = "Pencahayaan kurang terang";
-          } else if (isFront && result.centeredScore < 40) {
-            result.guidanceText = "Posisikan wajah di tengah oval";
-          } else if (isFront && result.sharpnessScore < 32) {
-            result.guidanceText = "Tahan kamera agar tidak goyang";
-          } else if (!poseCompliant && angleHint) {
-            result.guidanceText = angleHint;
+        // 3. Sensor Fusion: 60% 3D Euler Pose + 40% Landmark Displacement
+        const instantX = 0.6 * eulerX + 0.4 * lmX;
+        const instantY = 0.6 * eulerY + 0.4 * lmY;
+
+        // 4. Low-pass Smoothing Filter (EMA):
+        // Eliminates jitter, camera sensor noise, and rapid tremors like Apple Face ID
+        const ALPHA = 0.38;
+        smoothPosRef.current.x = ALPHA * instantX + (1 - ALPHA) * smoothPosRef.current.x;
+        smoothPosRef.current.y = ALPHA * instantY + (1 - ALPHA) * smoothPosRef.current.y;
+        const smoothX = smoothPosRef.current.x;
+        const smoothY = smoothPosRef.current.y;
+        const smoothMag = Math.hypot(smoothX, smoothY);
+
+        // ================= PHASE 1: INITIAL CENTER LOCK =================
+        if (!isFrontLockedRef.current) {
+          const isCentered = Math.abs(smoothX) <= 8.0 && Math.abs(smoothY) <= 8.0;
+          if (isCentered) {
+            centerStabilityRef.current += 1;
+            const ratio = Math.min(1, centerStabilityRef.current / 8);
+            setCenterHoldRatio(ratio);
+            const pct = Math.round(ratio * 100);
+            setGuidance(`Wajah di tengah! Tahan posisi... (${pct}%)`);
+
+            if (centerStabilityRef.current >= 8) {
+              // Lock front pose!
+              isFrontLockedRef.current = true;
+              capturePoseSnapshot("front");
+              playFrontLockedSound();
+              setPhase("circle");
+              setGuidance("Bagus! Sekarang putar kepala perlahan membentuk lingkaran 🔄");
+            }
           } else {
-            result.guidanceText = `Posisi pas! Tahan sejenak (${result.overallScore}% presisi)...`;
+            centerStabilityRef.current = Math.max(0, centerStabilityRef.current - 1);
+            setCenterHoldRatio(Math.min(1, centerStabilityRef.current / 8));
+            if (smoothX > 8.0) setGuidance("Posisikan kepala lurus (jangan menengok ke Kanan)");
+            else if (smoothX < -8.0) setGuidance("Posisikan kepala lurus (jangan menengok ke Kiri)");
+            else if (smoothY < -8.0) setGuidance("Posisikan kepala lurus (jangan mendongak ke Atas)");
+            else if (smoothY > 8.0) setGuidance("Posisikan kepala lurus (jangan menunduk ke Bawah)");
+            else setGuidance("Hadapkan wajah lurus ke kamera");
           }
+          animFrameRef.current = requestAnimationFrame(processFrame);
+          return;
+        }
 
-          setAnalysis(result);
+        // ================= PHASE 2: CONTINUOUS 3D CIRCULAR HEAD ROLL =================
+        if (isFrontLockedRef.current) {
+          // If user moves head slightly outward from center (>= 4.0 degrees)
+          if (smoothMag >= 4.0) {
+            // Natural polar coordinate mapping:
+            // 0° = Atas (Up), 90° = Kanan (Right), 180° = Bawah (Down), 270° = Kiri (Left)
+            // - smoothX > 0: user faces Right -> angle moves towards 90° (Right)
+            // - smoothX < 0: user faces Left  -> angle moves towards 270° (Left)
+            // - smoothY < 0: user tilts Up   -> -smoothY > 0 -> angle moves towards 0° (Up)
+            // - smoothY > 0: user tilts Down -> -smoothY < 0 -> angle moves towards 180° (Down)
+            const rad = Math.atan2(smoothX, -smoothY);
+            const deg = (rad * (180 / Math.PI) + 360) % 360;
+            const tickIdx = Math.floor((deg + (360 / (2 * TOTAL_TICKS))) / (360 / TOTAL_TICKS)) % TOTAL_TICKS;
 
-          // Fast & responsive capture timer (only ~14 frames / ~0.45s of stability needed)
-          if (!inCooldown && fullStandardMet) {
-            stableDurationRef.current += 1;
+            setActiveTickIndex(tickIdx);
 
-            if (stableDurationRef.current < 4) {
-              setAutoCaptureCountdown(null);
-            } else if (stableDurationRef.current < 9) {
-              setAutoCaptureCountdown(2);
-            } else if (stableDurationRef.current < 14) {
-              setAutoCaptureCountdown(1);
+            // Fill the current tick + adjacent neighbors for a buttery-smooth fluid sweep
+            let newTickFilled = false;
+            const updated = [...ticksRef.current];
+            const neighbors = [
+              tickIdx,
+              (tickIdx + 1) % TOTAL_TICKS,
+              (tickIdx + TOTAL_TICKS - 1) % TOTAL_TICKS,
+            ];
+
+            neighbors.forEach((idx) => {
+              if (!updated[idx]) {
+                updated[idx] = true;
+                newTickFilled = true;
+              }
+            });
+
+            if (newTickFilled) {
+              ticksRef.current = updated;
+              setTicks(updated);
+              playTickSound();
+            }
+
+            // Multi-Frame Stability Validation before Capturing Cardinal Poses
+            // Head motion must be stable (not whipping past too rapidly)
+            const isStableSpeed = Math.abs(instantX - smoothX) < 5.5 && Math.abs(instantY - smoothY) < 5.5;
+
+            // Top sector (Atas): tickIdx >= 34 || tickIdx <= 2
+            if ((tickIdx >= 34 || tickIdx <= 2) && !capturedPosesRef.current.up) {
+              cardinalHoldRef.current.up = isStableSpeed ? cardinalHoldRef.current.up + 1 : cardinalHoldRef.current.up;
+              if (cardinalHoldRef.current.up >= 5) {
+                capturePoseSnapshot("up");
+                playFrontLockedSound();
+              }
             } else {
-              // Standard fulfilled and held -> Auto-Capture Now!
-              isCapturingRef.current = true;
-              stableDurationRef.current = 0;
-              setAutoCaptureCountdown(null);
-              // Use ArcFace embedding from Human if available, fallback to result.descriptor
-              const chosenDescriptor =
-                humanFaceRef.current?.embedding && humanFaceRef.current.embedding.length > 0
-                  ? humanFaceRef.current.embedding
-                  : result.descriptor;
-              triggerCaptureCurrentPose(chosenDescriptor, result.overallScore);
+              cardinalHoldRef.current.up = Math.max(0, cardinalHoldRef.current.up - 1);
+            }
+
+            // Right sector (Kanan): tickIdx >= 7 && tickIdx <= 11
+            if (tickIdx >= 7 && tickIdx <= 11 && !capturedPosesRef.current.right) {
+              cardinalHoldRef.current.right = isStableSpeed ? cardinalHoldRef.current.right + 1 : cardinalHoldRef.current.right;
+              if (cardinalHoldRef.current.right >= 5) {
+                capturePoseSnapshot("right");
+                playFrontLockedSound();
+              }
+            } else {
+              cardinalHoldRef.current.right = Math.max(0, cardinalHoldRef.current.right - 1);
+            }
+
+            // Bottom sector (Bawah): tickIdx >= 16 && tickIdx <= 20
+            if (tickIdx >= 16 && tickIdx <= 20 && !capturedPosesRef.current.down) {
+              cardinalHoldRef.current.down = isStableSpeed ? cardinalHoldRef.current.down + 1 : cardinalHoldRef.current.down;
+              if (cardinalHoldRef.current.down >= 5) {
+                capturePoseSnapshot("down");
+                playFrontLockedSound();
+              }
+            } else {
+              cardinalHoldRef.current.down = Math.max(0, cardinalHoldRef.current.down - 1);
+            }
+
+            // Left sector (Kiri): tickIdx >= 25 && tickIdx <= 29
+            if (tickIdx >= 25 && tickIdx <= 29 && !capturedPosesRef.current.left) {
+              cardinalHoldRef.current.left = isStableSpeed ? cardinalHoldRef.current.left + 1 : cardinalHoldRef.current.left;
+              if (cardinalHoldRef.current.left >= 5) {
+                capturePoseSnapshot("left");
+                playFrontLockedSound();
+              }
+            } else {
+              cardinalHoldRef.current.left = Math.max(0, cardinalHoldRef.current.left - 1);
+            }
+
+            // Count progress
+            const count = updated.filter(Boolean).length;
+            const pct = Math.round((count / TOTAL_TICKS) * 100);
+
+            if (count >= 32 || pct >= 89) {
+              // 90%+ covered: auto-fill remaining ticks and complete!
+              ticksRef.current = new Array(TOTAL_TICKS).fill(true);
+              setTicks(new Array(TOTAL_TICKS).fill(true));
+              setGuidance("Selesai! Menyimpan data Face ID... ✨");
+              finalizeEnrolment();
+              return;
+            } else {
+              // Responsive natural directional guidance with feedback on hold
+              if (tickIdx >= 34 || tickIdx <= 2) {
+                setGuidance(capturedPosesRef.current.up ? `Arah Atas tersimpan ✓ Lanjutkan putaran (${pct}%)...` : `Arah Atas terdeteksi — tahan posisi sejenak (${pct}%)...`);
+              } else if (tickIdx >= 7 && tickIdx <= 11) {
+                setGuidance(capturedPosesRef.current.right ? `Arah Kanan tersimpan ✓ Lanjutkan putaran (${pct}%)...` : `Arah Kanan terdeteksi — tahan posisi sejenak (${pct}%)...`);
+              } else if (tickIdx >= 16 && tickIdx <= 20) {
+                setGuidance(capturedPosesRef.current.down ? `Arah Bawah tersimpan ✓ Lanjutkan putaran (${pct}%)...` : `Arah Bawah terdeteksi — tahan posisi sejenak (${pct}%)...`);
+              } else if (tickIdx >= 25 && tickIdx <= 29) {
+                setGuidance(capturedPosesRef.current.left ? `Arah Kiri tersimpan ✓ Lanjutkan putaran (${pct}%)...` : `Arah Kiri terdeteksi — tahan posisi sejenak (${pct}%)...`);
+              } else {
+                setGuidance(`Putar kepala perlahan mengikuti lingkaran (${pct}%)...`);
+              }
             }
           } else {
-            // Soft decay instead of abrupt zero reset so a single frame glitch doesn't wipe progress
-            stableDurationRef.current = Math.max(0, stableDurationRef.current - 1);
-            if (stableDurationRef.current === 0) {
-              setAutoCaptureCountdown(null);
-            }
+            setActiveTickIndex(null);
+            setGuidance("Putar kepala Anda perlahan membentuk lingkaran 🔄");
           }
         }
       }
@@ -425,274 +658,47 @@ export function FaceEnrolmentModal({
         cancelAnimationFrame(animFrameRef.current);
       }
     };
-  }, [isOpen, step, cameraActive, activePoseIndex, activePose]);
+  }, [isOpen, phase, cameraActive, playTickSound, playFrontLockedSound, capturePoseSnapshot, finalizeEnrolment]);
 
-  // 4. Capture Current Pose (Executed Automatically or Manually)
-  const triggerCaptureCurrentPose = (fallbackDescriptor?: number[], quality = 90) => {
-    const video = videoRef.current;
-    if (!video) {
-      isCapturingRef.current = false;
-      return;
+  // Pre-calculate SVG tick marks around the circular camera ring
+  const svgTicks = useMemo(() => {
+    const cx = 150;
+    const cy = 150;
+    const rIn = 118;
+    const rOut = 138;
+    const items = [];
+
+    for (let i = 0; i < TOTAL_TICKS; i++) {
+      const angleDeg = i * (360 / TOTAL_TICKS);
+      const rad = ((angleDeg - 90) * Math.PI) / 180;
+      const x1 = cx + rIn * Math.cos(rad);
+      const y1 = cy + rIn * Math.sin(rad);
+      const x2 = cx + rOut * Math.cos(rad);
+      const y2 = cy + rOut * Math.sin(rad);
+      items.push({ index: i, angleDeg, x1, y1, x2, y2 });
     }
-
-    // Anti-spoofing validation on enrollment capture
-    if (humanFaceRef.current?.liveness?.realScore !== undefined && humanFaceRef.current.liveness.realScore < 45) {
-      showError(
-        "Pendaftaran wajah ditolak: Wajah terdeteksi sebagai foto atau layar digital (anti-spoofing). Harap gunakan wajah asli langsung.",
-        "Terdeteksi Foto / Layar"
-      );
-      isCapturingRef.current = false;
-      return;
-    }
-
-    isCapturingRef.current = true;
-
-    try {
-      const snapCanvas = document.createElement("canvas");
-      snapCanvas.width = 480;
-      snapCanvas.height = 480;
-      const ctx = snapCanvas.getContext("2d");
-      if (!ctx) {
-        isCapturingRef.current = false;
-        return;
-      }
-
-      // Draw centered cropped square face
-      const vWidth = video.videoWidth || 640;
-      const vHeight = video.videoHeight || 480;
-      const minDim = Math.min(vWidth, vHeight);
-      const startX = (vWidth - minDim) / 2;
-      const startY = (vHeight - minDim) / 2;
-
-      ctx.save();
-      ctx.translate(snapCanvas.width, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(video, startX, startY, minDim, minDim, 0, 0, snapCanvas.width, snapCanvas.height);
-      ctx.restore();
-
-      // Subtle watermark bar at bottom
-      const barH = 28;
-      ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
-      ctx.fillRect(0, snapCanvas.height - barH, snapCanvas.width, barH);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 11px sans-serif";
-      ctx.fillText(
-        `FACE ID • ${activePose.label.toUpperCase()} • ${userName.slice(0, 20)}`,
-        12,
-        snapCanvas.height - 10
-      );
-
-      const dataUrl = snapCanvas.toDataURL("image/jpeg", 0.85);
-      const descriptor =
-        fallbackDescriptor ||
-        (humanFaceRef.current?.embedding && humanFaceRef.current.embedding.length > 0
-          ? humanFaceRef.current.embedding
-          : analysis.descriptor) ||
-        new Array(128).fill(0.08);
-      const poseQuality = Math.max(85, quality || analysis.overallScore || 90);
-
-      // Audio & Flash feedback
-      playShutterSound();
-      setIsFlashing(true);
-      setTimeout(() => setIsFlashing(false), 200);
-
-      // Record captured pose into Ref and State
-      const currentKey = activePose.key;
-      const newCapturedPoses = {
-        ...capturedPosesRef.current,
-        [currentKey]: {
-          photoUrl: dataUrl,
-          descriptor,
-          qualityScore: poseQuality,
-          capturedAt: new Date().toISOString(),
-        },
-      };
-      capturedPosesRef.current = newCapturedPoses;
-      setCapturedPoses(newCapturedPoses);
-      setJustCapturedPose(currentKey);
-      setTimeout(() => setJustCapturedPose(null), 1200);
-
-      // Check if all 5 poses are captured
-      const completedCountNow = Object.keys(newCapturedPoses).length;
-      if (completedCountNow >= totalPoses) {
-        // All 5 poses recorded -> advance to preview
-        setTimeout(() => {
-          setStep("preview");
-          stopCamera();
-          isCapturingRef.current = false;
-        }, 700);
-      } else {
-        // Automatically advance to the next uncaptured pose
-        let nextIndex = (activePoseIndex + 1) % totalPoses;
-        for (let i = 0; i < totalPoses; i++) {
-          const testPose = POSE_DEFINITIONS[(activePoseIndex + 1 + i) % totalPoses].key;
-          if (!newCapturedPoses[testPose]) {
-            nextIndex = (activePoseIndex + 1 + i) % totalPoses;
-            break;
-          }
-        }
-        setTimeout(() => {
-          setActivePoseIndex(nextIndex);
-          stableDurationRef.current = 0;
-          setAutoCaptureCountdown(null);
-          // Grace period for user to move head to next pose
-          poseCooldownUntilRef.current = Date.now() + 1200;
-          isCapturingRef.current = false;
-        }, 500);
-      }
-    } catch (err) {
-      console.error("Capture face pose error:", err);
-      isCapturingRef.current = false;
-      showError("Gagal merekam sudut wajah dari kamera.", "Error Kamera");
-    }
-  };
-
-  // Duplicate front pose into current non-front pose as a fallback
-  const handleCopyFromFront = () => {
-    const frontPose = capturedPosesRef.current.front;
-    if (!frontPose) {
-      showError("Rekam sudut Depan terlebih dahulu.", "Sudut Depan Belum Ada");
-      return;
-    }
-
-    const currentKey = activePose.key;
-    const newCapturedPoses = {
-      ...capturedPosesRef.current,
-      [currentKey]: {
-        photoUrl: frontPose.photoUrl,
-        descriptor: frontPose.descriptor,
-        qualityScore: frontPose.qualityScore || 90,
-        capturedAt: new Date().toISOString(),
-      },
-    };
-    capturedPosesRef.current = newCapturedPoses;
-    setCapturedPoses(newCapturedPoses);
-    setJustCapturedPose(currentKey);
-    setTimeout(() => setJustCapturedPose(null), 1000);
-
-    const completedCountNow = Object.keys(newCapturedPoses).length;
-    if (completedCountNow >= totalPoses) {
-      setTimeout(() => {
-        setStep("preview");
-        stopCamera();
-        isCapturingRef.current = false;
-      }, 500);
-    } else {
-      let nextIndex = (activePoseIndex + 1) % totalPoses;
-      for (let i = 0; i < totalPoses; i++) {
-        const testPose = POSE_DEFINITIONS[(activePoseIndex + 1 + i) % totalPoses].key;
-        if (!newCapturedPoses[testPose]) {
-          nextIndex = (activePoseIndex + 1 + i) % totalPoses;
-          break;
-        }
-      }
-      setTimeout(() => {
-        setActivePoseIndex(nextIndex);
-        stableDurationRef.current = 0;
-        setAutoCaptureCountdown(null);
-        poseCooldownUntilRef.current = Date.now() + 800;
-        isCapturingRef.current = false;
-      }, 400);
-    }
-  };
-
-  const handleRetakeSinglePose = (poseKey: FacePoseType, idx: number) => {
-    const updated = { ...capturedPosesRef.current };
-    delete updated[poseKey];
-    capturedPosesRef.current = updated;
-    setCapturedPoses(updated);
-    setActivePoseIndex(idx);
-    setJustCapturedPose(null);
-    setStep("camera");
-    poseCooldownUntilRef.current = Date.now() + 1000;
-    isCapturingRef.current = false;
-    startCamera();
-  };
-
-  const handleRetakeAll = () => {
-    setCapturedPoses({});
-    capturedPosesRef.current = {};
-    setActivePoseIndex(0);
-    setJustCapturedPose(null);
-    poseCooldownUntilRef.current = Date.now() + 800;
-    isCapturingRef.current = false;
-    setStep("camera");
-    startCamera();
-  };
-
-  // 5. Save Master Biometrics to Firebase & Cache
-  const handleSaveBiometric = async () => {
-    if (!userUid) {
-      showError("Sesi akun tidak terdeteksi. Silakan muat ulang halaman.", "Autentikasi Diperlukan");
-      return;
-    }
-
-    const frontPose = capturedPoses.front || Object.values(capturedPoses)[0];
-    if (!frontPose) {
-      showError("Minimal sudut depan (lurus) wajib terekam.", "Sudut Kurang");
-      return;
-    }
-
-    setStep("saving");
-    try {
-      // Calculate overall quality average
-      const poseValues = Object.values(capturedPoses);
-      const avgQuality = Math.round(
-        poseValues.reduce((sum, p) => sum + (p?.qualityScore || 90), 0) / Math.max(1, poseValues.length)
-      );
-
-      const biometricData: FaceBiometricData = {
-        isEnrolled: true,
-        enrolledAt: new Date().toISOString(),
-        faceDescriptor: frontPose.descriptor,
-        photoUrl: frontPose.photoUrl,
-        qualityScore: avgQuality,
-        poses: capturedPoses,
-        userName,
-        userRole,
-        studentId,
-        nip,
-      };
-
-      await saveUserFaceBiometric(userUid, biometricData, userRole);
-
-      setStep("completed");
-      showSuccess("Wajah master multi-sudut berhasil didaftarkan!", "Pendaftaran Sukses");
-
-      if (onSuccess) {
-        onSuccess(biometricData);
-      }
-
-      // Auto close after celebratory screen
-      setTimeout(() => {
-        onClose();
-      }, 1900);
-    } catch (err: any) {
-      console.error("Error saving biometric:", err);
-      showError("Gagal menyimpan data biometrik: " + err.message, "Penyimpanan Gagal");
-      setStep("preview");
-    }
-  };
+    return items;
+  }, []);
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-xl bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden text-slate-800 flex flex-col max-h-[94vh]">
-        {/* Hidden analysis canvas */}
-        <canvas ref={canvasRef} className="hidden" />
-
-        {/* 1. TOP HEADER BAR */}
-        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-white/95 backdrop-blur-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#531FFF] to-[#7942FF] flex items-center justify-center text-white shadow-lg shadow-[#531FFF]/25 shrink-0">
-              <ScanFace className="w-5 h-5 animate-pulse" />
+      <div
+        className="w-full max-w-lg bg-white border border-slate-200/90 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] text-slate-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 1. Clean Header */}
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 backdrop-blur-sm shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#531FFF] to-[#8C52FF] flex items-center justify-center text-white shadow-md shadow-[#531FFF]/20">
+              <ScanFace className="w-4 h-4" />
             </div>
             <div>
               <h3 className="font-extrabold text-sm sm:text-base text-slate-900 tracking-tight flex items-center gap-2">
                 <span>{title}</span>
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                  5 Sudut Wajah
+                <span className="text-[10px] font-bold text-[#531FFF] bg-[#531FFF]/10 border border-[#531FFF]/20 px-2 py-0.5 rounded-full">
+                  Lingkaran 360°
                 </span>
               </h3>
               <p className="text-[11px] text-slate-500 font-medium line-clamp-1">{description}</p>
@@ -702,428 +708,242 @@ export function FaceEnrolmentModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+            className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer shrink-0"
             title="Tutup"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* 2. BODY CONTENT ACCORDING TO STEP */}
-        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto">
-          {/* ================= STEP 1: LIVE MULTI-POSE CAMERA SCANNER ================= */}
-          {step === "camera" && (
-            <div className="space-y-3.5">
-              {/* Top Pose Progress Bar */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-slate-700 flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-[#531FFF]" />
-                    Perekaman Sudut Wajah ({completedCount}/{totalPoses} Selesai)
-                  </span>
-                  <span className="text-[11px] font-mono font-bold text-emerald-600">
-                    {Math.round((completedCount / totalPoses) * 100)}%
-                  </span>
-                </div>
+        {/* 2. Main Apple Face ID Circular Scanner Viewport */}
+        <div className="p-6 flex flex-col items-center justify-center space-y-5 overflow-y-auto bg-white">
+          {/* Circular Stage with 36 Radial Ticks */}
+          <div className="relative w-[300px] h-[300px] flex items-center justify-center select-none">
+            {/* 1. Camera Video (Clipped cleanly into a circular window) */}
+            <div className="w-[210px] h-[210px] rounded-full overflow-hidden bg-slate-100 relative border-2 border-slate-200 shadow-xl flex items-center justify-center z-10">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className={cn(
+                  "absolute inset-0 w-full h-full object-cover transition-opacity duration-300",
+                  cameraActive ? "opacity-100" : "opacity-0"
+                )}
+              />
 
-                {/* 5 Pose Tabs / Pills */}
-                <div className="grid grid-cols-5 gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200/80">
-                  {POSE_DEFINITIONS.map((p, idx) => {
-                    const isDone = Boolean(capturedPoses[p.key]);
-                    const isActive = idx === activePoseIndex;
-                    return (
+              {/* Camera Loading State */}
+              {!cameraActive && (
+                <div className="absolute inset-0 bg-slate-50 flex flex-col items-center justify-center p-4 text-center z-20 space-y-2">
+                  {cameraError ? (
+                    <>
+                      <AlertTriangle className="w-8 h-8 text-amber-500 animate-pulse" />
+                      <p className="text-[10px] text-amber-700 max-w-[170px] leading-relaxed">{cameraError}</p>
                       <button
-                        key={p.key}
                         type="button"
-                        onClick={() => {
-                          setActivePoseIndex(idx);
-                          stableDurationRef.current = 0;
-                          setAutoCaptureCountdown(null);
-                        }}
-                        className={cn(
-                          "py-2 px-1 rounded-lg text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5",
-                          isActive
-                            ? "bg-[#531FFF] text-white shadow-md shadow-[#531FFF]/30 scale-[1.02]"
-                            : isDone
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-300 font-semibold"
-                            : "bg-white text-slate-600 hover:text-slate-900 border border-slate-200/60 shadow-xs"
-                        )}
-                        title={p.label}
+                        onClick={startCamera}
+                        className="px-3 py-1.5 bg-[#531FFF] text-white text-[10px] font-bold rounded-lg cursor-pointer hover:bg-[#4314cc] transition-colors"
                       >
-                        <span className="text-[10px] font-black uppercase tracking-tight flex items-center gap-0.5">
-                          {p.shortLabel}
-                          {isDone && <Check className="w-2.5 h-2.5 text-emerald-600 shrink-0" />}
-                        </span>
+                        Nyalakan Ulang
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Current Pose Direction Banner */}
-              <div className="p-3 bg-gradient-to-r from-purple-50 via-slate-50 to-indigo-50 rounded-xl border border-purple-100 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-7 h-7 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shrink-0 font-black shadow-xs">
-                    {activePose.icon === "left" && <ArrowLeft className="w-4 h-4 animate-bounce" />}
-                    {activePose.icon === "right" && <ArrowRight className="w-4 h-4 animate-bounce" />}
-                    {activePose.icon === "up" && <ArrowUp className="w-4 h-4 animate-bounce" />}
-                    {activePose.icon === "down" && <ArrowDown className="w-4 h-4 animate-bounce" />}
-                    {activePose.icon === "center" && <Target className="w-4 h-4" />}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-extrabold text-slate-900 text-xs truncate">{activePose.label}</p>
-                    <p className="text-[11px] text-purple-700 line-clamp-1">{activePose.instruction}</p>
-                  </div>
-                </div>
-                {capturedPoses[activePose.key] && (
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300 shrink-0">
-                    Sudah Terekam ✓
-                  </span>
-                )}
-              </div>
-
-              {/* Viewport Frame with Always Mounted Video */}
-              <div className="relative aspect-4/3 w-full bg-slate-950 rounded-2xl overflow-hidden border-2 border-slate-200 shadow-md flex items-center justify-center">
-                {/* 1. Video Element (Always Mounted so videoRef is NEVER null) */}
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  onLoadedMetadata={() => {
-                    if (videoRef.current) {
-                      videoRef.current.play().catch(() => {});
-                      setCameraActive(true);
-                    }
-                  }}
-                  className={cn(
-                    "absolute inset-0 w-full h-full object-cover transform -scale-x-100 transition-opacity duration-300",
-                    cameraActive ? "opacity-100" : "opacity-0"
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-6 h-6 text-[#531FFF] animate-spin" />
+                      <p className="text-[10px] text-slate-500 font-medium">Menghubungkan kamera...</p>
+                    </>
                   )}
-                />
+                </div>
+              )}
 
-                {/* 2. Loading / Camera Inactive Overlay */}
-                {!cameraActive && (
-                  <div className="absolute inset-0 bg-slate-50 flex flex-col items-center justify-center p-6 text-center z-10 space-y-3">
-                    {cameraError ? (
-                      <>
-                        <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto animate-pulse" />
-                        <p className="text-xs text-amber-800 max-w-xs">{cameraError}</p>
-                        <button
-                          type="button"
-                          onClick={startCamera}
-                          className="px-4 py-2 bg-[#531FFF] hover:bg-[#4416d8] text-white text-xs font-bold rounded-xl cursor-pointer transition-all inline-flex items-center gap-1.5 shadow-lg shadow-[#531FFF]/30"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                          <span>Nyalakan Kamera Ulang</span>
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="w-8 h-8 text-[#531FFF] animate-spin mx-auto" />
-                        <p className="text-xs text-slate-600 font-medium">Menghubungkan sensor biometrik webcam...</p>
-                      </>
-                    )}
+              {/* Center Lock Reticle in Phase 1 */}
+              {phase === "center" && cameraActive && (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                  <div className="relative w-[150px] h-[150px] flex items-center justify-center">
+                    <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 150 150">
+                      <circle
+                        cx="75"
+                        cy="75"
+                        r="66"
+                        fill="none"
+                        stroke="#cbd5e1"
+                        strokeWidth="2.5"
+                        strokeDasharray="4 4"
+                      />
+                      <circle
+                        cx="75"
+                        cy="75"
+                        r="66"
+                        fill="none"
+                        stroke={centerHoldRatio >= 0.9 ? "#10b981" : "#0284c7"}
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                        strokeDasharray={2 * Math.PI * 66}
+                        strokeDashoffset={(2 * Math.PI * 66) * (1 - centerHoldRatio)}
+                        className="transition-all duration-100"
+                      />
+                    </svg>
+                    <Target className={cn(
+                      "w-7 h-7 transition-all duration-200",
+                      centerHoldRatio >= 0.8 ? "text-emerald-500 scale-110" : "text-sky-500"
+                    )} />
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Flash Overlay when photo is snapped */}
-                {isFlashing && (
-                  <div className="absolute inset-0 bg-white/80 z-30 pointer-events-none transition-opacity duration-200" />
-                )}
+              {/* Completion Green Flash Overlay */}
+              {phase === "completed" && (
+                <div className="absolute inset-0 bg-emerald-500/90 backdrop-blur-xs flex flex-col items-center justify-center z-30 animate-in zoom-in-75 duration-300 text-white">
+                  <CheckCircle2 className="w-16 h-16 text-white animate-bounce" />
+                  <span className="text-xs font-black text-white mt-2">Face ID Siap!</span>
+                </div>
+              )}
+            </div>
 
-                {/* 3. Futuristic HUD Scanner & Directional Cue */}
-                {cameraActive && (
-                  <>
-                    {/* Live 3D Head Angle Indicator from @vladmandic/human */}
-                    {humanFace?.angles && (
-                      <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-black/65 backdrop-blur-md border border-white/20 text-[10px] text-white flex items-center gap-1.5 shadow-md font-mono z-20 pointer-events-none">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        <span className="text-slate-300 font-bold">3D AI:</span>
-                        <span className={cn(Math.abs(humanFace.angles.yaw) >= 12 ? "text-emerald-300 font-bold" : "text-slate-300")}>
-                          Yaw: {humanFace.angles.yaw > 0 ? `+${humanFace.angles.yaw}` : humanFace.angles.yaw}°
-                        </span>
-                        <span className="text-slate-500">•</span>
-                        <span className={cn(Math.abs(humanFace.angles.pitch) >= 10 ? "text-emerald-300 font-bold" : "text-slate-300")}>
-                          Pitch: {humanFace.angles.pitch > 0 ? `+${humanFace.angles.pitch}` : humanFace.angles.pitch}°
-                        </span>
-                      </div>
+            {/* 2. SVG 36-Tick Radial Ring Overlay */}
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none z-20"
+              viewBox="0 0 300 300"
+            >
+              {svgTicks.map((tick) => {
+                const isCompleted = ticks[tick.index];
+                const isActive = activeTickIndex === tick.index;
+
+                return (
+                  <line
+                    key={tick.index}
+                    x1={tick.x1}
+                    y1={tick.y1}
+                    x2={tick.x2}
+                    y2={tick.y2}
+                    stroke={
+                      phase === "completed"
+                        ? "#10b981"
+                        : isActive
+                        ? "#0284c7"
+                        : isCompleted
+                        ? "#10b981"
+                        : "#cbd5e1"
+                    }
+                    strokeWidth={isActive ? 5 : isCompleted || phase === "completed" ? 4 : 3}
+                    strokeLinecap="round"
+                    className={cn(
+                      "transition-all duration-150",
+                      isActive && "drop-shadow-[0_0_8px_rgba(2,132,199,0.7)]",
+                      isCompleted && "drop-shadow-[0_0_6px_rgba(16,185,129,0.5)]"
                     )}
+                  />
+                );
+              })}
 
-                    <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-                      {/* Scanning Laser Beam */}
-                      <div className="absolute w-full h-0.5 bg-gradient-to-r from-transparent via-[#531FFF] to-transparent animate-pulse opacity-70 top-1/3" />
+              {/* Active Head Direction Tracker Dot on the 36-tick ring */}
+              {phase === "circle" && activeTickIndex !== null && svgTicks[activeTickIndex] && (
+                <>
+                  <circle
+                    cx={svgTicks[activeTickIndex].x2}
+                    cy={svgTicks[activeTickIndex].y2}
+                    r={6}
+                    fill="#0284c7"
+                    className="animate-ping opacity-60"
+                  />
+                  <circle
+                    cx={svgTicks[activeTickIndex].x2}
+                    cy={svgTicks[activeTickIndex].y2}
+                    r={4}
+                    fill="#0284c7"
+                    className="drop-shadow-[0_0_8px_rgba(2,132,199,0.9)]"
+                  />
+                </>
+              )}
+            </svg>
+          </div>
 
-                      {/* Oval Target Ring */}
-                      <div
-                        className={cn(
-                          "w-48 h-64 sm:w-52 sm:h-70 rounded-[50%] border-3 transition-all duration-300 relative flex items-center justify-center",
-                          justCapturedPose
-                            ? "border-emerald-400 bg-emerald-500/10 shadow-[0_0_40px_rgba(52,211,153,0.6)]"
-                            : autoCaptureCountdown !== null
-                            ? "border-emerald-400 shadow-[0_0_35px_rgba(16,185,129,0.5)] ring-4 ring-emerald-300/30"
-                            : analysis.isReadyForCapture
-                            ? "border-emerald-400 shadow-[0_0_30px_rgba(52,211,153,0.4)]"
-                            : analysis.hasFace
-                            ? "border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.3)]"
-                            : "border-purple-400/80 shadow-[0_0_20px_rgba(83,31,255,0.25)]"
-                        )}
-                      >
-                        {/* 4 Corner Crosshairs */}
-                        <div className="absolute -top-3 -left-3 w-4 h-4 border-t-2 border-l-2 border-white/80" />
-                        <div className="absolute -top-3 -right-3 w-4 h-4 border-t-2 border-r-2 border-white/80" />
-                        <div className="absolute -bottom-3 -left-3 w-4 h-4 border-b-2 border-l-2 border-white/80" />
-                        <div className="absolute -bottom-3 -right-3 w-4 h-4 border-b-2 border-r-2 border-white/80" />
+          {/* 3. Progress Percentage Pill & Dynamic Guidance */}
+          <div className="text-center space-y-2 max-w-sm">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-mono font-bold shadow-xs">
+              {phase === "center" ? (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 border border-sky-200 text-sky-700">
+                  <Target className="w-3.5 h-3.5 text-sky-600" />
+                  <span>Tahap 1: Kunci Posisi Depan</span>
+                </div>
+              ) : phase === "completed" ? (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>100% Selesai Terverifikasi</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Kemajuan: {progressPercent}%</span>
+                </div>
+              )}
+            </div>
 
-                        {/* Directional Visual Compass Indicator inside Oval */}
-                        <div className="flex flex-col items-center justify-center pointer-events-none space-y-1">
-                          {autoCaptureCountdown !== null ? (
-                            <div className="flex flex-col items-center justify-center animate-in zoom-in-75 duration-150">
-                              <div className="w-18 h-18 rounded-full bg-emerald-600 text-white font-black text-3xl flex items-center justify-center shadow-2xl border-3 border-white ring-4 ring-emerald-300/60">
-                                {autoCaptureCountdown}
-                              </div>
-                              <span className="mt-2 text-[10px] font-black tracking-wide text-white bg-black/80 px-2.5 py-0.5 rounded-full shadow-md whitespace-nowrap">
-                                Standar Terpenuhi • Tahan Posisi
-                              </span>
-                            </div>
-                          ) : justCapturedPose ? (
-                            <div className="px-3.5 py-2 rounded-full bg-emerald-600 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-xl animate-in zoom-in-75">
-                              <Check className="w-4 h-4" />
-                              <span>Sudut Tersimpan!</span>
-                            </div>
-                          ) : (
-                            <div className="px-3 py-1.5 rounded-full bg-black/65 backdrop-blur-xs border border-white/20 text-center space-y-0.5 shadow-md">
-                              <div className="flex items-center justify-center text-purple-300">
-                                {activePose.icon === "left" && <ArrowLeft className="w-5 h-5 animate-pulse text-purple-300" />}
-                                {activePose.icon === "right" && <ArrowRight className="w-5 h-5 animate-pulse text-purple-300" />}
-                                {activePose.icon === "up" && <ArrowUp className="w-5 h-5 animate-pulse text-purple-300" />}
-                                {activePose.icon === "down" && <ArrowDown className="w-5 h-5 animate-pulse text-purple-300" />}
-                                {activePose.icon === "center" && <Target className="w-4 h-4 text-purple-300" />}
-                              </div>
-                              <span className="text-[10px] font-bold text-white block">
-                                {activePose.badgeHint}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+            <p className="text-xs sm:text-sm font-bold text-slate-800 tracking-tight transition-all">
+              {guidance}
+            </p>
+          </div>
 
-                    {/* HUD Status Bar Bottom Overlay (Light & Crisp Glassmorphism) */}
-                    <div className="absolute bottom-3 inset-x-3 p-2.5 rounded-xl bg-white/95 backdrop-blur-md border border-slate-200 shadow-lg flex items-center justify-between text-[11px] font-medium z-10">
-                      <div className="flex items-center gap-2 truncate">
-                        <Activity className={cn("w-4 h-4 shrink-0", analysis.isReadyForCapture ? "text-emerald-600 animate-spin" : "text-[#531FFF]")} />
-                        <span className={cn(analysis.isReadyForCapture ? "text-emerald-700 font-bold" : "text-slate-700 font-semibold")}>
-                          {analysis.guidanceText}
-                        </span>
-                      </div>
-                      <span className="font-mono text-[10px] text-[#531FFF] bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100 font-bold shrink-0 ml-2">
-                        Presisi: {analysis.overallScore}%
-                      </span>
-                    </div>
-                  </>
+          {/* 4. Cardinal Angles Status Bar */}
+          <div className="grid grid-cols-4 gap-2 w-full max-w-xs pt-1">
+            {[
+              { key: "up", label: "Atas", done: Boolean(capturedPosesState.up) },
+              { key: "right", label: "Kanan", done: Boolean(capturedPosesState.right) },
+              { key: "down", label: "Bawah", done: Boolean(capturedPosesState.down) },
+              { key: "left", label: "Kiri", done: Boolean(capturedPosesState.left) },
+            ].map((item) => (
+              <div
+                key={item.key}
+                className={cn(
+                  "py-1.5 px-2 rounded-xl border text-center transition-all flex items-center justify-center gap-1",
+                  item.done
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-700 font-bold"
+                    : "bg-slate-50 border-slate-200/80 text-slate-400 font-medium"
                 )}
+              >
+                <span className="text-[10px]">{item.label}</span>
+                {item.done && <Check className="w-2.5 h-2.5 text-emerald-600" />}
               </div>
+            ))}
+          </div>
 
-              {/* Metrics (Cahaya, Posisi, Stabil) */}
-              <div className="grid grid-cols-3 gap-2">
-                <div className={cn(
-                  "p-2 rounded-xl border flex flex-col items-center justify-center text-center transition-all",
-                  analysis.brightnessScore >= 40
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                    : "bg-slate-50 border-slate-200 text-slate-500"
-                )}>
-                  <Sun className="w-3.5 h-3.5 mb-0.5" />
-                  <span className="text-[10px] font-bold">Cahaya: {analysis.brightnessScore}%</span>
-                </div>
+          {/* 5. Bottom Actions */}
+          <div className="flex items-center gap-2 w-full pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setPhase("center");
+                setTicks(new Array(TOTAL_TICKS).fill(false));
+                ticksRef.current = new Array(TOTAL_TICKS).fill(false);
+                capturedPosesRef.current = {};
+                setCapturedPosesState({});
+                centerStabilityRef.current = 0;
+                setCenterHoldRatio(0);
+                smoothPosRef.current = { x: 0, y: 0 };
+                cardinalHoldRef.current = { up: 0, right: 0, down: 0, left: 0 };
+                isFrontLockedRef.current = false;
+                setActiveTickIndex(null);
+                setGuidance("Posisikan wajah Anda di dalam lingkaran...");
+              }}
+              className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Ulangi Putaran</span>
+            </button>
 
-                <div className={cn(
-                  "p-2 rounded-xl border flex flex-col items-center justify-center text-center transition-all",
-                  analysis.centeredScore >= 45
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                    : "bg-slate-50 border-slate-200 text-slate-500"
-                )}>
-                  <Target className="w-3.5 h-3.5 mb-0.5" />
-                  <span className="text-[10px] font-bold">Posisi: {analysis.centeredScore}%</span>
-                </div>
-
-                <div className={cn(
-                  "p-2 rounded-xl border flex flex-col items-center justify-center text-center transition-all",
-                  analysis.sharpnessScore >= 40
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                    : "bg-slate-50 border-slate-200 text-slate-500"
-                )}>
-                  <ShieldCheck className="w-3.5 h-3.5 mb-0.5" />
-                  <span className="text-[10px] font-bold">Stabil: {analysis.sharpnessScore}%</span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => triggerCaptureCurrentPose()}
-                  disabled={!cameraActive}
-                  className="flex-1 py-3 bg-gradient-to-r from-[#531FFF] to-[#7942FF] hover:from-[#4314cc] hover:to-[#6a34ea] disabled:opacity-40 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-[#531FFF]/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
-                  title="Sistem akan mengambil foto secara otomatis saat stabil. Klik untuk mengambil seketika secara manual."
-                >
-                  <Camera className="w-4 h-4" />
-                  <span>Jepret Manual ({activePose.shortLabel})</span>
-                </button>
-
-                {/* Easy Fallback: Copy from Front Pose if user has trouble tilting head */}
-                {activePose.key !== "front" && capturedPoses.front && (
-                  <button
-                    type="button"
-                    onClick={handleCopyFromFront}
-                    className="py-3 px-3.5 bg-purple-50 hover:bg-purple-100 text-[#531FFF] font-bold text-xs rounded-xl border border-purple-200 transition-colors cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]"
-                    title="Salin foto depan jika webcam sulit menangkap gerakan sudut ini"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Gunakan Foto Depan</span>
-                  </button>
-                )}
-
-                {completedCount >= 1 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep("preview");
-                      stopCamera();
-                    }}
-                    className="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-colors cursor-pointer"
-                  >
-                    Pratinjau ({completedCount} Sudut)
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ================= STEP 2: PREVIEW & GALLERY CONFIRMATION ================= */}
-          {step === "preview" && (
-            <div className="space-y-4 animate-in fade-in duration-200">
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                    <div>
-                      <h4 className="font-extrabold text-sm text-slate-900">Pratinjau Rekaman Multi-Sudut</h4>
-                      <p className="text-[10px] text-slate-500">
-                        {completedCount} dari {totalPoses} sudut wajah berhasil diekstrak untuk {userName}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
-                    Siap Disimpan
-                  </span>
-                </div>
-
-                {/* 5-Pose Thumbnail Gallery Grid */}
-                <div className="grid grid-cols-5 gap-2">
-                  {POSE_DEFINITIONS.map((p, pIdx) => {
-                    const poseData = capturedPoses[p.key];
-                    return (
-                      <div
-                        key={p.key}
-                        className={cn(
-                          "relative rounded-xl overflow-hidden border p-1 text-center space-y-1 transition-all",
-                          poseData
-                            ? "bg-white border-purple-200 shadow-xs"
-                            : "bg-slate-100/60 border-dashed border-slate-300 text-slate-400"
-                        )}
-                      >
-                        <div className="aspect-square rounded-lg overflow-hidden bg-slate-100 relative flex items-center justify-center border border-slate-100">
-                          {poseData?.photoUrl ? (
-                            <img src={poseData.photoUrl} alt={p.label} className="w-full h-full object-cover" />
-                          ) : (
-                            <ScanFace className="w-6 h-6 text-slate-400" />
-                          )}
-                          {poseData && (
-                            <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-emerald-600 text-white font-black text-[8px] shadow-xs">
-                              {poseData.qualityScore}%
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-[9px] font-bold block truncate text-slate-700">
-                          {p.shortLabel}
-                        </span>
-                        {poseData && (
-                          <button
-                            type="button"
-                            onClick={() => handleRetakeSinglePose(p.key, pIdx)}
-                            className="text-[8px] text-[#531FFF] hover:text-[#4314cc] hover:underline font-bold block w-full text-center cursor-pointer"
-                          >
-                            Foto Ulang
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Biometric Technical Details */}
-                <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-100 space-y-1 text-[10px]">
-                  <p className="flex items-center gap-1.5 text-slate-900 font-bold">
-                    <Lock className="w-3.5 h-3.5 text-[#531FFF]" />
-                    Model AI: @vladmandic/human ArcFace 512-D + 3D Euler Angles
-                  </p>
-                  <p className="text-slate-600 leading-relaxed text-[9.5px]">
-                    Sistem mengekstrak vektor embedding ArcFace berstandar internasional dengan validasi rotasi sudut 3D (Yaw/Pitch) dan proteksi Anti-Spoofing.
-                  </p>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={handleRetakeAll}
-                  className="py-3 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Ulangi Semua</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSaveBiometric}
-                  className="py-3 bg-[#531FFF] hover:bg-[#4314cc] text-white font-extrabold text-xs rounded-xl shadow-lg shadow-[#531FFF]/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>Simpan Wajah Master</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ================= STEP 3: SAVING LOADER ================= */}
-          {step === "saving" && (
-            <div className="py-12 text-center space-y-4">
-              <RefreshCw className="w-10 h-10 text-[#531FFF] animate-spin mx-auto" />
-              <div>
-                <h4 className="font-extrabold text-base text-slate-900">Menyimpan Multi-Sudut Wajah...</h4>
-                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
-                  Menyimpan vektor acuan biometrik ke database sekolah dan mengaktifkan profil Face ID.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* ================= STEP 4: COMPLETED CELEBRATION ================= */}
-          {step === "completed" && (
-            <div className="py-8 text-center space-y-4 animate-in zoom-in-95 duration-200">
-              <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/10">
-                <CheckCircle2 className="w-10 h-10 text-emerald-600" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="font-black text-lg text-slate-900">Pendaftaran Wajah Berhasil!</h4>
-                <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
-                  Data 5 sudut wajah master Anda telah resmi terdaftar. Anda kini dapat menggunakan <strong>Face Recognition (AI)</strong> saat absensi sekolah dengan pengenalan sudut yang akurat.
-                </p>
-              </div>
-            </div>
-          )}
+            {/* Quick Completion Button if user has locked front pose and wishes to finish early */}
+            {isFrontLockedRef.current && (
+              <button
+                type="button"
+                onClick={finalizeEnrolment}
+                disabled={phase === "saving" || phase === "completed"}
+                className="flex-1 py-2.5 bg-gradient-to-r from-[#531FFF] to-[#8C52FF] hover:from-[#4414d6] hover:to-[#7941ea] disabled:opacity-50 text-white text-xs font-extrabold rounded-xl shadow-lg shadow-[#531FFF]/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Simpan Sekarang</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -84,7 +84,6 @@ const FaceEnrolmentModal = dynamic(
 );
 import {
   getUserFaceBiometric,
-  analyzeCameraFrame,
   compareFaceDescriptors,
   FaceBiometricData,
 } from "@/lib/face-biometric-service";
@@ -215,6 +214,7 @@ export default function TeacherAttendancePage() {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [gpsErrorState, setGpsErrorState] = useState<GeolocationErrorState | null>(null);
+  const [lastGpsRefreshedAt, setLastGpsRefreshedAt] = useState<Date | null>(null);
   const [locationData, setLocationData] = useState<{
     lat: number;
     lng: number;
@@ -239,14 +239,14 @@ export default function TeacherAttendancePage() {
   // Auto-scan Face ID states & refs
   const [autoScanStatus, setAutoScanStatus] = useState<"idle" | "searching" | "verifying" | "blinking" | "matched" | "unmatched" | "spoof">("idle");
   const [autoScanFeedback, setAutoScanFeedback] = useState<string>("");
-  const [autoScanScore, setAutoScanScore] = useState<number | null>(null);
+  const [_autoScanScore, setAutoScanScore] = useState<number | null>(null);
 
   const isAutoScanningRef = useRef(false);
   const hasAutoCapturedRef = useRef(false);
   const matchStreakRef = useRef(0);
   const livenessHistoryRef = useRef<FaceLivenessHistory>(createLivenessHistory());
 
-  // Live Location Tracker with two-tier fallback and friendly Indonesian error messages
+  // Live Location Tracker with two-tier fallback and forced real-time coordinates
   const refreshLocation = useCallback(async () => {
     setGpsLoading(true);
     setGpsError(null);
@@ -257,7 +257,7 @@ export default function TeacherAttendancePage() {
     const radius = Number(config.geofenceCenter?.radiusMeters ?? 100);
 
     try {
-      const res = await acquireCurrentLocation(schoolLat, schoolLng, radius);
+      const res = await acquireCurrentLocation(schoolLat, schoolLng, radius, { forceFresh: true });
       setLocationData({
         lat: res.lat,
         lng: res.lng,
@@ -266,6 +266,7 @@ export default function TeacherAttendancePage() {
         address: config.geofenceCenter.address || "SMART SCHOOL OS Campus - Area Utama Sekolah",
         accuracy: res.accuracy,
       });
+      setLastGpsRefreshedAt(new Date());
       setGpsError(null);
       setGpsErrorState(null);
     } catch (err: any) {
@@ -289,6 +290,13 @@ export default function TeacherAttendancePage() {
   useEffect(() => {
     refreshLocation();
   }, [refreshLocation]);
+
+  // Automatically trigger a fresh, real-time GPS refresh every time Clock In or Clock Out modal is opened
+  useEffect(() => {
+    if (isClockInModalOpen || isClockOutModalOpen) {
+      refreshLocation();
+    }
+  }, [isClockInModalOpen, isClockOutModalOpen, refreshLocation]);
 
   // Camera Lifecycle
   const startCamera = async () => {
@@ -391,17 +399,14 @@ export default function TeacherAttendancePage() {
           console.warn("detectFaceWithHuman error in teacher attendance:", e);
         }
 
-        if (humanResult?.embedding && humanResult.embedding.length > 0) {
+        if (humanResult?.embedding && humanResult.embedding.length >= 512) {
           liveDescriptor = humanResult.embedding;
-        } else {
-          const analysis = analyzeCameraFrame(canvas, ctx);
-          liveDescriptor = analysis.descriptor ?? null;
         }
 
-        if (!liveDescriptor || liveDescriptor.length === 0) {
+        if (!liveDescriptor || liveDescriptor.length < 512) {
           showError(
-            "Wajah tidak terdeteksi dengan jelas di kamera. Pastikan posisi wajah tegak dan pencahayaan terang.",
-            "Wajah Tidak Terdeteksi"
+            "Biometrik wajah belum terdeteksi jelas oleh sensor AI. Posisikan wajah tegak di depan kamera dengan pencahayaan terang.",
+            "Biometrik AI Belum Terbaca"
           );
           setFaceVerificationResult({
             tested: true,
@@ -449,15 +454,24 @@ export default function TeacherAttendancePage() {
           config.minFaceMatchScore || 70
         );
 
+        if (comp.isLegacy) {
+          showError(
+            comp.error || "Data wajah master Anda terdaftar dengan versi lama. Silakan lakukan pendaftaran ulang wajah.",
+            "Wajah Master Perlu Diperbarui"
+          );
+          setIsFaceModalOpen(true);
+          return;
+        }
+
         if (!comp.match) {
           setFaceVerificationResult({
             tested: true,
             match: false,
             similarity: comp.similarity,
-            error: `Kecocokan (${comp.similarity}%) belum memenuhi syarat (Min: ${config.minFaceMatchScore || 70}%).`,
+            error: "Wajah tidak cocok dengan data master terdaftar.",
           });
           showError(
-            `Verifikasi wajah tidak cocok (${comp.similarity}% / Min ${config.minFaceMatchScore || 70}%). Silakan posisikan wajah Anda dan foto ulang.`,
+            "Verifikasi wajah tidak cocok. Silakan posisikan wajah Anda tepat di depan kamera dan coba kembali.",
             "Verifikasi Wajah Gagal"
           );
           return;
@@ -467,7 +481,7 @@ export default function TeacherAttendancePage() {
             match: true,
             similarity: comp.similarity,
           });
-          showSuccess(`Wajah cocok ${comp.similarity}%! Terverifikasi AI asli.`);
+          showSuccess("Wajah cocok! Terverifikasi asli.");
         }
       } else {
         setFaceVerificationResult({
@@ -728,10 +742,10 @@ export default function TeacherAttendancePage() {
       isAutoScanningRef.current = true;
 
       try {
-        // Fast offscreen scan canvas downscaled to 320px for high-speed WebGL AI inference (<40ms)
+        // Fast offscreen scan canvas at 480px for optimal faceres neural network resolution
         const vWidth = video.videoWidth || 640;
         const vHeight = video.videoHeight || 480;
-        const scanW = 320;
+        const scanW = Math.min(480, vWidth);
         const scanH = Math.round(scanW * (vHeight / vWidth));
 
         const canvas = document.createElement("canvas");
@@ -756,11 +770,8 @@ export default function TeacherAttendancePage() {
         }
 
         let liveDescriptor: number[] | null = null;
-        if (humanResult?.embedding && humanResult.embedding.length > 0) {
+        if (humanResult?.embedding && humanResult.embedding.length >= 512) {
           liveDescriptor = humanResult.embedding;
-        } else {
-          const analysis = analyzeCameraFrame(canvas, ctx);
-          liveDescriptor = analysis.descriptor ?? null;
         }
 
         if (hasAutoCapturedRef.current) {
@@ -768,7 +779,7 @@ export default function TeacherAttendancePage() {
           return;
         }
 
-        if (!liveDescriptor || liveDescriptor.length === 0) {
+        if (!liveDescriptor || liveDescriptor.length < 512) {
           matchStreakRef.current = 0;
           livenessHistoryRef.current = createLivenessHistory();
           setAutoScanStatus("searching");
@@ -794,15 +805,25 @@ export default function TeacherAttendancePage() {
         setAutoScanStatus("verifying");
         const minScore = config.minFaceMatchScore || 70;
         const comp = compareFaceDescriptors(faceBiometric, liveDescriptor, minScore);
+
+        if (comp.isLegacy) {
+          matchStreakRef.current = 0;
+          setAutoScanStatus("unmatched");
+          setAutoScanFeedback("Format wajah master lama. Silakan daftar ulang.");
+          setAutoScanScore(0);
+          isAutoScanningRef.current = false;
+          return;
+        }
+
         setAutoScanScore(comp.similarity);
 
         if (comp.match) {
           matchStreakRef.current += 1;
 
-          // Active Liveness Challenge: Require Live Human Action (Blink OR Head Turn)
+          // Passive Liveness Challenge: Require verified living human presence (Passive alignment)
           if (!livenessHistoryRef.current.isLivenessPassed) {
             setAutoScanStatus("blinking");
-            setAutoScanFeedback(`Wajah Cocok (${comp.similarity}%)! Silakan KEDIP 👁️ atau TENGOK 👤`);
+            setAutoScanFeedback(`Wajah Cocok (${comp.similarity}%)! Menyelaraskan wajah asli... Mohon tahan posisi sejenak`);
             isAutoScanningRef.current = false;
             return;
           }
@@ -810,7 +831,7 @@ export default function TeacherAttendancePage() {
           // Both Biometric Matched AND Live Action Confirmed!
           setAutoScanStatus("matched");
           const livenessNote = livenessHistoryRef.current.livenessReason || "Wajah Asli Cocok";
-          setAutoScanFeedback(`${livenessNote} (${comp.similarity}%)! Memproses presensi...`);
+          setAutoScanFeedback(`${livenessNote}! Memproses presensi...`);
 
           // Confirmed match: Auto-capture!
           hasAutoCapturedRef.current = true;
@@ -861,12 +882,12 @@ export default function TeacherAttendancePage() {
             match: true,
             similarity: comp.similarity,
           });
-          showSuccess(`Wajah cocok ${comp.similarity}%! Presensi diverifikasi otomatis.`, "Auto-Scan Berhasil");
+          showSuccess("Wajah terverifikasi asli & cocok! Presensi diverifikasi otomatis.", "Auto-Scan Berhasil");
           stopCamera();
         } else {
           matchStreakRef.current = 0;
           setAutoScanStatus("unmatched");
-          setAutoScanFeedback(`Kecocokan ${comp.similarity}% (Min: ${minScore}%)`);
+          setAutoScanFeedback("Wajah belum cocok. Posisikan wajah di tengah bingkai");
         }
       } catch (err) {
         console.warn("Auto-scan teacher attendance error:", err);
@@ -1661,9 +1682,12 @@ export default function TeacherAttendancePage() {
                   </span>
                 </div>
 
-                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200/60 text-xs space-y-1.5">
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200/60 text-xs space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-gray-400 uppercase font-bold block">Titik Geofence Sekolah</span>
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-[#531FFF]" />
+                      <span className="font-bold text-gray-800 text-[11px]">Radius & Titik GPS Sekolah</span>
+                    </div>
                     <button
                       type="button"
                       onClick={refreshLocation}
@@ -1674,7 +1698,12 @@ export default function TeacherAttendancePage() {
                       <span>{gpsLoading ? "Mendeteksi..." : "Perbarui GPS"}</span>
                     </button>
                   </div>
-                  <p className="font-bold text-gray-800 leading-snug">{config.geofenceCenter.address}</p>
+
+                  <div className="bg-white p-2.5 rounded-lg border border-gray-200/70 shadow-2xs space-y-0.5">
+                    <span className="text-[9px] uppercase tracking-wider text-gray-400 font-extrabold block">Alamat Sekolah:</span>
+                    <p className="font-bold text-gray-800 leading-snug text-[11px]">{config.geofenceCenter.address}</p>
+                  </div>
+
                   <div className="flex items-center justify-between pt-1 border-t border-gray-200/40 text-[11px]">
                     <span className="text-gray-500">
                       Jarak dari Pusat: <strong className="text-gray-800">{formatDistance(locationData.distance)}</strong>
@@ -1684,7 +1713,7 @@ export default function TeacherAttendancePage() {
                     </span>
                   </div>
                   <p className="text-[10px] text-gray-400 font-mono">
-                    GPS: {locationData.lat.toFixed(5)}, {locationData.lng.toFixed(5)}
+                    GPS Guru: {locationData.lat.toFixed(5)}, {locationData.lng.toFixed(5)} · Titik Sekolah: {config.geofenceCenter.lat.toFixed(5)}, {config.geofenceCenter.lng.toFixed(5)}
                   </p>
                   {gpsErrorState ? (
                     <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl space-y-2 text-xs animate-in fade-in">
@@ -2397,78 +2426,91 @@ export default function TeacherAttendancePage() {
       {/* 4. MODAL: CLOCK IN CONFIRMATION WITH CAMERA & GEOFENCE                    */}
       {/* ========================================================================= */}
       {isClockInModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-3xl max-h-[92vh] md:max-h-[88vh] rounded-xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col my-auto animate-in zoom-in-95 duration-200">
-            {/* Header (Compact Sticky) */}
-            <div className="px-5 py-3 border-b border-gray-100 bg-white/95 backdrop-blur-xs flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-                  <LogIn className="w-4 h-4" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-4xl max-h-[92vh] rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col my-auto animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-5 sm:px-6 py-3.5 border-b border-gray-100 bg-white/95 backdrop-blur-xs flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shadow-xs shrink-0">
+                  <LogIn className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-black text-sm md:text-base text-gray-900 leading-tight">Clock In (Presensi Masuk)</h3>
-                  <p className="text-[10px] md:text-[11px] text-gray-500 font-medium">Verifikasi kamera dan titik koordinat radius sekolah</p>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-black text-sm sm:text-base text-gray-900 leading-tight">Clock In (Presensi Masuk Guru)</h3>
+                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-extrabold rounded-md flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Live Verifikasi
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 font-medium">Verifikasi biometrik wajah & titik koordinat radius sekolah</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <Clock className="w-3 h-3" />
+              <div className="flex items-center gap-2 sm:gap-3">
+                <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-mono font-bold px-3 py-1 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
+                  <Clock className="w-3.5 h-3.5 text-emerald-600" />
                   <span>{nowDate.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB</span>
                 </span>
                 <button
                   onClick={closeClockInModal}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                  className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 cursor-pointer transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* Modal Body - 2 Column Compact Grid */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-5">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch">
-                {/* Left Column: Camera Viewfinder */}
-                <div className="md:col-span-6 flex flex-col justify-between space-y-2">
+            {/* Modal Body - 2 Column Grid (7 cols camera + 5 cols info) */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-stretch">
+                {/* Left Column: Camera Viewfinder (Large & Prominent) */}
+                <div className="lg:col-span-7 flex flex-col justify-between space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
                       {config.attendanceMode === "face_recognition" ? (
                         <>
-                          <ScanFace className="w-3.5 h-3.5 text-[#531FFF]" />
-                          <span className="text-[#531FFF]">Verifikasi Wajah (Face Recognition AI)</span>
+                          <ScanFace className="w-4 h-4 text-[#531FFF]" />
+                          <span className="text-[#531FFF] font-extrabold">Verifikasi Wajah AI (Face Recognition)</span>
                         </>
                       ) : (
                         <>
-                          <Camera className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Verifikasi Wajah (Selfie)</span>
+                          <Camera className="w-4 h-4 text-emerald-600" />
+                          <span className="font-extrabold">Verifikasi Wajah (Selfie Guru)</span>
                         </>
                       )}
                     </label>
                     {photoPreview ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        Foto Siap 🟢
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Foto Siap</span>
                       </span>
                     ) : cameraActive ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                         <span>Kamera Aktif</span>
                       </span>
-                    ) : null}
+                    ) : (
+                      <span className="text-[11px] font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
+                        Kamera Siaga
+                      </span>
+                    )}
                   </div>
 
                   {/* Face Biometric Enrollment Prompt */}
                   {config.attendanceMode === "face_recognition" && !faceBiometric?.isEnrolled && (
-                    <div className="p-3 rounded-xl bg-gradient-to-r from-purple-900 to-indigo-900 text-white border border-purple-400/40 flex items-center justify-between gap-3 text-xs shadow-md">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <ScanFace className="w-4 h-4 text-purple-300 shrink-0" />
+                    <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 text-white border border-purple-400/40 flex items-center justify-between gap-3 text-xs shadow-lg">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                          <ScanFace className="w-5 h-5 text-purple-300" />
+                        </div>
                         <div className="min-w-0">
-                          <p className="font-extrabold text-[11px]">Wajah Master Guru Belum Terdaftar</p>
+                          <p className="font-extrabold text-xs">Wajah Master Guru Belum Terdaftar</p>
                           <p className="text-[10px] text-purple-200 truncate">Daftarkan acuan wajah untuk Clock In Face ID.</p>
                         </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => setIsFaceModalOpen(true)}
-                        className="px-2.5 py-1 rounded-lg bg-white text-[#531FFF] font-extrabold text-[10px] hover:bg-purple-50 transition-colors shrink-0 cursor-pointer"
+                        className="px-3.5 py-1.5 rounded-xl bg-white text-[#531FFF] font-extrabold text-[11px] hover:bg-purple-50 transition-colors shrink-0 cursor-pointer shadow-xs"
                       >
                         Daftar Sekarang
                       </button>
@@ -2476,24 +2518,24 @@ export default function TeacherAttendancePage() {
                   )}
 
                   {/* Camera Frame */}
-                  <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden border border-gray-200 bg-slate-950 shadow-inner flex items-center justify-center">
+                  <div className="relative aspect-[4/3] w-full max-h-[340px] sm:max-h-[370px] md:max-h-[390px] rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-xl flex items-center justify-center">
                     {photoPreview ? (
                       <div className="relative w-full h-full flex items-center justify-center bg-black">
                         <img src={photoPreview} alt="Selfie preview" className="w-full h-full object-cover" />
                         {/* Biometric Match HUD Overlay */}
                         {config.attendanceMode === "face_recognition" && faceVerificationResult?.match && (
-                          <div className="absolute top-2.5 left-2.5 z-10 px-2.5 py-1 bg-emerald-950/85 border border-emerald-500/60 rounded-lg text-emerald-300 text-[10px] font-bold flex items-center gap-1.5 backdrop-blur-xs shadow-md">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <div className="absolute top-3 left-3 z-10 px-3 py-1.5 bg-emerald-950/90 border border-emerald-500/60 rounded-xl text-emerald-300 text-xs font-bold flex items-center gap-2 backdrop-blur-md shadow-lg">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                             <span>Wajah Guru Cocok ({faceVerificationResult.similarity}%)</span>
                           </div>
                         )}
-                        <div className="absolute top-2.5 right-2.5 z-10">
+                        <div className="absolute top-3 right-3 z-10">
                           <button
                             type="button"
                             onClick={handleRetakePhoto}
-                            className="px-2.5 py-1 bg-black/75 hover:bg-black/90 text-white rounded-lg text-[11px] font-bold flex items-center gap-1.5 backdrop-blur-xs transition-colors cursor-pointer"
+                            className="px-3 py-1.5 bg-black/80 hover:bg-black text-white rounded-xl text-xs font-bold flex items-center gap-2 backdrop-blur-md transition-colors cursor-pointer border border-white/20 shadow-lg"
                           >
-                            <RotateCcw className="w-3 h-3 text-emerald-400" />
+                            <RotateCcw className="w-3.5 h-3.5 text-emerald-400" />
                             <span>Ambil Ulang</span>
                           </button>
                         </div>
@@ -2509,10 +2551,10 @@ export default function TeacherAttendancePage() {
                         />
                         {/* Top Auto-Scan Status Pill */}
                         {config.attendanceMode === "face_recognition" && (
-                          <div className="absolute top-2.5 inset-x-2 z-20 flex items-center justify-center pointer-events-none">
+                          <div className="absolute top-3 inset-x-3 z-20 flex items-center justify-center pointer-events-none">
                             <div
                               className={cn(
-                                "px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 backdrop-blur-md border shadow-lg transition-all duration-300",
+                                "px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 backdrop-blur-md border shadow-xl transition-all duration-300",
                                 autoScanStatus === "matched"
                                   ? "bg-emerald-950/85 text-emerald-300 border-emerald-500/60 shadow-emerald-500/20"
                                   : autoScanStatus === "blinking"
@@ -2527,38 +2569,30 @@ export default function TeacherAttendancePage() {
                               )}
                             >
                               {autoScanStatus === "matched" ? (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400 animate-bounce" />
                               ) : autoScanStatus === "blinking" ? (
-                                <Eye className="w-3.5 h-3.5 text-cyan-300 animate-bounce" />
+                                <ScanFace className="w-4 h-4 text-cyan-300 animate-pulse" />
                               ) : autoScanStatus === "verifying" ? (
-                                <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+                                <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
                               ) : autoScanStatus === "spoof" ? (
-                                <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+                                <ShieldAlert className="w-4 h-4 text-rose-400 animate-pulse" />
                               ) : autoScanStatus === "unmatched" ? (
-                                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                                <AlertTriangle className="w-4 h-4 text-amber-400" />
                               ) : (
-                                <ScanFace className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                                <ScanFace className="w-4 h-4 text-cyan-400 animate-pulse" />
                               )}
-                              <span className="truncate max-w-[200px] sm:max-w-xs">
-                                {autoScanFeedback || (faceBiometric?.isEnrolled ? "Auto-Scan Aktif: Arahkan wajah..." : "Wajah master belum terdaftar")}
+                              <span className="truncate max-w-[280px] sm:max-w-md font-semibold">
+                                {autoScanFeedback || (faceBiometric?.isEnrolled ? "Posisikan wajah di dalam bingkai..." : "Wajah master belum terdaftar")}
                               </span>
-                              {autoScanScore !== null && (
-                                <span className={cn(
-                                  "text-[10px] px-1.5 py-0.5 rounded-md font-mono",
-                                  autoScanStatus === "spoof" ? "bg-rose-500/20 text-rose-200" : autoScanStatus === "blinking" ? "bg-cyan-400/20 text-cyan-200" : "bg-white/10"
-                                )}>
-                                  {autoScanStatus === "spoof" ? `Fake: ${autoScanScore}%` : `${autoScanScore}%`}
-                                </span>
-                              )}
                             </div>
                           </div>
                         )}
 
-                        {/* Centered HUD Bounding Box */}
+                        {/* Centered HUD Bounding Box - Well-proportioned framing */}
                         <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                           <div
                             className={cn(
-                              "w-36 h-44 sm:w-42 sm:h-52 border-2 rounded-2xl relative flex items-center justify-center transition-all duration-300",
+                              "w-36 h-48 sm:w-42 sm:h-56 border-2 rounded-2xl relative flex items-center justify-center transition-all duration-300",
                               autoScanStatus === "matched"
                                 ? "border-emerald-400 bg-emerald-500/10 shadow-[0_0_25px_rgba(52,211,153,0.35)] ring-4 ring-emerald-400/30"
                                 : autoScanStatus === "blinking"
@@ -2572,43 +2606,39 @@ export default function TeacherAttendancePage() {
                                 : "border-dashed border-emerald-400/80"
                             )}
                           >
-                            <div className={cn("absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-emerald-400")} />
-                            <div className={cn("absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-emerald-400")} />
-                            <div className={cn("absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-emerald-400")} />
-                            <div className={cn("absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-emerald-400")} />
+                            <div className={cn("absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 rounded-tl-lg transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-emerald-400")} />
+                            <div className={cn("absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 rounded-tr-lg transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-emerald-400")} />
+                            <div className={cn("absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 rounded-bl-lg transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-emerald-400")} />
+                            <div className={cn("absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 rounded-br-lg transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-emerald-400")} />
 
                             {config.attendanceMode === "face_recognition" && (
                               <div className={cn(
-                                "absolute inset-x-2 top-2 h-0.5 bg-gradient-to-r from-transparent to-transparent animate-pulse",
+                                "absolute inset-x-3 top-3 h-0.5 bg-gradient-to-r from-transparent to-transparent animate-pulse",
                                 autoScanStatus === "spoof"
-                                  ? "via-rose-500 shadow-[0_0_8px_#f43f5e]"
-                                  : "via-cyan-400 shadow-[0_0_8px_#22d3ee]"
+                                  ? "via-rose-500 shadow-[0_0_10px_#f43f5e]"
+                                  : "via-cyan-400 shadow-[0_0_10px_#22d3ee]"
                               )} />
                             )}
 
-                            {autoScanStatus === "blinking" ? (
-                              <Eye className="w-8 h-8 text-cyan-300 animate-pulse" />
-                            ) : (
-                              <ScanFace className={cn("w-7 h-7 transition-colors", autoScanStatus === "matched" ? "text-emerald-400/60" : autoScanStatus === "spoof" ? "text-rose-400/80" : "text-emerald-400/50")} />
-                            )}
+                            <ScanFace className={cn("w-10 h-10 transition-colors", autoScanStatus === "matched" ? "text-emerald-400/70" : autoScanStatus === "spoof" ? "text-rose-400/80" : autoScanStatus === "blinking" ? "text-cyan-300 animate-pulse" : "text-emerald-400/50")} />
                           </div>
                         </div>
 
                         {/* Bottom Action HUD: Auto-Scan indicator + Instant manual trigger */}
-                        <div className="absolute bottom-2.5 inset-x-0 flex items-center justify-center px-4 z-10 gap-2">
+                        <div className="absolute bottom-3 inset-x-0 flex items-center justify-center px-4 z-10 gap-2.5">
                           {config.attendanceMode === "face_recognition" ? (
-                            <div className="flex items-center gap-2">
-                              <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-xl border border-white/10 text-white/90 text-[11px] font-medium flex items-center gap-1.5 shadow-md">
-                                <span className="relative flex h-2 w-2">
+                            <div className="flex items-center gap-2.5 bg-black/60 backdrop-blur-md p-1.5 rounded-2xl border border-white/10 shadow-xl">
+                              <div className="px-3 py-1.5 text-white/90 text-xs font-semibold flex items-center gap-2">
+                                <span className="relative flex h-2.5 w-2.5">
                                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                                 </span>
-                                <span>Auto-Scan Aktif</span>
+                                <span>Auto-Scan AI Aktif</span>
                               </div>
                               <button
                                 type="button"
                                 onClick={() => handleCapturePhoto("CLOCK IN")}
-                                className="px-3 py-1.5 bg-[#531FFF]/85 hover:bg-[#531FFF] text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 border border-purple-400/30 backdrop-blur-xs"
+                                className="px-3.5 py-1.5 bg-[#531FFF] hover:bg-[#6E3BFF] text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 border border-purple-400/30"
                                 title="Ambil foto langsung tanpa menunggu auto-scan"
                               >
                                 <ScanFace className="w-3.5 h-3.5" />
@@ -2619,31 +2649,35 @@ export default function TeacherAttendancePage() {
                             <button
                               type="button"
                               onClick={() => handleCapturePhoto("CLOCK IN")}
-                              className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-500/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                              className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-xs rounded-2xl shadow-xl shadow-emerald-500/40 flex items-center gap-2 cursor-pointer transition-all active:scale-95"
                             >
-                              <Camera className="w-3.5 h-3.5" />
+                              <Camera className="w-4 h-4" />
                               <span>Ambil Foto Masuk</span>
                             </button>
                           )}
                         </div>
                       </>
                     ) : (
-                      <div className="p-4 text-center space-y-2.5">
-                        <Camera className="w-8 h-8 text-gray-400 mx-auto" />
-                        <p className="text-[11px] text-gray-300 max-w-xs mx-auto leading-tight">
-                          {cameraError || "Kamera perlu diinisialisasi atau izin peramban belum aktif."}
+                      <div className="p-6 text-center space-y-3">
+                        <div className="w-16 h-16 rounded-2xl border-2 border-emerald-500/50 flex items-center justify-center bg-emerald-500/15 shadow-xl mx-auto">
+                          <Camera className="w-8 h-8 text-emerald-400" />
+                        </div>
+                        <h4 className="font-extrabold text-sm text-white">Kamera Belum Aktif</h4>
+                        <p className="text-xs text-gray-300 max-w-sm mx-auto leading-relaxed">
+                          {cameraError || "Nyalakan kamera live untuk memverifikasi kehadiran guru secara instan dan akurat."}
                         </p>
-                        <div className="flex items-center justify-center gap-2 flex-wrap pt-1">
+                        <div className="flex items-center justify-center gap-3 flex-wrap pt-2">
                           <button
                             type="button"
                             onClick={startCamera}
-                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg cursor-pointer"
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/30 cursor-pointer transition-all active:scale-95 flex items-center gap-2"
                           >
-                            Nyalakan Kamera
+                            <Camera className="w-4 h-4" />
+                            <span>Nyalakan Kamera</span>
                           </button>
                           <label
                             htmlFor="clockInFileFallback"
-                            className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white font-bold text-xs rounded-lg cursor-pointer transition-colors"
+                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors border border-white/20"
                           >
                             Unggah File
                           </label>
@@ -2652,23 +2686,23 @@ export default function TeacherAttendancePage() {
                     )}
                   </div>
 
-                  {/* Fallback upload text - only in selfie mode */}
-                  {config.attendanceMode !== "face_recognition" ? (
-                    <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
-                      <span>Posisi wajah di tengah bingkai</span>
+                  {/* Fallback upload text / sub-bar helper */}
+                  <div className="flex items-center justify-between text-[11px] text-gray-500 px-1">
+                    <span>💡 Posisikan wajah di tengah bingkai dalam pencahayaan yang cukup</span>
+                    {config.attendanceMode !== "face_recognition" ? (
                       <label
                         htmlFor="clockInFileFallback"
                         className="text-emerald-600 hover:underline font-semibold cursor-pointer"
                       >
                         Unggah Foto dari Galeri
                       </label>
-                    </div>
-                  ) : (
-                    <div className="text-[10px] text-purple-600 font-semibold pt-0.5 flex items-center gap-1">
-                      <ScanFace className="w-3 h-3" />
-                      <span>Mode Face Recognition AI aktif • Verifikasi langsung lewat kamera</span>
-                    </div>
-                  )}
+                    ) : (
+                      <span className="text-purple-600 font-semibold flex items-center gap-1">
+                        <ScanFace className="w-3.5 h-3.5" />
+                        <span>Mode Face Recognition AI Aktif</span>
+                      </span>
+                    )}
+                  </div>
 
                   <input
                     type="file"
@@ -2680,70 +2714,112 @@ export default function TeacherAttendancePage() {
                   />
                 </div>
 
-                {/* Right Column: Identity, Geofence, Notes, & Actions */}
-                <div className="md:col-span-6 flex flex-col justify-between space-y-2.5">
-                  {/* Quick Teacher & Shift Bar */}
-                  <div className="p-2.5 bg-gray-50/90 rounded-xl border border-gray-200/60 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="text-[9px] text-gray-400 uppercase font-extrabold block">Identitas Guru</span>
-                      <strong className="text-gray-900 truncate block text-xs">{currentTeacherInfo?.name}</strong>
-                      <span className="text-[10px] text-gray-500">NIP: {currentTeacherInfo?.nip || "-"}</span>
+                {/* Right Column: Redesigned Layout for Identity, GPS, Notes, & Actions */}
+                <div className="lg:col-span-5 flex flex-col justify-between space-y-3.5">
+                  {/* 1. Quick Teacher & Shift Bar */}
+                  <div className="p-3.5 bg-gradient-to-br from-slate-50 to-emerald-50/30 rounded-2xl border border-slate-200/80 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-gray-400 uppercase font-extrabold tracking-wider">Identitas Guru</span>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-emerald-100/70 text-emerald-800 border border-emerald-200/60">
+                        Tenaga Pendidik
+                      </span>
                     </div>
-                    <div className="text-right">
-                      <span className="text-[9px] text-gray-400 uppercase font-extrabold block">Waktu Saat Ini</span>
-                      <strong className="font-mono text-emerald-700 font-black block text-xs">
-                        {nowDate.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} WIB
-                      </strong>
-                      <span className="text-[10px] text-gray-500">Batas: {config.lateThreshold} WIB</span>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <strong className="text-gray-900 text-sm font-black block leading-tight">{currentTeacherInfo?.name}</strong>
+                        <p className="text-[11px] text-gray-500 mt-0.5 font-medium">NIP: {currentTeacherInfo?.nip || "-"}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] text-gray-400 block font-semibold">Batas Masuk</span>
+                        <strong className="font-mono text-xs text-emerald-700 font-bold block">{config.lateThreshold} WIB</strong>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Geofence & GPS Box */}
-                  <div className="p-2.5 bg-gray-50/90 rounded-xl border border-gray-200/60 space-y-1.5 text-xs">
+                  {/* 2. Geofence & GPS Box */}
+                  <div className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-2.5 text-xs shadow-2xs">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-[#531FFF]" />
-                        <span className="font-bold text-gray-800 text-[11px]">Radius & Lokasi GPS</span>
+                        <div className="w-6 h-6 rounded-lg bg-[#531FFF]/10 flex items-center justify-center text-[#531FFF]">
+                          <MapPin className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="font-bold text-gray-900 text-xs">Lokasi & Radius GPS</span>
                       </div>
                       <button
                         type="button"
                         onClick={refreshLocation}
                         disabled={gpsLoading}
-                        className="text-[10px] text-[#531FFF] hover:underline flex items-center gap-1 font-bold cursor-pointer"
+                        className="text-[11px] text-[#531FFF] hover:text-[#4317CC] flex items-center gap-1 font-bold cursor-pointer transition-colors"
                       >
                         <RefreshCw className={cn("w-3 h-3", gpsLoading && "animate-spin")} />
-                        <span>{gpsLoading ? "Mengecek..." : "Perbarui GPS"}</span>
+                        <span>{gpsLoading ? "Mengambil GPS..." : "Perbarui GPS"}</span>
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-gray-200/50">
-                      <span className="text-gray-600">
-                        Jarak: <strong className="text-gray-900">{formatDistance(locationData.distance)}</strong>{" "}
-                        <span className="text-gray-400 text-[10px]">(Maks {config.geofenceCenter.radiusMeters}m)</span>
-                      </span>
-                      <span
-                        className={cn(
-                          "text-[10px] font-bold px-2 py-0.5 rounded-full border",
-                          locationData.inRadius
-                            ? "bg-emerald-100 text-emerald-800 border-emerald-200"
-                            : "bg-rose-100 text-rose-800 border-rose-200"
-                        )}
-                      >
-                        {locationData.inRadius ? "Dalam Radius 🟢" : "Di Luar Radius 🔴"}
-                      </span>
+                    <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-gray-200/70 shadow-2xs">
+                      <div>
+                        <span className="text-[10px] text-gray-400 uppercase font-extrabold block">Jarak ke Sekolah</span>
+                        <div className="text-gray-900 text-xs font-black">
+                          {gpsLoading ? (
+                            <span className="text-gray-400 font-normal italic flex items-center gap-1.5 py-0.5">
+                              <Loader2 className="w-3 h-3 animate-spin text-emerald-600" />
+                              <span>Mendeteksi jarak terkini...</span>
+                            </span>
+                          ) : (
+                            <>
+                              {formatDistance(locationData.distance)}{" "}
+                              <span className="text-gray-400 text-[10px] font-normal">(Maks {config.geofenceCenter.radiusMeters}m)</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {gpsLoading ? (
+                        <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-lg border bg-blue-50 text-blue-700 border-blue-200 flex items-center gap-1.5 animate-pulse">
+                          <RefreshCw className="w-3 h-3 animate-spin text-blue-600" />
+                          <span>Sinkron GPS...</span>
+                        </span>
+                      ) : (
+                        <span
+                          className={cn(
+                            "text-[10px] font-extrabold px-2.5 py-1 rounded-lg border flex items-center gap-1",
+                            locationData.inRadius
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                              : "bg-rose-50 text-rose-800 border-rose-200"
+                          )}
+                        >
+                          {locationData.inRadius ? "Dalam Radius 🟢" : "Di Luar Radius 🔴"}
+                        </span>
+                      )}
                     </div>
 
-                    <p className="text-[10px] text-gray-400 font-mono truncate" title={config.geofenceCenter.address}>
-                      {config.geofenceCenter.address} ({locationData.lat.toFixed(4)}, {locationData.lng.toFixed(4)})
-                    </p>
+                    <div className="bg-white p-2.5 rounded-xl border border-gray-200/60 text-[11px] leading-relaxed">
+                      <span className="text-[9px] uppercase tracking-wider text-gray-400 font-extrabold block mb-0.5">Alamat Titik GPS Sekolah:</span>
+                      <p className="text-gray-700 font-medium line-clamp-2" title={config.geofenceCenter.address}>
+                        📍 {config.geofenceCenter.address}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono px-0.5">
+                      <span>
+                        {gpsLoading
+                          ? "📡 Menyambungkan sinyal satelit GPS..."
+                          : `Koordinat Guru: ${locationData.lat.toFixed(5)}, ${locationData.lng.toFixed(5)}`}
+                      </span>
+                      {lastGpsRefreshedAt && !gpsLoading && (
+                        <span className="text-[9px] text-emerald-600 font-sans font-bold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          GPS Real-time
+                        </span>
+                      )}
+                    </div>
 
                     {gpsErrorState && (
-                      <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] space-y-1">
-                        <div className="flex items-start gap-1.5">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-1.5">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                           <div>
-                            <p className="font-bold text-amber-900 text-[10px]">{gpsErrorState.title}</p>
-                            <p className="text-[10px] text-amber-800">{gpsErrorState.message}</p>
+                            <p className="font-bold text-amber-900 text-xs">{gpsErrorState.title}</p>
+                            <p className="text-[11px] text-amber-800">{gpsErrorState.message}</p>
                           </div>
                         </div>
                         <div className="pt-0.5 flex justify-end">
@@ -2751,7 +2827,7 @@ export default function TeacherAttendancePage() {
                             type="button"
                             onClick={refreshLocation}
                             disabled={gpsLoading}
-                            className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[9px] font-bold transition-colors cursor-pointer"
+                            className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] font-bold transition-colors cursor-pointer"
                           >
                             Minta Ulang Izin
                           </button>
@@ -2760,16 +2836,17 @@ export default function TeacherAttendancePage() {
                     )}
                   </div>
 
+                  {/* 3. Alerts */}
                   {/* Warning Alert if outside radius */}
                   {config.geofenceEnabled && !locationData.inRadius && !gpsLoading && (
-                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800 animate-in fade-in">
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-xs text-rose-800 animate-in fade-in">
                       <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                       <div className="space-y-0.5">
-                        <span className="font-bold block text-rose-900 text-[11px]">
+                        <span className="font-bold block text-rose-900 text-xs">
                           Lokasi di Luar Jangkauan Sekolah
                         </span>
-                        <p className="text-rose-800 text-[10px] leading-snug">
-                          Anda berjarak <strong>{formatDistance(locationData.distance)}</strong> ({Math.max(0, locationData.distance - (config.geofenceCenter?.radiusMeters ?? 100))}m di luar batas). Tombol Clock In dinonaktifkan.
+                        <p className="text-rose-800 text-[11px] leading-snug">
+                          Anda berjarak <strong>{formatDistance(locationData.distance)}</strong> ({Math.max(0, locationData.distance - (config.geofenceCenter?.radiusMeters ?? 100))}m di luar batas). Tombol Clock In dinonaktifkan demi keaslian presensi.
                         </p>
                       </div>
                     </div>
@@ -2777,36 +2854,36 @@ export default function TeacherAttendancePage() {
 
                   {/* Mandatory Photo Alert / Status Badge */}
                   {!photoPreview ? (
-                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-xs text-amber-800 animate-in fade-in">
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5 text-xs text-amber-800 animate-in fade-in">
                       <Camera className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                       <div className="space-y-0.5">
-                        <span className="font-bold block text-amber-900 text-[11px]">
+                        <span className="font-bold block text-amber-900 text-xs">
                           Wajib Foto Selfie Masuk
                         </span>
-                        <p className="text-amber-800 text-[10px] leading-snug">
+                        <p className="text-amber-800 text-[11px] leading-snug">
                           Silakan ambil foto wajah Anda melalui bingkai kamera di sebelah kiri untuk mengaktifkan tombol Konfirmasi Masuk.
                         </p>
                       </div>
                     </div>
                   ) : (
-                    <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-800 animate-in fade-in">
-                      <div className="flex items-center gap-1.5">
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between text-xs text-emerald-800 animate-in fade-in">
+                      <div className="flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span className="font-bold text-[11px] text-emerald-900">
+                        <span className="font-bold text-xs text-emerald-900">
                           Foto Masuk Berhasil Diambil & Tervalidasi ✓
                         </span>
                       </div>
                       <button
                         type="button"
                         onClick={handleRetakePhoto}
-                        className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                        className="text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
                       >
                         Ambil Ulang
                       </button>
                     </div>
                   )}
 
-                  {/* Notes textarea */}
+                  {/* 4. Notes textarea */}
                   <div className="space-y-1">
                     <label className="block text-[11px] font-bold text-gray-700">Catatan Masuk (Opsional)</label>
                     <textarea
@@ -2814,16 +2891,16 @@ export default function TeacherAttendancePage() {
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Rencana kegiatan mengajar hari ini atau catatan kehadiran..."
                       rows={2}
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] resize-none"
+                      className="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] resize-none"
                     />
                   </div>
 
-                  {/* Footer Actions */}
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                  {/* 5. Footer Actions */}
+                  <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
                     <button
                       type="button"
                       onClick={closeClockInModal}
-                      className="px-3.5 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer transition-colors"
+                      className="px-4 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer transition-colors"
                     >
                       Batal
                     </button>
@@ -2832,25 +2909,25 @@ export default function TeacherAttendancePage() {
                       onClick={handleExecuteClockIn}
                       disabled={submitting || !photoPreview || (config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState))}
                       className={cn(
-                        "px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5",
+                        "w-full sm:w-auto px-5 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 shadow-md",
                         submitting || !photoPreview || (config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState))
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none border border-gray-200"
-                          : "text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 cursor-pointer"
+                          : "text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-600/25 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                       )}
                     >
                       {submitting ? (
                         <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <RefreshCw className="w-4 h-4 animate-spin" />
                           <span>Memproses...</span>
                         </>
                       ) : !photoPreview ? (
                         <>
-                          <Camera className="w-3.5 h-3.5 text-gray-400" />
+                          <Camera className="w-4 h-4 text-gray-400" />
                           <span>Ambil Foto Terlebih Dahulu</span>
                         </>
                       ) : config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState) ? (
                         <>
-                          <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                          <XCircle className="w-4 h-4 text-rose-500" />
                           <span>
                             {gpsLoading
                               ? "Menunggu GPS..."
@@ -2861,7 +2938,7 @@ export default function TeacherAttendancePage() {
                         </>
                       ) : (
                         <>
-                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <CheckCircle2 className="w-4 h-4 text-emerald-200" />
                           <span>Konfirmasi Masuk (Clock In)</span>
                         </>
                       )}
@@ -2878,78 +2955,91 @@ export default function TeacherAttendancePage() {
       {/* 5. MODAL: CLOCK OUT CONFIRMATION WITH CAMERA & GEOFENCE                   */}
       {/* ========================================================================= */}
       {isClockOutModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-3xl max-h-[92vh] md:max-h-[88vh] rounded-xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col my-auto animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-4xl max-h-[92vh] rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col my-auto animate-in zoom-in-95 duration-200">
             {/* Header */}
-            <div className="px-5 py-3 border-b border-gray-100 bg-white/95 backdrop-blur-xs flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-                  <LogOut className="w-4 h-4" />
+            <div className="px-5 sm:px-6 py-3.5 border-b border-gray-100 bg-white/95 backdrop-blur-xs flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shadow-xs shrink-0">
+                  <LogOut className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-black text-sm md:text-base text-gray-900 leading-tight">Clock Out (Presensi Pulang)</h3>
-                  <p className="text-[10px] md:text-[11px] text-gray-500 font-medium">Verifikasi kamera dan waktu penyelesaian tugas kerja</p>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-black text-sm sm:text-base text-gray-900 leading-tight">Clock Out (Presensi Pulang Guru)</h3>
+                    <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-extrabold rounded-md flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                      Selesai Tugas
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 font-medium">Verifikasi biometrik kamera dan waktu penyelesaian jam kerja guru</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  <Clock className="w-3 h-3" />
+              <div className="flex items-center gap-2 sm:gap-3">
+                <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-mono font-bold px-3 py-1 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xs">
+                  <Clock className="w-3.5 h-3.5 text-indigo-600" />
                   <span>{nowDate.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB</span>
                 </span>
                 <button
                   onClick={closeClockOutModal}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                  className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 cursor-pointer transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* Modal Body - 2 Column Grid */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-5">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch">
-                {/* Left Column: Camera Viewfinder */}
-                <div className="md:col-span-6 flex flex-col justify-between space-y-2">
+            {/* Modal Body - 2 Column Grid (7 cols camera + 5 cols info) */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-stretch">
+                {/* Left Column: Camera Viewfinder (Large & Prominent) */}
+                <div className="lg:col-span-7 flex flex-col justify-between space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
                       {config.attendanceMode === "face_recognition" ? (
                         <>
-                          <ScanFace className="w-3.5 h-3.5 text-[#531FFF]" />
-                          <span className="text-[#531FFF]">Verifikasi Wajah (Face Recognition AI)</span>
+                          <ScanFace className="w-4 h-4 text-[#531FFF]" />
+                          <span className="text-[#531FFF] font-extrabold">Verifikasi Wajah AI (Face Recognition)</span>
                         </>
                       ) : (
                         <>
-                          <Camera className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>Verifikasi Pulang (Selfie)</span>
+                          <Camera className="w-4 h-4 text-indigo-600" />
+                          <span className="font-extrabold">Verifikasi Pulang (Selfie Guru)</span>
                         </>
                       )}
                     </label>
                     {photoPreview ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                        Foto Siap 🟢
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Foto Siap</span>
                       </span>
                     ) : cameraActive ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
                         <span>Kamera Aktif</span>
                       </span>
-                    ) : null}
+                    ) : (
+                      <span className="text-[11px] font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
+                        Kamera Siaga
+                      </span>
+                    )}
                   </div>
 
                   {/* Face Biometric Enrollment Prompt */}
                   {config.attendanceMode === "face_recognition" && !faceBiometric?.isEnrolled && (
-                    <div className="p-3 rounded-xl bg-gradient-to-r from-purple-900 to-indigo-900 text-white border border-purple-400/40 flex items-center justify-between gap-3 text-xs shadow-md">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <ScanFace className="w-4 h-4 text-purple-300 shrink-0" />
+                    <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-950 text-white border border-purple-400/40 flex items-center justify-between gap-3 text-xs shadow-lg">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                          <ScanFace className="w-5 h-5 text-purple-300" />
+                        </div>
                         <div className="min-w-0">
-                          <p className="font-extrabold text-[11px]">Wajah Master Guru Belum Terdaftar</p>
+                          <p className="font-extrabold text-xs">Wajah Master Guru Belum Terdaftar</p>
                           <p className="text-[10px] text-purple-200 truncate">Daftarkan acuan wajah untuk Clock Out Face ID.</p>
                         </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => setIsFaceModalOpen(true)}
-                        className="px-2.5 py-1 rounded-lg bg-white text-[#531FFF] font-extrabold text-[10px] hover:bg-purple-50 transition-colors shrink-0 cursor-pointer"
+                        className="px-3.5 py-1.5 rounded-xl bg-white text-[#531FFF] font-extrabold text-[11px] hover:bg-purple-50 transition-colors shrink-0 cursor-pointer shadow-xs"
                       >
                         Daftar Sekarang
                       </button>
@@ -2957,24 +3047,24 @@ export default function TeacherAttendancePage() {
                   )}
 
                   {/* Camera Frame */}
-                  <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden border border-gray-200 bg-slate-950 shadow-inner flex items-center justify-center">
+                  <div className="relative aspect-[4/3] w-full max-h-[340px] sm:max-h-[370px] md:max-h-[390px] rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-xl flex items-center justify-center">
                     {photoPreview ? (
                       <div className="relative w-full h-full flex items-center justify-center bg-black">
                         <img src={photoPreview} alt="Selfie preview" className="w-full h-full object-cover" />
                         {/* Biometric Match HUD Overlay */}
                         {config.attendanceMode === "face_recognition" && faceVerificationResult?.match && (
-                          <div className="absolute top-2.5 left-2.5 z-10 px-2.5 py-1 bg-emerald-950/85 border border-emerald-500/60 rounded-lg text-emerald-300 text-[10px] font-bold flex items-center gap-1.5 backdrop-blur-xs shadow-md">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <div className="absolute top-3 left-3 z-10 px-3 py-1.5 bg-emerald-950/90 border border-emerald-500/60 rounded-xl text-emerald-300 text-xs font-bold flex items-center gap-2 backdrop-blur-md shadow-lg">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                             <span>Wajah Guru Cocok ({faceVerificationResult.similarity}%)</span>
                           </div>
                         )}
-                        <div className="absolute top-2.5 right-2.5 z-10">
+                        <div className="absolute top-3 right-3 z-10">
                           <button
                             type="button"
                             onClick={handleRetakePhoto}
-                            className="px-2.5 py-1 bg-black/75 hover:bg-black/90 text-white rounded-lg text-[11px] font-bold flex items-center gap-1.5 backdrop-blur-xs transition-colors cursor-pointer"
+                            className="px-3 py-1.5 bg-black/80 hover:bg-black text-white rounded-xl text-xs font-bold flex items-center gap-2 backdrop-blur-md transition-colors cursor-pointer border border-white/20 shadow-lg"
                           >
-                            <RotateCcw className="w-3 h-3 text-indigo-400" />
+                            <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
                             <span>Ambil Ulang</span>
                           </button>
                         </div>
@@ -2990,14 +3080,14 @@ export default function TeacherAttendancePage() {
                         />
                         {/* Top Auto-Scan Status Pill */}
                         {config.attendanceMode === "face_recognition" && (
-                          <div className="absolute top-2.5 inset-x-2 z-20 flex items-center justify-center pointer-events-none">
+                          <div className="absolute top-3 inset-x-3 z-20 flex items-center justify-center pointer-events-none">
                             <div
                               className={cn(
-                                "px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 backdrop-blur-md border shadow-lg transition-all duration-300",
+                                "px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 backdrop-blur-md border shadow-xl transition-all duration-300",
                                 autoScanStatus === "matched"
                                   ? "bg-emerald-950/85 text-emerald-300 border-emerald-500/60 shadow-emerald-500/20"
                                   : autoScanStatus === "blinking"
-                                  ? "bg-cyan-950/90 text-cyan-200 border-cyan-400 shadow-cyan-500/30 animate-pulse"
+                                  ? "bg-cyan-950/90 text-cyan-200 border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.35)] animate-pulse"
                                   : autoScanStatus === "verifying"
                                   ? "bg-indigo-950/85 text-indigo-300 border-indigo-500/60 shadow-indigo-500/20"
                                   : autoScanStatus === "spoof"
@@ -3008,42 +3098,34 @@ export default function TeacherAttendancePage() {
                               )}
                             >
                               {autoScanStatus === "matched" ? (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400 animate-bounce" />
                               ) : autoScanStatus === "blinking" ? (
-                                <Eye className="w-3.5 h-3.5 text-cyan-300 animate-bounce" />
+                                <ScanFace className="w-4 h-4 text-cyan-300 animate-pulse" />
                               ) : autoScanStatus === "verifying" ? (
-                                <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
+                                <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
                               ) : autoScanStatus === "spoof" ? (
-                                <ShieldAlert className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+                                <ShieldAlert className="w-4 h-4 text-rose-400 animate-pulse" />
                               ) : autoScanStatus === "unmatched" ? (
-                                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                                <AlertTriangle className="w-4 h-4 text-amber-400" />
                               ) : (
-                                <ScanFace className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+                                <ScanFace className="w-4 h-4 text-indigo-400 animate-pulse" />
                               )}
-                              <span className="truncate max-w-[200px] sm:max-w-xs">
-                                {autoScanFeedback || (faceBiometric?.isEnrolled ? "Auto-Scan Aktif: Arahkan wajah..." : "Wajah master belum terdaftar")}
+                              <span className="truncate max-w-[280px] sm:max-w-md font-semibold">
+                                {autoScanFeedback || (faceBiometric?.isEnrolled ? "Posisikan wajah di dalam bingkai..." : "Wajah master belum terdaftar")}
                               </span>
-                              {autoScanScore !== null && (
-                                <span className={cn(
-                                  "text-[10px] px-1.5 py-0.5 rounded-md font-mono",
-                                  autoScanStatus === "spoof" ? "bg-rose-500/20 text-rose-200" : "bg-white/10"
-                                )}>
-                                  {autoScanStatus === "spoof" ? `Fake: ${autoScanScore}%` : `${autoScanScore}%`}
-                                </span>
-                              )}
                             </div>
                           </div>
                         )}
 
-                        {/* Centered HUD Bounding Box */}
+                        {/* Centered HUD Bounding Box - Well-proportioned framing */}
                         <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                           <div
                             className={cn(
-                              "w-36 h-44 sm:w-42 sm:h-52 border-2 rounded-2xl relative flex items-center justify-center transition-all duration-300",
+                              "w-36 h-48 sm:w-42 sm:h-56 border-2 rounded-2xl relative flex items-center justify-center transition-all duration-300",
                               autoScanStatus === "matched"
                                 ? "border-emerald-400 bg-emerald-500/10 shadow-[0_0_25px_rgba(52,211,153,0.35)] ring-4 ring-emerald-400/30"
                                 : autoScanStatus === "blinking"
-                                ? "border-cyan-400 bg-cyan-500/15 shadow-[0_0_25px_rgba(6,182,212,0.4)] ring-4 ring-cyan-400/40 animate-pulse"
+                                ? "border-cyan-400 bg-cyan-500/15 shadow-[0_0_30px_rgba(34,211,238,0.4)] ring-4 ring-cyan-400/30"
                                 : autoScanStatus === "verifying"
                                 ? "border-indigo-400 bg-indigo-500/10 shadow-[0_0_20px_rgba(99,102,241,0.25)]"
                                 : autoScanStatus === "spoof"
@@ -3053,45 +3135,41 @@ export default function TeacherAttendancePage() {
                                 : "border-dashed border-indigo-400/80"
                             )}
                           >
-                            <div className={cn("absolute top-0 left-0 w-3.5 h-3.5 border-t-2 border-l-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "blinking" ? "border-cyan-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-indigo-400")} />
-                            <div className={cn("absolute top-0 right-0 w-3.5 h-3.5 border-t-2 border-r-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "blinking" ? "border-cyan-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-indigo-400")} />
-                            <div className={cn("absolute bottom-0 left-0 w-3.5 h-3.5 border-b-2 border-l-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "blinking" ? "border-cyan-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-indigo-400")} />
-                            <div className={cn("absolute bottom-0 right-0 w-3.5 h-3.5 border-b-2 border-r-2 transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "blinking" ? "border-cyan-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-indigo-400")} />
+                            <div className={cn("absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 rounded-tl-lg transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-indigo-400")} />
+                            <div className={cn("absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 rounded-tr-lg transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-indigo-400")} />
+                            <div className={cn("absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 rounded-bl-lg transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-indigo-400")} />
+                            <div className={cn("absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 rounded-br-lg transition-colors", autoScanStatus === "matched" ? "border-emerald-400" : autoScanStatus === "spoof" ? "border-rose-500" : "border-indigo-400")} />
 
                             {config.attendanceMode === "face_recognition" && (
                               <div className={cn(
-                                "absolute inset-x-2 top-2 h-0.5 bg-gradient-to-r from-transparent to-transparent animate-pulse",
+                                "absolute inset-x-3 top-3 h-0.5 bg-gradient-to-r from-transparent to-transparent animate-pulse",
                                 autoScanStatus === "spoof"
-                                  ? "via-rose-500 shadow-[0_0_8px_#f43f5e]"
+                                  ? "via-rose-500 shadow-[0_0_10px_#f43f5e]"
                                   : autoScanStatus === "blinking"
                                   ? "via-cyan-400 shadow-[0_0_8px_#22d3ee]"
                                   : "via-indigo-400 shadow-[0_0_8px_#818cf8]"
                               )} />
                             )}
 
-                            {autoScanStatus === "blinking" ? (
-                              <Eye className="w-8 h-8 text-cyan-300 animate-bounce" />
-                            ) : (
-                              <ScanFace className={cn("w-7 h-7 transition-colors", autoScanStatus === "matched" ? "text-emerald-400/60" : autoScanStatus === "spoof" ? "text-rose-400/80" : "text-indigo-400/50")} />
-                            )}
+                            <ScanFace className={cn("w-10 h-10 transition-colors", autoScanStatus === "matched" ? "text-emerald-400/70" : autoScanStatus === "spoof" ? "text-rose-400/80" : autoScanStatus === "blinking" ? "text-cyan-300 animate-pulse" : "text-indigo-400/50")} />
                           </div>
                         </div>
 
                         {/* Bottom Action HUD: Auto-Scan indicator + Instant manual trigger */}
-                        <div className="absolute bottom-2.5 inset-x-0 flex items-center justify-center px-4 z-10 gap-2">
+                        <div className="absolute bottom-3 inset-x-0 flex items-center justify-center px-4 z-10 gap-2.5">
                           {config.attendanceMode === "face_recognition" ? (
-                            <div className="flex items-center gap-2">
-                              <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-xl border border-white/10 text-white/90 text-[11px] font-medium flex items-center gap-1.5 shadow-md">
-                                <span className="relative flex h-2 w-2">
+                            <div className="flex items-center gap-2.5 bg-black/60 backdrop-blur-md p-1.5 rounded-2xl border border-white/10 shadow-xl">
+                              <div className="px-3 py-1.5 text-white/90 text-xs font-semibold flex items-center gap-2">
+                                <span className="relative flex h-2.5 w-2.5">
                                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                                 </span>
-                                <span>Auto-Scan Aktif</span>
+                                <span>Auto-Scan AI Aktif</span>
                               </div>
                               <button
                                 type="button"
                                 onClick={() => handleCapturePhoto("CLOCK OUT")}
-                                className="px-3 py-1.5 bg-[#531FFF]/85 hover:bg-[#531FFF] text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 border border-purple-400/30 backdrop-blur-xs"
+                                className="px-3.5 py-1.5 bg-[#531FFF] hover:bg-[#6E3BFF] text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 border border-purple-400/30"
                                 title="Ambil foto langsung tanpa menunggu auto-scan"
                               >
                                 <ScanFace className="w-3.5 h-3.5" />
@@ -3102,31 +3180,35 @@ export default function TeacherAttendancePage() {
                             <button
                               type="button"
                               onClick={() => handleCapturePhoto("CLOCK OUT")}
-                              className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-500/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                              className="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-extrabold text-xs rounded-2xl shadow-xl shadow-indigo-500/40 flex items-center gap-2 cursor-pointer transition-all active:scale-95"
                             >
-                              <Camera className="w-3.5 h-3.5" />
+                              <Camera className="w-4 h-4" />
                               <span>Ambil Foto Pulang</span>
                             </button>
                           )}
                         </div>
                       </>
                     ) : (
-                      <div className="p-4 text-center space-y-2.5">
-                        <Camera className="w-8 h-8 text-gray-400 mx-auto" />
-                        <p className="text-[11px] text-gray-300 max-w-xs mx-auto leading-tight">
-                          {cameraError || "Kamera perlu diinisialisasi atau izin peramban belum aktif."}
+                      <div className="p-6 text-center space-y-3">
+                        <div className="w-16 h-16 rounded-2xl border-2 border-indigo-500/50 flex items-center justify-center bg-indigo-500/15 shadow-xl mx-auto">
+                          <Camera className="w-8 h-8 text-indigo-400" />
+                        </div>
+                        <h4 className="font-extrabold text-sm text-white">Kamera Belum Aktif</h4>
+                        <p className="text-xs text-gray-300 max-w-sm mx-auto leading-relaxed">
+                          {cameraError || "Nyalakan kamera live untuk memverifikasi presensi pulang kerja guru secara instan."}
                         </p>
-                        <div className="flex items-center justify-center gap-2 flex-wrap pt-1">
+                        <div className="flex items-center justify-center gap-3 flex-wrap pt-2">
                           <button
                             type="button"
                             onClick={startCamera}
-                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg cursor-pointer"
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/30 cursor-pointer transition-all active:scale-95 flex items-center gap-2"
                           >
-                            Nyalakan Kamera
+                            <Camera className="w-4 h-4" />
+                            <span>Nyalakan Kamera</span>
                           </button>
                           <label
                             htmlFor="clockOutFileFallback"
-                            className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white font-bold text-xs rounded-lg cursor-pointer transition-colors"
+                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors border border-white/20"
                           >
                             Unggah File
                           </label>
@@ -3135,23 +3217,23 @@ export default function TeacherAttendancePage() {
                     )}
                   </div>
 
-                  {/* Fallback upload text - only in selfie mode */}
-                  {config.attendanceMode !== "face_recognition" ? (
-                    <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
-                      <span>Posisi wajah di tengah bingkai</span>
+                  {/* Fallback upload text / sub-bar helper */}
+                  <div className="flex items-center justify-between text-[11px] text-gray-500 px-1">
+                    <span>💡 Posisikan wajah di tengah bingkai dalam pencahayaan yang cukup</span>
+                    {config.attendanceMode !== "face_recognition" ? (
                       <label
                         htmlFor="clockOutFileFallback"
                         className="text-indigo-600 hover:underline font-semibold cursor-pointer"
                       >
                         Unggah Foto dari Galeri
                       </label>
-                    </div>
-                  ) : (
-                    <div className="text-[10px] text-purple-600 font-semibold pt-0.5 flex items-center gap-1">
-                      <ScanFace className="w-3 h-3" />
-                      <span>Mode Face Recognition AI aktif • Verifikasi langsung lewat kamera</span>
-                    </div>
-                  )}
+                    ) : (
+                      <span className="text-purple-600 font-semibold flex items-center gap-1">
+                        <ScanFace className="w-3.5 h-3.5" />
+                        <span>Mode Face Recognition AI Aktif</span>
+                      </span>
+                    )}
+                  </div>
 
                   <input
                     type="file"
@@ -3163,72 +3245,117 @@ export default function TeacherAttendancePage() {
                   />
                 </div>
 
-                {/* Right Column: Identity, Geofence, Notes, & Actions */}
-                <div className="md:col-span-6 flex flex-col justify-between space-y-2.5">
-                  {/* Shift & Time Summary */}
-                  <div className="p-2.5 bg-gray-50/90 rounded-xl border border-gray-200/60 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="text-[9px] text-gray-400 uppercase font-extrabold block">Jam Masuk Tercatat</span>
-                      <strong className="font-mono text-emerald-700 font-bold block text-xs">
-                        {(activeTodayRecord || todayTeacherRecord)?.clockIn?.time || "--:--:--"} WIB
-                      </strong>
-                      <span className="text-[10px] text-gray-500 truncate block max-w-[140px]">{currentTeacherInfo?.name}</span>
+                {/* Right Column: Redesigned Layout for Identity, GPS, Notes, & Actions */}
+                <div className="lg:col-span-5 flex flex-col justify-between space-y-3.5">
+                  {/* 1. Shift & Time Summary Card */}
+                  <div className="p-3.5 bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-2xl border border-slate-200/80 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-gray-400 uppercase font-extrabold tracking-wider">Identitas & Jadwal</span>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-indigo-100/70 text-indigo-800 border border-indigo-200/60">
+                        Presensi Pulang
+                      </span>
                     </div>
-                    <div className="text-right">
-                      <span className="text-[9px] text-gray-400 uppercase font-extrabold block">Waktu Pulang</span>
-                      <strong className="font-mono text-indigo-700 font-black block text-xs">
-                        {nowDate.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} WIB
-                      </strong>
-                      <span className="text-[10px] text-gray-500">Standar: {config.standardClockOut} WIB</span>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <strong className="text-gray-900 text-sm font-black block leading-tight">{currentTeacherInfo?.name}</strong>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[11px] text-gray-500 font-medium">Jam Masuk:</span>
+                          <span className="font-mono text-[11px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                            {(activeTodayRecord || todayTeacherRecord)?.clockIn?.time || "--:--:--"} WIB
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] text-gray-400 block font-semibold">Standar Pulang</span>
+                        <strong className="font-mono text-xs text-indigo-700 font-bold block">{config.standardClockOut} WIB</strong>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Geofence & GPS Verification Box */}
-                  <div className="p-2.5 bg-gray-50/90 rounded-xl border border-gray-200/60 space-y-1.5 text-xs">
+                  {/* 2. Geofence & GPS Verification Box */}
+                  <div className="p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-2.5 text-xs shadow-2xs">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-[#531FFF]" />
-                        <span className="font-bold text-gray-800 text-[11px]">Radius & Lokasi GPS</span>
+                        <div className="w-6 h-6 rounded-lg bg-[#531FFF]/10 flex items-center justify-center text-[#531FFF]">
+                          <MapPin className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="font-bold text-gray-900 text-xs">Lokasi & Radius GPS</span>
                       </div>
                       <button
                         type="button"
                         onClick={refreshLocation}
                         disabled={gpsLoading}
-                        className="text-[10px] text-[#531FFF] hover:underline flex items-center gap-1 font-bold cursor-pointer"
+                        className="text-[11px] text-[#531FFF] hover:text-[#4317CC] flex items-center gap-1 font-bold cursor-pointer transition-colors"
                       >
                         <RefreshCw className={cn("w-3 h-3", gpsLoading && "animate-spin")} />
-                        <span>{gpsLoading ? "Mengecek..." : "Perbarui GPS"}</span>
+                        <span>{gpsLoading ? "Mengambil GPS..." : "Perbarui GPS"}</span>
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-gray-200/50">
-                      <span className="text-gray-600">
-                        Jarak: <strong className="text-gray-900">{formatDistance(locationData.distance)}</strong>{" "}
-                        <span className="text-gray-400 text-[10px]">(Maks {config.geofenceCenter.radiusMeters}m)</span>
-                      </span>
-                      <span
-                        className={cn(
-                          "text-[10px] font-bold px-2 py-0.5 rounded-full border",
-                          locationData.inRadius
-                            ? "bg-emerald-100 text-emerald-800 border-emerald-200"
-                            : "bg-rose-100 text-rose-800 border-rose-200"
-                        )}
-                      >
-                        {locationData.inRadius ? "Dalam Radius 🟢" : "Di Luar Radius 🔴"}
-                      </span>
+                    <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-gray-200/70 shadow-2xs">
+                      <div>
+                        <span className="text-[10px] text-gray-400 uppercase font-extrabold block">Jarak ke Sekolah</span>
+                        <div className="text-gray-900 text-xs font-black">
+                          {gpsLoading ? (
+                            <span className="text-gray-400 font-normal italic flex items-center gap-1.5 py-0.5">
+                              <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
+                              <span>Mendeteksi jarak terkini...</span>
+                            </span>
+                          ) : (
+                            <>
+                              {formatDistance(locationData.distance)}{" "}
+                              <span className="text-gray-400 text-[10px] font-normal">(Maks {config.geofenceCenter.radiusMeters}m)</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {gpsLoading ? (
+                        <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-lg border bg-blue-50 text-blue-700 border-blue-200 flex items-center gap-1.5 animate-pulse">
+                          <RefreshCw className="w-3 h-3 animate-spin text-blue-600" />
+                          <span>Sinkron GPS...</span>
+                        </span>
+                      ) : (
+                        <span
+                          className={cn(
+                            "text-[10px] font-extrabold px-2.5 py-1 rounded-lg border flex items-center gap-1",
+                            locationData.inRadius
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                              : "bg-rose-50 text-rose-800 border-rose-200"
+                          )}
+                        >
+                          {locationData.inRadius ? "Dalam Radius 🟢" : "Di Luar Radius 🔴"}
+                        </span>
+                      )}
                     </div>
 
-                    <p className="text-[10px] text-gray-400 font-mono truncate" title={config.geofenceCenter.address}>
-                      {config.geofenceCenter.address} ({locationData.lat.toFixed(4)}, {locationData.lng.toFixed(4)})
-                    </p>
+                    <div className="bg-white p-2.5 rounded-xl border border-gray-200/60 text-[11px] leading-relaxed">
+                      <span className="text-[9px] uppercase tracking-wider text-gray-400 font-extrabold block mb-0.5">Alamat Titik GPS Sekolah:</span>
+                      <p className="text-gray-700 font-medium line-clamp-2" title={config.geofenceCenter.address}>
+                        📍 {config.geofenceCenter.address}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono px-0.5">
+                      <span>
+                        {gpsLoading
+                          ? "📡 Menyambungkan sinyal satelit GPS..."
+                          : `Koordinat Guru: ${locationData.lat.toFixed(5)}, ${locationData.lng.toFixed(5)}`}
+                      </span>
+                      {lastGpsRefreshedAt && !gpsLoading && (
+                        <span className="text-[9px] text-indigo-600 font-sans font-bold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                          GPS Real-time
+                        </span>
+                      )}
+                    </div>
 
                     {gpsErrorState && (
-                      <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] space-y-1">
-                        <div className="flex items-start gap-1.5">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-1.5">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                           <div>
-                            <p className="font-bold text-amber-900 text-[10px]">{gpsErrorState.title}</p>
-                            <p className="text-[10px] text-amber-800">{gpsErrorState.message}</p>
+                            <p className="font-bold text-amber-900 text-xs">{gpsErrorState.title}</p>
+                            <p className="text-[11px] text-amber-800">{gpsErrorState.message}</p>
                           </div>
                         </div>
                         <div className="pt-0.5 flex justify-end">
@@ -3236,7 +3363,7 @@ export default function TeacherAttendancePage() {
                             type="button"
                             onClick={refreshLocation}
                             disabled={gpsLoading}
-                            className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[9px] font-bold transition-colors cursor-pointer"
+                            className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] font-bold transition-colors cursor-pointer"
                           >
                             Minta Ulang Izin
                           </button>
@@ -3245,16 +3372,17 @@ export default function TeacherAttendancePage() {
                     )}
                   </div>
 
+                  {/* 3. Alerts */}
                   {/* Warning Alert if outside radius */}
                   {config.geofenceEnabled && !locationData.inRadius && !gpsLoading && (
-                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800 animate-in fade-in">
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-xs text-rose-800 animate-in fade-in">
                       <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                       <div className="space-y-0.5">
-                        <span className="font-bold block text-rose-900 text-[11px]">
+                        <span className="font-bold block text-rose-900 text-xs">
                           Lokasi di Luar Jangkauan Sekolah
                         </span>
-                        <p className="text-rose-800 text-[10px] leading-snug">
-                          Anda berjarak <strong>{formatDistance(locationData.distance)}</strong> ({Math.max(0, locationData.distance - (config.geofenceCenter?.radiusMeters ?? 100))}m di luar batas). Tombol Clock Out dinonaktifkan.
+                        <p className="text-rose-800 text-[11px] leading-snug">
+                          Anda berjarak <strong>{formatDistance(locationData.distance)}</strong> ({Math.max(0, locationData.distance - (config.geofenceCenter?.radiusMeters ?? 100))}m di luar batas). Tombol Clock Out dinonaktifkan demi keaslian presensi.
                         </p>
                       </div>
                     </div>
@@ -3262,36 +3390,36 @@ export default function TeacherAttendancePage() {
 
                   {/* Mandatory Photo Alert / Status Badge */}
                   {!photoPreview ? (
-                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-xs text-amber-800 animate-in fade-in">
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5 text-xs text-amber-800 animate-in fade-in">
                       <Camera className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                       <div className="space-y-0.5">
-                        <span className="font-bold block text-amber-900 text-[11px]">
+                        <span className="font-bold block text-amber-900 text-xs">
                           Wajib Foto Selfie Pulang
                         </span>
-                        <p className="text-amber-800 text-[10px] leading-snug">
+                        <p className="text-amber-800 text-[11px] leading-snug">
                           Silakan ambil foto wajah Anda melalui bingkai kamera di sebelah kiri untuk mengaktifkan tombol Konfirmasi Pulang.
                         </p>
                       </div>
                     </div>
                   ) : (
-                    <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-800 animate-in fade-in">
-                      <div className="flex items-center gap-1.5">
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between text-xs text-emerald-800 animate-in fade-in">
+                      <div className="flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span className="font-bold text-[11px] text-emerald-900">
+                        <span className="font-bold text-xs text-emerald-900">
                           Foto Pulang Berhasil Diambil & Tervalidasi ✓
                         </span>
                       </div>
                       <button
                         type="button"
                         onClick={handleRetakePhoto}
-                        className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                        className="text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
                       >
                         Ambil Ulang
                       </button>
                     </div>
                   )}
 
-                  {/* Notes textarea */}
+                  {/* 4. Notes textarea */}
                   <div className="space-y-1">
                     <label className="block text-[11px] font-bold text-gray-700">Laporan Kegiatan / Catatan Pulang (Opsional)</label>
                     <textarea
@@ -3299,16 +3427,16 @@ export default function TeacherAttendancePage() {
                       onChange={(e) => setActionNotes(e.target.value)}
                       placeholder="Materi ajar yang telah diselesaikan, penugasan, atau catatan kelas..."
                       rows={2}
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] resize-none"
+                      className="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] resize-none"
                     />
                   </div>
 
-                  {/* Footer Actions */}
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                  {/* 5. Footer Actions */}
+                  <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
                     <button
                       type="button"
                       onClick={closeClockOutModal}
-                      className="px-3.5 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer transition-colors"
+                      className="px-4 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer transition-colors"
                     >
                       Batal
                     </button>
@@ -3317,25 +3445,25 @@ export default function TeacherAttendancePage() {
                       onClick={handleExecuteClockOut}
                       disabled={submitting || !photoPreview || (config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState))}
                       className={cn(
-                        "px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5",
+                        "w-full sm:w-auto px-5 py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 shadow-md",
                         submitting || !photoPreview || (config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState))
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none border border-gray-200"
-                          : "text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 cursor-pointer"
+                          : "text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-indigo-600/25 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                       )}
                     >
                       {submitting ? (
                         <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <RefreshCw className="w-4 h-4 animate-spin" />
                           <span>Memproses...</span>
                         </>
                       ) : !photoPreview ? (
                         <>
-                          <Camera className="w-3.5 h-3.5 text-gray-400" />
+                          <Camera className="w-4 h-4 text-gray-400" />
                           <span>Ambil Foto Terlebih Dahulu</span>
                         </>
                       ) : config.geofenceEnabled && (!locationData.inRadius || gpsLoading || !!gpsErrorState) ? (
                         <>
-                          <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                          <XCircle className="w-4 h-4 text-rose-500" />
                           <span>
                             {gpsLoading
                               ? "Menunggu GPS..."
@@ -3346,7 +3474,7 @@ export default function TeacherAttendancePage() {
                         </>
                       ) : (
                         <>
-                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <CheckCircle2 className="w-4 h-4 text-emerald-200" />
                           <span>Konfirmasi Pulang (Clock Out)</span>
                         </>
                       )}
