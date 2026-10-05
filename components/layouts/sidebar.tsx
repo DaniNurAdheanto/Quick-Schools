@@ -26,6 +26,7 @@ import {
   UserCog,
   PenLine,
   UserCheck,
+  ClipboardCheck,
   Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/homeroom": "users",
   "/subjects": "academic",
   "/attendance": "attendance",
+  "/leave-requests": "attendance",
   "/teacher-attendance": "attendance",
   "/grades": "grades",
   "/report-cards": "grades",
@@ -76,6 +78,7 @@ const MASTER_DATA_NAV = [
 
 const AKADEMIK_NAV = [
   { href: "/attendance", label: "Absensi Siswa", icon: FileCheck },
+  { href: "/leave-requests", label: "Izin & Sakit Siswa", icon: ClipboardCheck },
   { href: "/teacher-attendance", label: "Absensi Guru", icon: UserCheck },
   { href: "/grades", label: "Penilaian", icon: PenLine },
   { href: "/report-cards", label: "Rapor Digital", icon: Award },
@@ -175,6 +178,11 @@ function NavGroup({
       if (isStudent || isParent) {
         return false;
       }
+      return true;
+    }
+
+    // Izin & Sakit Siswa: Accessible to Siswa, Orang Tua, Guru (Wali Kelas), Admin, and Kepala Sekolah
+    if (item.href === "/leave-requests") {
       return true;
     }
 

@@ -23,7 +23,8 @@ import {
   CalendarRange,
   MapPin,
   Activity,
-  Camera
+  Camera,
+  ClipboardCheck
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -923,6 +924,14 @@ export function StudentDashboardView({
             <CreditCard className="w-4 h-4 text-gray-500" />
             <span>Tagihan SPP</span>
           </Link>
+
+          <Link
+            href="/leave-requests"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-purple-50 hover:bg-purple-100 text-[#531FFF] rounded-xl text-xs font-bold border border-purple-200 transition-colors"
+          >
+            <ClipboardCheck className="w-4 h-4 text-[#531FFF]" />
+            <span>Izin & Sakit</span>
+          </Link>
         </div>
 
       </div>
@@ -1095,6 +1104,13 @@ export function StudentDashboardView({
             >
               <FileText className="w-3.5 h-3.5 text-emerald-300" />
               <span>Rapor Digital</span>
+            </Link>
+            <Link
+              href="/leave-requests"
+              className="bg-white/10 hover:bg-white/20 px-3.5 py-1.5 rounded-lg border border-white/15 backdrop-blur-md text-xs font-bold flex items-center gap-1.5 transition-colors"
+            >
+              <ClipboardCheck className="w-3.5 h-3.5 text-blue-300" />
+              <span>Pengajuan Izin</span>
             </Link>
           </div>
         </div>

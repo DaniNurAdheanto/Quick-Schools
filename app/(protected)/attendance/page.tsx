@@ -37,7 +37,8 @@ import {
   Filter,
   GraduationCap,
   X,
-  ShieldAlert
+  ShieldAlert,
+  ClipboardCheck
 } from "lucide-react";
 import { cn, getTodayDateString } from "@/lib/utils";
 import { db, auth } from "@/lib/firebase";
@@ -1413,6 +1414,15 @@ export default function AttendancePage() {
                   <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
                   <span>Absensi Guru</span>
                   <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+
+                <Link
+                  href="/leave-requests"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-purple-50 text-[#531FFF] border border-purple-200 rounded-xl hover:bg-purple-100 transition-all text-xs font-bold shadow-2xs cursor-pointer"
+                  title="Kelola pengajuan izin & sakit siswa oleh Wali Kelas"
+                >
+                  <ClipboardCheck className="w-3.5 h-3.5 text-[#531FFF]" />
+                  <span>Izin & Sakit Siswa</span>
                 </Link>
 
                 {!isGuru && (

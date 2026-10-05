@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import Link from "next/link";
 import {
   Calendar,
   Clock,
@@ -17,7 +18,8 @@ import {
   AlertTriangle,
   ChevronDown,
   Filter,
-  UserCheck
+  UserCheck,
+  ClipboardCheck
 } from "lucide-react";
 import { cn, getTodayDateString } from "@/lib/utils";
 import type { AttendanceRecord, AttendanceConfig } from "@/app/(protected)/attendance/page";
@@ -310,35 +312,54 @@ export default function StudentPersonalAttendanceView({
             )}
 
             {!readOnly ? (
-              todayAttendance ? (
-                <div className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-500/20 backdrop-blur-md border border-emerald-400/30 text-emerald-300 font-extrabold text-xs rounded-lg cursor-not-allowed opacity-90">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Presensi Hari Ini Selesai ✓</span>
-                </div>
-              ) : isPastAbsentThreshold ? (
-                <button
-                  type="button"
-                  onClick={onOpenScanModal}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white font-extrabold text-xs rounded-lg shadow-md shadow-rose-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                  title={`Telah melewati batas waktu ${config.absentThresholdTime || "08:30"} WIB. Status absensi akan otomatis tercatat sebagai Alpa.`}
+              <div className="flex flex-wrap items-center gap-2">
+                {todayAttendance ? (
+                  <div className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-500/20 backdrop-blur-md border border-emerald-400/30 text-emerald-300 font-extrabold text-xs rounded-lg cursor-not-allowed opacity-90">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Presensi Hari Ini Selesai ✓</span>
+                  </div>
+                ) : isPastAbsentThreshold ? (
+                  <button
+                    type="button"
+                    onClick={onOpenScanModal}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white font-extrabold text-xs rounded-lg shadow-md shadow-rose-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                    title={`Telah melewati batas waktu ${config.absentThresholdTime || "08:30"} WIB. Status absensi akan otomatis tercatat sebagai Alpa.`}
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>Ambil Presensi (Tercatat Alpa)</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onOpenScanModal}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7E42EA] hover:from-[#4516db] hover:to-[#6f33db] text-white font-extrabold text-xs rounded-lg shadow-md shadow-[#531FFF]/40 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>Ambil Presensi Sekarang</span>
+                  </button>
+                )}
+
+                <Link
+                  href="/leave-requests"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white font-extrabold text-xs rounded-lg transition-all active:scale-[0.98]"
                 >
-                  <Camera className="w-3.5 h-3.5" />
-                  <span>Ambil Presensi (Tercatat Alpa)</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onOpenScanModal}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7E42EA] hover:from-[#4516db] hover:to-[#6f33db] text-white font-extrabold text-xs rounded-lg shadow-md shadow-[#531FFF]/40 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                >
-                  <Camera className="w-3.5 h-3.5" />
-                  <span>Ambil Presensi Sekarang</span>
-                </button>
-              )
+                  <ClipboardCheck className="w-3.5 h-3.5 text-purple-200" />
+                  <span>Ajukan Izin / Sakit</span>
+                </Link>
+              </div>
             ) : (
-              <div className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white/10 backdrop-blur-md border border-white/20 text-white font-bold text-xs rounded-lg">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{isParent ? "Mode Pantau Orang Tua" : "Read-Only"}</span>
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/leave-requests"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white font-extrabold text-xs rounded-lg transition-all active:scale-[0.98]"
+                >
+                  <ClipboardCheck className="w-3.5 h-3.5 text-purple-200" />
+                  <span>Pengajuan Izin Siswa</span>
+                </Link>
+                <div className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white/10 backdrop-blur-md border border-white/20 text-white font-bold text-xs rounded-lg">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{isParent ? "Mode Pantau Orang Tua" : "Read-Only"}</span>
+                </div>
               </div>
             )}
           </div>

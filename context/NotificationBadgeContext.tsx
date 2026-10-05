@@ -66,6 +66,7 @@ const MENU_LABELS: Record<string, string> = {
   "/exams": "Jadwal Ujian",
   "/payments": "Pembayaran SPP",
   "/attendance": "Absensi Siswa",
+  "/leave-requests": "Izin & Sakit Siswa",
   "/teacher-attendance": "Absensi Guru",
   "/grades": "Penilaian",
   "/report-cards": "Rapor Digital",
@@ -129,6 +130,7 @@ export function NotificationBadgeProvider({ children }: { children: React.ReactN
   const [billsData, setBillsData] = useState<any[]>([]);
   const [usersData, setUsersData] = useState<any[]>([]);
   const [attendanceData, setAttendanceData] = useState<any[]>([]);
+  const [leaveRequestsData, setLeaveRequestsData] = useState<any[]>([]);
   const [gradesData, setGradesData] = useState<any[]>([]);
   const [studentsData, setStudentsData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -225,6 +227,11 @@ export function NotificationBadgeProvider({ children }: { children: React.ReactN
       setAttendanceData(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     }, (err) => console.warn("attendance notif error:", err));
 
+    // G2. Leave Requests (Izin & Sakit)
+    const unsubLeaveRequests = onSnapshot(collection(db, "leave_requests"), (snap) => {
+      setLeaveRequestsData(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }, (err) => console.warn("leave_requests notif error:", err));
+
     // H. Grades (for Students & Parents)
     let unsubGrades = () => {};
     if (isStudent || isParent) {
@@ -249,6 +256,7 @@ export function NotificationBadgeProvider({ children }: { children: React.ReactN
       unsubBills();
       unsubUsers();
       unsubAttendance();
+      unsubLeaveRequests();
       unsubGrades();
       unsubStudents();
     };
@@ -420,6 +428,31 @@ export function NotificationBadgeProvider({ children }: { children: React.ReactN
       if (count > 0) res[path] = count;
     }
 
+    // 10. Leave Requests (/leave-requests)
+    {
+      const path = "/leave-requests";
+      const baseline = getBaselineTimestamp(path);
+      const readIds = new Set(readState.readItemIds?.[path] || []);
+      let count = 0;
+
+      leaveRequestsData.forEach((req) => {
+        if (readIds.has(req.id)) return;
+        if (isGuru || isAdmin || isSuperAdmin) {
+          // Wali Kelas / Admin gets badge for pending requests
+          if (req.status === "Menunggu Persetujuan") {
+            count++;
+          }
+        } else if (isStudent || isParent) {
+          // Student gets badge if their permit was reviewed
+          if (req.status !== "Menunggu Persetujuan") {
+            const docTime = parseDocTimestamp(req.approvedAt || req.rejectedAt || req.updatedAt);
+            if (docTime > baseline) count++;
+          }
+        }
+      });
+      if (count > 0) res[path] = count;
+    }
+
     return res;
   }, [
     uid,
@@ -430,6 +463,7 @@ export function NotificationBadgeProvider({ children }: { children: React.ReactN
     billsData,
     usersData,
     attendanceData,
+    leaveRequestsData,
     gradesData,
     studentsData,
     readState,

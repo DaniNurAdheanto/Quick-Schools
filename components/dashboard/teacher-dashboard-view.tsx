@@ -25,7 +25,8 @@ import {
   GraduationCap,
   ListTodo,
   ScanFace,
-  LogIn
+  LogIn,
+  ClipboardCheck
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -950,6 +951,13 @@ export function TeacherDashboardView({
             </div>
 
             <div className="flex items-center gap-2">
+              <Link
+                href="/leave-requests"
+                className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <ClipboardCheck className="w-3.5 h-3.5" />
+                Review Izin & Sakit
+              </Link>
               <Link
                 href="/report-cards"
                 className="px-3.5 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
