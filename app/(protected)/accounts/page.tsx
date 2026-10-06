@@ -68,263 +68,7 @@ interface AccountUser {
   [key: string]: any;
 }
 
-const ACCOUNTS_CACHE_KEY = "quick_schools_accounts_cache_v3";
-
-const DEFAULT_PRESET_ACCOUNTS: AccountUser[] = [
-  // Super Admin
-  {
-    id: "NJzKw1QdgKSqfuBBwzylnHyOSnk2",
-    uid: "NJzKw1QdgKSqfuBBwzylnHyOSnk2",
-    _allDocIds: ["NJzKw1QdgKSqfuBBwzylnHyOSnk2"],
-    name: "Dani Nur Adheanto",
-    email: "dani@gmail.com",
-    role: "super-admin",
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0812-3456-7890",
-  },
-  // Admin Sekolah
-  {
-    id: "admin-utama-01",
-    uid: "admin-utama-01",
-    _allDocIds: ["admin-utama-01"],
-    name: "Administrator Sekolah",
-    email: "admin@quickschools.sch.id",
-    role: "admin",
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0812-9876-5432",
-  },
-  {
-    id: "admin-staff-02",
-    uid: "admin-staff-02",
-    _allDocIds: ["admin-staff-02"],
-    name: "Staf Tata Usaha & IT",
-    email: "staff.admin@quickschools.sch.id",
-    role: "admin",
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0813-2233-4455",
-  },
-  // Kepala Sekolah
-  {
-    id: "kepsek-suryanto-01",
-    uid: "kepsek-suryanto-01",
-    _allDocIds: ["kepsek-suryanto-01"],
-    name: "Drs. H. Suryanto, M.Pd",
-    email: "kepsek@quickschools.sch.id",
-    role: "kepala-sekolah",
-    nip: "196805121994031004",
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0811-5566-7788",
-  },
-  // Guru Pengajar
-  {
-    id: "guru-budi-01",
-    uid: "guru-budi-01",
-    _allDocIds: ["guru-budi-01"],
-    name: "Budi Santoso, S.Pd",
-    email: "budi.santoso@quickschools.sch.id",
-    role: "guru",
-    nip: "198503152010011002",
-    subject: "Matematika Wajib",
-    className: "10 IPA 1",
-    classId: "10 IPA 1",
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0812-1122-3344",
-  },
-  {
-    id: "guru-siti-02",
-    uid: "guru-siti-02",
-    _allDocIds: ["guru-siti-02"],
-    name: "Dra. Hj. Siti Rahmawati, M.Pd",
-    email: "siti.rahma@quickschools.sch.id",
-    role: "guru",
-    nip: "197508201999032001",
-    subject: "Bahasa Indonesia",
-    className: "12 MIPA 1",
-    classId: "12 MIPA 1",
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0813-9988-7766",
-  },
-  {
-    id: "guru-joko-03",
-    uid: "guru-joko-03",
-    _allDocIds: ["guru-joko-03"],
-    name: "Joko Widodo, S.Pd",
-    email: "joko.widodo@quickschools.sch.id",
-    role: "guru",
-    nip: "198201012008011001",
-    subject: "Fisika",
-    className: "11 IPA 2",
-    classId: "11 IPA 2",
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0812-3344-5566",
-  },
-  {
-    id: "guru-rina-04",
-    uid: "guru-rina-04",
-    _allDocIds: ["guru-rina-04"],
-    name: "Rina Marlina, M.Pd",
-    email: "rina.marlina@quickschools.sch.id",
-    role: "guru",
-    nip: "198904122014022001",
-    subject: "Bahasa Inggris",
-    className: "10 IPS 1",
-    classId: "10 IPS 1",
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0813-7788-9900",
-  },
-  {
-    id: "guru-hendra-05",
-    uid: "guru-hendra-05",
-    _allDocIds: ["guru-hendra-05"],
-    name: "Hendra Gunawan, S.Pd",
-    email: "hendra.guru@quickschools.sch.id",
-    role: "guru",
-    nip: "198306112009021003",
-    subject: "Kimia",
-    className: "11 IPA 1",
-    classId: "11 IPA 1",
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0812-4455-6677",
-  },
-  {
-    id: "guru-dewi-06",
-    uid: "guru-dewi-06",
-    _allDocIds: ["guru-dewi-06"],
-    name: "Dewi Santoso, S.Si",
-    email: "dewi.santoso@quickschools.sch.id",
-    role: "guru",
-    nip: "198807142015032002",
-    subject: "Biologi",
-    className: "12 MIPA 2",
-    classId: "12 MIPA 2",
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0813-1133-5577",
-  },
-  // Siswa
-  {
-    id: "siswa-ahmad-01",
-    uid: "siswa-ahmad-01",
-    _allDocIds: ["siswa-ahmad-01"],
-    name: "Ahmad Rizqi Pratama",
-    email: "ahmad.rizqi@quickschools.sch.id",
-    role: "siswa",
-    nisn: "2023001",
-    className: "10 IPA 1",
-    classId: "10 IPA 1",
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0812-7711-2233",
-  },
-  {
-    id: "sTMozU2ZI1PpbQdGN6sbuCHouJv2",
-    uid: "sTMozU2ZI1PpbQdGN6sbuCHouJv2",
-    _allDocIds: ["sTMozU2ZI1PpbQdGN6sbuCHouJv2"],
-    name: "Josua",
-    email: "josua@quickschools.sch.id",
-    role: "siswa",
-    nisn: "2023002",
-    className: "12 MIPA 1",
-    classId: "12 MIPA 1",
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0813-8822-4411",
-  },
-  {
-    id: "siswa-budi-03",
-    uid: "siswa-budi-03",
-    _allDocIds: ["siswa-budi-03"],
-    name: "Budi Santoso",
-    email: "budi.siswa@quickschools.sch.id",
-    role: "siswa",
-    nisn: "2023003",
-    className: "10 IPA 1",
-    classId: "10 IPA 1",
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0812-3311-9988",
-  },
-  // Orang Tua / Wali
-  {
-    id: "wali-bambang-01",
-    uid: "wali-bambang-01",
-    _allDocIds: ["wali-bambang-01"],
-    name: "Ir. H. Bambang Sudarmono",
-    email: "bambang.wali@quickschools.sch.id",
-    role: "orang-tua",
-    studentName: "Ahmad Rizqi Pratama",
-    studentId: "2023001",
-    studentIds: ["2023001"],
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0811-2233-4455",
-  },
-  {
-    id: "wali-endang-02",
-    uid: "wali-endang-02",
-    _allDocIds: ["wali-endang-02"],
-    name: "Hj. Endang Sri Wahyuni",
-    email: "endang.wali@quickschools.sch.id",
-    role: "orang-tua",
-    studentName: "Josua",
-    studentId: "2023002",
-    studentIds: ["2023002"],
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0812-6677-8899",
-  },
-  {
-    id: "wali-hendra-03",
-    uid: "wali-hendra-03",
-    _allDocIds: ["wali-hendra-03"],
-    name: "Hendra Gunawan, S.E",
-    email: "hendra.wali@quickschools.sch.id",
-    role: "orang-tua",
-    studentName: "Budi Santoso",
-    studentId: "2023003",
-    studentIds: ["2023003"],
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0813-4455-6677",
-  },
-  {
-    id: "wali-rina-04",
-    uid: "wali-rina-04",
-    _allDocIds: ["wali-rina-04"],
-    name: "Rina Wulandari",
-    email: "rina.wali@quickschools.sch.id",
-    role: "orang-tua",
-    studentName: "Siti Rahmawati",
-    studentId: "2023004",
-    studentIds: ["2023004"],
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0812-9900-1122",
-  },
-  {
-    id: "wali-agus-05",
-    uid: "wali-agus-05",
-    _allDocIds: ["wali-agus-05"],
-    name: "Agus Setiawan",
-    email: "agus.wali@quickschools.sch.id",
-    role: "orang-tua",
-    studentName: "Dimas Aditya",
-    studentId: "2023005",
-    studentIds: ["2023005"],
-    status: "Aktif",
-    onboardingCompleted: true,
-    phone: "0813-1122-3344",
-  },
-];
+const ACCOUNTS_CACHE_KEY = "quick_schools_accounts_cache_v4";
 
 const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; border: string; icon: any }> = {
   "super-admin": { label: "Super Admin", bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200", icon: ShieldAlert },
@@ -337,8 +81,8 @@ const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; bor
   "kepala-sekolah": { label: "Kepala Sekolah", bg: "bg-cyan-50", text: "text-cyan-700", border: "border-cyan-200", icon: BookUser },
 };
 
-function resolveAccountRole(data: any, existingPreset?: AccountUser): string {
-  const email = (data.email || existingPreset?.email || "").toLowerCase().trim();
+function resolveAccountRole(data: any): string {
+  const email = (data.email || "").toLowerCase().trim();
   
   if (email === "dani@gmail.com" || email.includes("superadmin")) {
     return "super-admin";
@@ -356,19 +100,8 @@ function resolveAccountRole(data: any, existingPreset?: AccountUser): string {
     return "admin";
   }
 
-  // If existing preset has a non-student role, never let an accidental/empty "siswa" overwrite it
-  if (existingPreset && existingPreset.role && existingPreset.role !== "siswa") {
-    if (!data.role || normalizeRole(data.role) === "siswa") {
-      return existingPreset.role;
-    }
-  }
-
   if (data.role) {
     return normalizeRole(data.role);
-  }
-
-  if (existingPreset?.role) {
-    return normalizeRole(existingPreset.role);
   }
 
   if (data.nip || data.subject || data.subjectIds) {
@@ -391,16 +124,18 @@ export default function AccountManagementPage() {
   const [usersList, setUsersList] = useState<AccountUser[]>(() => {
     if (typeof window !== "undefined") {
       try {
+        localStorage.removeItem("quick_schools_accounts_cache_v3");
+        localStorage.removeItem("quick_schools_accounts_cache_v2");
         const cached = localStorage.getItem(ACCOUNTS_CACHE_KEY);
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             return parsed;
           }
         }
       } catch (e) {}
     }
-    return DEFAULT_PRESET_ACCOUNTS;
+    return [];
   });
   const [loading, setLoading] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -527,23 +262,36 @@ export default function AccountManagementPage() {
 
     setLoading(true);
     const qUsers = query(collection(db, "users"));
-    const unsubscribe = onSnapshot(qUsers, (snapshot) => {
-      const userMap = new Map<string, AccountUser>();
+    const unsubscribe = onSnapshot(qUsers, async (snapshot) => {
+      // Check deleted accounts to prevent ghost entries
+      const deletedIds = new Set<string>();
+      try {
+        const delSnap = await getDocs(collection(db, "deleted_accounts"));
+        delSnap.forEach(d => {
+          deletedIds.add(d.id);
+          const email = (d.data().email || "").toLowerCase().trim();
+          if (email) deletedIds.add(email);
+        });
+      } catch (e) {}
 
-      // 1. Seed DEFAULT_PRESET_ACCOUNTS so that standard accounts (Super Admin, Kepsek, Teachers, Parents, Students)
-      // are always available in the management table even if some Firestore docs are missing or newly provisioned
-      DEFAULT_PRESET_ACCOUNTS.forEach((preset) => {
-        const pEmail = (preset.email || "").toLowerCase().trim();
-        const pUid = preset.uid || preset.id;
-        const key = pUid && pUid.length >= 10 ? `uid_${pUid}` : (pEmail ? `email_${pEmail}` : `doc_${preset.id}`);
-        userMap.set(key, { ...preset });
-      });
+      const userMap = new Map<string, AccountUser>();
 
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
         const docId = docSnap.id;
         const uid = data.uid || docId;
         const email = (data.email || "").toLowerCase().trim();
+
+        // Skip deleted / purged accounts
+        if (
+          deletedIds.has(docId) || 
+          deletedIds.has(uid) || 
+          (email && deletedIds.has(email)) ||
+          data.status === "deleted" ||
+          data.isDeleted === true
+        ) {
+          return;
+        }
         
         let statusNormalized = data.status || "Aktif";
         if (data.onboardingCompleted === false && statusNormalized !== "Nonaktif") {
@@ -560,7 +308,7 @@ export default function AccountManagementPage() {
           key = `doc_${docId}`;
         }
 
-        // If duplicate entry exists (e.g. from preset or previous doc), merge safely
+        // If duplicate entry exists (e.g. from multiple docs with same UID/Email), merge safely
         if (userMap.has(key)) {
           const existing = userMap.get(key)!;
           if (!existing._allDocIds?.includes(docId)) {
@@ -576,8 +324,7 @@ export default function AccountManagementPage() {
           if (data.email) existing.email = data.email;
           if (data.phone) existing.phone = data.phone;
           
-          // Resilient role resolution: NEVER blindly collapse into "siswa"
-          existing.role = resolveAccountRole(data, existing);
+          existing.role = resolveAccountRole(data);
           existing.status = statusNormalized;
           if (typeof data.onboardingCompleted === "boolean") {
             existing.onboardingCompleted = data.onboardingCompleted;
@@ -622,8 +369,6 @@ export default function AccountManagementPage() {
       setLoading(false);
     }, (err) => {
       console.warn("Firestore snapshot error:", err);
-      // Fallback to presets if Firestore has permission or network error
-      setUsersList((prev) => prev.length > 0 ? prev : DEFAULT_PRESET_ACCOUNTS);
       setLoading(false);
     });
 
