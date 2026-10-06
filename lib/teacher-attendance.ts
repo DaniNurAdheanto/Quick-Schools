@@ -743,62 +743,96 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
     status,
     reason,
     permitDocUrl,
+    startDate,
+    endDate,
   }: {
     teacherId: string;
     teacherName: string;
     nip: string;
     subject?: string;
-    date: string;
+    date?: string;
+    startDate?: string;
+    endDate?: string;
     status: "Sakit" | "Izin" | "Cuti";
     reason: string;
     permitDocUrl?: string;
   }) => {
-    const docId = `TA_${teacherId}_${date}`;
+    const sDate = startDate || date || new Date().toISOString().split("T")[0];
+    const eDate = endDate || sDate;
+    
+    // Generate dates list
+    const dates: string[] = [];
+    try {
+      const start = new Date(sDate);
+      const end = new Date(eDate);
+      if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) {
+        dates.push(sDate);
+      } else {
+        const current = new Date(start);
+        while (current <= end) {
+          const y = current.getFullYear();
+          const m = String(current.getMonth() + 1).padStart(2, "0");
+          const d = String(current.getDate()).padStart(2, "0");
+          dates.push(`${y}-${m}-${d}`);
+          current.setDate(current.getDate() + 1);
+        }
+      }
+    } catch {
+      dates.push(sDate);
+    }
+
     const isoNow = new Date().toISOString();
+    const createdRecords: TeacherAttendanceRecord[] = [];
 
-    const newRecord: TeacherAttendanceRecord = {
-      id: docId,
-      teacherId,
-      teacherName,
-      nip: nip || "-",
-      subject: subject || "Guru Pengajar",
-      date,
-      clockIn: null,
-      clockOut: null,
-      workDurationMinutes: 0,
-      workDurationFormatted: "0m",
-      status,
-      permitReason: reason || "",
-      permitDocUrl: permitDocUrl || "",
-      createdAt: isoNow,
-      updatedAt: isoNow,
-    };
+    for (const dStr of dates) {
+      const docId = `TA_${teacherId}_${dStr}`;
+      const newRecord: TeacherAttendanceRecord = {
+        id: docId,
+        teacherId,
+        teacherName,
+        nip: nip || "-",
+        subject: subject || "Guru Pengajar",
+        date: dStr,
+        clockIn: null,
+        clockOut: null,
+        workDurationMinutes: 0,
+        workDurationFormatted: "0m",
+        status,
+        permitReason: reason || "",
+        permitDocUrl: permitDocUrl || "",
+        createdAt: isoNow,
+        updatedAt: isoNow,
+      };
 
-    const updated = [newRecord, ...records.filter((r) => r.id !== docId)];
+      createdRecords.push(newRecord);
+
+      try {
+        await setDoc(doc(db, "roles", docId), {
+          ...cleanFirestoreData({
+            ...newRecord,
+            type: "teacher_attendance",
+          }),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.warn("Error saving permit to roles:", err);
+      }
+
+      try {
+        await setDoc(doc(db, "teacher_attendance", docId), {
+          ...cleanFirestoreData(newRecord),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        // Direct teacher_attendance collection may be restricted
+      }
+    }
+
+    const createdIds = new Set(createdRecords.map((r) => r.id));
+    const updated = [...createdRecords, ...records.filter((r) => !createdIds.has(r.id))];
     saveRecordsCache(updated);
 
-    try {
-      await setDoc(doc(db, "roles", docId), {
-        ...cleanFirestoreData({
-          ...newRecord,
-          type: "teacher_attendance",
-        }),
-        updatedAt: serverTimestamp(),
-      });
-    } catch (err) {
-      console.warn("Error saving permit to roles:", err);
-    }
-
-    try {
-      await setDoc(doc(db, "teacher_attendance", docId), {
-        ...cleanFirestoreData(newRecord),
-        updatedAt: serverTimestamp(),
-      });
-    } catch (err) {
-      // Direct teacher_attendance collection may be restricted
-    }
-
-    return newRecord;
+    return createdRecords[0];
   };
 
   // Admin Actions: Update or Create Record Manually

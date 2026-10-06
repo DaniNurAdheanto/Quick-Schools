@@ -284,7 +284,7 @@ export default function LeaveRequestsPage() {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300">
+    <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-[1600px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
       
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 1. TOP HERO BANNER (Standard Quick Schools Aesthetics)       */}

@@ -82,6 +82,7 @@ const FaceEnrolmentModal = dynamic(
   () => import("@/components/attendance/face-enrolment-modal").then((mod) => mod.FaceEnrolmentModal),
   { ssr: false }
 );
+import { TeacherPermitModal } from "@/components/modals/teacher-permit-modal";
 import {
   getUserFaceBiometric,
   compareFaceDescriptors,
@@ -608,14 +609,6 @@ export default function TeacherAttendancePage() {
     stopCamera();
     setPhotoPreview(null);
   };
-
-  // Permit Form
-  const [permitForm, setPermitForm] = useState({
-    date: getTodayDateString(),
-    status: "Izin" as "Izin" | "Sakit" | "Cuti",
-    reason: "",
-    permitDocUrl: "",
-  });
 
   // Manual Record Form (Admin)
   const [manualRecord, setManualRecord] = useState<Partial<TeacherAttendanceRecord>>({
@@ -1242,43 +1235,6 @@ export default function TeacherAttendancePage() {
     } catch (err: any) {
       console.error("Execute clockOut error:", err);
       showError(err.message || "Gagal melakukan Clock Out.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Submit Permit
-  const handleSubmitPermit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentTeacherInfo) return;
-    const targetTeacherId = currentTeacherInfo.uid || currentTeacherInfo.id || authUser?.uid || currentUser?.uid;
-    if (!targetTeacherId) {
-      showError("Data identitas akun guru tidak ditemukan. Silakan login kembali.");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await submitPermit({
-        teacherId: targetTeacherId,
-        teacherName: currentTeacherInfo.name || authUserData?.fullName || authUserName || "Bapak/Ibu Guru",
-        nip: currentTeacherInfo.nip || authUserData?.nip || "-",
-        subject: currentTeacherInfo.subject || authUserData?.subject || "Guru Pengajar",
-        date: permitForm.date,
-        status: permitForm.status,
-        reason: permitForm.reason,
-        permitDocUrl: permitForm.permitDocUrl,
-      });
-
-      showSuccess(`Pengajuan ${permitForm.status} berhasil disimpan dan dicatat ke sistem.`);
-      setIsPermitModalOpen(false);
-      setPermitForm({
-        date: getTodayDateString(),
-        status: "Izin",
-        reason: "",
-        permitDocUrl: "",
-      });
-    } catch (err: any) {
-      showError(err.message || "Gagal menyimpan pengajuan.");
     } finally {
       setSubmitting(false);
     }
@@ -3507,87 +3463,28 @@ export default function TeacherAttendancePage() {
       )}
 
       {/* ========================================================================= */}
-      {/* 6. MODAL: PENGAJUAN IZIN / SAKIT / CUTI                                   */}
+      {/* 6. MODAL: PENGAJUAN IZIN / SAKIT / CUTI GURU                              */}
       {/* ========================================================================= */}
-      {isPermitModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <form
-            onSubmit={handleSubmitPermit}
-            className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200"
-          >
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold">
-                  <FileText className="w-4 h-4" />
-                </div>
-                <h3 className="font-bold text-base text-gray-900">Pengajuan Izin / Sakit / Cuti</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsPermitModalOpen(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Tanggal</label>
-                <input
-                  type="date"
-                  value={permitForm.date}
-                  onChange={(e) => setPermitForm({ ...permitForm, date: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Jenis Pengajuan</label>
-                <select
-                  value={permitForm.status}
-                  onChange={(e) => setPermitForm({ ...permitForm, status: e.target.value as any })}
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg font-bold text-gray-800"
-                >
-                  <option value="Izin">Izin (Keperluan Mendesak)</option>
-                  <option value="Sakit">Sakit (Kondisi Medis)</option>
-                  <option value="Cuti">Cuti Tahunan / Melahirkan</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Alasan / Keterangan</label>
-                <textarea
-                  rows={3}
-                  value={permitForm.reason}
-                  onChange={(e) => setPermitForm({ ...permitForm, reason: e.target.value })}
-                  placeholder="Jelaskan alasan ketidakhadiran Anda..."
-                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setIsPermitModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="px-5 py-2 text-xs font-bold text-white bg-[#531FFF] hover:bg-[#4216d6] rounded-xl shadow-md shadow-[#531FFF]/20 cursor-pointer transition-all"
-              >
-                {submitting ? "Menyimpan..." : "Kirim Pengajuan"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      <TeacherPermitModal
+        isOpen={isPermitModalOpen}
+        onClose={() => setIsPermitModalOpen(false)}
+        teacher={{
+          id: currentTeacherInfo?.id || authUser?.uid || "GURU",
+          uid: currentTeacherInfo?.uid || authUser?.uid,
+          name: currentTeacherInfo?.name || authUserData?.fullName || authUserName || "Bapak/Ibu Guru",
+          nip: currentTeacherInfo?.nip || authUserData?.nip || "-",
+          subject: currentTeacherInfo?.subject || authUserData?.subject || "Guru Pengajar",
+          homeroomClass: currentTeacherInfo?.homeroomClass,
+          imageUrl: currentTeacherInfo?.imageUrl || authUser?.photoURL || "",
+        }}
+        academicYear={activeAcademicYear || "2025/2026"}
+        onSubmitPermit={async (payload) => {
+          return await submitPermit(payload);
+        }}
+        onSuccess={() => {
+          setIsPermitModalOpen(false);
+        }}
+      />
 
       {/* ========================================================================= */}
       {/* 7. MODAL: CATAT MANUAL ADMIN                                              */}

@@ -13,44 +13,55 @@ import {
   Stethoscope,
   Send,
   CalendarDays,
-  Check
+  Check,
+  Briefcase
 } from "lucide-react";
 import { cn, getTodayDateString } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
-import { 
-  createLeaveRequest, 
-  getDatesBetween, 
-  LeaveRequestType 
-} from "@/lib/leave-requests-service";
+import { getDatesBetween } from "@/lib/leave-requests-service";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 
-interface CreateLeaveRequestModalProps {
+export type TeacherPermitType = "Sakit" | "Izin" | "Cuti";
+
+interface TeacherPermitModalProps {
   isOpen: boolean;
   onClose: () => void;
-  student: {
+  teacher: {
     id: string;
-    name: string;
-    nisn?: string;
-    className?: string;
     uid?: string;
+    name: string;
+    nip?: string;
+    subject?: string;
+    homeroomClass?: string;
+    imageUrl?: string;
   };
   academicYear?: string;
-  semester?: string;
+  onSubmitPermit: (payload: {
+    teacherId: string;
+    teacherName: string;
+    nip: string;
+    subject?: string;
+    startDate: string;
+    endDate: string;
+    status: TeacherPermitType;
+    reason: string;
+    permitDocUrl?: string;
+  }) => Promise<any>;
   onSuccess?: () => void;
 }
 
-export function CreateLeaveRequestModal({
+export function TeacherPermitModal({
   isOpen,
   onClose,
-  student,
+  teacher,
   academicYear = "2025/2026",
-  semester = "Ganjil",
+  onSubmitPermit,
   onSuccess
-}: CreateLeaveRequestModalProps) {
+}: TeacherPermitModalProps) {
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [type, setType] = useState<LeaveRequestType>("Sakit");
+  const [type, setType] = useState<TeacherPermitType>("Izin");
   const [startDate, setStartDate] = useState<string>(() => getTodayDateString());
   const [endDate, setEndDate] = useState<string>(() => getTodayDateString());
   const [reason, setReason] = useState("");
@@ -155,11 +166,11 @@ export function CreateLeaveRequestModal({
     e.preventDefault();
 
     if (!startDate) {
-      toast.showError("Pilih tanggal mulai izin / sakit.", "Form Belum Lengkap");
+      toast.showError("Pilih tanggal mulai izin / sakit / cuti.", "Form Belum Lengkap");
       return;
     }
     if (!endDate) {
-      toast.showError("Pilih tanggal selesai izin / sakit.", "Form Belum Lengkap");
+      toast.showError("Pilih tanggal selesai izin / sakit / cuti.", "Form Belum Lengkap");
       return;
     }
     if (startDate > endDate) {
@@ -167,42 +178,34 @@ export function CreateLeaveRequestModal({
       return;
     }
     if (!reason.trim()) {
-      toast.showError("Tuliskan alasan atau keterangan pengajuan izin/sakit.", "Keterangan Wajib");
+      toast.showError("Tuliskan alasan atau keterangan permohonan Anda.", "Keterangan Wajib");
       return;
     }
 
     if (type === "Sakit" && !attachmentBase64) {
       const confirmProceed = window.confirm(
-        "Anda belum melampirkan Surat Keterangan Dokter atau foto bukti sakit. Pengajuan tanpa surat dokter mungkin memerlukan konfirmasi tambahan dari Wali Kelas. Lanjutkan kirim?"
+        "Anda belum melampirkan Surat Keterangan Dokter. Lanjutkan pengajuan sakit?"
       );
       if (!confirmProceed) return;
     }
 
     setIsSubmitting(true);
     try {
-      await createLeaveRequest({
-        type,
-        studentId: student.id || student.nisn || "siswa",
-        studentName: student.name,
-        studentNisn: student.nisn,
-        studentUid: student.uid,
-        className: student.className || "Umum",
+      await onSubmitPermit({
+        teacherId: teacher.uid || teacher.id,
+        teacherName: teacher.name,
+        nip: teacher.nip || "-",
+        subject: teacher.subject || "Guru Pengajar",
         startDate,
         endDate,
-        daysCount,
+        status: type,
         reason: reason.trim(),
-        attachmentUrl: attachmentBase64 || undefined,
-        attachmentName: attachmentName || undefined,
-        submittedAt: new Date().toISOString(),
-        submittedBy: "siswa",
-        submitterName: student.name,
-        academicYear,
-        semester,
+        permitDocUrl: attachmentBase64 || undefined,
       });
 
       toast.showSuccess(
-        `Pengajuan ${type} untuk ${student.name} (${daysCount} hari) berhasil dikirim ke Wali Kelas.`,
-        "Pengajuan Terkirim"
+        `Pengajuan ${type} (${daysCount} hari) berhasil disimpan dan dicatat ke rekap kehadiran guru.`,
+        "Pengajuan Berhasil"
       );
 
       onSuccess?.();
@@ -218,12 +221,13 @@ export function CreateLeaveRequestModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-gray-950/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full flex flex-col overflow-hidden border border-gray-100 max-h-[96vh]">
         
-        {/* Compact Header with Student Summary in Top Bar */}
+        {/* Compact Header with Teacher Info */}
         <div className="px-5 py-3.5 bg-gradient-to-r from-gray-950 via-[#1d0b45] to-[#3a1078] text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <ProfileAvatar
-              name={student.name}
-              role="student"
+              name={teacher.name}
+              imageUrl={teacher.imageUrl}
+              role="teacher"
               size="md"
               shape="rounded-xl"
               className="shrink-0 ring-2 ring-white/30"
@@ -231,17 +235,17 @@ export function CreateLeaveRequestModal({
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm font-black tracking-tight text-white leading-tight truncate">
-                  Pengajuan Izin & Sakit — {student.name}
+                  Pengajuan Izin, Sakit & Cuti Guru
                 </h3>
                 <span className="px-2 py-0.2 rounded-md text-[10px] font-black bg-white/20 text-white border border-white/30">
-                  {student.className || "Kelas -"}
+                  {teacher.subject || "Pendidik"}
                 </span>
                 <span className="text-[10px] text-purple-200/90 font-medium hidden sm:inline">
-                  NISN: {student.nisn || "-"}
+                  NIP: {teacher.nip || "-"}
                 </span>
               </div>
               <p className="text-[11px] text-purple-200/80 font-medium">
-                Kirim surat permohonan ke Wali Kelas • T.A. {academicYear} ({semester})
+                {teacher.name} • Portal Presensi Guru T.A. {academicYear}
               </p>
             </div>
           </div>
@@ -262,69 +266,97 @@ export function CreateLeaveRequestModal({
             {/* ── LEFT COLUMN (7 Cols): Tipe, Waktu, & Alasan ── */}
             <div className="md:col-span-7 space-y-4">
               
-              {/* 1. Segmented Type Selector */}
+              {/* 1. Segmented Type Selector: Sakit, Izin, Cuti */}
               <div>
                 <label className="block text-xs font-black text-gray-800 tracking-tight mb-1.5">
-                  1. Jenis Permohonan <span className="text-rose-500">*</span>
+                  1. Kategori Ketidakhadiran <span className="text-rose-500">*</span>
                 </label>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setType("Sakit")}
-                    className={cn(
-                      "p-2.5 rounded-xl border text-left transition-all flex items-center gap-2.5 cursor-pointer",
-                      type === "Sakit"
-                        ? "bg-blue-50/90 border-blue-500 text-blue-950 shadow-xs ring-2 ring-blue-500/20"
-                        : "bg-gray-50/80 hover:bg-gray-100 border-gray-200 text-gray-700"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 font-bold",
-                      type === "Sakit" ? "bg-blue-600 text-white shadow-2xs" : "bg-gray-200 text-gray-600"
-                    )}>
-                      <Stethoscope className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black">Sakit</span>
-                        {type === "Sakit" && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                      </div>
-                      <span className="text-[10px] text-gray-500 block truncate">Surat dokter / gejala</span>
-                    </div>
-                  </button>
-
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Izin */}
                   <button
                     type="button"
                     onClick={() => setType("Izin")}
                     className={cn(
-                      "p-2.5 rounded-xl border text-left transition-all flex items-center gap-2.5 cursor-pointer",
+                      "p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer",
                       type === "Izin"
                         ? "bg-purple-50/90 border-[#531FFF] text-purple-950 shadow-xs ring-2 ring-[#531FFF]/20"
                         : "bg-gray-50/80 hover:bg-gray-100 border-gray-200 text-gray-700"
                     )}
                   >
-                    <div className={cn(
-                      "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 font-bold",
-                      type === "Izin" ? "bg-[#531FFF] text-white shadow-2xs" : "bg-gray-200 text-gray-600"
-                    )}>
-                      <Calendar className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black">Izin Resmi</span>
-                        {type === "Izin" && <Check className="w-3.5 h-3.5 text-[#531FFF]" />}
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <div className={cn(
+                        "w-7 h-7 rounded-lg flex items-center justify-center font-bold",
+                        type === "Izin" ? "bg-[#531FFF] text-white shadow-2xs" : "bg-gray-200 text-gray-600"
+                      )}>
+                        <Calendar className="w-3.5 h-3.5" />
                       </div>
-                      <span className="text-[10px] text-gray-500 block truncate">Urusan keluarga / dinas</span>
+                      {type === "Izin" && <Check className="w-3.5 h-3.5 text-[#531FFF]" />}
+                    </div>
+                    <div>
+                      <span className="text-xs font-black block">Izin Resmi</span>
+                      <span className="text-[9px] text-gray-500 block truncate">Dinas / Pribadi</span>
+                    </div>
+                  </button>
+
+                  {/* Sakit */}
+                  <button
+                    type="button"
+                    onClick={() => setType("Sakit")}
+                    className={cn(
+                      "p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer",
+                      type === "Sakit"
+                        ? "bg-blue-50/90 border-blue-500 text-blue-950 shadow-xs ring-2 ring-blue-500/20"
+                        : "bg-gray-50/80 hover:bg-gray-100 border-gray-200 text-gray-700"
+                    )}
+                  >
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <div className={cn(
+                        "w-7 h-7 rounded-lg flex items-center justify-center font-bold",
+                        type === "Sakit" ? "bg-blue-600 text-white shadow-2xs" : "bg-gray-200 text-gray-600"
+                      )}>
+                        <Stethoscope className="w-3.5 h-3.5" />
+                      </div>
+                      {type === "Sakit" && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                    </div>
+                    <div>
+                      <span className="text-xs font-black block">Sakit</span>
+                      <span className="text-[9px] text-gray-500 block truncate">Surat dokter</span>
+                    </div>
+                  </button>
+
+                  {/* Cuti */}
+                  <button
+                    type="button"
+                    onClick={() => setType("Cuti")}
+                    className={cn(
+                      "p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer",
+                      type === "Cuti"
+                        ? "bg-emerald-50/90 border-emerald-500 text-emerald-950 shadow-xs ring-2 ring-emerald-500/20"
+                        : "bg-gray-50/80 hover:bg-gray-100 border-gray-200 text-gray-700"
+                    )}
+                  >
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <div className={cn(
+                        "w-7 h-7 rounded-lg flex items-center justify-center font-bold",
+                        type === "Cuti" ? "bg-emerald-600 text-white shadow-2xs" : "bg-gray-200 text-gray-600"
+                      )}>
+                        <Briefcase className="w-3.5 h-3.5" />
+                      </div>
+                      {type === "Cuti" && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                    </div>
+                    <div>
+                      <span className="text-xs font-black block">Cuti Guru</span>
+                      <span className="text-[9px] text-gray-500 block truncate">Tahunan / Khusus</span>
                     </div>
                   </button>
                 </div>
               </div>
 
-              {/* 2. Tanggal & Preset */}
+              {/* 2. Tanggal & Presets */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-black text-gray-800 tracking-tight">
-                    2. Rentang Tanggal Absensi <span className="text-rose-500">*</span>
+                    2. Rentang Tanggal <span className="text-rose-500">*</span>
                   </label>
                   
                   {/* Preset chips */}
@@ -349,6 +381,13 @@ export function CreateLeaveRequestModal({
                       className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 hover:bg-purple-100 hover:text-[#531FFF] text-gray-700 transition-colors cursor-pointer"
                     >
                       2 Hari
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectPreset(3, 0)}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 hover:bg-purple-100 hover:text-[#531FFF] text-gray-700 transition-colors cursor-pointer"
+                    >
+                      3 Hari
                     </button>
                   </div>
                 </div>
@@ -411,8 +450,10 @@ export function CreateLeaveRequestModal({
                   onChange={(e) => setReason(e.target.value)}
                   placeholder={
                     type === "Sakit"
-                      ? "Contoh: Mengalami demam dan dianjurkan dokter istirahat..."
-                      : "Contoh: Menghadiri acara keluarga penting di luar kota..."
+                      ? "Jelaskan kondisi medis atau anjuran istirahat dokter..."
+                      : type === "Cuti"
+                      ? "Jelaskan keperluan cuti tahunan / urusan keluarga besar..."
+                      : "Jelaskan keperluan izin penting / tugas dinas luar..."
                   }
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 text-xs font-medium text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none placeholder:text-gray-400 resize-none leading-relaxed"
                   required
@@ -427,10 +468,10 @@ export function CreateLeaveRequestModal({
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-black text-gray-800 tracking-tight">
-                    4. Lampiran Bukti
+                    4. Dokumen Lampiran
                   </label>
                   <span className="text-[10px] text-purple-600 font-bold bg-purple-50 px-2 py-0.2 rounded">
-                    {type === "Sakit" ? "Surat Dokter" : "Surat Izin"}
+                    {type === "Sakit" ? "Surat Dokter" : "Dokumen Pendukung"}
                   </span>
                 </div>
 
@@ -451,7 +492,7 @@ export function CreateLeaveRequestModal({
                       <UploadCloud className="w-4 h-4" />
                     </div>
                     <p className="text-[11px] font-extrabold text-gray-800 group-hover:text-[#531FFF] transition-colors">
-                      Unggah foto surat / bukti
+                      Unggah berkas / foto surat
                     </p>
                     <p className="text-[9px] text-gray-400 mt-0.5">
                       JPG, PNG, atau PDF (Maks. 5MB)
@@ -499,10 +540,10 @@ export function CreateLeaveRequestModal({
               </div>
 
               {/* 5. Process Notice Card */}
-              <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl flex items-start gap-2 text-xs text-blue-950">
-                <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                <div className="text-[11px] leading-relaxed text-blue-900 font-medium">
-                  Permohonan akan langsung diverifikasi dan disetujui oleh <strong>Wali Kelas</strong> untuk pembaruan presensi.
+              <div className="p-3 bg-emerald-50/70 border border-emerald-100 rounded-xl flex items-start gap-2 text-xs text-emerald-950">
+                <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="text-[11px] leading-relaxed text-emerald-900 font-medium">
+                  Pengajuan otomatis dicatat ke sistem presensi guru dan terintegrasi pada rekapitulasi kehadiran bulanan sekolah.
                 </div>
               </div>
 
@@ -524,12 +565,12 @@ export function CreateLeaveRequestModal({
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Mengirim...</span>
+                      <span>Menyimpan...</span>
                     </>
                   ) : (
                     <>
                       <Send className="w-3.5 h-3.5" />
-                      <span>Kirim Sekarang</span>
+                      <span>Kirim Pengajuan</span>
                     </>
                   )}
                 </button>
