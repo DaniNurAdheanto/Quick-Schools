@@ -49,6 +49,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTeacherAttendance } from "@/lib/teacher-attendance";
 import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
+import { TeacherLeaveRequestsWidget } from "@/components/dashboard/teacher-leave-requests-widget";
 
 interface TeacherDashboardViewProps {
   userName: string;
@@ -1028,12 +1029,19 @@ export function TeacherDashboardView({
       )}
 
       {/* ============================================================ */}
-      {/* 4. MAIN CONTENT GRID: SCHEDULE (LEFT) & ACTIONS/TASKS (RIGHT) */}
+      {/* 4. MAIN CONTENT GRID: SCHEDULE, LEAVE REQUESTS & ACTIONS */}
       {/* ============================================================ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-7">
         
-        {/* LEFT COLUMN: LIVE TEACHING SCHEDULE (8 COLS) */}
+        {/* LEFT COLUMN: LEAVE REQUESTS, SCHEDULE & PERFORMANCE (8 COLS) */}
         <div className="lg:col-span-8 space-y-6">
+          {/* KOMPONEN CEK SURAT IZIN / SAKIT SISWA */}
+          <TeacherLeaveRequestsWidget
+            teacherName={teacherProfile.name}
+            homeroomClass={resolvedHomeroomClass}
+            taughtClasses={taughtClasses}
+          />
+
           <div className="bg-white rounded-xl p-6 md:p-7 border border-gray-100 shadow-[0_2px_15px_-4px_rgba(0,0,0,0.05)] space-y-5">
             {/* Header & Day Selector */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-gray-100">
@@ -1340,6 +1348,24 @@ export function TeacherDashboardView({
                   <ChevronRight className="w-4 h-4 text-emerald-600 group-hover:translate-x-0.5 transition-transform" />
                 </Link>
               )}
+
+              <Link
+                href="/leave-requests"
+                className="p-3 rounded-lg bg-amber-50/60 hover:bg-amber-50 border border-amber-200 transition-all flex items-center justify-between group cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-sm">
+                    <ClipboardCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-900 group-hover:text-amber-700 transition-colors">
+                      Verifikasi Surat Izin / Sakit
+                    </h4>
+                    <p className="text-[10px] text-gray-500">Persetujuan ketidakhadiran siswa kelas</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-0.5 transition-transform" />
+              </Link>
 
               <Link
                 href="/grades"
