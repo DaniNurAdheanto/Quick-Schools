@@ -799,6 +799,70 @@ export function NotificationBadgeProvider({ children }: { children: React.ReactN
       });
     }
 
+    // 7. Leave Requests (Izin & Sakit) for Wali Kelas, Teachers, and Students
+    const leaveBaseline = getBaselineTimestamp("/leave-requests");
+    const readLeaveIds = new Set(readState.readItemIds?.["/leave-requests"] || []);
+
+    if (isGuru || isAdmin || isSuperAdmin) {
+      const homeroomClass = (userData?.homeroomClass || userData?.homeroom || userData?.className || "").trim().toLowerCase();
+
+      leaveRequestsData.forEach((req) => {
+        if (req.status === "Menunggu Persetujuan") {
+          const reqClass = (req.className || "").trim().toLowerCase();
+          const isTargeted = !homeroomClass || homeroomClass === "-" || homeroomClass === "semua kelas" || !reqClass || reqClass === homeroomClass || isAdmin || isSuperAdmin;
+
+          if (isTargeted) {
+            const docTime = parseDocTimestamp(req.submittedAt || req.createdAt);
+            const isUnread = !readLeaveIds.has(req.id) && docTime > leaveBaseline;
+
+            list.push({
+              id: `leave-req-${req.id}`,
+              category: "academic",
+              categoryLabel: `Persetujuan ${req.type}`,
+              categoryPath: "/leave-requests",
+              title: `Pengajuan ${req.type}: ${req.studentName} (${req.className || "Kelas"})`,
+              description: `${req.startDate} (${req.daysCount} hari) • Alasan: ${req.reason || "-"}`,
+              timestamp: docTime,
+              formattedTime: formatNotificationTime(docTime),
+              href: "/leave-requests",
+              isRead: !isUnread,
+              priority: "high",
+            });
+          }
+        }
+      });
+    } else if (isStudent || isParent) {
+      const studentId = userData?.nisn || userData?.studentId || uid;
+      const studentName = (userData?.name || userData?.fullName || "").trim().toLowerCase();
+
+      leaveRequestsData.forEach((req) => {
+        const isMatched =
+          (req.studentId && (req.studentId === studentId || req.studentId === uid)) ||
+          (req.studentNisn && req.studentNisn === studentId) ||
+          (req.studentUid && req.studentUid === uid) ||
+          (studentName && req.studentName && req.studentName.toLowerCase().includes(studentName));
+
+        if (isMatched && req.status !== "Menunggu Persetujuan") {
+          const docTime = parseDocTimestamp(req.approvedAt || req.rejectedAt || req.updatedAt || req.createdAt);
+          const isUnread = !readLeaveIds.has(req.id) && docTime > leaveBaseline;
+
+          list.push({
+            id: `leave-res-${req.id}`,
+            category: "academic",
+            categoryLabel: `Status ${req.type}`,
+            categoryPath: "/leave-requests",
+            title: `Pengajuan ${req.type} ${req.status}`,
+            description: `Permohonan tanggal ${req.startDate} (${req.daysCount} hari) telah ${req.status.toLowerCase()}${req.approvedBy ? ` oleh ${req.approvedBy}` : ""}.`,
+            timestamp: docTime,
+            formattedTime: formatNotificationTime(docTime),
+            href: "/leave-requests",
+            isRead: !isUnread,
+            priority: req.status === "Disetujui" ? "normal" : "high",
+          });
+        }
+      });
+    }
+
     // Sort: Unread first, then newest timestamp
     return list.sort((a, b) => {
       if (a.priority === "urgent" && b.priority !== "urgent") return -1;
@@ -815,6 +879,7 @@ export function NotificationBadgeProvider({ children }: { children: React.ReactN
     examsData,
     billsData,
     usersData,
+    leaveRequestsData,
     readState,
     getBaselineTimestamp,
     isSuperAdmin,

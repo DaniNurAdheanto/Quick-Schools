@@ -78,6 +78,81 @@ export function getDatesBetween(startDateStr: string, endDateStr: string): strin
 }
 
 /**
+ * Checks whether a pending leave request has exceeded the 1-day approval deadline after the absence date.
+ * (Batas waktu persetujuan maksimal 1 hari setelah tanggal absensi).
+ */
+export function isLeaveRequestExpired(request: LeaveRequest): boolean {
+  if (request.status !== "Menunggu Persetujuan") return false;
+
+  const now = Date.now();
+
+  // 1. Check based on startDate (tanggal absensi)
+  if (request.startDate) {
+    try {
+      const parts = request.startDate.split("-").map(Number);
+      if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+        // End of 1 day after absence date (23:59:59.999)
+        const deadline = new Date(parts[0], parts[1] - 1, parts[2] + 1, 23, 59, 59, 999).getTime();
+        if (now > deadline) {
+          return true;
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Fallback check based on submittedAt / createdAt if older than 24-48 hours and absence date has passed
+  if (request.submittedAt || request.createdAt) {
+    try {
+      const submitTime = new Date(request.submittedAt || request.createdAt).getTime();
+      if (!isNaN(submitTime) && now - submitTime > 24 * 60 * 60 * 1000) {
+        if (request.startDate) {
+          const parts = request.startDate.split("-").map(Number);
+          if (parts.length === 3) {
+            const startDateEnd = new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999).getTime();
+            if (now > startDateEnd) {
+              return true;
+            }
+          }
+        } else {
+          return true;
+        }
+      }
+    } catch {}
+  }
+
+  return false;
+}
+
+// Track IDs currently being auto-approved to prevent concurrent duplicate calls
+const autoApprovingIds = new Set<string>();
+
+/**
+ * Automatically approves any pending leave requests that have exceeded the 1-day deadline.
+ */
+export async function checkAndAutoApproveExpiredRequests(requests: LeaveRequest[]): Promise<void> {
+  const expiredPending = requests.filter(
+    (req) => req.status === "Menunggu Persetujuan" && isLeaveRequestExpired(req) && !autoApprovingIds.has(req.id)
+  );
+
+  if (expiredPending.length === 0) return;
+
+  for (const req of expiredPending) {
+    autoApprovingIds.add(req.id);
+    try {
+      await approveLeaveRequest(
+        req,
+        "Sistem (Otomatis)",
+        "Disetujui otomatis oleh sistem setelah melewati batas waktu persetujuan"
+      );
+    } catch (e) {
+      console.warn("Auto-approve leave request error for", req.id, e);
+    } finally {
+      autoApprovingIds.delete(req.id);
+    }
+  }
+}
+
+/**
  * Subscribe to leave requests in real-time from Firestore & fallback to localStorage.
  */
 export function subscribeLeaveRequests(
@@ -90,6 +165,8 @@ export function subscribeLeaveRequests(
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
         callback(parsed);
+        // Check for any expired requests in cached data
+        checkAndAutoApproveExpiredRequests(parsed);
       }
     }
   } catch (e) {
@@ -131,6 +208,9 @@ export function subscribeLeaveRequests(
     } catch (e) {}
 
     callback(all);
+
+    // Auto-approve expired requests in the background
+    checkAndAutoApproveExpiredRequests(all);
   };
 
   const unsubLeaveReq = onSnapshot(

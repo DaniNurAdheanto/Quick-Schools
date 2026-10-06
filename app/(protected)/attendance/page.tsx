@@ -38,9 +38,12 @@ import {
   GraduationCap,
   X,
   ShieldAlert,
-  ClipboardCheck
+  ClipboardCheck,
+  Lock
 } from "lucide-react";
 import { cn, getTodayDateString } from "@/lib/utils";
+
+const ATTENDANCE_LOCK_HOUR_MINUTES = 10 * 60; // 10:00 WIB (600 menit)
 import { db, auth } from "@/lib/firebase";
 import {
   collection,
@@ -327,7 +330,7 @@ export default function AttendancePage() {
   const [isSavingBatch, setIsSavingBatch] = useState(false);
   const [searchTermDaily, setSearchTermDaily] = useState("");
 
-  // Clock ticker to refresh time-based status (e.g. automatically moving from Belum Absen to Alpa when passing absentThresholdTime)
+  // Clock ticker to refresh time-based status (e.g. automatically moving from Belum Absen to Alpa when passing absentThresholdTime, and locking after 10:00 WIB)
   const [currentMinutesTick, setCurrentMinutesTick] = useState<number>(() => {
     const d = new Date();
     return d.getHours() * 60 + d.getMinutes();
@@ -337,9 +340,19 @@ export default function AttendancePage() {
     const timer = setInterval(() => {
       const d = new Date();
       setCurrentMinutesTick(d.getHours() * 60 + d.getMinutes());
-    }, 30000); // Check every 30 seconds
+    }, 15000); // Check every 15 seconds
     return () => clearInterval(timer);
   }, []);
+
+  const todayDateStr = useMemo(() => getTodayDateString(), []);
+  const isPastDate = useMemo(() => selectedDate < todayDateStr, [selectedDate, todayDateStr]);
+  const isToday = useMemo(() => selectedDate === todayDateStr, [selectedDate, todayDateStr]);
+  const isPastLockTimeToday = useMemo(() => isToday && currentMinutesTick >= ATTENDANCE_LOCK_HOUR_MINUTES, [isToday, currentMinutesTick]);
+
+  // Aturan Kunci Otomatis: Jika tanggal lampau atau hari ini sudah melewati pukul 10:00 WIB, data absensi dikunci dan menjadi data final
+  const isAttendanceLocked = useMemo(() => {
+    return isPastDate || isPastLockTimeToday;
+  }, [isPastDate, isPastLockTimeToday]);
 
   // Tab 2: Biometric Log State
   const [biometricSearch, setBiometricSearch] = useState("");
@@ -856,6 +869,10 @@ export default function AttendancePage() {
 
   // Quick action: Mark all as Hadir
   const handleMarkAllHadir = () => {
+    if (isAttendanceLocked) {
+      toast.showError("Waktu absensi siswa telah melewati pukul 10:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat diedit).", "Absensi Terkunci (Final)");
+      return;
+    }
     if (!canMutateAttendance) {
       toast.showError("Akun Anda berstatus Monitoring Executive (Hanya Lihat). Anda tidak memiliki izin untuk mengubah data absensi.", "Akses Terbatas");
       return;
@@ -881,6 +898,10 @@ export default function AttendancePage() {
 
   // Quick action: Mark all unrecorded as Alpa
   const handleMarkRemainingAlpa = () => {
+    if (isAttendanceLocked) {
+      toast.showError("Waktu absensi siswa telah melewati pukul 10:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat diedit).", "Absensi Terkunci (Final)");
+      return;
+    }
     if (!canMutateAttendance) {
       toast.showError("Akun Anda berstatus Monitoring Executive (Hanya Lihat). Anda tidak memiliki izin untuk mengubah data absensi.", "Akses Terbatas");
       return;
@@ -910,6 +931,10 @@ export default function AttendancePage() {
 
   // Quick single change
   const handleStudentStatusChange = (studentId: string, status: AttendanceStatus | "Belum Absen") => {
+    if (isAttendanceLocked) {
+      toast.showError("Waktu absensi siswa telah melewati pukul 10:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat diedit).", "Absensi Terkunci (Final)");
+      return;
+    }
     if (!canMutateAttendance) {
       toast.showError("Akun Anda berstatus Monitoring Executive (Hanya Lihat). Anda tidak memiliki izin untuk mengubah data absensi.", "Akses Terbatas");
       return;
@@ -931,7 +956,7 @@ export default function AttendancePage() {
   };
 
   const handleStudentNotesChange = (studentId: string, notes: string) => {
-    if (!canMutateAttendance) return;
+    if (isAttendanceLocked || !canMutateAttendance) return;
     setClassAttendanceMap((prev) => ({
       ...prev,
       [studentId]: {
@@ -943,6 +968,10 @@ export default function AttendancePage() {
 
   // Save Batch Class Attendance to Firestore (using allowed roles collection + local cache)
   const handleSaveClassAttendance = async () => {
+    if (isAttendanceLocked) {
+      toast.showError("Waktu absensi siswa telah melewati pukul 10:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat disimpan ulang).", "Absensi Terkunci (Final)");
+      return;
+    }
     if (!canMutateAttendance) {
       toast.showError("Akun Anda berstatus Monitoring Executive (Hanya Lihat). Anda tidak memiliki izin untuk menyimpan perubahan presensi.", "Akses Terbatas");
       return;
@@ -1025,7 +1054,6 @@ export default function AttendancePage() {
   // -------------------------------------------------------------
   // Summary Metrics Calculation
   // -------------------------------------------------------------
-  const todayDateStr = useMemo(() => getTodayDateString(), []);
 
   const statsToday = useMemo(() => {
     // If classAttendanceMap has items for the classStudents, compute stats from classAttendanceMap
@@ -1738,7 +1766,14 @@ export default function AttendancePage() {
             </div>
 
             {/* Quick Batch Actions Right */}
-            {canMutateAttendance ? (
+            {isAttendanceLocked ? (
+              <div className="flex flex-wrap items-center gap-2 justify-end">
+                <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs font-extrabold text-amber-900 shadow-xs">
+                  <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Data Terkunci (Final): Melewati 10:00 WIB</span>
+                </div>
+              </div>
+            ) : canMutateAttendance ? (
               <div className="flex flex-wrap items-center gap-2 justify-end">
                 <button
                   type="button"
@@ -1938,6 +1973,51 @@ export default function AttendancePage() {
               </div>
             </div>
           </div>
+
+          {/* Lock Status Banner (Pukul 10:00 WIB Lock Enforcement) */}
+          {isAttendanceLocked ? (
+            <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border-l-4 border-amber-500 p-4 rounded-r-xl flex items-start sm:items-center justify-between gap-3 shadow-xs animate-in fade-in duration-200">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-800 flex items-center justify-center shrink-0 border border-amber-500/30">
+                  <Lock className="w-5 h-5 text-amber-700" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-xs sm:text-sm font-black text-amber-950">
+                      Data Absensi Terkunci (Status Data Final)
+                    </h4>
+                    <span className="text-[10px] bg-amber-200/80 text-amber-950 px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">
+                      Locked • Final
+                    </span>
+                  </div>
+                  <p className="text-[11px] sm:text-xs text-amber-900 font-medium mt-0.5 leading-relaxed">
+                    {isPastDate
+                      ? `Data absensi untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} sudah melewati batas waktu dan berstatus data final.`
+                      : "Sesuai aturan sekolah, waktu presensi hari ini telah melewati batas pukul 10:00 WIB. Data absensi yang telah tersimpan di database otomatis dikunci dan tidak dapat diubah atau diedit lagi."}
+                  </p>
+                </div>
+              </div>
+              <div className="shrink-0 hidden md:flex items-center gap-1.5 text-[11px] font-bold text-amber-800 bg-white/90 border border-amber-200 px-3 py-1.5 rounded-lg shadow-2xs">
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <span>Batas Edit: 10:00 WIB</span>
+              </div>
+            </div>
+          ) : isToday ? (
+            <div className="bg-emerald-50/70 border-l-4 border-emerald-500 p-3 sm:p-3.5 rounded-r-xl flex items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Clock className="w-4 h-4 text-emerald-600 animate-pulse" />
+                </div>
+                <div className="text-xs text-emerald-900 font-medium">
+                  <span className="font-extrabold text-emerald-950">Pengeditan Presensi Aktif: </span>
+                  Data absensi siswa dapat diinput & disunting hingga pukul <strong className="font-black text-emerald-950">10:00 WIB</strong> hari ini.
+                </div>
+              </div>
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-md hidden sm:inline-block">
+                Tersisa {Math.max(0, ATTENDANCE_LOCK_HOUR_MINUTES - currentMinutesTick)} menit
+              </span>
+            </div>
+          ) : null}
 
           {/* C. Sub-Filters Chips & Table Container */}
           <div className="bg-white rounded-lg sm:rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
@@ -2152,9 +2232,11 @@ export default function AttendancePage() {
                             <div className="relative inline-block min-w-[140px]">
                               <select
                                 value={att.status}
+                                disabled={isAttendanceLocked || !canMutateAttendance}
                                 onChange={(e) => handleStudentStatusChange(student.id, e.target.value as any)}
                                 className={cn(
-                                  "w-full appearance-none pl-3 pr-8 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20",
+                                  "w-full appearance-none pl-3 pr-8 py-1.5 rounded-lg text-xs font-bold border transition-all focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20",
+                                  (isAttendanceLocked || !canMutateAttendance) ? "cursor-not-allowed opacity-90" : "cursor-pointer",
                                   att.status === "Hadir" && "bg-emerald-50 text-emerald-700 border-emerald-200",
                                   att.status === "Terlambat" && "bg-amber-50 text-amber-700 border-amber-200",
                                   att.status === "Sakit" && "bg-blue-50 text-blue-700 border-blue-200",
@@ -2170,7 +2252,11 @@ export default function AttendancePage() {
                                 <option value="Izin">📝 Izin</option>
                                 <option value="Alpa">❌ Alpa</option>
                               </select>
-                              <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                              {isAttendanceLocked ? (
+                                <Lock className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                              )}
                             </div>
                           </td>
 
@@ -2183,7 +2269,7 @@ export default function AttendancePage() {
                                 <Clock className="w-3.5 h-3.5 text-gray-400" />
                                 <input
                                   type="time"
-                                  disabled={!canMutateAttendance}
+                                  disabled={isAttendanceLocked || !canMutateAttendance}
                                   value={extractValidTimeHM(att.time, att.record?.createdAt)}
                                   onChange={(e) => {
                                     const newTime = e.target.value;
@@ -2245,9 +2331,11 @@ export default function AttendancePage() {
                           <td className="px-5 py-3.5">
                             <input
                               type="text"
-                              disabled={!canMutateAttendance}
+                              disabled={isAttendanceLocked || !canMutateAttendance}
                               placeholder={
-                                att.status === "Sakit"
+                                isAttendanceLocked
+                                  ? "-"
+                                  : att.status === "Sakit"
                                   ? "Surat dokter / keluhan..."
                                   : att.status === "Izin"
                                   ? "Alasan permohonan izin..."
@@ -2263,7 +2351,12 @@ export default function AttendancePage() {
 
                           {/* Aksi Cepat */}
                           <td className="px-5 py-3.5 text-center">
-                            {!canMutateAttendance ? (
+                            {isAttendanceLocked ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/80">
+                                <Lock className="w-2.5 h-2.5 text-amber-600" />
+                                <span>Final</span>
+                              </span>
+                            ) : !canMutateAttendance ? (
                               <span className="text-[11px] font-medium text-gray-400 italic">Hanya Pantau</span>
                             ) : att.status === "Belum Absen" ? (
                               <div className="flex items-center justify-center gap-1.5">
@@ -2327,7 +2420,7 @@ export default function AttendancePage() {
                 <span className="text-gray-400 text-xs">
                   {classStats.belumAbsen > 0 ? `${classStats.belumAbsen} siswa belum absen` : "Semua kehadiran telah terdata"}
                 </span>
-                {canMutateAttendance && (
+                {canMutateAttendance && !isAttendanceLocked && (
                   <button
                     type="button"
                     onClick={handleSaveClassAttendance}
@@ -2336,6 +2429,12 @@ export default function AttendancePage() {
                   >
                     {isSavingBatch ? "Menyimpan..." : "Simpan Perubahan"}
                   </button>
+                )}
+                {isAttendanceLocked && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                    <Lock className="w-3.5 h-3.5 text-amber-600" />
+                    Terkunci (Final)
+                  </span>
                 )}
               </div>
             </div>

@@ -801,6 +801,20 @@ export function QuickAttendanceModal({
     setStep("processing");
 
     const now = new Date();
+    const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
+
+    // Aturan Kunci Otomatis Pukul 10:00 WIB
+    if (currentTotalMinutes >= 10 * 60) {
+      if (showError) {
+        showError(
+          "Waktu absensi siswa telah melewati batas pukul 10:00 WIB. Data absensi telah dikunci otomatis dan berstatus final.",
+          "Absensi Ditutup (Terkunci)"
+        );
+      }
+      setIsSubmitting(false);
+      return;
+    }
+
     const hours = String(now.getHours()).padStart(2, "0");
     const minutes = String(now.getMinutes()).padStart(2, "0");
     const seconds = String(now.getSeconds()).padStart(2, "0");
@@ -815,7 +829,6 @@ export function QuickAttendanceModal({
     // Calculate late & automatic Alpa status based on Batas Maksimal Dihitung Alpa
     const [startH, startM] = config.schoolStartTime.split(":").map(Number);
     const startTotalMinutes = (startH || 7) * 60 + (startM || 0) + config.lateToleranceMinutes;
-    const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
     const isLate = currentTotalMinutes > startTotalMinutes;
 
     // Batas Maksimal Dihitung Alpa
