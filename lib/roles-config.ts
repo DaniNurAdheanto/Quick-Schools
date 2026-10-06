@@ -258,3 +258,23 @@ DEFAULT_PERMISSIONS["kepalasekolah"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
 DEFAULT_PERMISSIONS["kepsek"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
 DEFAULT_PERMISSIONS["principal"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
 
+/**
+ * Universally normalizes any role string or alias to canonical ID
+ */
+export function normalizeRole(roleStr: string = ""): string {
+  const r = (roleStr || "").toLowerCase().trim();
+  if (r === "super-admin" || r === "superadmin" || r === "owner" || r === "developer") return "super-admin";
+  if (r === "guru" || r === "teacher" || r === "pengajar") return "guru";
+  if (r === "siswa" || r === "student" || r === "murid") return "siswa";
+  if (r === "orang-tua" || r === "orang tua" || r === "wali" || r === "wali-murid" || r === "parent" || r === "orangtua") return "orang-tua";
+  if (
+    r === "kepala-sekolah" || 
+    r === "kepala sekolah" || 
+    r === "kepala_sekolah" || 
+    r === "kepsek" || 
+    r === "principal" || 
+    r === "headmaster"
+  ) return "kepala-sekolah";
+  return "admin";
+}
+

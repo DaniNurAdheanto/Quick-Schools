@@ -28,15 +28,21 @@ function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthLoading, user, isLoggingOut, pathname, router]);
 
-  // Check onboarding completion
-  const isOnboardingComplete = isUserOnboardingComplete(userData);
+  // Check onboarding completion - ONLY for strictly unboarded pending students
+  const isStrictStudentPendingOnboarding = Boolean(
+    userData &&
+    ((userData.role || "").toLowerCase().trim() === "siswa" || (userData.role || "").toLowerCase().trim() === "student" || !(userData.role)) &&
+    userData.status === "Belum Onboarding" &&
+    userData.onboardingCompleted === false &&
+    !userData.isActive &&
+    !isUserOnboardingComplete(userData)
+  );
+
   useEffect(() => {
-    if (!isAuthLoading && user && !isLoggingOut) {
-      if (!isOnboardingComplete && !isSuperAdmin) {
-        router.replace("/onboarding");
-      }
+    if (!isAuthLoading && user && !isLoggingOut && isStrictStudentPendingOnboarding) {
+      router.replace("/onboarding");
     }
-  }, [isAuthLoading, user, isOnboardingComplete, isSuperAdmin, isLoggingOut, router]);
+  }, [isAuthLoading, user, isStrictStudentPendingOnboarding, isLoggingOut, router]);
 
   // 0. Logout state: NEVER render empty state or previous content while logging out
   if (isLoggingOut) {
@@ -167,8 +173,8 @@ function getPageTitleFromPath(pathname: string | null): string {
     );
   }
 
-  // 2b. Incomplete onboarding state: Prevent flash of protected views and redirect to onboarding
-  if (user && !isOnboardingComplete && !isSuperAdmin) {
+  // 2b. Incomplete onboarding state: Only for strictly unboarded pending students
+  if (user && isStrictStudentPendingOnboarding && !isSuperAdmin) {
     return (
       <div className="min-h-screen bg-[#F8F9FC] flex flex-col items-center justify-center p-6 selection:bg-[#531FFF]/20">
         <div className="flex flex-col items-center gap-6 max-w-sm text-center animate-in fade-in zoom-in-95 duration-300">

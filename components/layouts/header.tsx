@@ -44,8 +44,9 @@ export function Header() {
     setActiveSemester 
   } = useAcademicYear();
 
-  const onboardingCompleted = userData?.onboardingCompleted ?? (userData?.status !== "Belum Onboarding");
-  const hasPendingReminder = Boolean(userData?.pendingOnboardingReminder) || (onboardingCompleted === false);
+  const isExplicitActive = userData?.status === "Aktif" || userData?.status === "Active" || userData?.isActive === true;
+  const onboardingCompleted = isExplicitActive || (userData?.onboardingCompleted ?? (userData?.status !== "Belum Onboarding"));
+  const hasPendingReminder = !isExplicitActive && (Boolean(userData?.pendingOnboardingReminder) || (onboardingCompleted === false));
 
   // Handle outside click to close dropdowns
   useEffect(() => {

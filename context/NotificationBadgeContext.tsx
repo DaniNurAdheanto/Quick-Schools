@@ -371,7 +371,8 @@ export function NotificationBadgeProvider({ children }: { children: React.ReactN
       const baseline = getBaselineTimestamp(path);
       let count = 0;
       usersData.forEach((u) => {
-        const isUnboarded = u.onboardingCompleted === false || u.status === "Belum Onboarding";
+        const isExplicitActive = u.status === "Aktif" || u.status === "Active" || u.isActive === true;
+        const isUnboarded = !isExplicitActive && (u.onboardingCompleted === false || u.status === "Belum Onboarding");
         const docTime = parseDocTimestamp(u.createdAt);
         if (isUnboarded || docTime > baseline) {
           count++;
@@ -643,7 +644,8 @@ export function NotificationBadgeProvider({ children }: { children: React.ReactN
     const list: NotificationItem[] = [];
 
     // 1. Critical Onboarding Reminder (if account not completed)
-    const isOnboardingIncomplete = userData?.onboardingCompleted === false || userData?.status === "Belum Onboarding";
+    const isExplicitActive = userData?.status === "Aktif" || userData?.status === "Active" || userData?.isActive === true;
+    const isOnboardingIncomplete = !isExplicitActive && (userData?.onboardingCompleted === false || userData?.status === "Belum Onboarding");
     if (isOnboardingIncomplete) {
       list.push({
         id: "notif-onboarding-alert",
@@ -776,7 +778,8 @@ export function NotificationBadgeProvider({ children }: { children: React.ReactN
     // 6. Users (Admin/Super Admin only)
     if (isAdmin || isSuperAdmin) {
       usersData.forEach((u) => {
-        const isUnboarded = u.onboardingCompleted === false || u.status === "Belum Onboarding";
+        const isExplicitActive = u.status === "Aktif" || u.status === "Active" || u.isActive === true;
+        const isUnboarded = !isExplicitActive && (u.onboardingCompleted === false || u.status === "Belum Onboarding");
         if (isUnboarded) {
           const docTime = parseDocTimestamp(u.createdAt);
           list.push({

@@ -429,10 +429,37 @@ export default function StudentOnboardingPage() {
       if (user) {
         setCurrentUser(user);
         try {
+          let uData: any = null;
           const userSnap = await getDoc(doc(db, "users", user.uid));
           if (userSnap.exists()) {
-            const uData = userSnap.data();
-            const role = uData.role || "";
+            uData = { id: userSnap.id, ...userSnap.data() };
+          }
+          const cleanEmail = (user.email || "").toLowerCase().trim();
+          if ((!uData || uData.status !== "Aktif") && cleanEmail) {
+            try {
+              const qS = query(collection(db, "students"), where("email", "==", cleanEmail));
+              const snapS = await getDocs(qS);
+              if (!snapS.empty) {
+                uData = { ...snapS.docs[0].data(), ...(uData || {}) };
+              }
+            } catch (e) {}
+          }
+
+          if (uData) {
+            const role = (uData.role || "").toLowerCase().trim();
+            // Non-students (Admin, Guru, Kepala Sekolah, Orang Tua) never do student onboarding!
+            if (role && role !== "siswa" && role !== "student") {
+              router.replace("/dashboard");
+              return;
+            }
+
+            // Immediate check: If user account is already active or completed, bypass onboarding directly!
+            const isExplicitActive = uData.status === "Aktif" || uData.status === "Active" || uData.isActive === true;
+            if (isExplicitActive || uData.onboardingCompleted === true || isUserOnboardingComplete(uData)) {
+              router.replace("/dashboard");
+              return;
+            }
+
             setCurrentUserRole(role);
 
             // Cloud Draft check & sync

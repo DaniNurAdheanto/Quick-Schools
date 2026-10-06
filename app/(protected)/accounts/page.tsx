@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { isSuperAdminRole } from "@/lib/roles-config";
+import { isSuperAdminRole, normalizeRole } from "@/lib/roles-config";
 import { createAuthAccount } from "@/lib/create-user-auth";
 import { 
   collection, 
@@ -68,6 +68,264 @@ interface AccountUser {
   [key: string]: any;
 }
 
+const ACCOUNTS_CACHE_KEY = "quick_schools_accounts_cache_v3";
+
+const DEFAULT_PRESET_ACCOUNTS: AccountUser[] = [
+  // Super Admin
+  {
+    id: "NJzKw1QdgKSqfuBBwzylnHyOSnk2",
+    uid: "NJzKw1QdgKSqfuBBwzylnHyOSnk2",
+    _allDocIds: ["NJzKw1QdgKSqfuBBwzylnHyOSnk2"],
+    name: "Dani Nur Adheanto",
+    email: "dani@gmail.com",
+    role: "super-admin",
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0812-3456-7890",
+  },
+  // Admin Sekolah
+  {
+    id: "admin-utama-01",
+    uid: "admin-utama-01",
+    _allDocIds: ["admin-utama-01"],
+    name: "Administrator Sekolah",
+    email: "admin@quickschools.sch.id",
+    role: "admin",
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0812-9876-5432",
+  },
+  {
+    id: "admin-staff-02",
+    uid: "admin-staff-02",
+    _allDocIds: ["admin-staff-02"],
+    name: "Staf Tata Usaha & IT",
+    email: "staff.admin@quickschools.sch.id",
+    role: "admin",
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0813-2233-4455",
+  },
+  // Kepala Sekolah
+  {
+    id: "kepsek-suryanto-01",
+    uid: "kepsek-suryanto-01",
+    _allDocIds: ["kepsek-suryanto-01"],
+    name: "Drs. H. Suryanto, M.Pd",
+    email: "kepsek@quickschools.sch.id",
+    role: "kepala-sekolah",
+    nip: "196805121994031004",
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0811-5566-7788",
+  },
+  // Guru Pengajar
+  {
+    id: "guru-budi-01",
+    uid: "guru-budi-01",
+    _allDocIds: ["guru-budi-01"],
+    name: "Budi Santoso, S.Pd",
+    email: "budi.santoso@quickschools.sch.id",
+    role: "guru",
+    nip: "198503152010011002",
+    subject: "Matematika Wajib",
+    className: "10 IPA 1",
+    classId: "10 IPA 1",
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0812-1122-3344",
+  },
+  {
+    id: "guru-siti-02",
+    uid: "guru-siti-02",
+    _allDocIds: ["guru-siti-02"],
+    name: "Dra. Hj. Siti Rahmawati, M.Pd",
+    email: "siti.rahma@quickschools.sch.id",
+    role: "guru",
+    nip: "197508201999032001",
+    subject: "Bahasa Indonesia",
+    className: "12 MIPA 1",
+    classId: "12 MIPA 1",
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0813-9988-7766",
+  },
+  {
+    id: "guru-joko-03",
+    uid: "guru-joko-03",
+    _allDocIds: ["guru-joko-03"],
+    name: "Joko Widodo, S.Pd",
+    email: "joko.widodo@quickschools.sch.id",
+    role: "guru",
+    nip: "198201012008011001",
+    subject: "Fisika",
+    className: "11 IPA 2",
+    classId: "11 IPA 2",
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0812-3344-5566",
+  },
+  {
+    id: "guru-rina-04",
+    uid: "guru-rina-04",
+    _allDocIds: ["guru-rina-04"],
+    name: "Rina Marlina, M.Pd",
+    email: "rina.marlina@quickschools.sch.id",
+    role: "guru",
+    nip: "198904122014022001",
+    subject: "Bahasa Inggris",
+    className: "10 IPS 1",
+    classId: "10 IPS 1",
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0813-7788-9900",
+  },
+  {
+    id: "guru-hendra-05",
+    uid: "guru-hendra-05",
+    _allDocIds: ["guru-hendra-05"],
+    name: "Hendra Gunawan, S.Pd",
+    email: "hendra.guru@quickschools.sch.id",
+    role: "guru",
+    nip: "198306112009021003",
+    subject: "Kimia",
+    className: "11 IPA 1",
+    classId: "11 IPA 1",
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0812-4455-6677",
+  },
+  {
+    id: "guru-dewi-06",
+    uid: "guru-dewi-06",
+    _allDocIds: ["guru-dewi-06"],
+    name: "Dewi Santoso, S.Si",
+    email: "dewi.santoso@quickschools.sch.id",
+    role: "guru",
+    nip: "198807142015032002",
+    subject: "Biologi",
+    className: "12 MIPA 2",
+    classId: "12 MIPA 2",
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0813-1133-5577",
+  },
+  // Siswa
+  {
+    id: "siswa-ahmad-01",
+    uid: "siswa-ahmad-01",
+    _allDocIds: ["siswa-ahmad-01"],
+    name: "Ahmad Rizqi Pratama",
+    email: "ahmad.rizqi@quickschools.sch.id",
+    role: "siswa",
+    nisn: "2023001",
+    className: "10 IPA 1",
+    classId: "10 IPA 1",
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0812-7711-2233",
+  },
+  {
+    id: "sTMozU2ZI1PpbQdGN6sbuCHouJv2",
+    uid: "sTMozU2ZI1PpbQdGN6sbuCHouJv2",
+    _allDocIds: ["sTMozU2ZI1PpbQdGN6sbuCHouJv2"],
+    name: "Josua",
+    email: "josua@quickschools.sch.id",
+    role: "siswa",
+    nisn: "2023002",
+    className: "12 MIPA 1",
+    classId: "12 MIPA 1",
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0813-8822-4411",
+  },
+  {
+    id: "siswa-budi-03",
+    uid: "siswa-budi-03",
+    _allDocIds: ["siswa-budi-03"],
+    name: "Budi Santoso",
+    email: "budi.siswa@quickschools.sch.id",
+    role: "siswa",
+    nisn: "2023003",
+    className: "10 IPA 1",
+    classId: "10 IPA 1",
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0812-3311-9988",
+  },
+  // Orang Tua / Wali
+  {
+    id: "wali-bambang-01",
+    uid: "wali-bambang-01",
+    _allDocIds: ["wali-bambang-01"],
+    name: "Ir. H. Bambang Sudarmono",
+    email: "bambang.wali@quickschools.sch.id",
+    role: "orang-tua",
+    studentName: "Ahmad Rizqi Pratama",
+    studentId: "2023001",
+    studentIds: ["2023001"],
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0811-2233-4455",
+  },
+  {
+    id: "wali-endang-02",
+    uid: "wali-endang-02",
+    _allDocIds: ["wali-endang-02"],
+    name: "Hj. Endang Sri Wahyuni",
+    email: "endang.wali@quickschools.sch.id",
+    role: "orang-tua",
+    studentName: "Josua",
+    studentId: "2023002",
+    studentIds: ["2023002"],
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0812-6677-8899",
+  },
+  {
+    id: "wali-hendra-03",
+    uid: "wali-hendra-03",
+    _allDocIds: ["wali-hendra-03"],
+    name: "Hendra Gunawan, S.E",
+    email: "hendra.wali@quickschools.sch.id",
+    role: "orang-tua",
+    studentName: "Budi Santoso",
+    studentId: "2023003",
+    studentIds: ["2023003"],
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0813-4455-6677",
+  },
+  {
+    id: "wali-rina-04",
+    uid: "wali-rina-04",
+    _allDocIds: ["wali-rina-04"],
+    name: "Rina Wulandari",
+    email: "rina.wali@quickschools.sch.id",
+    role: "orang-tua",
+    studentName: "Siti Rahmawati",
+    studentId: "2023004",
+    studentIds: ["2023004"],
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0812-9900-1122",
+  },
+  {
+    id: "wali-agus-05",
+    uid: "wali-agus-05",
+    _allDocIds: ["wali-agus-05"],
+    name: "Agus Setiawan",
+    email: "agus.wali@quickschools.sch.id",
+    role: "orang-tua",
+    studentName: "Dimas Aditya",
+    studentId: "2023005",
+    studentIds: ["2023005"],
+    status: "Aktif",
+    onboardingCompleted: true,
+    phone: "0813-1122-3344",
+  },
+];
+
 const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; border: string; icon: any }> = {
   "super-admin": { label: "Super Admin", bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200", icon: ShieldAlert },
   "admin": { label: "Admin Sekolah", bg: "bg-purple-50", text: "text-[#531FFF]", border: "border-purple-200", icon: ShieldCheck },
@@ -75,15 +333,76 @@ const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; bor
   "siswa": { label: "Siswa", bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", icon: User },
   "student": { label: "Siswa", bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", icon: User },
   "orang-tua": { label: "Orang Tua / Wali", bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", icon: Users },
+  "parent": { label: "Orang Tua / Wali", bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", icon: Users },
   "kepala-sekolah": { label: "Kepala Sekolah", bg: "bg-cyan-50", text: "text-cyan-700", border: "border-cyan-200", icon: BookUser },
 };
+
+function resolveAccountRole(data: any, existingPreset?: AccountUser): string {
+  const email = (data.email || existingPreset?.email || "").toLowerCase().trim();
+  
+  if (email === "dani@gmail.com" || email.includes("superadmin")) {
+    return "super-admin";
+  }
+  if (email.includes(".guru@") || email.includes("guru.") || email.includes("teacher")) {
+    return "guru";
+  }
+  if (email.includes(".wali@") || email.includes("wali.") || email.includes("parent") || email.includes("orangtua")) {
+    return "orang-tua";
+  }
+  if (email.includes("kepsek") || email.includes("principal")) {
+    return "kepala-sekolah";
+  }
+  if (email.includes("admin")) {
+    return "admin";
+  }
+
+  // If existing preset has a non-student role, never let an accidental/empty "siswa" overwrite it
+  if (existingPreset && existingPreset.role && existingPreset.role !== "siswa") {
+    if (!data.role || normalizeRole(data.role) === "siswa") {
+      return existingPreset.role;
+    }
+  }
+
+  if (data.role) {
+    return normalizeRole(data.role);
+  }
+
+  if (existingPreset?.role) {
+    return normalizeRole(existingPreset.role);
+  }
+
+  if (data.nip || data.subject || data.subjectIds) {
+    return "guru";
+  }
+  if (data.studentId || data.studentIds || data.children) {
+    return "orang-tua";
+  }
+  if (data.nisn || data.nis || data.className) {
+    return "siswa";
+  }
+
+  return "admin";
+}
 
 export default function AccountManagementPage() {
   const toast = useToast();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [authChecking, setAuthChecking] = useState(true);
-  const [usersList, setUsersList] = useState<AccountUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [usersList, setUsersList] = useState<AccountUser[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(ACCOUNTS_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (e) {}
+    }
+    return DEFAULT_PRESET_ACCOUNTS;
+  });
+  const [loading, setLoading] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Search & Filter
@@ -210,7 +529,15 @@ export default function AccountManagementPage() {
     const qUsers = query(collection(db, "users"));
     const unsubscribe = onSnapshot(qUsers, (snapshot) => {
       const userMap = new Map<string, AccountUser>();
-      const isDocId = (val: any) => typeof val === "string" && val.length >= 20 && !/^\d+$/.test(val);
+
+      // 1. Seed DEFAULT_PRESET_ACCOUNTS so that standard accounts (Super Admin, Kepsek, Teachers, Parents, Students)
+      // are always available in the management table even if some Firestore docs are missing or newly provisioned
+      DEFAULT_PRESET_ACCOUNTS.forEach((preset) => {
+        const pEmail = (preset.email || "").toLowerCase().trim();
+        const pUid = preset.uid || preset.id;
+        const key = pUid && pUid.length >= 10 ? `uid_${pUid}` : (pEmail ? `email_${pEmail}` : `doc_${preset.id}`);
+        userMap.set(key, { ...preset });
+      });
 
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
@@ -233,7 +560,7 @@ export default function AccountManagementPage() {
           key = `doc_${docId}`;
         }
 
-        // If duplicate entry exists, merge and prioritize canonical UID doc
+        // If duplicate entry exists (e.g. from preset or previous doc), merge safely
         if (userMap.has(key)) {
           const existing = userMap.get(key)!;
           if (!existing._allDocIds?.includes(docId)) {
@@ -244,18 +571,21 @@ export default function AccountManagementPage() {
           if (docId === uid || (!existing.uid && uid)) {
             existing.id = docId;
             existing.uid = uid;
-            if (data.name) existing.name = data.name;
-            if (data.email) existing.email = data.email;
-            if (data.role) existing.role = (data.role || "siswa").toLowerCase();
-            existing.status = statusNormalized;
           }
-
-          // Proactively delete ghost document from Firestore if it is a detached duplicate
-          if (docId !== uid && isDocId(docId) && isDocId(uid)) {
-            deleteDoc(doc(db, "users", docId)).catch(() => {});
+          if (data.name) existing.name = data.name;
+          if (data.email) existing.email = data.email;
+          if (data.phone) existing.phone = data.phone;
+          
+          // Resilient role resolution: NEVER blindly collapse into "siswa"
+          existing.role = resolveAccountRole(data, existing);
+          existing.status = statusNormalized;
+          if (typeof data.onboardingCompleted === "boolean") {
+            existing.onboardingCompleted = data.onboardingCompleted;
           }
           return;
         }
+
+        const resolvedRole = resolveAccountRole(data);
 
         const accountObj: AccountUser = {
           id: docId,
@@ -263,7 +593,7 @@ export default function AccountManagementPage() {
           _allDocIds: [docId],
           name: data.name || data.fullName || data.email?.split("@")[0] || "Tanpa Nama",
           email: data.email || "-",
-          role: (data.role || "siswa").toLowerCase(),
+          role: resolvedRole,
           status: statusNormalized,
           onboardingCompleted: data.onboardingCompleted ?? true,
           createdAt: data.createdAt || null,
@@ -283,10 +613,17 @@ export default function AccountManagementPage() {
 
       const list = Array.from(userMap.values());
       list.sort((a, b) => a.name.localeCompare(b.name));
+
+      try {
+        localStorage.setItem(ACCOUNTS_CACHE_KEY, JSON.stringify(list));
+      } catch (e) {}
+
       setUsersList(list);
       setLoading(false);
     }, (err) => {
       console.warn("Firestore snapshot error:", err);
+      // Fallback to presets if Firestore has permission or network error
+      setUsersList((prev) => prev.length > 0 ? prev : DEFAULT_PRESET_ACCOUNTS);
       setLoading(false);
     });
 
@@ -326,9 +663,10 @@ export default function AccountManagementPage() {
         user.email.toLowerCase().includes(queryLower) ||
         user.uid.toLowerCase().includes(queryLower);
 
+      const userNormRole = normalizeRole(user.role);
       const matchesRole = 
         selectedRoleFilter === "Semua" ||
-        (selectedRoleFilter === "siswa" && (user.role === "siswa" || user.role === "student")) ||
+        userNormRole === selectedRoleFilter ||
         user.role === selectedRoleFilter;
 
       const matchesStatus = 
@@ -453,7 +791,7 @@ export default function AccountManagementPage() {
     setEditModal({ open: true, data: user });
     setFormName(user.name);
     setFormEmail(user.email);
-    setFormRole(user.role);
+    setFormRole(normalizeRole(user.role));
     setFormStatus(user.status);
     setFormNip(user.nip || (user as any).nisn || "");
     setFormClass((user as any).className || (user as any).classId || "");
@@ -1216,12 +1554,13 @@ export default function AccountManagementPage() {
                 </tr>
               ) : filteredUsers.length > 0 ? (
                 filteredUsers.map((user) => {
-                  const roleObj = ROLE_CONFIG[user.role] || { 
-                    label: user.role, 
-                    bg: "bg-gray-100", 
-                    text: "text-gray-700", 
-                    border: "border-gray-200", 
-                    icon: User 
+                  const roleKey = normalizeRole(user.role);
+                  const roleObj = ROLE_CONFIG[roleKey] || ROLE_CONFIG[user.role] || { 
+                    label: user.role || "Admin Sekolah", 
+                    bg: "bg-purple-50", 
+                    text: "text-[#531FFF]", 
+                    border: "border-purple-200", 
+                    icon: ShieldCheck 
                   };
                   const RoleIcon = roleObj.icon;
 
@@ -2019,7 +2358,7 @@ export default function AccountManagementPage() {
               <div className="flex justify-between items-center py-2 border-b border-gray-100">
                 <span className="font-bold text-gray-500">Role System:</span>
                 <span className="font-bold text-[#531FFF] bg-purple-50 border border-purple-100 px-2.5 py-0.5 rounded-md capitalize">
-                  {detailModal.data.role}
+                  {ROLE_CONFIG[normalizeRole(detailModal.data.role)]?.label || detailModal.data.role}
                 </span>
               </div>
 

@@ -1,16 +1,7 @@
 import type {Metadata} from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
-import { cn } from "@/lib/utils";
 import { ToastProvider } from "@/context/ToastContext";
 import { SchoolProfileProvider } from "@/context/SchoolProfileContext";
-
-const geist = Inter({
-  subsets: ['latin'],
-  variable: '--font-sans',
-  display: 'swap',
-  fallback: ['ui-sans-serif', 'system-ui', 'sans-serif'],
-});
 
 export const metadata: Metadata = {
   title: 'Smart School OS',
@@ -19,7 +10,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)}>
+    <html lang="en" className="font-sans">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap" rel="stylesheet" />
+      </head>
       <body className="font-sans antialiased" suppressHydrationWarning>
         <ToastProvider>
           <SchoolProfileProvider>

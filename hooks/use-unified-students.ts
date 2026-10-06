@@ -66,7 +66,8 @@ export function useUnifiedStudents() {
     // 1. Process items from `students` collection
     rawStudentsRef.current.forEach(item => {
       const key = item.uid || item.email?.toLowerCase() || item._firestoreId;
-      const isUnboarded = item.status === "Belum Onboarding" || item.onboardingCompleted === false;
+      const isExplicitActive = item.status === "Aktif" || item.status === "Active" || item.isActive === true;
+      const isUnboarded = !isExplicitActive && (item.status === "Belum Onboarding" || item.onboardingCompleted === false);
 
       const cleanNisn = (!isDocId(item.nisn) && item.nisn && item.nisn !== "-") ? String(item.nisn)
         : (!isDocId(item.nis) && item.nis && item.nis !== "-") ? String(item.nis)
@@ -130,7 +131,8 @@ export function useUnifiedStudents() {
       if (isStudentRole(u.role)) {
         const uEmail = (u.email || "").toLowerCase();
         const uUid = u.uid || u._firestoreId;
-        const isUnboarded = u.onboardingCompleted === false || u.status === "Belum Onboarding";
+        const isUExplicitActive = u.status === "Aktif" || u.status === "Active" || u.isActive === true;
+        const isUnboarded = !isUExplicitActive && (u.onboardingCompleted === false || u.status === "Belum Onboarding");
 
         let existingKey: string | undefined;
         for (const [k, v] of studentMap.entries()) {

@@ -8,53 +8,153 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 export function isUserOnboardingComplete(userData: any): boolean {
   if (!userData) return false;
 
-  // Explicit incomplete indicators
-  if (userData.onboardingCompleted === false) return false;
-  if (userData.status === "Belum Onboarding") return false;
-
   const role = (userData.role || "").toLowerCase().trim();
 
-  // Super Admin & Admin are inherently fully onboarded
-  if (role === "super-admin" || role === "superadmin" || role === "admin" || role === "owner" || role === "developer") {
+  // 1. Super Admin, Admin, Teachers, Parents, and school staff management roles never require student onboarding
+  if (
+    role === "super-admin" ||
+    role === "superadmin" ||
+    role === "admin" ||
+    role === "guru" ||
+    role === "teacher" ||
+    role === "orang-tua" ||
+    role === "parent" ||
+    role === "kepala-sekolah" ||
+    role === "principal" ||
+    role === "owner" ||
+    role === "developer" ||
+    role === "staff" ||
+    role === "tata-usaha" ||
+    role === "bendahara"
+  ) {
     return true;
   }
 
-  // Teachers & Principals created by school
-  if (role === "guru" || role === "teacher" || role === "kepala-sekolah" || role === "principal") {
-    if (userData.status === "Aktif" || userData.onboardingCompleted === true) {
-      return true;
+  // 2. Explicit completion flag
+  if (userData.onboardingCompleted === true) {
+    return true;
+  }
+
+  // 3. Any account with explicit Active status is considered complete
+  const isExplicitActive =
+    userData.status === "Aktif" ||
+    userData.status === "Active" ||
+    userData.isActive === true;
+
+  // 4. Check for data completeness
+  const hasBasicIdentity = Boolean((userData.name || userData.fullName || "").trim());
+  const hasClassAssignment = Boolean(
+    (userData.className && userData.className !== "-") ||
+    (userData.classId && userData.classId !== "-") ||
+    (userData.class && userData.class !== "-") ||
+    (userData.kelas && userData.kelas !== "-")
+  );
+  const hasStudentIdentifier = Boolean(
+    (userData.nisn && userData.nisn !== "-") ||
+    (userData.nis && userData.nis !== "-") ||
+    (userData.id && userData.id !== "-" && !userData.id.startsWith("TEMP-"))
+  );
+  const hasBioDetails = Boolean(
+    (userData.phone && userData.phone !== "-") ||
+    (userData.address && userData.address !== "-") ||
+    userData.parentPhone ||
+    userData.fatherName ||
+    userData.motherName ||
+    userData.guardianName
+  );
+
+  const hasStudentData = hasClassAssignment || hasStudentIdentifier || hasBioDetails;
+  const hasTeacherData = Boolean(
+    (userData.nip && userData.nip !== "-") ||
+    userData.subject ||
+    (userData.subjects && userData.subjects.length > 0)
+  );
+  const hasParentData = Boolean(
+    (userData.studentIds && userData.studentIds.length > 0) ||
+    (userData.linkedStudentIds && userData.linkedStudentIds.length > 0) ||
+    (userData.studentId && userData.studentId !== "-") ||
+    userData.studentName
+  );
+
+  const isDataComplete =
+    hasBasicIdentity &&
+    (role === "guru" || role === "teacher"
+      ? hasTeacherData
+      : role === "orang-tua" || role === "parent"
+      ? hasParentData
+      : hasStudentData);
+
+  // If the account is explicitly active OR its profile data is complete, it is COMPLETE!
+  if (isExplicitActive || isDataComplete) {
+    // Only block if explicitly set to "Belum Onboarding" AND data is completely empty
+    if (userData.status === "Belum Onboarding" && !isDataComplete) {
+      return false;
     }
+    return true;
   }
 
-  // Parents
-  if (role === "orang-tua" || role === "parent") {
-    if (userData.status === "Aktif" || userData.onboardingCompleted === true) {
-      return true;
-    }
+  // 5. Incomplete if explicitly marked "Belum Onboarding" or onboardingCompleted is false with missing data
+  if (userData.status === "Belum Onboarding" || userData.onboardingCompleted === false) {
+    return false;
   }
 
-  // Students & Self-registered users must have onboardingCompleted explicitly true and status 'Aktif'
-  if (role === "siswa" || role === "student" || !role) {
-    return Boolean(userData.onboardingCompleted) && userData.status !== "Belum Onboarding";
-  }
-
-  return Boolean(userData.onboardingCompleted);
+  return true;
 }
 
 /**
  * Determines where to redirect the user after successful authentication.
  */
 export function getPostLoginRedirect(userData: any, targetRedirect?: string | null): string {
-  const isComplete = isUserOnboardingComplete(userData);
-  if (!isComplete) {
+  const cleanTarget = (targetRedirect && targetRedirect !== "/login" && targetRedirect !== "/register" && targetRedirect !== "/onboarding")
+    ? targetRedirect
+    : "/dashboard";
+
+  if (!userData) {
+    return cleanTarget;
+  }
+
+  const role = (userData.role || "").toLowerCase().trim();
+
+  // 1. Super Admin, Admin, Teachers, Parents, and staff ALWAYS go directly to dashboard
+  if (
+    role === "super-admin" ||
+    role === "superadmin" ||
+    role === "admin" ||
+    role === "owner" ||
+    role === "developer" ||
+    role === "guru" ||
+    role === "teacher" ||
+    role === "kepala-sekolah" ||
+    role === "principal" ||
+    role === "orang-tua" ||
+    role === "parent" ||
+    role === "staff" ||
+    role === "tata-usaha" ||
+    role === "bendahara"
+  ) {
+    return cleanTarget;
+  }
+
+  // 2. Active accounts or accounts that completed onboarding ALWAYS go to dashboard
+  const isExplicitActive =
+    userData.status === "Aktif" ||
+    userData.status === "Active" ||
+    userData.isActive === true;
+  if (isExplicitActive || userData.onboardingCompleted === true) {
+    return cleanTarget;
+  }
+
+  // 3. If their profile data is complete, go directly to dashboard
+  if (isUserOnboardingComplete(userData)) {
+    return cleanTarget;
+  }
+
+  // 4. ONLY explicitly pending new students go to onboarding
+  if (userData.status === "Belum Onboarding" && userData.onboardingCompleted === false) {
     return "/onboarding";
   }
 
-  if (targetRedirect && targetRedirect !== "/login" && targetRedirect !== "/register" && targetRedirect !== "/onboarding") {
-    return targetRedirect;
-  }
-
-  return "/dashboard";
+  return cleanTarget;
 }
 
 /**
