@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react";
 import { User, onAuthStateChanged, signOut, deleteUser } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { 
   DEFAULT_PERMISSIONS, 
@@ -69,14 +69,24 @@ function normalizeRole(roleStr: string = ""): UserRole {
   if (r === "super-admin" || r === "superadmin" || r === "owner" || r === "developer") return "super-admin";
   if (r === "guru" || r === "teacher" || r === "pengajar") return "guru";
   if (r === "siswa" || r === "student" || r === "murid") return "siswa";
-  if (r === "orang-tua" || r === "orang tua" || r === "wali" || r === "wali-murid" || r === "parent") return "orang-tua";
+  if (r === "orang-tua" || r === "orang tua" || r === "wali" || r === "wali-murid" || r === "parent" || r === "orangtua") return "orang-tua";
   if (
     r === "kepala-sekolah" || 
     r === "kepala sekolah" || 
     r === "kepala_sekolah" || 
     r === "kepsek" || 
     r === "principal" || 
-    r === "headmaster"
+    r === "headmaster" ||
+    r === "kelapasekolah" ||
+    r === "kelapa sekolah" ||
+    r === "kelapaseokolah" ||
+    r === "kepalaseokolah" ||
+    r.includes("kepala") ||
+    r.includes("kelapa") ||
+    r.includes("kepsek") ||
+    r.includes("principal") ||
+    r.includes("headmaster") ||
+    r.includes("tohar")
   ) return "kepala-sekolah";
   return "admin";
 }
@@ -134,13 +144,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (e) {}
       }
 
-      let userSnap = await getDoc(doc(db, "users", firebaseUser.uid));
-      // If user document is not found, wait briefly to avoid registration race condition before checking again
-      if (!userSnap.exists() && !delDocExists) {
-        await new Promise((r) => setTimeout(r, 600));
-        userSnap = await getDoc(doc(db, "users", firebaseUser.uid));
-      }
-
       if (delDocExists) {
         console.warn("Deleted account detected in deleted_accounts:", firebaseUser.uid);
         try {
@@ -161,22 +164,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      let userSnap: any = null;
+      try {
+        const snap = await getDoc(doc(db, "users", firebaseUser.uid));
+        if (snap.exists()) userSnap = snap;
+      } catch (e) {
+        console.warn("Error reading users doc by uid:", e);
+      }
+
+      // Fallback 1: Query users collection by email
+      if (!userSnap && cleanEmail) {
+        try {
+          const qByEmail = query(collection(db, "users"), where("email", "==", cleanEmail));
+          const querySnap = await getDocs(qByEmail);
+          if (!querySnap.empty) {
+            userSnap = querySnap.docs[0];
+          }
+        } catch (qe) {
+          console.warn("Error querying users doc by email:", qe);
+        }
+      }
+
+      // Fallback 2: Check sanitized email doc ID
+      if (!userSnap && sanitizedEmail) {
+        try {
+          const snap = await getDoc(doc(db, "users", sanitizedEmail));
+          if (snap.exists()) userSnap = snap;
+        } catch (e) {}
+      }
+
       let data: UserProfileData;
-      if (userSnap.exists()) {
-        data = { id: userSnap.id, uid: (userSnap.data() as any)?.uid || userSnap.id, ...userSnap.data() } as UserProfileData;
+      if (userSnap && userSnap.exists()) {
+        data = { id: userSnap.id, uid: (userSnap.data() as any)?.uid || firebaseUser.uid, ...userSnap.data() } as UserProfileData;
       } else {
-        // Fallback user profile if users/{uid} document has not replicated yet
+        // Fallback user profile if users document does not exist yet
         let fallbackRole = "admin";
+        let fallbackName = firebaseUser.displayName || cleanEmail.split("@")[0] || "Pengguna";
+
         if (cleanEmail === "dani@gmail.com" || cleanEmail.includes("superadmin")) {
           fallbackRole = "super-admin";
+          fallbackName = "Dani Nur Adheanto";
+        } else if (
+          cleanEmail.includes("kelapa") ||
+          cleanEmail.includes("kepala") ||
+          cleanEmail.includes("seokolah") ||
+          cleanEmail.includes("kepsek") ||
+          cleanEmail.includes("principal") ||
+          cleanEmail.includes("headmaster") ||
+          cleanEmail.includes("tohar")
+        ) {
+          fallbackRole = "kepala-sekolah";
+          fallbackName = "Dr. Tohar Bahar, M.Pd";
         } else if (cleanEmail.includes(".guru@") || cleanEmail.includes("teacher") || cleanEmail.includes("guru")) {
           fallbackRole = "guru";
         } else if (cleanEmail.includes(".wali@") || cleanEmail.includes("parent") || cleanEmail.includes("orangtua")) {
           fallbackRole = "orang-tua";
-        } else if (cleanEmail.includes("kepsek") || cleanEmail.includes("principal")) {
-          fallbackRole = "kepala-sekolah";
-        } else if (cleanEmail.includes("admin")) {
-          fallbackRole = "admin";
         } else if (cleanEmail.includes("student") || cleanEmail.includes("siswa")) {
           fallbackRole = "siswa";
         }
@@ -184,8 +226,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data = {
           uid: firebaseUser.uid,
           id: firebaseUser.uid,
-          name: firebaseUser.displayName || cleanEmail.split("@")[0] || "Pengguna",
-          fullName: firebaseUser.displayName || cleanEmail.split("@")[0] || "Pengguna",
+          name: fallbackName,
+          fullName: fallbackName,
           email: cleanEmail,
           role: fallbackRole,
           status: "Aktif",
@@ -217,12 +259,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (cleanEmail === "dani@gmail.com" || cleanEmail.includes("superadmin")) {
         uRawRole = "super-admin";
+      } else if (
+        cleanEmail.includes("kelapa") ||
+        cleanEmail.includes("kepala") ||
+        cleanEmail.includes("seokolah") ||
+        cleanEmail.includes("kepsek") ||
+        cleanEmail.includes("principal") ||
+        cleanEmail.includes("headmaster") ||
+        cleanEmail.includes("tohar") ||
+        (data.name && (data.name.toLowerCase().includes("tohar") || data.name.toLowerCase().includes("kepala sekolah"))) ||
+        (data.fullName && (data.fullName.toLowerCase().includes("tohar") || data.fullName.toLowerCase().includes("kepala sekolah"))) ||
+        isKepalaSekolahRole(data.role)
+      ) {
+        uRawRole = "kepala-sekolah";
       } else if (cleanEmail.includes(".guru@") || cleanEmail.includes("guru.") || cleanEmail.includes("teacher")) {
         uRawRole = "guru";
       } else if (cleanEmail.includes(".wali@") || cleanEmail.includes("wali.") || cleanEmail.includes("parent") || cleanEmail.includes("orangtua")) {
         uRawRole = "orang-tua";
-      } else if (cleanEmail.includes("kepsek") || cleanEmail.includes("principal")) {
-        uRawRole = "kepala-sekolah";
       } else if (cleanEmail.includes("admin") && !cleanEmail.includes("superadmin")) {
         uRawRole = "admin";
       } else if (isMisclassifiedStudent) {
@@ -304,6 +357,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {}
     } catch (error) {
       console.error("AuthContext fetchUserData error:", error);
+      // Emergency recovery fallback to prevent perpetual loading skeleton
+      const fallbackCleanEmail = (firebaseUser.email || "").toLowerCase().trim();
+      let emergencyRole: UserRole = "admin";
+      if (
+        fallbackCleanEmail.includes("kelapa") ||
+        fallbackCleanEmail.includes("kepala") ||
+        fallbackCleanEmail.includes("seokolah") ||
+        fallbackCleanEmail.includes("tohar") ||
+        fallbackCleanEmail.includes("kepsek") ||
+        fallbackCleanEmail.includes("principal")
+      ) {
+        emergencyRole = "kepala-sekolah";
+      } else if (fallbackCleanEmail === "dani@gmail.com" || fallbackCleanEmail.includes("superadmin")) {
+        emergencyRole = "super-admin";
+      } else if (fallbackCleanEmail.includes("guru") || fallbackCleanEmail.includes("teacher")) {
+        emergencyRole = "guru";
+      } else if (fallbackCleanEmail.includes("parent") || fallbackCleanEmail.includes("wali") || fallbackCleanEmail.includes("orangtua")) {
+        emergencyRole = "orang-tua";
+      } else if (fallbackCleanEmail.includes("siswa") || fallbackCleanEmail.includes("student")) {
+        emergencyRole = "siswa";
+      }
+      setRole(emergencyRole);
+      setRawRole(emergencyRole);
+      setRolePermissions(DEFAULT_PERMISSIONS[emergencyRole] || {});
     } finally {
       setIsAuthLoading(false);
     }
@@ -329,6 +406,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         } catch (e) {}
+
+        // Instant predictive role so isRoleReady is true immediately without delay
+        const email = (currentUser.email || "").toLowerCase().trim();
+        let instantRole: UserRole = "admin";
+        if (
+          email.includes("kelapa") ||
+          email.includes("kepala") ||
+          email.includes("seokolah") ||
+          email.includes("tohar") ||
+          email.includes("kepsek") ||
+          email.includes("principal")
+        ) {
+          instantRole = "kepala-sekolah";
+        } else if (email === "dani@gmail.com" || email.includes("superadmin")) {
+          instantRole = "super-admin";
+        } else if (email.includes("guru") || email.includes("teacher")) {
+          instantRole = "guru";
+        } else if (email.includes("parent") || email.includes("wali") || email.includes("orangtua")) {
+          instantRole = "orang-tua";
+        } else if (email.includes("siswa") || email.includes("student")) {
+          instantRole = "siswa";
+        }
+        setRole((prev) => prev || instantRole);
+        setRawRole((prev) => prev || instantRole);
+        setRolePermissions((prev) => (Object.keys(prev).length ? prev : (DEFAULT_PERMISSIONS[instantRole] || {})));
+
         await fetchUserData(currentUser);
       } else {
         setUser(null);
@@ -352,6 +455,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await fetchUserData(auth.currentUser);
     }
   }, [fetchUserData]);
+
 
   const logout = useCallback(async (redirectTo: string = "/login") => {
     try {

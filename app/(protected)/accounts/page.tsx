@@ -83,18 +83,30 @@ const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; bor
 
 function resolveAccountRole(data: any): string {
   const email = (data.email || "").toLowerCase().trim();
+  const name = (data.name || data.fullName || "").toLowerCase().trim();
   
   if (email === "dani@gmail.com" || email.includes("superadmin")) {
     return "super-admin";
+  }
+  if (
+    email.includes("kelapa") ||
+    email.includes("kepala") ||
+    email.includes("seokolah") ||
+    email.includes("kepsek") ||
+    email.includes("principal") ||
+    email.includes("headmaster") ||
+    email.includes("tohar") ||
+    name.includes("tohar") ||
+    name.includes("kepala sekolah") ||
+    name.includes("principal")
+  ) {
+    return "kepala-sekolah";
   }
   if (email.includes(".guru@") || email.includes("guru.") || email.includes("teacher")) {
     return "guru";
   }
   if (email.includes(".wali@") || email.includes("wali.") || email.includes("parent") || email.includes("orangtua")) {
     return "orang-tua";
-  }
-  if (email.includes("kepsek") || email.includes("principal")) {
-    return "kepala-sekolah";
   }
   if (email.includes("admin")) {
     return "admin";

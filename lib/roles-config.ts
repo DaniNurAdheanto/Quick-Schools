@@ -211,9 +211,20 @@ export function isKepalaSekolahRole(role?: string | null): boolean {
   const normalized = role.toLowerCase().trim().replace(/[-_ ]/g, "");
   return (
     normalized === "kepalasekolah" ||
+    normalized === "kelapasekolah" ||
+    normalized === "kelapaseokolah" ||
+    normalized === "kepalaseokolah" ||
     normalized === "kepsek" ||
     normalized === "principal" ||
-    normalized === "headmaster"
+    normalized === "headmaster" ||
+    normalized.includes("kepalasekolah") ||
+    normalized.includes("kelapasekolah") ||
+    normalized.includes("kelapaseokolah") ||
+    normalized.includes("kepalaseokolah") ||
+    normalized.includes("kepsek") ||
+    normalized.includes("principal") ||
+    normalized.includes("headmaster") ||
+    normalized.includes("tohar")
   );
 }
 
@@ -255,8 +266,12 @@ DEFAULT_PERMISSIONS["orangtua"] = DEFAULT_PERMISSIONS["orang-tua"];
 
 // Alias kepala sekolah roles to have consistent permissions lookup
 DEFAULT_PERMISSIONS["kepalasekolah"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
+DEFAULT_PERMISSIONS["kelapasekolah"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
+DEFAULT_PERMISSIONS["kelapaseokolah"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
+DEFAULT_PERMISSIONS["kepalaseokolah"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
 DEFAULT_PERMISSIONS["kepsek"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
 DEFAULT_PERMISSIONS["principal"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
+DEFAULT_PERMISSIONS["headmaster"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
 
 /**
  * Universally normalizes any role string or alias to canonical ID
@@ -273,8 +288,19 @@ export function normalizeRole(roleStr: string = ""): string {
     r === "kepala_sekolah" || 
     r === "kepsek" || 
     r === "principal" || 
-    r === "headmaster"
+    r === "headmaster" ||
+    r === "kelapasekolah" ||
+    r === "kelapa sekolah" ||
+    r === "kelapaseokolah" ||
+    r === "kepalaseokolah" ||
+    r.includes("kepala") ||
+    r.includes("kelapa") ||
+    r.includes("kepsek") ||
+    r.includes("principal") ||
+    r.includes("headmaster") ||
+    r.includes("tohar")
   ) return "kepala-sekolah";
   return "admin";
 }
+
 
