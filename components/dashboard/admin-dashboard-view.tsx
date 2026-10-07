@@ -43,7 +43,8 @@ import {
   Tooltip as RechartsTooltip,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  Line
 } from "recharts";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -51,7 +52,7 @@ import { formatRupiah } from "@/lib/spp-payments";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
-import { subscribeLeaveRequests, LeaveRequest } from "@/lib/leave-requests-service";
+import { subscribeLeaveRequests, getDatesBetween, LeaveRequest } from "@/lib/leave-requests-service";
 
 interface AdminDashboardViewProps {
   userName: string;
@@ -272,39 +273,166 @@ export function AdminDashboardView({
     return { male, female };
   }, [filteredStudents]);
 
-  // Today's student attendance stats (broken down cleanly)
-  const attendanceToday = useMemo(() => {
-    const todayRecords = attendance.filter((a: any) => {
-      const isToday = a.date === todayDateStr || a.date?.startsWith(todayDateStr);
-      if (!isToday) return false;
-      if (selectedClassFilter === "ALL") return true;
-      return (a.className || a.classId || "").toLowerCase() === selectedClassFilter.toLowerCase();
+  // Synthesize complete attendance records (Firestore attendance + roles attendance_record + leave_requests)
+  const effectiveAttendance = useMemo(() => {
+    const map = new Map<string, any>();
+
+    // 1. Direct attendance records
+    attendance.forEach((r: any) => {
+      if (r && r.id) {
+        const rawStatus = (r.status || "").toLowerCase().trim();
+        const normStatus = (rawStatus === "leave_request" || r.type === "leave_request" || rawStatus === "disetujui")
+          ? (r.leaveType === "Sakit" || r.type === "Sakit" ? "Sakit" : "Izin")
+          : (r.status || "Hadir");
+
+        map.set(r.id, {
+          ...r,
+          status: normStatus
+        });
+      }
     });
 
-    const hadir = todayRecords.filter((a: any) => (a.status || "").toLowerCase() === "hadir").length;
-    const terlambat = todayRecords.filter((a: any) => (a.status || "").toLowerCase() === "terlambat").length;
-    const sakit = todayRecords.filter((a: any) => (a.status || "").toLowerCase() === "sakit").length;
-    const izin = todayRecords.filter((a: any) => (a.status || "").toLowerCase() === "izin").length;
-    const alpa = todayRecords.filter((a: any) => ["alpa", "alpha", "ditolak"].includes((a.status || "").toLowerCase())).length;
+    // 2. Synthesize leave requests (Izin & Sakit)
+    leaveRequests.forEach((lr: any) => {
+      if (lr.status === "Ditolak") return;
+      const dates = getDatesBetween(lr.startDate || lr.date, lr.endDate || lr.startDate || lr.date);
+      const studentId = lr.studentId || lr.nisn || lr.studentUid || "";
+      const leaveType = lr.type === "Sakit" ? "Sakit" : "Izin";
 
-    const totalRecords = todayRecords.length;
-    const baseCount = filteredStudents.length || totalRecords || 1;
-    const rateNumber = totalRecords > 0
-      ? Math.min(100, Math.round(((hadir + terlambat) / Math.max(1, baseCount)) * 1000) / 10)
+      dates.forEach((dateStr) => {
+        const docKey = `leave_${lr.id}_${dateStr}`;
+        let alreadyHasPresentRecord = false;
+        for (const existing of map.values()) {
+          if (
+            existing.date === dateStr &&
+            (existing.studentId === studentId || existing.nisn === studentId || (existing.studentName && lr.studentName && existing.studentName.toLowerCase().trim() === lr.studentName.toLowerCase().trim()))
+          ) {
+            if (["hadir", "terlambat"].includes((existing.status || "").toLowerCase())) {
+              alreadyHasPresentRecord = true;
+            } else {
+              existing.status = leaveType;
+              existing.notes = lr.reason ? `Permohonan ${leaveType}: ${lr.reason}` : existing.notes;
+              alreadyHasPresentRecord = true;
+            }
+          }
+        }
+
+        if (!alreadyHasPresentRecord) {
+          map.set(docKey, {
+            id: docKey,
+            studentId,
+            studentName: lr.studentName || "",
+            className: lr.className || "",
+            date: dateStr,
+            status: leaveType,
+            notes: lr.reason ? `Permohonan ${leaveType}: ${lr.reason}` : "",
+            time: "07:00",
+            source: "permit"
+          });
+        }
+      });
+    });
+
+    return Array.from(map.values());
+  }, [attendance, leaveRequests]);
+
+  // Today's student attendance stats (broken down cleanly)
+  const attendanceToday = useMemo(() => {
+    let hadir = 0;
+    let terlambat = 0;
+    let sakit = 0;
+    let izin = 0;
+    let alpa = 0;
+
+    filteredStudents.forEach((student: any) => {
+      const sId = (student.id || "").toLowerCase().trim();
+      const sNisn = (student.nisn || "").toLowerCase().trim();
+      const sUid = (student.uid || "").toLowerCase().trim();
+      const sName = (student.name || "").toLowerCase().trim();
+
+      const record = effectiveAttendance.find((a: any) => {
+        const isToday = a.date === todayDateStr || a.date?.startsWith(todayDateStr);
+        if (!isToday) return false;
+
+        const aId = (a.studentId || a.id || "").toLowerCase().trim();
+        const aNisn = (a.nisn || "").toLowerCase().trim();
+        const aUid = (a.uid || a.studentUid || "").toLowerCase().trim();
+        const aName = (a.studentName || "").toLowerCase().trim();
+
+        return (
+          (sId && (aId === sId || aId.includes(sId) || sId.includes(aId))) ||
+          (sNisn && (aNisn === sNisn || aId === sNisn)) ||
+          (sUid && (aUid === sUid || aId === sUid)) ||
+          (sName && aName && (sName === aName || sName.includes(aName) || aName.includes(sName)))
+        );
+      });
+
+      if (record) {
+        const st = (record.status || "").toLowerCase().trim();
+        if (st === "hadir") {
+          hadir++;
+        } else if (st === "terlambat") {
+          terlambat++;
+          hadir++;
+        } else if (st === "sakit") {
+          sakit++;
+        } else if (st === "izin") {
+          izin++;
+        } else {
+          alpa++;
+        }
+      } else {
+        // Siswa terdaftar tetapi belum memiliki data absen/izin -> dihitung Alpa / Tanpa Keterangan
+        alpa++;
+      }
+    });
+
+    // Also account for any active records in effectiveAttendance that didn't match filteredStudents list
+    const unattachedRecords = effectiveAttendance.filter((a: any) => {
+      const isToday = a.date === todayDateStr || a.date?.startsWith(todayDateStr);
+      if (!isToday) return false;
+      if (selectedClassFilter !== "ALL") {
+        const c = (a.className || a.classId || "").toLowerCase().trim();
+        const target = selectedClassFilter.toLowerCase().trim();
+        if (c !== target && c.replace(/\s+/g, "") !== target.replace(/\s+/g, "")) return false;
+      }
+      const aId = (a.studentId || a.id || "").toLowerCase().trim();
+      const aNisn = (a.nisn || "").toLowerCase().trim();
+      const aName = (a.studentName || "").toLowerCase().trim();
+      return !filteredStudents.some((s: any) => {
+        const sId = (s.id || "").toLowerCase().trim();
+        const sNisn = (s.nisn || "").toLowerCase().trim();
+        const sName = (s.name || "").toLowerCase().trim();
+        return (sId && aId.includes(sId)) || (sNisn && (aNisn === sNisn || aId === sNisn)) || (sName && aName && sName === aName);
+      });
+    });
+
+    unattachedRecords.forEach((a: any) => {
+      const st = (a.status || "").toLowerCase().trim();
+      if (st === "hadir") hadir++;
+      else if (st === "terlambat") { terlambat++; hadir++; }
+      else if (st === "sakit") sakit++;
+      else if (st === "izin") izin++;
+      else alpa++;
+    });
+
+    const totalStudents = Math.max(filteredStudents.length, hadir + sakit + izin + alpa);
+    const rateNumber = totalStudents > 0
+      ? Math.min(100, Math.round((hadir / Math.max(1, totalStudents)) * 1000) / 10)
       : 0;
 
     return {
-      hadir,
+      hadir: Math.max(0, hadir - terlambat), // Hadir Tepat Waktu
       terlambat,
       sakit,
       izin,
       alpa,
       tidakHadir: sakit + izin + alpa,
       rate: rateNumber,
-      totalMarked: totalRecords,
-      baseStudents: baseCount
+      totalMarked: hadir + sakit + izin + alpa,
+      baseStudents: totalStudents
     };
-  }, [attendance, todayDateStr, filteredStudents.length, selectedClassFilter]);
+  }, [effectiveAttendance, todayDateStr, filteredStudents, selectedClassFilter]);
 
   // Leave Requests (Izin & Sakit Pending Review)
   const leaveStats = useMemo(() => {
@@ -370,7 +498,18 @@ export function AdminDashboardView({
   // Multi-day Attendance Trend Data (7, 14, or 30 days)
   const attendanceTrendData = useMemo(() => {
     const daysCount = selectedTimeRange === "30d" ? 30 : selectedTimeRange === "14d" ? 14 : 7;
-    const days: { date: string; fullDate: string; rate: number; hadir: number; tidakHadir: number }[] = [];
+    const days: {
+      date: string;
+      fullDate: string;
+      rate: number;
+      hadir: number;
+      terlambat: number;
+      izin: number;
+      sakit: number;
+      alpa: number;
+      tidakHadir: number;
+      total: number;
+    }[] = [];
     const now = new Date();
 
     for (let i = daysCount - 1; i >= 0; i--) {
@@ -379,24 +518,63 @@ export function AdminDashboardView({
       const dStr = d.toISOString().slice(0, 10);
       const dayName = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
 
-      const dayRecords = attendance.filter((a: any) => {
-        const isMatch = a.date === dStr || a.date?.startsWith(dStr);
-        if (!isMatch) return false;
-        if (selectedClassFilter === "ALL") return true;
-        return (a.className || a.classId || "").toLowerCase() === selectedClassFilter.toLowerCase();
-      });
+      let h = 0;
+      let t = 0;
+      let s = 0;
+      let iz = 0;
+      let a = 0;
 
-      if (dayRecords.length > 0) {
-        const h = dayRecords.filter((a: any) => ["hadir", "terlambat"].includes((a.status || "").toLowerCase())).length;
-        const th = dayRecords.filter((a: any) => ["sakit", "izin", "alpa", "alpha"].includes((a.status || "").toLowerCase())).length;
-        const pct = Math.min(100, Math.round((h / Math.max(1, filteredStudents.length || dayRecords.length)) * 100));
-        days.push({ date: dayName, fullDate: dStr, rate: pct, hadir: h, tidakHadir: th });
+      if (dStr === todayDateStr) {
+        // Today syncs with current active calculation
+        h = attendanceToday.hadir + attendanceToday.terlambat;
+        t = attendanceToday.terlambat;
+        s = attendanceToday.sakit;
+        iz = attendanceToday.izin;
+        a = attendanceToday.alpa;
       } else {
-        days.push({ date: dayName, fullDate: dStr, rate: 0, hadir: 0, tidakHadir: 0 });
+        const dayRecords = effectiveAttendance.filter((rec: any) => {
+          const isMatch = rec.date === dStr || rec.date?.startsWith(dStr);
+          if (!isMatch) return false;
+          if (selectedClassFilter === "ALL") return true;
+          const c = (rec.className || rec.classId || "").toLowerCase().trim();
+          const target = selectedClassFilter.toLowerCase().trim();
+          return c === target || c.replace(/\s+/g, "") === target.replace(/\s+/g, "");
+        });
+
+        dayRecords.forEach((rec: any) => {
+          const st = (rec.status || "").toLowerCase().trim();
+          if (st === "hadir") h++;
+          else if (st === "terlambat") { t++; h++; }
+          else if (st === "sakit") s++;
+          else if (st === "izin") iz++;
+          else a++;
+        });
+
+        if (dayRecords.length > 0 && filteredStudents.length > dayRecords.length) {
+          a += (filteredStudents.length - dayRecords.length);
+        }
       }
+
+      const totalHadir = h;
+      const totalTidakHadir = s + iz + a;
+      const base = filteredStudents.length || (totalHadir + totalTidakHadir) || 1;
+      const pct = (totalHadir + totalTidakHadir) > 0 ? Math.min(100, Math.round((totalHadir / Math.max(1, base)) * 100)) : 0;
+
+      days.push({
+        date: dayName,
+        fullDate: dStr,
+        rate: pct,
+        hadir: totalHadir,
+        terlambat: t,
+        izin: iz,
+        sakit: s,
+        alpa: a,
+        tidakHadir: totalTidakHadir,
+        total: totalHadir + totalTidakHadir
+      });
     }
     return days;
-  }, [attendance, filteredStudents.length, selectedTimeRange, selectedClassFilter]);
+  }, [effectiveAttendance, filteredStudents.length, selectedTimeRange, selectedClassFilter, todayDateStr, attendanceToday]);
 
   // Today's Status Donut Chart Data
   const attendanceDonutData = useMemo(() => {
@@ -416,37 +594,74 @@ export function AdminDashboardView({
 
   // Class by Class Comparison (Bar Chart)
   const classComparisonData = useMemo(() => {
-    if (classes.length === 0) {
-      return [
-        { name: "X IPA 1", rate: 95, total: 32, hadir: 30 },
-        { name: "X IPA 2", rate: 88, total: 30, hadir: 26 },
-        { name: "XI IPA 1", rate: 92, total: 34, hadir: 31 },
-        { name: "XI IPS 1", rate: 78, total: 32, hadir: 25 },
-        { name: "XII IPA 1", rate: 97, total: 33, hadir: 32 },
-        { name: "XII IPS 1", rate: 84, total: 31, hadir: 26 }
-      ];
-    }
+    const classList = classes.length > 0 ? classes : [
+      { name: "10 MIPA 1" },
+      { name: "10 MIPA 2" },
+      { name: "11 MIPA 1" },
+      { name: "12 IPA 1" },
+      { name: "12 IPS 1" }
+    ];
 
-    return classes.map((c: any) => {
+    return classList.map((c: any) => {
       const cName = c.name || c.className || "Kelas";
-      const studentsInClass = students.filter((s) => (s.className || s.classId || "").toLowerCase() === cName.toLowerCase());
-      const classRecordsToday = attendance.filter((a: any) => {
-        const isToday = a.date === todayDateStr || a.date?.startsWith(todayDateStr);
-        return isToday && (a.className || a.classId || "").toLowerCase() === cName.toLowerCase();
+      const cClean = cName.toLowerCase().trim();
+      const cNoSpace = cClean.replace(/\s+/g, "");
+
+      const studentsInClass = students.filter((s) => {
+        const sc = (s.className || s.classId || s.class || s.kelas || "").toLowerCase().trim();
+        return sc === cClean || sc.replace(/\s+/g, "") === cNoSpace;
       });
 
-      const hadirCount = classRecordsToday.filter((a: any) => ["hadir", "terlambat"].includes((a.status || "").toLowerCase())).length;
-      const base = studentsInClass.length || classRecordsToday.length || 1;
-      const rate = classRecordsToday.length > 0 ? Math.min(100, Math.round((hadirCount / base) * 100)) : 0;
+      let hadirCount = 0;
+      let izinCount = 0;
+      let sakitCount = 0;
+      let alpaCount = 0;
+
+      studentsInClass.forEach((st: any) => {
+        const sId = (st.id || "").toLowerCase().trim();
+        const sNisn = (st.nisn || "").toLowerCase().trim();
+        const sName = (st.name || "").toLowerCase().trim();
+
+        const record = effectiveAttendance.find((a: any) => {
+          const isToday = a.date === todayDateStr || a.date?.startsWith(todayDateStr);
+          if (!isToday) return false;
+
+          const aId = (a.studentId || a.id || "").toLowerCase().trim();
+          const aNisn = (a.nisn || "").toLowerCase().trim();
+          const aName = (a.studentName || "").toLowerCase().trim();
+
+          return (
+            (sId && (aId === sId || aId.includes(sId) || sId.includes(aId))) ||
+            (sNisn && (aNisn === sNisn || aId === sNisn)) ||
+            (sName && aName && (sName === aName || sName.includes(aName) || aName.includes(sName)))
+          );
+        });
+
+        if (record) {
+          const stStatus = (record.status || "").toLowerCase().trim();
+          if (["hadir", "terlambat"].includes(stStatus)) hadirCount++;
+          else if (stStatus === "izin") izinCount++;
+          else if (stStatus === "sakit") sakitCount++;
+          else alpaCount++;
+        } else {
+          alpaCount++;
+        }
+      });
+
+      const base = studentsInClass.length || 1;
+      const rate = studentsInClass.length > 0 ? Math.min(100, Math.round((hadirCount / base) * 100)) : 0;
 
       return {
         name: cName,
         rate,
         total: studentsInClass.length,
-        hadir: hadirCount
+        hadir: hadirCount,
+        izin: izinCount,
+        sakit: sakitCount,
+        alpa: alpaCount
       };
     }).slice(0, 8); // Top 8 classes for clear visualization
-  }, [classes, students, attendance, todayDateStr]);
+  }, [classes, students, effectiveAttendance, todayDateStr]);
 
   // Academic Performance Analytics
   const academicStats = useMemo(() => {
@@ -981,13 +1196,13 @@ export function AdminDashboardView({
             </div>
           </div>
 
-          {/* Area Chart Container */}
+          {/* Area & Line Chart Container */}
           <div className="h-[280px] w-full pt-2">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={attendanceTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="attendanceGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.4} />
+                    <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.35} />
                     <stop offset="95%" stopColor="#4F46E5" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
@@ -1012,20 +1227,24 @@ export function AdminDashboardView({
                     if (active && payload && payload.length) {
                       const data = payload[0].payload;
                       return (
-                        <div className="bg-gray-900/95 backdrop-blur-md text-white p-3 rounded-xl shadow-xl text-xs space-y-1.5 border border-white/10">
-                          <p className="font-extrabold text-indigo-300">{label}</p>
-                          <div className="space-y-1">
-                            <p className="flex justify-between gap-4 text-emerald-300 font-bold">
+                        <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-xl shadow-xl text-xs space-y-2 border border-white/10 min-w-[200px]">
+                          <p className="font-extrabold text-indigo-300 pb-1 border-b border-white/10">{label}</p>
+                          <div className="space-y-1.5">
+                            <p className="flex justify-between gap-4 text-emerald-400 font-bold">
                               <span>Tingkat Kehadiran:</span>
-                              <span>{data.rate}%</span>
+                              <span>{data.rate}% ({data.hadir} Siswa)</span>
                             </p>
-                            <p className="flex justify-between gap-4 text-gray-300">
-                              <span>Total Hadir:</span>
-                              <span className="font-semibold text-white">{data.hadir} Siswa</span>
+                            <p className="flex justify-between gap-4 text-purple-300 font-medium">
+                              <span>Izin:</span>
+                              <span className="font-bold text-white">{data.izin} Siswa</span>
                             </p>
-                            <p className="flex justify-between gap-4 text-rose-300">
-                              <span>Tidak Hadir:</span>
-                              <span className="font-semibold text-white">{data.tidakHadir} Siswa</span>
+                            <p className="flex justify-between gap-4 text-blue-300 font-medium">
+                              <span>Sakit:</span>
+                              <span className="font-bold text-white">{data.sakit} Siswa</span>
+                            </p>
+                            <p className="flex justify-between gap-4 text-rose-300 font-medium">
+                              <span>Alpa / Tanpa Ket.:</span>
+                              <span className="font-bold text-white">{data.alpa} Siswa</span>
                             </p>
                           </div>
                         </div>
@@ -1037,10 +1256,39 @@ export function AdminDashboardView({
                 <Area
                   type="monotone"
                   dataKey="rate"
+                  name="Tingkat Kehadiran"
                   stroke="#4F46E5"
                   strokeWidth={3}
                   fillOpacity={1}
                   fill="url(#attendanceGradient)"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="izin"
+                  name="Izin"
+                  stroke="#8B5CF6"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: "#8B5CF6" }}
+                  activeDot={{ r: 5 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="sakit"
+                  name="Sakit"
+                  stroke="#3B82F6"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: "#3B82F6" }}
+                  activeDot={{ r: 5 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="alpa"
+                  name="Alpa"
+                  stroke="#EF4444"
+                  strokeWidth={2}
+                  strokeDasharray="3 3"
+                  dot={{ r: 2.5, fill: "#EF4444" }}
+                  activeDot={{ r: 4 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -1048,13 +1296,25 @@ export function AdminDashboardView({
 
           {/* Chart Footnote / Quick Legend */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-4 mt-2 border-t border-gray-100 text-[11px] text-gray-500">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3.5">
               <span className="flex items-center gap-1.5 font-semibold text-gray-700">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#4F46E5]" />
-                Persentase Kehadiran
+                Kehadiran (%)
               </span>
-              <span className="text-gray-400">|</span>
-              <span>Target Minimal Sekolah: <strong className="text-gray-800">85%</strong></span>
+              <span className="flex items-center gap-1.5 font-semibold text-purple-700">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6]" />
+                Izin
+              </span>
+              <span className="flex items-center gap-1.5 font-semibold text-blue-700">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6]" />
+                Sakit
+              </span>
+              <span className="flex items-center gap-1.5 font-semibold text-rose-700">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />
+                Alpa
+              </span>
+              <span className="text-gray-300">|</span>
+              <span className="text-gray-400">Target Min: <strong className="text-gray-800">85%</strong></span>
             </div>
             <Link href="/attendance" className="font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
               Buka Rekap Detail <ChevronRight className="w-3.5 h-3.5" />
