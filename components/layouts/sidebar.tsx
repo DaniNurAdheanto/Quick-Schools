@@ -30,7 +30,7 @@ import {
   Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { isSuperAdminRole, isStudentRole, isParentRole, isKepalaSekolahRole } from "@/lib/roles-config";
+import { isSuperAdminRole, isTeacherRole, isStudentRole, isParentRole, isKepalaSekolahRole } from "@/lib/roles-config";
 import { useAuth } from "@/context/AuthContext";
 import { useNotificationBadges } from "@/context/NotificationBadgeContext";
 import { SidebarSkeleton } from "@/components/ui/role-loading-skeleton";
@@ -124,9 +124,10 @@ function NavGroup({
 }) {
   const isSuperAdmin = isSuperAdminRole(userRole);
   const isAdmin = (userRole || "").toLowerCase() === "admin" && !isSuperAdmin;
-  const isParent = isParentRole(userRole) || (userRole || "").toLowerCase() === "orang-tua";
-  const isStudent = isStudentRole(userRole) || (userRole || "").toLowerCase() === "siswa";
-  const isKepalaSekolah = isKepalaSekolahRole(userRole) || (userRole || "").toLowerCase() === "kepala-sekolah";
+  const isParent = isParentRole(userRole);
+  const isStudent = isStudentRole(userRole);
+  const isGuru = isTeacherRole(userRole);
+  const isKepalaSekolah = isKepalaSekolahRole(userRole);
 
   // Hide entire MASTER DATA group for parents and students
   if ((isParent || isStudent) && title === "MASTER DATA") {
@@ -149,23 +150,30 @@ function NavGroup({
 
     // Laporan Keuangan is accessible to Super Admin, Admin, Kepala Sekolah, and any role with finance read permission
     if (item.href === "/financial-reports") {
+      if (isStudent || isParent) return false;
       return isSuperAdmin || isAdmin || isKepalaSekolah || Boolean(userPermissions["finance"]?.read);
     }
 
-    // Pengaturan Sekolah: Hidden from Parents, Students, and Kepala Sekolah (unless explicit settings permission is granted)
+    // Pengaturan Sekolah: Exclusively for Super Admin, Admin, or users with explicit settings read permission
     if (item.href === "/settings") {
-      if (isParent || isStudent) return false;
+      if (isParent || isStudent || isGuru) {
+        return Boolean(userPermissions["settings"]?.read);
+      }
       if (isKepalaSekolah) {
         return Boolean(userPermissions["settings"]?.read);
       }
+      return isSuperAdmin || isAdmin;
     }
 
-    // Tahun Ajaran & Kenaikan: Hidden from Parents, Students, and Kepala Sekolah (unless explicit settings permission is granted)
+    // Tahun Ajaran & Kenaikan: Exclusively for Super Admin, Admin, or users with explicit settings read permission
     if (item.href === "/academic-years") {
-      if (isParent || isStudent) return false;
+      if (isParent || isStudent || isGuru) {
+        return Boolean(userPermissions["settings"]?.read);
+      }
       if (isKepalaSekolah) {
         return Boolean(userPermissions["settings"]?.read);
       }
+      return isSuperAdmin || isAdmin;
     }
 
     // Pembayaran SPP is accessible to Admin, Guru (Wali Kelas), Siswa, Orang Tua, and Kepala Sekolah

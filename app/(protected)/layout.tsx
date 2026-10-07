@@ -14,7 +14,7 @@ import { IdleTimeoutManager } from "@/components/auth/idle-timeout-manager";
 import { isUserOnboardingComplete } from "@/lib/auth-helpers";
 
 function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
-  const { user, userData, isAuthLoading, isLoggingOut, role, isSuperAdmin, isStudent, isParent } = useAuth();
+  const { user, userData, isAuthLoading, isLoggingOut, role, isSuperAdmin, isAdmin, isStudent, isParent } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -219,8 +219,8 @@ function getPageTitleFromPath(pathname: string | null): string {
     );
   }
 
-  // 4. Strict Route Guard for Students accessing staff management
-  if (isStudent && (isTeachersRoute || isStudentsManagementRoute || isRolesRoute)) {
+  // 4. Strict Route Guard for Students accessing staff management and administration
+  if (isStudent && isSchoolAdminRoute) {
     return (
       <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center p-6 text-center">
         <div className="bg-white p-8 rounded-xl border border-gray-100 shadow-xl max-w-md space-y-5">
@@ -265,6 +265,32 @@ function getPageTitleFromPath(pathname: string | null): string {
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Kembali ke Dashboard Orang Tua</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // 5b. Strict Route Guard for Roles & System Settings: Admin & Super Admin only
+  if ((isRolesRoute || isSettingsRoute) && !isSuperAdmin && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center p-6 text-center">
+        <div className="bg-white p-8 rounded-xl border border-gray-100 shadow-xl max-w-md space-y-5">
+          <div className="w-16 h-16 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center mx-auto shadow-sm">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-lg font-extrabold text-gray-900">Akses Pengaturan Terbatas</h3>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Menu Konfigurasi & Role Sistem hanya dapat diakses oleh Administrator Sekolah.
+            </p>
+          </div>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white text-xs font-bold rounded-lg shadow-md transition-all active:scale-95 cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Kembali ke Dashboard</span>
           </Link>
         </div>
       </div>

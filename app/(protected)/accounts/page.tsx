@@ -609,7 +609,7 @@ export default function AccountManagementPage() {
           email: formEmail.trim().toLowerCase(),
           status: formStatus,
           subject: formSubject.trim() || editModal.data.subject || "Guru Pengajar",
-          role: formSubject.trim() || editModal.data.subject || "Guru Pengajar",
+          role: "guru",
         });
       } else if (formRole === "orang-tua") {
         try {
@@ -712,7 +712,7 @@ export default function AccountManagementPage() {
           name: formName.trim(),
           fullName: formName.trim(),
           email: formEmail.trim().toLowerCase(),
-          role: formSubject.trim() || "Guru Pengajar",
+          role: "guru",
           subject: formSubject.trim() || "Mata Pelajaran Umum",
           status: formStatus === "Nonaktif" ? "Nonaktif" : "Aktif",
           createdAt: new Date().toISOString()

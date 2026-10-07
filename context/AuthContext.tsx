@@ -12,6 +12,7 @@ import {
   isParentRole,
   isKepalaSekolahRole,
   canMutateModule,
+  normalizeRole,
   ModulePermission
 } from "@/lib/roles-config";
 
@@ -62,34 +63,7 @@ interface AuthContextType {
   logout: (redirectTo?: string) => Promise<void>;
 }
 
-const AUTH_CACHE_KEY = "quick_schools_auth_session";
-
-function normalizeRole(roleStr: string = ""): UserRole {
-  const r = (roleStr || "").toLowerCase().trim();
-  if (r === "super-admin" || r === "superadmin" || r === "owner" || r === "developer") return "super-admin";
-  if (r === "guru" || r === "teacher" || r === "pengajar") return "guru";
-  if (r === "siswa" || r === "student" || r === "murid") return "siswa";
-  if (r === "orang-tua" || r === "orang tua" || r === "wali" || r === "wali-murid" || r === "parent" || r === "orangtua") return "orang-tua";
-  if (
-    r === "kepala-sekolah" || 
-    r === "kepala sekolah" || 
-    r === "kepala_sekolah" || 
-    r === "kepsek" || 
-    r === "principal" || 
-    r === "headmaster" ||
-    r === "kelapasekolah" ||
-    r === "kelapa sekolah" ||
-    r === "kelapaseokolah" ||
-    r === "kepalaseokolah" ||
-    r.includes("kepala") ||
-    r.includes("kelapa") ||
-    r.includes("kepsek") ||
-    r.includes("principal") ||
-    r.includes("headmaster") ||
-    r.includes("tohar")
-  ) return "kepala-sekolah";
-  return "admin";
-}
+const AUTH_CACHE_KEY = "quick_schools_auth_session_v3";
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -193,12 +167,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (e) {}
       }
 
+      // Look up companion collections (teachers, parents, students)
+      let teacherSnap: any = null;
+      let parentSnap: any = null;
+      let studentSnap: any = null;
+
+      try {
+        const tDoc = await getDoc(doc(db, "teachers", firebaseUser.uid));
+        if (tDoc.exists()) teacherSnap = tDoc;
+        else if (cleanEmail) {
+          const qT = query(collection(db, "teachers"), where("email", "==", cleanEmail));
+          const qTSnap = await getDocs(qT);
+          if (!qTSnap.empty) teacherSnap = qTSnap.docs[0];
+        }
+      } catch (e) {}
+
+      try {
+        const pDoc = await getDoc(doc(db, "parents", firebaseUser.uid));
+        if (pDoc.exists()) parentSnap = pDoc;
+        else if (cleanEmail) {
+          const qP = query(collection(db, "parents"), where("email", "==", cleanEmail));
+          const qPSnap = await getDocs(qP);
+          if (!qPSnap.empty) parentSnap = qPSnap.docs[0];
+        }
+      } catch (e) {}
+
+      try {
+        const sDoc = await getDoc(doc(db, "students", firebaseUser.uid));
+        if (sDoc.exists()) studentSnap = sDoc;
+        else if (cleanEmail) {
+          const qS = query(collection(db, "students"), where("email", "==", cleanEmail));
+          const qSSnap = await getDocs(qS);
+          if (!qSSnap.empty) studentSnap = qSSnap.docs[0];
+        }
+      } catch (e) {}
+
       let data: UserProfileData;
       if (userSnap && userSnap.exists()) {
         data = { id: userSnap.id, uid: (userSnap.data() as any)?.uid || firebaseUser.uid, ...userSnap.data() } as UserProfileData;
+      } else if (teacherSnap && teacherSnap.exists()) {
+        data = { id: teacherSnap.id, uid: (teacherSnap.data() as any)?.uid || firebaseUser.uid, role: "guru", ...teacherSnap.data() } as UserProfileData;
+      } else if (parentSnap && parentSnap.exists()) {
+        data = { id: parentSnap.id, uid: (parentSnap.data() as any)?.uid || firebaseUser.uid, role: "orang-tua", ...parentSnap.data() } as UserProfileData;
+      } else if (studentSnap && studentSnap.exists()) {
+        data = { id: studentSnap.id, uid: (studentSnap.data() as any)?.uid || firebaseUser.uid, role: "siswa", ...studentSnap.data() } as UserProfileData;
       } else {
         // Fallback user profile if users document does not exist yet
-        let fallbackRole = "admin";
+        let fallbackRole: UserRole = "admin";
         let fallbackName = firebaseUser.displayName || cleanEmail.split("@")[0] || "Pengguna";
 
         if (cleanEmail === "dani@gmail.com" || cleanEmail.includes("superadmin")) {
@@ -215,9 +230,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ) {
           fallbackRole = "kepala-sekolah";
           fallbackName = "Dr. Tohar Bahar, M.Pd";
-        } else if (cleanEmail.includes(".guru@") || cleanEmail.includes("teacher") || cleanEmail.includes("guru")) {
+        } else if (cleanEmail.includes(".guru@") || cleanEmail.includes("guru.") || cleanEmail.includes("teacher")) {
           fallbackRole = "guru";
-        } else if (cleanEmail.includes(".wali@") || cleanEmail.includes("parent") || cleanEmail.includes("orangtua")) {
+        } else if (cleanEmail.includes(".wali@") || cleanEmail.includes("wali.") || cleanEmail.includes("parent") || cleanEmail.includes("orangtua")) {
           fallbackRole = "orang-tua";
         } else if (cleanEmail.includes("student") || cleanEmail.includes("siswa")) {
           fallbackRole = "siswa";
@@ -254,8 +269,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // Merge data from companion docs if available
+      if (teacherSnap && teacherSnap.exists()) {
+        data = { ...teacherSnap.data(), ...data, role: data.role || "guru" };
+      }
+      if (parentSnap && parentSnap.exists()) {
+        const pData = parentSnap.data() as any;
+        const toSafeArray = (v: any): string[] => {
+          if (!v) return [];
+          if (Array.isArray(v)) return v.map(String).filter(Boolean);
+          if (typeof v === "string") return v.includes(",") ? v.split(",").map(s => s.trim()).filter(Boolean) : [v.trim()];
+          if (typeof v === "object") return Object.values(v).map(String).filter(Boolean);
+          return [String(v)];
+        };
+        const mergedStudentIds = Array.from(new Set([...toSafeArray(data.studentIds), ...toSafeArray(pData.studentIds)]));
+        const mergedLinkedIds = Array.from(new Set([...toSafeArray(data.linkedStudentIds), ...toSafeArray(pData.linkedStudentIds), ...mergedStudentIds]));
+
+        data = {
+          ...pData,
+          ...data,
+          studentIds: mergedStudentIds,
+          linkedStudentIds: mergedLinkedIds,
+          studentId: data.studentId || pData.studentId || data.nisn || pData.nisn || "",
+          studentName: data.studentName || pData.studentName || "",
+          nisn: data.nisn || pData.nisn || data.studentId || pData.studentId || "",
+          role: data.role || "orang-tua",
+        };
+      }
+      if (studentSnap && studentSnap.exists()) {
+        data = { ...studentSnap.data(), ...data, role: data.role || "siswa" };
+      }
+
       let uRawRole = data.role;
-      const isMisclassifiedStudent = !uRawRole || uRawRole === "siswa" || uRawRole === "student";
 
       if (cleanEmail === "dani@gmail.com" || cleanEmail.includes("superadmin")) {
         uRawRole = "super-admin";
@@ -276,57 +321,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         uRawRole = "guru";
       } else if (cleanEmail.includes(".wali@") || cleanEmail.includes("wali.") || cleanEmail.includes("parent") || cleanEmail.includes("orangtua")) {
         uRawRole = "orang-tua";
+      } else if (cleanEmail.includes("siswa") || cleanEmail.includes("student")) {
+        uRawRole = "siswa";
       } else if (cleanEmail.includes("admin") && !cleanEmail.includes("superadmin")) {
         uRawRole = "admin";
-      } else if (isMisclassifiedStudent) {
-        // If marked as siswa or role is missing, verify whether user actually exists in teachers or parents collections
-        try {
-          const teacherDoc = await getDoc(doc(db, "teachers", firebaseUser.uid));
-          if (teacherDoc.exists()) {
-            uRawRole = "guru";
-          } else {
-            const parentDoc = await getDoc(doc(db, "parents", firebaseUser.uid));
-            if (parentDoc.exists()) {
-              uRawRole = "orang-tua";
-            }
-          }
-        } catch (e) {}
+      } else if (data.role) {
+        uRawRole = data.role;
+      } else if (teacherSnap && teacherSnap.exists() || data.nip || data.subject) {
+        uRawRole = "guru";
+      } else if (parentSnap && parentSnap.exists() || data.studentId || data.studentIds) {
+        uRawRole = "orang-tua";
+      } else if (studentSnap && studentSnap.exists() || data.nisn || data.className || data.kelas) {
+        uRawRole = "siswa";
       }
 
       if (!uRawRole) {
         uRawRole = "admin";
       }
-      const normalized = normalizeRole(uRawRole);
-
-      // If parent role, merge data from parents collection to ensure complete student links
-      if (normalized === "orang-tua") {
-        try {
-          const parentRef = doc(db, "parents", firebaseUser.uid);
-          const parentSnap = await getDoc(parentRef);
-          if (parentSnap.exists()) {
-            const pData = parentSnap.data() as any;
-            const toSafeArray = (v: any): string[] => {
-              if (!v) return [];
-              if (Array.isArray(v)) return v.map(String).filter(Boolean);
-              if (typeof v === "string") return v.includes(",") ? v.split(",").map(s => s.trim()).filter(Boolean) : [v.trim()];
-              if (typeof v === "object") return Object.values(v).map(String).filter(Boolean);
-              return [String(v)];
-            };
-            const mergedStudentIds = Array.from(new Set([...toSafeArray(data.studentIds), ...toSafeArray(pData.studentIds)]));
-            const mergedLinkedIds = Array.from(new Set([...toSafeArray(data.linkedStudentIds), ...toSafeArray(pData.linkedStudentIds), ...mergedStudentIds]));
-
-            data = {
-              ...pData,
-              ...data,
-              studentIds: mergedStudentIds,
-              linkedStudentIds: mergedLinkedIds,
-              studentId: data.studentId || pData.studentId || data.nisn || pData.nisn || "",
-              studentName: data.studentName || pData.studentName || "",
-              nisn: data.nisn || pData.nisn || data.studentId || pData.studentId || "",
-            };
-          }
-        } catch (pe) {}
-      }
+      const normalized = normalizeRole(uRawRole) as UserRole;
 
       setUserData(data);
       setRawRole(uRawRole);
@@ -398,7 +410,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (cached && cached.uid === currentUser.uid) {
               if (cached.userData) setUserData(cached.userData);
               if (cached.role) {
-                const norm = normalizeRole(cached.role);
+                const norm = normalizeRole(cached.role) as UserRole;
                 setRole(norm);
                 setRolePermissions(DEFAULT_PERMISSIONS[norm] || {});
               }
@@ -407,9 +419,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         } catch (e) {}
 
-        // Instant predictive role so isRoleReady is true immediately without delay
+        // Predictive role only if email clearly defines it; otherwise let fetchUserData resolve accurately
         const email = (currentUser.email || "").toLowerCase().trim();
-        let instantRole: UserRole = "admin";
+        let instantRole: UserRole | null = null;
         if (
           email.includes("kelapa") ||
           email.includes("kepala") ||
@@ -421,16 +433,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           instantRole = "kepala-sekolah";
         } else if (email === "dani@gmail.com" || email.includes("superadmin")) {
           instantRole = "super-admin";
-        } else if (email.includes("guru") || email.includes("teacher")) {
+        } else if (email.includes(".guru@") || email.includes("guru.") || email.includes("teacher")) {
           instantRole = "guru";
-        } else if (email.includes("parent") || email.includes("wali") || email.includes("orangtua")) {
+        } else if (email.includes(".wali@") || email.includes("wali.") || email.includes("parent") || email.includes("orangtua")) {
           instantRole = "orang-tua";
         } else if (email.includes("siswa") || email.includes("student")) {
           instantRole = "siswa";
         }
-        setRole((prev) => prev || instantRole);
-        setRawRole((prev) => prev || instantRole);
-        setRolePermissions((prev) => (Object.keys(prev).length ? prev : (DEFAULT_PERMISSIONS[instantRole] || {})));
+
+        if (instantRole) {
+          setRole((prev) => prev || instantRole);
+          setRawRole((prev) => prev || instantRole);
+          setRolePermissions((prev) => (Object.keys(prev).length ? prev : (DEFAULT_PERMISSIONS[instantRole!] || {})));
+        }
 
         await fetchUserData(currentUser);
       } else {

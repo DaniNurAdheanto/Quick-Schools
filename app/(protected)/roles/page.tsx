@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { 
   Save, 
   Check, 
@@ -12,14 +13,17 @@ import {
   Edit3, 
   Building2,
   ShieldAlert,
-  Shield
+  Shield,
+  Users,
+  User,
+  ArrowUpRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { doc, setDoc, onSnapshot, collection } from "firebase/firestore";
+import { doc, setDoc, onSnapshot, collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
-import { ROLES, PERMISSION_MODULES, DEFAULT_PERMISSIONS } from "@/lib/roles-config";
+import { ROLES, PERMISSION_MODULES, DEFAULT_PERMISSIONS, normalizeRole } from "@/lib/roles-config";
 
 export default function RolesAndPermissionsPage() {
   const toast = useToast();
@@ -30,6 +34,7 @@ export default function RolesAndPermissionsPage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("Semua");
+  const [usersList, setUsersList] = useState<any[]>([]);
 
   // Subscribe to Firestore roles collection
   useEffect(() => {
@@ -47,6 +52,118 @@ export default function RolesAndPermissionsPage() {
 
     return () => unsub();
   }, []);
+
+  // Subscribe to real-time users collection for live account synchronization
+  useEffect(() => {
+    const unsubUsers = onSnapshot(collection(db, "users"), async (snapshot) => {
+      const deletedIds = new Set<string>();
+      try {
+        const delSnap = await getDocs(collection(db, "deleted_accounts"));
+        delSnap.forEach(d => {
+          deletedIds.add(d.id);
+          const em = (d.data().email || "").toLowerCase().trim();
+          if (em) deletedIds.add(em);
+        });
+      } catch (e) {}
+
+      const userMap = new Map<string, any>();
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        const docId = docSnap.id;
+        const uid = data.uid || docId;
+        const email = (data.email || "").toLowerCase().trim();
+
+        if (
+          deletedIds.has(docId) ||
+          deletedIds.has(uid) ||
+          (email && deletedIds.has(email)) ||
+          data.status === "deleted" ||
+          data.isDeleted === true
+        ) {
+          return;
+        }
+
+        const key = uid && uid.length >= 10 ? `uid_${uid}` : email ? `email_${email}` : `doc_${docId}`;
+        if (!userMap.has(key)) {
+          userMap.set(key, {
+            id: docId,
+            uid: uid,
+            name: data.name || data.fullName || data.email?.split("@")[0] || "Tanpa Nama",
+            email: data.email || "-",
+            role: data.role || "siswa",
+            status: data.status || (data.onboardingCompleted === false ? "Belum Onboarding" : "Aktif"),
+            onboardingCompleted: data.onboardingCompleted ?? true,
+            nip: data.nip || null,
+            nisn: data.nisn || null,
+            className: data.className || data.classId || null
+          });
+        }
+      });
+
+      setUsersList(Array.from(userMap.values()));
+    }, (err) => {
+      console.warn("Firestore users query in roles error:", err);
+    });
+
+    return () => unsubUsers();
+  }, []);
+
+  // Map users to roles
+  const roleUserMap = useMemo(() => {
+    const map: Record<string, any[]> = {
+      "admin": [],
+      "guru": [],
+      "siswa": [],
+      "orang-tua": [],
+      "kepala-sekolah": [],
+      "super-admin": []
+    };
+
+    usersList.forEach(u => {
+      const email = (u.email || "").toLowerCase().trim();
+      const name = (u.name || "").toLowerCase().trim();
+      let r = normalizeRole(u.role);
+
+      if (email === "dani@gmail.com" || email.includes("superadmin")) {
+        r = "super-admin";
+      } else if (
+        email.includes("kelapa") ||
+        email.includes("kepala") ||
+        email.includes("seokolah") ||
+        email.includes("tohar") ||
+        name.includes("tohar") ||
+        name.includes("kepala sekolah")
+      ) {
+        r = "kepala-sekolah";
+      } else if (email.includes(".guru@") || email.includes("guru.") || email.includes("teacher")) {
+        r = "guru";
+      } else if (email.includes(".wali@") || email.includes("wali.") || email.includes("parent") || email.includes("orangtua")) {
+        r = "orang-tua";
+      } else if (email.includes("siswa") || email.includes("student")) {
+        r = "siswa";
+      } else if (u.role) {
+        r = normalizeRole(u.role);
+      } else if (u.nip || u.subject) {
+        r = "guru";
+      } else if (u.studentId || u.studentIds) {
+        r = "orang-tua";
+      } else if (u.nisn || u.className) {
+        r = "siswa";
+      }
+
+      if (map[r]) {
+        map[r].push(u);
+      } else if (r === "student") {
+        map["siswa"]?.push(u);
+      } else if (r === "parent" || r === "orangtua") {
+        map["orang-tua"]?.push(u);
+      } else {
+        map["admin"]?.push(u);
+      }
+    });
+
+    return map;
+  }, [usersList]);
 
   const activeRoleData = useMemo(() => {
     return ROLES.find(r => r.id === activeRole) || ROLES[0];
@@ -307,30 +424,40 @@ export default function RolesAndPermissionsPage() {
             {ROLES.map((role) => {
               const Icon = role.icon;
               const isActive = activeRole === role.id;
+              const roleAccounts = roleUserMap[role.id] || [];
 
               return (
                 <button
                   key={role.id}
                   onClick={() => setActiveRole(role.id)}
                   className={cn(
-                    "w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all group",
+                    "w-full flex items-center justify-between p-3 rounded-lg text-left transition-all group cursor-pointer",
                     isActive 
                       ? "bg-[#531FFF] text-white shadow-md shadow-[#531FFF]/20 font-bold" 
                       : "text-gray-700 hover:bg-gray-50 hover:text-gray-900 border border-transparent hover:border-gray-200"
                   )}
                 >
-                  <div className={cn(
-                    "p-2 rounded-md shrink-0 transition-colors",
-                    isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500 group-hover:text-[#531FFF]"
-                  )}>
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <div className="overflow-hidden">
-                    <div className="text-xs font-bold leading-tight truncate">{role.name}</div>
-                    <div className={cn("text-[10px] font-medium truncate mt-0.5", isActive ? "text-white/80" : "text-gray-400")}>
-                      {role.badge}
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className={cn(
+                      "p-2 rounded-md shrink-0 transition-colors",
+                      isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500 group-hover:text-[#531FFF]"
+                    )}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div className="overflow-hidden">
+                      <div className="text-xs font-bold leading-tight truncate">{role.name}</div>
+                      <div className={cn("text-[10px] font-medium truncate mt-0.5", isActive ? "text-white/80" : "text-gray-400")}>
+                        {role.badge}
+                      </div>
                     </div>
                   </div>
+
+                  <span className={cn(
+                    "text-[10px] font-extrabold px-2 py-0.5 rounded-full shrink-0 ml-1.5",
+                    isActive ? "bg-white/20 text-white" : "bg-purple-50 text-[#531FFF] border border-purple-100"
+                  )}>
+                    {roleAccounts.length}
+                  </span>
                 </button>
               );
             })}
@@ -352,6 +479,9 @@ export default function RolesAndPermissionsPage() {
                     <h3 className="text-base font-bold text-gray-900">Otorisasi Modul: {activeRoleData.name}</h3>
                     <span className="px-2.5 py-0.5 text-[10px] font-extrabold bg-purple-50 text-[#531FFF] rounded border border-purple-100">
                       {activeRoleData.badge}
+                    </span>
+                    <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-50 text-emerald-700 rounded border border-emerald-200">
+                      {roleUserMap[activeRole]?.length || 0} Akun Terdaftar
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5">{activeRoleData.description}</p>
@@ -377,7 +507,7 @@ export default function RolesAndPermissionsPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => applyPreset("standard")}
-                    className="px-3 py-1.5 bg-[#F3F0FF] hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-md text-xs font-bold transition-all border border-[#531FFF]/20 flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-[#F3F0FF] hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-md text-xs font-bold transition-all border border-[#531FFF]/20 flex items-center gap-1.5 cursor-pointer"
                   >
                     <Building2 className="w-3.5 h-3.5" />
                     Standar Sekolah
@@ -385,7 +515,7 @@ export default function RolesAndPermissionsPage() {
 
                   <button
                     onClick={() => applyPreset("readOnly")}
-                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs font-bold transition-all border border-gray-200 flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs font-bold transition-all border border-gray-200 flex items-center gap-1.5 cursor-pointer"
                   >
                     <Eye className="w-3.5 h-3.5 text-blue-600" />
                     Read-Only All
@@ -393,7 +523,7 @@ export default function RolesAndPermissionsPage() {
 
                   <button
                     onClick={() => applyPreset("fullWrite")}
-                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs font-bold transition-all border border-gray-200 flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs font-bold transition-all border border-gray-200 flex items-center gap-1.5 cursor-pointer"
                   >
                     <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
                     Full Write
@@ -401,7 +531,7 @@ export default function RolesAndPermissionsPage() {
 
                   <button
                     onClick={() => applyPreset("clear")}
-                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md text-xs font-bold transition-all border border-rose-200 flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md text-xs font-bold transition-all border border-rose-200 flex items-center gap-1.5 cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     Batasi Semua
@@ -436,7 +566,7 @@ export default function RolesAndPermissionsPage() {
                       key={cat}
                       onClick={() => setCategoryFilter(cat)}
                       className={cn(
-                        "px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap",
+                        "px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap cursor-pointer",
                         categoryFilter === cat 
                           ? "bg-white text-[#531FFF] border border-[#531FFF]/30 shadow-xs" 
                           : "text-gray-600 hover:text-gray-900"
@@ -453,13 +583,13 @@ export default function RolesAndPermissionsPage() {
                 <div className="flex items-center gap-2 text-xs">
                   <button 
                     onClick={() => handleToggleColumn("read")}
-                    className="px-2.5 py-1 bg-white border border-gray-200 hover:border-blue-300 text-blue-700 rounded font-bold transition-all shadow-xs"
+                    className="px-2.5 py-1 bg-white border border-gray-200 hover:border-blue-300 text-blue-700 rounded font-bold transition-all shadow-xs cursor-pointer"
                   >
                     Toggle All Read
                   </button>
                   <button 
                     onClick={() => handleToggleColumn("write")}
-                    className="px-2.5 py-1 bg-white border border-gray-200 hover:border-emerald-300 text-emerald-700 rounded font-bold transition-all shadow-xs"
+                    className="px-2.5 py-1 bg-white border border-gray-200 hover:border-emerald-300 text-emerald-700 rounded font-bold transition-all shadow-xs cursor-pointer"
                   >
                     Toggle All Write
                   </button>
@@ -555,6 +685,86 @@ export default function RolesAndPermissionsPage() {
               <p>Menampilkan <span className="font-bold text-gray-900">{filteredModules.length}</span> modul fitur RBAC</p>
               <p className="text-[11px] text-gray-400 font-mono">Modul tersinkronisasi dengan Sidebar Navigasi</p>
             </div>
+          </div>
+
+          {/* ================= REGISTERED ACCOUNTS FOR ACTIVE ROLE ================= */}
+          <div className="bg-white border border-gray-100 rounded-lg shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden space-y-4 p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold">
+                  <Users className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">
+                    Daftar Akun Pengguna Terdaftar ({activeRoleData.name})
+                  </h3>
+                  <p className="text-[11px] text-gray-500 font-medium">
+                    Tersinkronisasi langsung dengan database <strong>Manajemen Akun System</strong> ({roleUserMap[activeRole]?.length || 0} akun)
+                  </p>
+                </div>
+              </div>
+
+              {isSuperAdmin && (
+                <Link
+                  href="/accounts"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold text-[#531FFF] bg-[#F3F0FF] hover:bg-[#531FFF] hover:text-white transition-all border border-[#531FFF]/20 shrink-0"
+                >
+                  <span>Buka Manajemen Akun</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </Link>
+              )}
+            </div>
+
+            {/* List of Accounts */}
+            {(roleUserMap[activeRole] || []).length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(roleUserMap[activeRole] || []).map((acc) => (
+                  <div
+                    key={acc.id || acc.uid}
+                    className="p-3 bg-gray-50/70 hover:bg-purple-50/30 border border-gray-200/80 hover:border-purple-200 rounded-lg flex items-center justify-between gap-3 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                        {(acc.name || "U").charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-gray-900 truncate">{acc.name}</p>
+                        <p className="text-[11px] text-gray-500 font-medium truncate">{acc.email}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={cn(
+                        "px-2 py-0.5 rounded text-[10px] font-bold border",
+                        acc.status === "Aktif"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : acc.status === "Belum Onboarding"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : "bg-gray-100 text-gray-600 border-gray-200"
+                      )}>
+                        {acc.status || "Aktif"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-8 text-center bg-gray-50/50 rounded-lg border border-dashed border-gray-200 space-y-2">
+                <User className="w-8 h-8 text-gray-400 mx-auto" />
+                <p className="text-xs font-bold text-gray-700">Belum ada akun dengan peran {activeRoleData.name}</p>
+                <p className="text-[11px] text-gray-400 max-w-sm mx-auto">
+                  Anda dapat menambahkan akun baru dengan peran ini melalui modul Manajemen Akun System.
+                </p>
+                {isSuperAdmin && (
+                  <Link
+                    href="/accounts"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-[#531FFF] hover:underline pt-1"
+                  >
+                    <span>Buka Manajemen Akun System &rarr;</span>
+                  </Link>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

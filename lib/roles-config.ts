@@ -167,8 +167,15 @@ PERMISSION_MODULES.forEach(mod => {
  */
 export function isSuperAdminRole(role?: string | null): boolean {
   if (!role) return false;
-  const normalized = role.toLowerCase().trim().replace(/[-_ ]/g, "");
-  return normalized === "superadmin";
+  const raw = role.toLowerCase().trim();
+  const normalized = raw.replace(/[-_ /]/g, "");
+  return (
+    normalized.includes("superadmin") ||
+    normalized.includes("superadministrator") ||
+    normalized === "owner" ||
+    normalized === "developer" ||
+    normalized === "root"
+  );
 }
 
 /**
@@ -176,8 +183,15 @@ export function isSuperAdminRole(role?: string | null): boolean {
  */
 export function isStudentRole(role?: string | null): boolean {
   if (!role) return false;
-  const normalized = role.toLowerCase().trim();
-  return normalized === "siswa" || normalized === "student";
+  const raw = role.toLowerCase().trim();
+  const normalized = raw.replace(/[-_ /]/g, "");
+  return (
+    normalized.includes("siswa") ||
+    normalized.includes("student") ||
+    normalized.includes("murid") ||
+    normalized.includes("pesertadidik") ||
+    normalized.includes("pelajar")
+  );
 }
 
 /**
@@ -185,8 +199,20 @@ export function isStudentRole(role?: string | null): boolean {
  */
 export function isTeacherRole(role?: string | null): boolean {
   if (!role) return false;
-  const normalized = role.toLowerCase().trim();
-  return normalized === "guru" || normalized === "teacher";
+  const raw = role.toLowerCase().trim();
+  const normalized = raw.replace(/[-_ /]/g, "");
+  // Ensure parent variants with "wali" don't get misclassified as teacher
+  if (normalized.includes("walimurid") || normalized.includes("orangtua") || normalized.includes("parent")) {
+    return false;
+  }
+  return (
+    normalized.includes("guru") ||
+    normalized.includes("teacher") ||
+    normalized.includes("pengajar") ||
+    normalized.includes("pendidik") ||
+    normalized.includes("walikelas") ||
+    normalized.includes("homeroom")
+  );
 }
 
 /**
@@ -194,12 +220,18 @@ export function isTeacherRole(role?: string | null): boolean {
  */
 export function isParentRole(role?: string | null): boolean {
   if (!role) return false;
-  const normalized = role.toLowerCase().trim().replace(/[-_ ]/g, "");
+  const raw = role.toLowerCase().trim();
+  const normalized = raw.replace(/[-_ /]/g, "");
+  // Ensure "wali kelas" is teacher, not parent
+  if (normalized.includes("walikelas") || normalized.includes("homeroom")) {
+    return false;
+  }
   return (
-    normalized === "orangtua" ||
-    normalized === "parent" ||
-    normalized === "walimurid" ||
-    normalized === "wali"
+    normalized.includes("orangtua") ||
+    normalized.includes("parent") ||
+    normalized.includes("walimurid") ||
+    normalized.includes("wali") ||
+    raw.includes("orang tua")
   );
 }
 
@@ -208,15 +240,9 @@ export function isParentRole(role?: string | null): boolean {
  */
 export function isKepalaSekolahRole(role?: string | null): boolean {
   if (!role) return false;
-  const normalized = role.toLowerCase().trim().replace(/[-_ ]/g, "");
+  const raw = role.toLowerCase().trim();
+  const normalized = raw.replace(/[-_ /]/g, "");
   return (
-    normalized === "kepalasekolah" ||
-    normalized === "kelapasekolah" ||
-    normalized === "kelapaseokolah" ||
-    normalized === "kepalaseokolah" ||
-    normalized === "kepsek" ||
-    normalized === "principal" ||
-    normalized === "headmaster" ||
     normalized.includes("kepalasekolah") ||
     normalized.includes("kelapasekolah") ||
     normalized.includes("kelapaseokolah") ||
@@ -252,7 +278,7 @@ export function canMutateModule(
   if (isStudentRole(role) || isParentRole(role)) return false;
 
   // Admin default allows write for most modules except accounts
-  if (role.toLowerCase() === "admin") {
+  if ((role || "").toLowerCase().trim() === "admin") {
     if (module === "accounts") return false;
     return action === "write";
   }
@@ -263,6 +289,18 @@ export function canMutateModule(
 // Alias parent roles to have consistent permissions lookup
 DEFAULT_PERMISSIONS["parent"] = DEFAULT_PERMISSIONS["orang-tua"];
 DEFAULT_PERMISSIONS["orangtua"] = DEFAULT_PERMISSIONS["orang-tua"];
+DEFAULT_PERMISSIONS["orang-tua / wali"] = DEFAULT_PERMISSIONS["orang-tua"];
+DEFAULT_PERMISSIONS["wali-murid"] = DEFAULT_PERMISSIONS["orang-tua"];
+DEFAULT_PERMISSIONS["wali"] = DEFAULT_PERMISSIONS["orang-tua"];
+
+// Alias teacher roles
+DEFAULT_PERMISSIONS["teacher"] = DEFAULT_PERMISSIONS["guru"];
+DEFAULT_PERMISSIONS["guru pengajar"] = DEFAULT_PERMISSIONS["guru"];
+DEFAULT_PERMISSIONS["pengajar"] = DEFAULT_PERMISSIONS["guru"];
+
+// Alias student roles
+DEFAULT_PERMISSIONS["student"] = DEFAULT_PERMISSIONS["siswa"];
+DEFAULT_PERMISSIONS["murid"] = DEFAULT_PERMISSIONS["siswa"];
 
 // Alias kepala sekolah roles to have consistent permissions lookup
 DEFAULT_PERMISSIONS["kepalasekolah"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
@@ -278,28 +316,14 @@ DEFAULT_PERMISSIONS["headmaster"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
  */
 export function normalizeRole(roleStr: string = ""): string {
   const r = (roleStr || "").toLowerCase().trim();
-  if (r === "super-admin" || r === "superadmin" || r === "owner" || r === "developer") return "super-admin";
-  if (r === "guru" || r === "teacher" || r === "pengajar") return "guru";
-  if (r === "siswa" || r === "student" || r === "murid") return "siswa";
-  if (r === "orang-tua" || r === "orang tua" || r === "wali" || r === "wali-murid" || r === "parent" || r === "orangtua") return "orang-tua";
-  if (
-    r === "kepala-sekolah" || 
-    r === "kepala sekolah" || 
-    r === "kepala_sekolah" || 
-    r === "kepsek" || 
-    r === "principal" || 
-    r === "headmaster" ||
-    r === "kelapasekolah" ||
-    r === "kelapa sekolah" ||
-    r === "kelapaseokolah" ||
-    r === "kepalaseokolah" ||
-    r.includes("kepala") ||
-    r.includes("kelapa") ||
-    r.includes("kepsek") ||
-    r.includes("principal") ||
-    r.includes("headmaster") ||
-    r.includes("tohar")
-  ) return "kepala-sekolah";
+  if (!r) return "admin";
+
+  if (isSuperAdminRole(r)) return "super-admin";
+  if (isKepalaSekolahRole(r)) return "kepala-sekolah";
+  if (isParentRole(r)) return "orang-tua";
+  if (isTeacherRole(r)) return "guru";
+  if (isStudentRole(r)) return "siswa";
+
   return "admin";
 }
 
