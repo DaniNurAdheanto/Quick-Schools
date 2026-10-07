@@ -90,49 +90,15 @@ export default function StudentPersonalAttendanceView({
   // Today string YYYY-MM-DD
   const todayStr = useMemo(() => getTodayDateString(), []);
 
-  // Check if today has passed the "Batas Maksimal Dihitung Alpa"
-  const isPastAbsentThreshold = useMemo(() => {
-    const thresholdStr = config.absentThresholdTime || (config as any).autoAbsentTime || "08:30";
-    const [absentH, absentM] = thresholdStr.split(":").map(Number);
-    const absentTotalMinutes = (isNaN(absentH) ? 8 : absentH) * 60 + (isNaN(absentM) ? 30 : absentM);
-    const now = new Date();
-    const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
-    return currentTotalMinutes >= absentTotalMinutes;
-  }, [config.absentThresholdTime, (config as any).autoAbsentTime]);
-
-  // Check today's attendance status (real record or synthesized auto-Alpa if past threshold)
+  // Check today's attendance status (strictly from database records)
   const todayAttendance = useMemo(() => {
-    return studentRecords.find((r) => r.date === todayStr);
+    return studentRecords.find((r) => r.date === todayStr) || null;
   }, [studentRecords, todayStr]);
 
-  const effectiveTodayAttendance = useMemo(() => {
-    if (todayAttendance) return todayAttendance;
-    if (isPastAbsentThreshold) {
-      const thresholdStr = config.absentThresholdTime || (config as any).autoAbsentTime || "08:30";
-      return {
-        id: `auto_alpa_${student.id}_${todayStr}`,
-        studentId: student.id,
-        studentName: student.name,
-        className: student.className || "Umum",
-        date: todayStr,
-        status: "Alpa" as const,
-        notes: `Otomatis Alpa (Melewati Batas Maksimal ${thresholdStr} WIB)`,
-        timestamp: `${thresholdStr} WIB`,
-        time: "-",
-        source: "system" as const,
-        isRecorded: false
-      } as unknown as AttendanceRecord;
-    }
-    return null;
-  }, [todayAttendance, isPastAbsentThreshold, config.absentThresholdTime, student, todayStr]);
+  const effectiveTodayAttendance = todayAttendance;
 
-  // Combined student records including today's auto-Alpa if deadline has passed
-  const effectiveStudentRecords = useMemo(() => {
-    if (!todayAttendance && isPastAbsentThreshold && effectiveTodayAttendance) {
-      return [effectiveTodayAttendance, ...studentRecords];
-    }
-    return studentRecords;
-  }, [studentRecords, todayAttendance, isPastAbsentThreshold, effectiveTodayAttendance]);
+  // Combined student records
+  const effectiveStudentRecords = studentRecords;
 
   // 2. Filter by status & search
   const finalDisplayRecords = useMemo(() => {
@@ -265,29 +231,41 @@ export default function StudentPersonalAttendanceView({
                     ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
                     : effectiveTodayAttendance.status === "Terlambat"
                     ? "bg-amber-500/20 text-amber-300 border border-amber-400/30"
+                    : effectiveTodayAttendance.status === "Izin"
+                    ? "bg-purple-500/20 text-purple-300 border border-purple-400/30"
+                    : effectiveTodayAttendance.status === "Sakit"
+                    ? "bg-blue-500/20 text-blue-300 border border-blue-400/30"
                     : "bg-rose-500/20 text-rose-300 border border-rose-400/30"
                 )}>
                   {effectiveTodayAttendance.status === "Hadir" ? (
                     <CheckCircle2 className="w-4 h-4" />
                   ) : effectiveTodayAttendance.status === "Terlambat" ? (
                     <Clock className="w-4 h-4" />
+                  ) : effectiveTodayAttendance.status === "Izin" ? (
+                    <Calendar className="w-4 h-4" />
+                  ) : effectiveTodayAttendance.status === "Sakit" ? (
+                    <AlertCircle className="w-4 h-4" />
                   ) : (
                     <AlertTriangle className="w-4 h-4" />
                   )}
                 </div>
                 <div>
                   <div className="text-[9px] font-bold text-gray-300 uppercase tracking-wider">
-                    Hari Ini ({effectiveTodayAttendance.timestamp?.substring(0, 5) || (config.absentThresholdTime || "08:30")} WIB)
+                    Hari Ini ({(effectiveTodayAttendance.timestamp || effectiveTodayAttendance.time || "Tercatat").substring(0, 5)} WIB)
                   </div>
                   <div className="text-xs font-black text-white flex items-center gap-1.5">
                     <span className={cn(
-                      effectiveTodayAttendance.status === "Alpa" && "text-rose-300"
+                      effectiveTodayAttendance.status === "Izin" && "text-amber-300",
+                      effectiveTodayAttendance.status === "Sakit" && "text-blue-300",
+                      effectiveTodayAttendance.status === "Alpa" && "text-rose-300",
+                      effectiveTodayAttendance.status === "Hadir" && "text-emerald-300",
+                      effectiveTodayAttendance.status === "Terlambat" && "text-amber-300"
                     )}>
-                      {effectiveTodayAttendance.status === "Alpa" && !todayAttendance ? "Alpa (Otomatis)" : effectiveTodayAttendance.status}
+                      {effectiveTodayAttendance.status}
                     </span>
                     <span className="text-[10px] font-normal text-purple-200">
-                      • {effectiveTodayAttendance.status === "Alpa" 
-                          ? `Batas ${config.absentThresholdTime || "08:30"} WIB` 
+                      • {effectiveTodayAttendance.status === "Izin" || effectiveTodayAttendance.status === "Sakit"
+                          ? "Disetujui"
                           : effectiveTodayAttendance.location?.distance 
                             ? `${effectiveTodayAttendance.location.distance}m` 
                             : "Radius OK"}
@@ -305,7 +283,7 @@ export default function StudentPersonalAttendanceView({
                     Belum Presensi Hari Ini
                   </div>
                   <div className="text-[11px] font-bold text-white">
-                    Masuk: {config.schoolStartTime} WIB (Batas Alpa: {config.absentThresholdTime || "08:30"} WIB)
+                    Masuk: {config.schoolStartTime} WIB (Batas: {config.absentThresholdTime || "08:30"} WIB)
                   </div>
                 </div>
               </div>
@@ -316,18 +294,8 @@ export default function StudentPersonalAttendanceView({
                 {todayAttendance ? (
                   <div className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-500/20 backdrop-blur-md border border-emerald-400/30 text-emerald-300 font-extrabold text-xs rounded-lg cursor-not-allowed opacity-90">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Presensi Hari Ini Selesai ✓</span>
+                    <span>Presensi: {todayAttendance.status} ✓</span>
                   </div>
-                ) : isPastAbsentThreshold ? (
-                  <button
-                    type="button"
-                    onClick={onOpenScanModal}
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white font-extrabold text-xs rounded-lg shadow-md shadow-rose-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                    title={`Telah melewati batas waktu ${config.absentThresholdTime || "08:30"} WIB. Status absensi akan otomatis tercatat sebagai Alpa.`}
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                    <span>Ambil Presensi (Tercatat Alpa)</span>
-                  </button>
                 ) : (
                   <button
                     type="button"

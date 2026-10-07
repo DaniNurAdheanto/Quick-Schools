@@ -26,6 +26,7 @@ import {
   Camera,
   ClipboardCheck,
   Lock,
+  AlertCircle,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -44,6 +45,7 @@ import { auth, db } from "@/lib/firebase";
 import { isAnnouncementVisibleForRole, cleanAnnouncementDesc } from "@/lib/announcements-helper";
 import { cn, getTodayDateString } from "@/lib/utils";
 import { formatRupiah } from "@/lib/spp-payments";
+import { getDatesBetween } from "@/lib/leave-requests-service";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useAuth } from "@/context/AuthContext";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
@@ -97,6 +99,7 @@ export function StudentDashboardView({
   const [sppBillsList, setSppBillsList] = useState<any[]>([]);
   const [announcementsList, setAnnouncementsList] = useState<any[]>([]);
   const [classesList, setClassesList] = useState<any[]>([]);
+  const [leaveRequestsList, setLeaveRequestsList] = useState<any[]>([]);
 
   // Selected Day for Timetable
   const [selectedDay, setSelectedDay] = useState<string>(() => {
@@ -319,13 +322,17 @@ export function StudentDashboardView({
       collection(db, "roles"),
       (snap) => {
         rolesRecords = snap.docs
-          .filter(
-            (d) =>
+          .filter((d) => {
+            const data = d.data();
+            if (data.type === "leave_request" || data.typeMarker === "leave_request" || d.id.startsWith("leave_")) {
+              return false;
+            }
+            return (
               d.id.startsWith("att_") ||
               d.id.startsWith("att_rec_") ||
-              d.data().type === "attendance_record" ||
-              !!d.data().status
-          )
+              data.type === "attendance_record"
+            );
+          })
           .map((d) => ({ id: d.id, ...d.data() }));
         mergeAndSetAttendance();
       },
@@ -362,6 +369,11 @@ export function StudentDashboardView({
       setClassesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (err) => console.warn("Classes listener warning:", err));
 
+    // 2h. Leave Requests (Permits / Sick Leave)
+    const unsubLeave = onSnapshot(collection(db, "leave_requests"), (snap) => {
+      setLeaveRequestsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.warn("Leave requests listener warning:", err));
+
     return () => {
       unsubAttendance();
       unsubRolesAtt();
@@ -371,6 +383,7 @@ export function StudentDashboardView({
       unsubBills();
       unsubAnnouncements();
       unsubClasses();
+      unsubLeave();
     };
   }, []);
 
@@ -401,49 +414,155 @@ export function StudentDashboardView({
 
   // ── 3. COMPUTED ATTENDANCE STATS (Strictly for Current Student) ─────────────
   const attendanceData = useMemo(() => {
-    const uid = currentUser?.uid;
-    const nisn =
-      studentNisn ||
-      studentDoc?.nisn ||
-      studentDoc?.nis ||
-      studentDoc?.studentId ||
-      (studentDoc?.id && studentDoc?.id !== uid ? studentDoc?.id : "");
-    const email = (currentUser?.email || studentDoc?.email || "").toLowerCase().trim();
-    const studentDocId = studentDoc?.id || "";
-    const studentName = (studentDoc?.fullName || studentDoc?.name || userName || "").toLowerCase().trim();
+    const myUid = (currentUser?.uid || "").trim().toLowerCase();
+    const myEmail = (currentUser?.email || studentDoc?.email || "").trim().toLowerCase();
+    const myNisn = (studentNisn || studentDoc?.nisn || studentDoc?.nis || studentDoc?.studentId || "").trim().toLowerCase();
+    const myDocId = (studentDoc?.id || "").trim().toLowerCase();
+    const myName = (studentDoc?.fullName || studentDoc?.name || userName || "").trim().toLowerCase();
+    const isGenericName = !myName || myName === "siswa" || myName === "student";
 
-    // Merge live local/event record if present (deduplicate by id)
-    const combinedRecords = [...attendanceRecords];
-    if (liveAttendedRecord && !combinedRecords.some((r) => r.id === liveAttendedRecord.id)) {
-      combinedRecords.unshift(liveAttendedRecord);
+    const normalizeStatus = (r: any): "Hadir" | "Terlambat" | "Izin" | "Sakit" | "Alpa" => {
+      const raw = String(r.status || r.type || "").trim();
+      const rawLower = raw.toLowerCase();
+
+      if (rawLower === "hadir" || rawLower === "present") return "Hadir";
+      if (rawLower === "terlambat" || rawLower === "late") return "Terlambat";
+      if (rawLower === "sakit" || rawLower === "sick" || r.leaveType === "Sakit" || r.type === "Sakit") return "Sakit";
+      if (rawLower === "izin" || rawLower === "permit" || rawLower === "leave_request" || rawLower === "disetujui" || r.leaveType === "Izin" || r.type === "Izin") return "Izin";
+      if (rawLower === "alpa" || rawLower === "absent" || rawLower === "ditolak") return "Alpa";
+
+      if (r.source === "permit" || r.typeMarker === "leave_request" || r.type === "leave_request") {
+        return r.type === "Sakit" || r.leaveType === "Sakit" ? "Sakit" : "Izin";
+      }
+
+      return "Hadir";
+    };
+
+    // 1. Base records from attendance collection & roles
+    const combinedRecords: any[] = [];
+
+    // 2. Synthesize/merge leave requests (Izin / Sakit) for this student
+    if (leaveRequestsList && leaveRequestsList.length > 0) {
+      leaveRequestsList.forEach((lr: any) => {
+        if (lr.status === "Ditolak") return;
+        const reqStudentId = String(lr.studentId || lr.nisn || lr.studentUid || "").toLowerCase().trim();
+        const reqStudentName = String(lr.studentName || "").toLowerCase().trim();
+        const reqEmail = String(lr.studentEmail || "").toLowerCase().trim();
+
+        const isMyLeave =
+          (myUid && (reqStudentId === myUid || reqStudentId.includes(myUid))) ||
+          (myNisn && myNisn.length >= 4 && (reqStudentId === myNisn || reqStudentId.includes(myNisn))) ||
+          (myDocId && myDocId.length >= 4 && (reqStudentId === myDocId || reqStudentId.includes(myDocId))) ||
+          (myEmail && reqEmail && reqEmail === myEmail) ||
+          (!isGenericName && myName.length > 3 && reqStudentName && (reqStudentName === myName || reqStudentName.includes(myName) || myName.includes(reqStudentName)));
+
+        if (!isMyLeave) return;
+
+        const dates = getDatesBetween(lr.startDate || lr.date, lr.endDate || lr.startDate || lr.date);
+        const resolvedType = lr.type === "Sakit" ? "Sakit" : "Izin";
+
+        dates.forEach((dateStr) => {
+          const recId = `leave_${lr.id}_${dateStr}`;
+          combinedRecords.push({
+            id: recId,
+            studentId: lr.studentId || myNisn || myUid,
+            studentName: lr.studentName || studentFullName,
+            className: lr.className || studentDisplayClass,
+            date: dateStr,
+            status: resolvedType,
+            notes: lr.reason ? `Permohonan ${resolvedType}: ${lr.reason}` : `Disetujui oleh Wali Kelas`,
+            timestamp: "07:00 WIB",
+            time: "07:00",
+            source: "permit",
+            capturedImage: lr.attachmentUrl || null,
+            approvedBy: lr.approvedBy || "Wali Kelas",
+          });
+        });
+      });
     }
 
-    const myRecords = combinedRecords.filter((r) => {
-      if (liveAttendedRecord && r.id === liveAttendedRecord.id) return true;
-      if (uid && (r.studentId === uid || r.uid === uid || r.studentUid === uid || r.id?.includes(uid))) return true;
-      if (nisn && (r.studentId === nisn || r.nisn === nisn || r.id?.includes(nisn))) return true;
-      if (studentDocId && (r.studentId === studentDocId || r.id?.includes(studentDocId))) return true;
-      if (email && r.studentEmail && r.studentEmail.toLowerCase().trim() === email) return true;
-      if (studentName && r.studentName && r.studentName.toLowerCase().trim() === studentName) return true;
-      return false;
+    // Add attendanceRecords
+    attendanceRecords.forEach((r) => {
+      if (!r) return;
+      combinedRecords.push({
+        ...r,
+        status: normalizeStatus(r)
+      });
     });
 
+    // 3. Merge live local/event record if present
+    if (liveAttendedRecord && !combinedRecords.some((r) => r.id === liveAttendedRecord.id)) {
+      combinedRecords.unshift({
+        ...liveAttendedRecord,
+        status: normalizeStatus(liveAttendedRecord)
+      });
+    }
+
+    // 4. Strictly filter records for this student
+    const isRecordForMe = (r: any) => {
+      if (!r) return false;
+      if (liveAttendedRecord && (r.id === liveAttendedRecord.id || r._id === liveAttendedRecord._id)) return true;
+
+      const rStudentId = String(r.studentId || "").trim().toLowerCase();
+      const rUid = String(r.uid || r.studentUid || "").trim().toLowerCase();
+      const rNisn = String(r.nisn || "").trim().toLowerCase();
+      const rEmail = String(r.email || r.studentEmail || "").trim().toLowerCase();
+      const rName = String(r.studentName || r.name || "").trim().toLowerCase();
+      const rDocId = String(r.id || "").trim().toLowerCase();
+
+      // 1. Direct UID match
+      if (myUid && (rStudentId === myUid || rUid === myUid || rDocId.endsWith(`_${myUid}`))) return true;
+
+      // 2. Direct NISN match
+      if (myNisn && myNisn.length >= 4 && (rStudentId === myNisn || rNisn === myNisn || rDocId.endsWith(`_${myNisn}`))) return true;
+
+      // 3. Direct Firestore Student Doc ID match
+      if (myDocId && myDocId.length >= 4 && (rStudentId === myDocId || rDocId.endsWith(`_${myDocId}`))) return true;
+
+      // 4. Email match
+      if (myEmail && rEmail && rEmail === myEmail) return true;
+
+      // 5. Full name match
+      if (!isGenericName && myName.length > 3 && rName && (rName === myName || (rName.length > 5 && (rName.includes(myName) || myName.includes(rName))))) {
+        return true;
+      }
+
+      return false;
+    };
+
+    const myRawRecords = combinedRecords.filter(isRecordForMe);
+
+    // 5. Deduplicate by date (keep highest precedence: Hadir/Terlambat > Izin/Sakit > Alpa)
+    const recordByDate = new Map<string, any>();
+    myRawRecords.forEach((r) => {
+      const dateKey = r.date;
+      if (!dateKey) return;
+      const normalized = { ...r, status: normalizeStatus(r) };
+
+      if (!recordByDate.has(dateKey)) {
+        recordByDate.set(dateKey, normalized);
+      } else {
+        const existing = recordByDate.get(dateKey);
+        if (r.id === liveAttendedRecord?.id || r.source === "biometric" || r.capturedImage) {
+          recordByDate.set(dateKey, normalized);
+        } else if (existing.status === "Alpa" && normalized.status !== "Alpa") {
+          recordByDate.set(dateKey, normalized);
+        }
+      }
+    });
+
+    const myRecords = Array.from(recordByDate.values());
     const todayDate = currentLocalDate;
 
-    let todayRecord = myRecords.find((r) => {
-      // Must match today's local date exactly
-      if (r.date === todayDate) return true;
-      if (r.id === `att_${nisn}_${todayDate}` || (uid && r.id === `att_${uid}_${todayDate}`)) return true;
-      return false;
-    });
+    let todayRecord = myRecords.find((r) => r.date === todayDate) || null;
 
     if (!todayRecord && liveAttendedRecord) {
       const isToday =
         liveAttendedRecord.date === todayDate ||
-        liveAttendedRecord.id === `att_${nisn}_${todayDate}` ||
-        (uid && liveAttendedRecord.id === `att_${uid}_${todayDate}`);
+        liveAttendedRecord.id === `att_${myNisn}_${todayDate}` ||
+        (myUid && liveAttendedRecord.id === `att_${myUid}_${todayDate}`);
       if (isToday) {
-        todayRecord = liveAttendedRecord;
+        todayRecord = { ...liveAttendedRecord, status: normalizeStatus(liveAttendedRecord) };
       }
     }
 
@@ -458,44 +577,13 @@ export function StudentDashboardView({
     // Aturan penguncian otomatis setelah pukul 10:00 WIB (600 menit)
     const isAttendanceLocked = currentTotalMinutes >= 10 * 60;
 
-    let isAutoAlpa = false;
-    if (!todayRecord && isPastAbsentThreshold) {
-      isAutoAlpa = true;
-      todayRecord = {
-        id: `auto_alpa_${nisn || uid || "student"}_${todayDate}`,
-        date: todayDate,
-        status: "Alpa",
-        notes: isAttendanceLocked
-          ? "Otomatis Alpa (Final Terkunci Pukul 10:00 WIB)"
-          : `Otomatis Alpa (Melewati Batas Maksimal ${absentThresholdStr} WIB)`,
-        time: "-",
-        timestamp: isAttendanceLocked ? "10:00 WIB" : `${absentThresholdStr} WIB`,
-        isAutoGenerated: true,
-        isLocked: isAttendanceLocked,
-        isFinal: isAttendanceLocked,
-      };
-    } else if (todayRecord && isAttendanceLocked) {
-      todayRecord = {
-        ...todayRecord,
-        isLocked: true,
-        isFinal: true,
-      };
-    }
-
-    let total = myRecords.length;
-    // In Indonesian school academic administration:
-    // Kehadiran (Present) = Hadir tepat waktu + Terlambat
+    const total = myRecords.length;
     const hadirTepatWaktu = myRecords.filter((r) => r.status === "Hadir").length;
     const terlambat = myRecords.filter((r) => r.status === "Terlambat").length;
     const hadir = hadirTepatWaktu + terlambat; // Total Kehadiran
     const sakit = myRecords.filter((r) => r.status === "Sakit").length;
     const izin = myRecords.filter((r) => r.status === "Izin").length;
-    let alpa = myRecords.filter((r) => r.status === "Alpa" || r.status === "Ditolak").length;
-
-    if (isAutoAlpa) {
-      alpa += 1;
-      total += 1;
-    }
+    const alpa = myRecords.filter((r) => r.status === "Alpa" || r.status === "Ditolak").length;
 
     let percentage = "0.0";
     if (total > 0) {
@@ -517,7 +605,6 @@ export function StudentDashboardView({
     return {
       myRecords,
       todayRecord,
-      isAutoAlpa,
       isAttendanceLocked,
       absentThresholdStr,
       isPastAbsentThreshold,
@@ -533,7 +620,7 @@ export function StudentDashboardView({
       recentLogs,
       hasData: total > 0,
     };
-  }, [attendanceRecords, currentUser, studentNisn, studentDoc, liveAttendedRecord, currentLocalDate]);
+  }, [attendanceRecords, leaveRequestsList, currentUser, studentNisn, studentDoc, liveAttendedRecord, currentLocalDate, attendanceConfig]);
 
   // ── 4. COMPUTED ACADEMIC GRADES (Strictly for Current Student) ─────────────
   const gradesData = useMemo(() => {
@@ -858,17 +945,17 @@ export function StudentDashboardView({
       }
       return;
     }
-    if (attendanceData.todayRecord && !attendanceData.isAutoAlpa) {
+    if (attendanceData.todayRecord) {
       if (showError) {
         showError(
-          "Anda sudah melakukan presensi hari ini. Presensi hanya dapat dilakukan 1 kali per hari.",
-          "Sudah Absen Hari Ini"
+          `Status kehadiran Anda hari ini telah tercatat sebagai ${attendanceData.todayRecord.status}.`,
+          "Presensi Hari Ini Telah Tercatat"
         );
       }
       return;
     }
     setShowAttendanceModal(true);
-  }, [attendanceData.todayRecord, attendanceData.isAutoAlpa, attendanceData.isAttendanceLocked, showError]);
+  }, [attendanceData.todayRecord, attendanceData.isAttendanceLocked, showError]);
 
   return (
     <div className="p-4 md:p-8 max-w-[1600px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
@@ -913,24 +1000,32 @@ export function StudentDashboardView({
             id="btn-top-attendance"
             className={cn(
               "inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer",
-              attendanceData.todayRecord?.status === "Alpa"
+              !attendanceData.todayRecord
+                ? "bg-gradient-to-r from-[#531FFF] to-[#6d35ff] hover:from-[#4314cc] hover:to-[#5a2ad6] text-white shadow-purple-500/25 active:scale-95 ring-2 ring-purple-300/40"
+                : attendanceData.todayRecord.status === "Izin"
+                ? "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300"
+                : attendanceData.todayRecord.status === "Sakit"
+                ? "bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300"
+                : attendanceData.todayRecord.status === "Alpa"
                 ? "bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300"
-                : attendanceData.todayRecord
-                ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300"
-                : "bg-gradient-to-r from-[#531FFF] to-[#6d35ff] hover:from-[#4314cc] hover:to-[#5a2ad6] text-white shadow-purple-500/25 active:scale-95 ring-2 ring-purple-300/40"
+                : attendanceData.todayRecord.status === "Terlambat"
+                ? "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300"
+                : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300"
             )}
           >
             {attendanceData.todayRecord ? (
               <>
-                {attendanceData.isAttendanceLocked ? (
-                  <Lock className="w-4 h-4 text-amber-600" />
+                {attendanceData.todayRecord.status === "Izin" ? (
+                  <Calendar className="w-4 h-4 text-amber-600" />
+                ) : attendanceData.todayRecord.status === "Sakit" ? (
+                  <AlertCircle className="w-4 h-4 text-blue-600" />
                 ) : attendanceData.todayRecord.status === "Alpa" ? (
                   <AlertTriangle className="w-4 h-4 text-rose-600" />
                 ) : (
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 )}
                 <span>
-                  Presensi: {attendanceData.todayRecord.status || "Hadir"} {attendanceData.isAttendanceLocked ? "(Final - Terkunci 10:00 WIB)" : `(${(attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "Tercatat").replace(/\s*WIB/gi, "").trim()} WIB)`}
+                  Presensi: {attendanceData.todayRecord.status} ({(attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "Tercatat").replace(/\s*WIB/gi, "").trim()} WIB)
                 </span>
               </>
             ) : attendanceData.isAttendanceLocked ? (
@@ -1011,6 +1106,66 @@ export function StudentDashboardView({
             </div>
           </div>
         </div>
+      ) : attendanceData.todayRecord.status === "Izin" ? (
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-950 via-amber-900 to-yellow-950 border border-amber-500/40 p-4 md:p-5 text-white shadow-lg animate-in fade-in duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Calendar className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black text-amber-200 uppercase tracking-wider">
+                    Presensi Hari Ini: Izin Terverifikasi
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/40 text-amber-100 border border-amber-400/50">
+                    Status: Izin
+                  </span>
+                </div>
+                <p className="text-xs md:text-sm font-bold text-amber-100 mt-0.5">
+                  {attendanceData.todayRecord.notes || "Permohonan Izin Anda telah disetujui oleh pihak sekolah/Wali Kelas."} ({currentDate}).
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/leave-requests"
+              className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold border border-white/20 transition-all flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
+            >
+              <ClipboardCheck className="w-3.5 h-3.5 text-amber-300" />
+              <span>Detail Surat Izin</span>
+            </Link>
+          </div>
+        </div>
+      ) : attendanceData.todayRecord.status === "Sakit" ? (
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-950 via-blue-900 to-indigo-950 border border-blue-500/40 p-4 md:p-5 text-white shadow-lg animate-in fade-in duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black text-blue-200 uppercase tracking-wider">
+                    Presensi Hari Ini: Sakit Terverifikasi
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-blue-500/40 text-blue-100 border border-blue-400/50">
+                    Status: Sakit
+                  </span>
+                </div>
+                <p className="text-xs md:text-sm font-bold text-blue-100 mt-0.5">
+                  {attendanceData.todayRecord.notes || "Keterangan Sakit Anda telah diverifikasi oleh Wali Kelas."} ({currentDate}).
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/leave-requests"
+              className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold border border-white/20 transition-all flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
+            >
+              <ClipboardCheck className="w-3.5 h-3.5 text-blue-300" />
+              <span>Detail Keterangan Sakit</span>
+            </Link>
+          </div>
+        </div>
       ) : attendanceData.todayRecord.status === "Alpa" ? (
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-rose-950 via-rose-900 to-red-950 border border-rose-500/40 p-4 md:p-5 text-white shadow-lg animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
@@ -1024,11 +1179,11 @@ export function StudentDashboardView({
                     Presensi Hari Ini: Alpa
                   </span>
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/40 text-rose-100 border border-rose-400/50">
-                    {attendanceData.isAutoAlpa ? `Otomatis (Melewati Batas ${attendanceData.absentThresholdStr} WIB)` : "Tanpa Keterangan"}
+                    Tanpa Keterangan
                   </span>
                 </div>
                 <p className="text-xs md:text-sm font-bold text-rose-100 mt-0.5">
-                  Batas maksimal absensi telah terlewati ({attendanceData.absentThresholdStr} WIB). Status kehadiran Anda tercatat sebagai <strong className="text-white font-black">Alpa</strong>.
+                  Status kehadiran Anda tercatat sebagai <strong className="text-white font-black">Alpa</strong> di sistem database absensi sekolah.
                 </p>
               </div>
             </div>
@@ -1037,16 +1192,48 @@ export function StudentDashboardView({
                 <Lock className="w-3.5 h-3.5 text-rose-300" />
                 <span>Data Final Terkunci (Pukul 10:00 WIB)</span>
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={handleOpenAttendance}
-                className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold border border-white/20 transition-all flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
-              >
-                <Camera className="w-3.5 h-3.5" />
-                <span>Foto Presensi Susulan</span>
-              </button>
-            )}
+            ) : null}
+          </div>
+        </div>
+      ) : attendanceData.todayRecord.status === "Terlambat" ? (
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-50 to-orange-50/80 border border-amber-300/80 p-4 md:p-5 text-amber-950 shadow-xs animate-in fade-in duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Clock className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black text-amber-800 uppercase tracking-wider">
+                    Presensi Hari Ini: Terlambat
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 border border-amber-300">
+                    Status: Terlambat
+                  </span>
+                  {attendanceData.isAttendanceLocked && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-amber-700" />
+                      Data Final (Terkunci 10:00 WIB)
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs md:text-sm font-bold text-amber-950 mt-0.5">
+                  Kehadiran Anda telah tercatat pada pukul{" "}
+                  <strong className="text-amber-900 font-extrabold">
+                    {(attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "waktu presensi").replace(/\s*WIB/gi, "").trim()} WIB
+                  </strong>{" "}
+                  ({currentDate}). Tetap dihitung hadir.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-800 bg-white/90 px-3.5 py-2 rounded-xl border border-amber-200 shadow-xs self-start sm:self-auto">
+              <MapPin className="w-4 h-4 text-amber-600" />
+              <span>
+                {attendanceData.todayRecord.location?.distance || attendanceData.todayRecord.distance
+                  ? `Radius GPS: ${attendanceData.todayRecord.location?.distance || attendanceData.todayRecord.distance}m (Valid)`
+                  : "Lokasi GPS Terverifikasi"}
+              </span>
+            </div>
           </div>
         </div>
       ) : (
@@ -1083,8 +1270,8 @@ export function StudentDashboardView({
             <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 bg-white/90 px-3.5 py-2 rounded-xl border border-emerald-200 shadow-xs self-start sm:self-auto">
               <MapPin className="w-4 h-4 text-emerald-600" />
               <span>
-                {attendanceData.todayRecord.distance
-                  ? `Radius GPS: ${attendanceData.todayRecord.distance}m (Valid)`
+                {attendanceData.todayRecord.location?.distance || attendanceData.todayRecord.distance
+                  ? `Radius GPS: ${attendanceData.todayRecord.location?.distance || attendanceData.todayRecord.distance}m (Valid)`
                   : "Lokasi GPS Terverifikasi"}
               </span>
             </div>
@@ -1198,15 +1385,40 @@ export function StudentDashboardView({
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Presensi Hari Ini</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
-              <CalendarCheck className="w-5 h-5" />
+            <div className={cn(
+              "w-10 h-10 rounded-xl flex items-center justify-center font-bold group-hover:scale-110 transition-transform",
+              !attendanceData.todayRecord
+                ? "bg-amber-50 text-amber-600"
+                : attendanceData.todayRecord.status === "Izin"
+                ? "bg-amber-50 text-amber-600"
+                : attendanceData.todayRecord.status === "Sakit"
+                ? "bg-blue-50 text-blue-600"
+                : attendanceData.todayRecord.status === "Alpa"
+                ? "bg-rose-50 text-rose-600"
+                : attendanceData.todayRecord.status === "Terlambat"
+                ? "bg-amber-50 text-amber-600"
+                : "bg-emerald-50 text-emerald-600"
+            )}>
+              {attendanceData.todayRecord?.status === "Izin" ? (
+                <Calendar className="w-5 h-5" />
+              ) : attendanceData.todayRecord?.status === "Sakit" ? (
+                <AlertCircle className="w-5 h-5" />
+              ) : attendanceData.todayRecord?.status === "Alpa" ? (
+                <AlertTriangle className="w-5 h-5" />
+              ) : (
+                <CalendarCheck className="w-5 h-5" />
+              )}
             </div>
           </div>
           <div className="text-xl font-black text-gray-900 tracking-tight mb-1 flex items-center gap-1.5">
             {attendanceData.todayRecord ? (
               <>
                 <span className={cn(
-                  attendanceData.todayRecord.status === "Alpa"
+                  attendanceData.todayRecord.status === "Izin"
+                    ? "text-amber-600"
+                    : attendanceData.todayRecord.status === "Sakit"
+                    ? "text-blue-600"
+                    : attendanceData.todayRecord.status === "Alpa"
                     ? "text-rose-600"
                     : attendanceData.todayRecord.status === "Terlambat"
                     ? "text-amber-600"
@@ -1215,7 +1427,7 @@ export function StudentDashboardView({
                 )}>
                   {attendanceData.todayRecord.status}
                 </span>
-                <span className="text-xs font-semibold text-gray-400">({attendanceData.todayRecord.timestamp || "Tercatat"})</span>
+                <span className="text-xs font-semibold text-gray-400">({(attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "Tercatat").replace(/\s*WIB/gi, "").trim()} WIB)</span>
               </>
             ) : (
               <span className="text-amber-600 font-extrabold">Belum Presensi</span>
@@ -1225,24 +1437,19 @@ export function StudentDashboardView({
             <span>Persentase Kehadiran:</span>
             <strong className="text-emerald-600 font-bold">{attendanceData.percentage}%</strong>
           </div>
-          {attendanceData.isAttendanceLocked ? (
+          {attendanceData.isAttendanceLocked && !attendanceData.todayRecord ? (
             <div className="mt-3 w-full py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 bg-gray-100 text-gray-500 border border-gray-200">
               <Lock className="w-3.5 h-3.5 text-gray-400" />
               <span>Data Final (Terkunci 10:00 WIB)</span>
             </div>
-          ) : (!attendanceData.todayRecord || attendanceData.isAutoAlpa) ? (
+          ) : !attendanceData.todayRecord ? (
             <button
               onClick={handleOpenAttendance}
               id="btn-kpi-attendance"
-              className={cn(
-                "mt-3 w-full py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer active:scale-95 border",
-                attendanceData.isAutoAlpa
-                  ? "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200"
-                  : "bg-purple-50 hover:bg-purple-100 text-[#531FFF] border-purple-200"
-              )}
+              className="mt-3 w-full py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer active:scale-95 border bg-purple-50 hover:bg-purple-100 text-[#531FFF] border-purple-200"
             >
               <Camera className="w-3.5 h-3.5" />
-              <span>{attendanceData.isAutoAlpa ? "Presensi Susulan (Tercatat Alpa)" : "Absensi Sekarang →"}</span>
+              <span>Absensi Sekarang →</span>
             </button>
           ) : null}
         </div>
@@ -1534,14 +1741,22 @@ export function StudentDashboardView({
                   <span
                     className={cn(
                       "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border",
-                      attendanceData.todayRecord.status === "Alpa"
+                      attendanceData.todayRecord.status === "Izin"
+                        ? "bg-amber-50 text-amber-800 border-amber-300"
+                        : attendanceData.todayRecord.status === "Sakit"
+                        ? "bg-blue-50 text-blue-800 border-blue-300"
+                        : attendanceData.todayRecord.status === "Alpa"
                         ? "bg-rose-50 text-rose-800 border-rose-300"
                         : attendanceData.todayRecord.status === "Terlambat"
                         ? "bg-amber-50 text-amber-800 border-amber-300"
-                        : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-emerald-50 text-emerald-700 border-emerald-200"
                     )}
                   >
-                    {attendanceData.todayRecord.status === "Alpa" ? (
+                    {attendanceData.todayRecord.status === "Izin" ? (
+                      <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                    ) : attendanceData.todayRecord.status === "Sakit" ? (
+                      <AlertCircle className="w-3.5 h-3.5 text-blue-600" />
+                    ) : attendanceData.todayRecord.status === "Alpa" ? (
                       <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
                     ) : (
                       <CheckCircle
@@ -1551,7 +1766,7 @@ export function StudentDashboardView({
                         )}
                       />
                     )}
-                    {attendanceData.todayRecord.status || "Hadir"} ({attendanceData.todayRecord.timestamp || "Tercatat"})
+                    {attendanceData.todayRecord.status} ({(attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "Tercatat").replace(/\s*WIB/gi, "").trim()} WIB)
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
@@ -1561,23 +1776,18 @@ export function StudentDashboardView({
                 )}
               </div>
 
-              {attendanceData.isAttendanceLocked ? (
+              {attendanceData.isAttendanceLocked && !attendanceData.todayRecord ? (
                 <div className="w-full py-2.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 text-xs font-bold flex items-center justify-center gap-2 shadow-2xs">
                   <Lock className="w-4 h-4 text-amber-600" />
                   <span>Data Presensi Telah Dikunci (Final Pukul 10:00 WIB)</span>
                 </div>
-              ) : (!attendanceData.todayRecord || attendanceData.isAutoAlpa) ? (
+              ) : !attendanceData.todayRecord ? (
                 <button
                   onClick={handleOpenAttendance}
-                  className={cn(
-                    "w-full py-2.5 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer active:scale-95",
-                    attendanceData.isAutoAlpa
-                      ? "bg-rose-600 hover:bg-rose-700"
-                      : "bg-[#531FFF] hover:bg-[#4314cc]"
-                  )}
+                  className="w-full py-2.5 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer active:scale-95 bg-[#531FFF] hover:bg-[#4314cc]"
                 >
                   <CalendarCheck className="w-4 h-4" />
-                  <span>{attendanceData.isAutoAlpa ? "Presensi Susulan (Tercatat Alpa)" : "Ambil Foto Presensi Sekarang"}</span>
+                  <span>Ambil Foto Presensi Sekarang</span>
                 </button>
               ) : null}
             </div>
@@ -1585,7 +1795,7 @@ export function StudentDashboardView({
             {/* Attendance breakdown pills (Hadir, Terlambat, Izin, Sakit, Alpa) */}
             <div className="grid grid-cols-5 gap-1.5 text-center pt-1">
               <div className="p-2 rounded-xl bg-purple-50/70 border border-purple-100">
-                <div className="text-xs font-black text-[#531FFF]">{attendanceData.hadir}</div>
+                <div className="text-xs font-black text-[#531FFF]">{attendanceData.hadirTepatWaktu}</div>
                 <div className="text-[10px] font-semibold text-gray-500">Hadir</div>
               </div>
               <div className="p-2 rounded-xl bg-indigo-50/70 border border-indigo-100">
@@ -1738,7 +1948,7 @@ export function StudentDashboardView({
         userName={studentFullName}
         studentClass={studentDisplayClass}
         studentId={studentDisplayNisn !== "-" ? studentDisplayNisn : currentUser?.uid || "SISWA"}
-        alreadyAttendedToday={!!attendanceData.todayRecord && !attendanceData.isAutoAlpa}
+        alreadyAttendedToday={!!attendanceData.todayRecord}
         onAttendanceSuccess={(record) => {
           setLiveAttendedRecord(record);
         }}

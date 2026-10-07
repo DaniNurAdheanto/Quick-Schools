@@ -40,7 +40,7 @@ import {
   Cell
 } from "recharts";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, collection, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, collection, onSnapshot, query, where } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { cn, getTodayDateString } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
@@ -50,6 +50,7 @@ import { useTeacherAttendance } from "@/lib/teacher-attendance";
 import { QuickAttendanceModal } from "@/components/modals/quick-attendance-modal";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { TeacherLeaveRequestsWidget } from "@/components/dashboard/teacher-leave-requests-widget";
+import { subscribeLeaveRequests, LeaveRequest } from "@/lib/leave-requests-service";
 
 interface TeacherDashboardViewProps {
   userName: string;
@@ -109,6 +110,7 @@ export function TeacherDashboardView({
   const { students: unifiedStudents } = useUnifiedStudents();
   const [students, setStudents] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [grades, setGrades] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [schoolKkm, setSchoolKkm] = useState<number>(75);
@@ -265,6 +267,22 @@ export function TeacherDashboardView({
 
   // 3. Realtime Firestore Subscriptions
   useEffect(() => {
+    // Initial read from local storage for instant sync
+    try {
+      const stored = localStorage.getItem("quick_schools_attendance_records");
+      if (stored) {
+        const list = JSON.parse(stored);
+        if (Array.isArray(list)) {
+          setAttendanceRecords((prev) => {
+            const map = new Map<string, any>();
+            prev.forEach((r) => { if (r?.id) map.set(r.id, r); });
+            list.forEach((r) => { if (r?.id) map.set(r.id, r); });
+            return Array.from(map.values());
+          });
+        }
+      }
+    } catch {}
+
     const unsubSchedules = onSnapshot(collection(db, "schedules"), (snap) => {
       setSchedules(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
@@ -274,7 +292,28 @@ export function TeacherDashboardView({
     });
 
     const unsubAttendance = onSnapshot(collection(db, "attendance"), (snap) => {
-      setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setAttendanceRecords((prev) => {
+        const map = new Map<string, any>();
+        prev.forEach((r) => { if (r?.id) map.set(r.id, r); });
+        list.forEach((r) => { if (r?.id) map.set(r.id, r); });
+        return Array.from(map.values());
+      });
+    });
+
+    const qRolesAtt = query(collection(db, "roles"), where("type", "==", "attendance_record"));
+    const unsubRolesAtt = onSnapshot(qRolesAtt, (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setAttendanceRecords((prev) => {
+        const map = new Map<string, any>();
+        prev.forEach((r) => { if (r?.id) map.set(r.id, r); });
+        list.forEach((r) => { if (r?.id) map.set(r.id, r); });
+        return Array.from(map.values());
+      });
+    });
+
+    const unsubLeave = subscribeLeaveRequests((requests) => {
+      setLeaveRequests(requests);
     });
 
     const unsubGrades = onSnapshot(collection(db, "grades"), (snap) => {
@@ -298,6 +337,8 @@ export function TeacherDashboardView({
       unsubSchedules();
       unsubClasses();
       unsubAttendance();
+      unsubRolesAtt();
+      unsubLeave();
       unsubGrades();
       unsubAnnounce();
       unsubSettings();
@@ -496,13 +537,32 @@ export function TeacherDashboardView({
       return taughtClasses.some(tc => tc.toLowerCase() === rClass);
     });
 
-    const totalRecords = relevantRecords.length;
+    const relevantLeaves = leaveRequests.filter((req) => {
+      if (req.status === "Ditolak") return false;
+      const applies = (req.startDate <= todayDate && req.endDate >= todayDate) || req.startDate === todayDate;
+      if (!applies) return false;
+      const reqClass = (req.className || "").toLowerCase().trim();
+      return taughtClasses.some(tc => tc.toLowerCase() === reqClass);
+    });
+
     const hadir = relevantRecords.filter((r: any) => r.status === "Hadir").length;
     const terlambat = relevantRecords.filter((r: any) => r.status === "Terlambat").length;
-    const sakit = relevantRecords.filter((r: any) => r.status === "Sakit").length;
-    const izin = relevantRecords.filter((r: any) => r.status === "Izin").length;
+    let sakit = relevantRecords.filter((r: any) => r.status === "Sakit").length;
+    let izin = relevantRecords.filter((r: any) => r.status === "Izin").length;
     const alpa = relevantRecords.filter((r: any) => r.status === "Alpa").length;
 
+    relevantLeaves.forEach((req) => {
+      const alreadyInRecs = relevantRecords.some((r: any) => 
+        (r.studentId && (r.studentId === req.studentId || r.studentId === req.studentUid || r.studentId === req.studentNisn)) ||
+        (r.studentName && req.studentName && r.studentName.toLowerCase().trim() === req.studentName.toLowerCase().trim())
+      );
+      if (!alreadyInRecs) {
+        if (req.type === "Sakit") sakit++;
+        else izin++;
+      }
+    });
+
+    const totalRecords = relevantRecords.length + relevantLeaves.length;
     let percentage = 0;
     if (totalRecords > 0) {
       percentage = Math.round(((hadir + terlambat) / totalRecords) * 1000) / 10;
@@ -517,39 +577,173 @@ export function TeacherDashboardView({
       alpa,
       rate: percentage
     };
-  }, [attendanceRecords, taughtClasses]);
+  }, [attendanceRecords, leaveRequests, taughtClasses]);
 
   // 9. Homeroom Class Attendance (If teacher is a Wali Kelas)
   const homeroomAttendance = useMemo(() => {
     if (!resolvedHomeroomClass) return null;
     const todayDate = getTodayDateString();
     const hrClean = resolvedHomeroomClass.toLowerCase().trim();
+    const hrNoSpace = hrClean.replace(/\s+/g, "");
 
+    // 1. Filter students enrolled in this homeroom class
     const classStudents = students.filter((s: any) => {
-      const c = (s.className || s.classId || s.class || "").toLowerCase().trim();
-      return c === hrClean;
+      const c = (s.className || s.classId || s.class || s.kelas || "").toLowerCase().trim();
+      const cNoSpace = c.replace(/\s+/g, "");
+      return c === hrClean || cNoSpace === hrNoSpace;
     });
 
-    const records = attendanceRecords.filter((r: any) => {
-      return (r.date === todayDate) && (r.className || "").toLowerCase().trim() === hrClean;
+    // 2. Filter leave requests matching this homeroom class and active today
+    const activeLeavesToday = leaveRequests.filter((req) => {
+      if (req.status === "Ditolak") return false;
+      const appliesToDate = (req.startDate <= todayDate && req.endDate >= todayDate) || req.startDate === todayDate;
+      if (!appliesToDate) return false;
+
+      const reqClass = (req.className || "").toLowerCase().trim();
+      const reqClassNoSpace = reqClass.replace(/\s+/g, "");
+      if (reqClass === hrClean || reqClassNoSpace === hrNoSpace) return true;
+
+      // Or matches one of the class students
+      return classStudents.some((st) => {
+        const sId = (st.id || "").toLowerCase().trim();
+        const sUid = (st.uid || "").toLowerCase().trim();
+        const sNisn = (st.nisn || "").toLowerCase().trim();
+        const sName = (st.name || "").toLowerCase().trim();
+
+        const lrStudentId = (req.studentId || "").toLowerCase().trim();
+        const lrUid = (req.studentUid || "").toLowerCase().trim();
+        const lrNisn = (req.studentNisn || "").toLowerCase().trim();
+        const lrName = (req.studentName || "").toLowerCase().trim();
+
+        return (
+          (sId && lrStudentId && (sId === lrStudentId || lrStudentId.includes(sId) || sId.includes(lrStudentId))) ||
+          (sUid && lrUid && sUid === lrUid) ||
+          (sNisn && lrNisn && sNisn === lrNisn) ||
+          (sName && lrName && (sName === lrName || sName.includes(lrName) || lrName.includes(sName)))
+        );
+      });
     });
 
-    const hadir = records.filter((r: any) => r.status === "Hadir").length;
-    const sakit = records.filter((r: any) => r.status === "Sakit").length;
-    const izin = records.filter((r: any) => r.status === "Izin").length;
-    const alpa = records.filter((r: any) => r.status === "Alpa").length;
-    const terlambat = records.filter((r: any) => r.status === "Terlambat").length;
+    let hadir = 0;
+    let terlambat = 0;
+    let sakit = 0;
+    let izin = 0;
+    let alpa = 0;
+    let recordedCount = 0;
+
+    classStudents.forEach((student: any) => {
+      // Check matching leave request
+      const studentLeave = activeLeavesToday.find((req) => {
+        const sId = (student.id || "").toLowerCase().trim();
+        const sUid = (student.uid || "").toLowerCase().trim();
+        const sNisn = (student.nisn || "").toLowerCase().trim();
+        const sName = (student.name || "").toLowerCase().trim();
+
+        const lrStudentId = (req.studentId || "").toLowerCase().trim();
+        const lrUid = (req.studentUid || "").toLowerCase().trim();
+        const lrNisn = (req.studentNisn || "").toLowerCase().trim();
+        const lrName = (req.studentName || "").toLowerCase().trim();
+
+        return (
+          (sId && lrStudentId && (sId === lrStudentId || lrStudentId.includes(sId) || sId.includes(lrStudentId))) ||
+          (sUid && lrUid && sUid === lrUid) ||
+          (sNisn && lrNisn && sNisn === lrNisn) ||
+          (sName && lrName && (sName === lrName || sName.includes(lrName) || lrName.includes(sName)))
+        );
+      });
+
+      // Check matching attendance record
+      const existing = attendanceRecords.find((r: any) => {
+        if (r.date !== todayDate) return false;
+        if (r.studentId && r.studentId === student.id) return true;
+        if (student.nisn && (r.studentId === student.nisn || r.nisn === student.nisn)) return true;
+        if (student.uid && (r.studentId === student.uid || r.studentUid === student.uid || r.uid === student.uid)) return true;
+        if (r.studentName && student.name && r.studentName.toLowerCase().trim() === student.name.toLowerCase().trim()) return true;
+        if (r.id && student.id && r.id.includes(student.id)) return true;
+        return false;
+      });
+
+      if (existing) {
+        recordedCount++;
+        const stStatus = existing.status;
+        if (stStatus === "Hadir") {
+          hadir++;
+        } else if (stStatus === "Terlambat") {
+          terlambat++;
+          hadir++;
+        } else if (stStatus === "Sakit") {
+          sakit++;
+        } else if (stStatus === "Izin") {
+          izin++;
+        } else if (stStatus === "Alpa" || stStatus === "Ditolak") {
+          if (studentLeave) {
+            if (studentLeave.type === "Sakit") sakit++;
+            else izin++;
+          } else {
+            alpa++;
+          }
+        } else {
+          // "Belum Absen"
+          if (studentLeave) {
+            if (studentLeave.type === "Sakit") sakit++;
+            else izin++;
+          } else {
+            alpa++;
+          }
+        }
+      } else if (studentLeave) {
+        recordedCount++;
+        if (studentLeave.type === "Sakit") {
+          sakit++;
+        } else {
+          izin++;
+        }
+      } else {
+        // Belum ada data kehadiran sama sekali -> dihitung Alpa / Tidak Masuk
+        alpa++;
+      }
+    });
+
+    // Also include any active leave requests from this class that didn't match classStudents list
+    activeLeavesToday.forEach((req) => {
+      const isAlreadyCounted = classStudents.some((st: any) => {
+        const sId = (st.id || "").toLowerCase().trim();
+        const sUid = (st.uid || "").toLowerCase().trim();
+        const sNisn = (st.nisn || "").toLowerCase().trim();
+        const sName = (st.name || "").toLowerCase().trim();
+
+        const lrStudentId = (req.studentId || "").toLowerCase().trim();
+        const lrUid = (req.studentUid || "").toLowerCase().trim();
+        const lrNisn = (req.studentNisn || "").toLowerCase().trim();
+        const lrName = (req.studentName || "").toLowerCase().trim();
+
+        return (
+          (sId && lrStudentId && (sId === lrStudentId || lrStudentId.includes(sId) || sId.includes(lrStudentId))) ||
+          (sUid && lrUid && sUid === lrUid) ||
+          (sNisn && lrNisn && sNisn === lrNisn) ||
+          (sName && lrName && (sName === lrName || sName.includes(lrName) || lrName.includes(sName)))
+        );
+      });
+
+      if (!isAlreadyCounted) {
+        if (req.type === "Sakit") sakit++;
+        else izin++;
+        recordedCount++;
+      }
+    });
+
+    const totalStudents = Math.max(classStudents.length, hadir + sakit + izin + alpa);
 
     return {
-      totalStudents: classStudents.length,
-      recordedCount: records.length,
+      totalStudents,
+      recordedCount,
       hadir,
       sakit,
       izin,
       alpa,
       terlambat
     };
-  }, [resolvedHomeroomClass, students, attendanceRecords]);
+  }, [resolvedHomeroomClass, students, attendanceRecords, leaveRequests]);
 
   // 10. Grading Progress & Performance Analytics
   const gradingAnalytics = useMemo(() => {

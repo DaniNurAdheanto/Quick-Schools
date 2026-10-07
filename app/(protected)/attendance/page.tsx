@@ -65,6 +65,7 @@ import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { subscribeLeaveRequests, LeaveRequest } from "@/lib/leave-requests-service";
 
 // -------------------------------------------------------------
 // Types & Defaults
@@ -97,7 +98,7 @@ export interface AttendanceRecord {
     distance: number;
     inRadius: boolean;
   };
-  source?: "biometric" | "manual" | "qr";
+  source?: "biometric" | "manual" | "qr" | "permit" | string;
   markedBy?: string;
   type?: string;
   createdAt?: any;
@@ -108,7 +109,7 @@ export interface StudentDailyAttendance {
   notes: string;
   time: string;
   isRecorded: boolean;
-  source?: "biometric" | "manual" | "qr";
+  source?: "biometric" | "manual" | "qr" | "permit" | string;
   faceVerified?: boolean;
   faceMatchScore?: number;
   capturedImage?: string;
@@ -293,6 +294,7 @@ export default function AttendancePage() {
   const [classesList, setClassesList] = useState<any[]>([]);
   const [studentsList, setStudentsList] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [leaveRequestsList, setLeaveRequestsList] = useState<LeaveRequest[]>([]);
   const [config, setConfig] = useState<AttendanceConfig>(DEFAULT_CONFIG);
 
   useEffect(() => {
@@ -349,10 +351,14 @@ export default function AttendancePage() {
   const isToday = useMemo(() => selectedDate === todayDateStr, [selectedDate, todayDateStr]);
   const isPastLockTimeToday = useMemo(() => isToday && currentMinutesTick >= ATTENDANCE_LOCK_HOUR_MINUTES, [isToday, currentMinutesTick]);
 
-  // Aturan Kunci Otomatis: Jika tanggal lampau atau hari ini sudah melewati pukul 10:00 WIB, data absensi dikunci dan menjadi data final
+  // Aturan Kunci Otomatis: Jika tanggal lampau atau hari ini sudah melewati pukul 10:00 WIB, data absensi dikunci
   const isAttendanceLocked = useMemo(() => {
+    // Admin, Super Admin, dan Wali Kelas / Guru yang berwenang tetap dapat mengelola dan memvalidasi presensi
+    if (canMutateAttendance && (rawRole.includes("admin") || rawRole.includes("guru") || rawRole.includes("teacher") || rawRole.includes("wali") || !isKepalaSekolah)) {
+      return false;
+    }
     return isPastDate || isPastLockTimeToday;
-  }, [isPastDate, isPastLockTimeToday]);
+  }, [isPastDate, isPastLockTimeToday, canMutateAttendance, rawRole, isKepalaSekolah]);
 
   // Tab 2: Biometric Log State
   const [biometricSearch, setBiometricSearch] = useState("");
@@ -548,11 +554,17 @@ export default function AttendancePage() {
       console.warn("Attendance config read error from roles, using fallback:", err);
     });
 
+    // 6. Subscribe to real-time student leave requests (Izin & Sakit)
+    const unsubLeave = subscribeLeaveRequests((requests) => {
+      setLeaveRequestsList(requests);
+    });
+
     return () => {
       unsubClasses();
       unsubRolesAtt();
       unsubAttendance();
       unsubConfig();
+      unsubLeave();
     };
   }, []);
 
@@ -728,7 +740,7 @@ export default function AttendancePage() {
     return filtered;
   }, [studentsList, selectedClass, isGuru, teacherHomeroomClasses, scopedStudentsList, primaryTeacherClass]);
 
-  // Synchronize classAttendanceMap when class, date, records, config, or clock tick changes
+  // Synchronize classAttendanceMap when class, date, records, leave requests, config, or clock tick changes
   useEffect(() => {
     const map: Record<string, StudentDailyAttendance> = {};
 
@@ -744,7 +756,31 @@ export default function AttendancePage() {
     const shouldAutoMarkAlpa = isPastDate || isTodayPastAbsentThreshold;
 
     classStudents.forEach((student) => {
-      // Check if there is an existing record for this student on this date
+      // 1. Check if there is an active Leave Request (Izin / Sakit) for this student on selectedDate
+      const sId = (student.id || "").toLowerCase().trim();
+      const sUid = (student.uid || "").toLowerCase().trim();
+      const sNisn = (student.nisn || "").toLowerCase().trim();
+      const sName = (student.name || "").toLowerCase().trim();
+
+      const matchingLeave = leaveRequestsList.find((lr) => {
+        if (lr.status === "Ditolak") return false;
+        const appliesToDate = (lr.startDate <= selectedDate && lr.endDate >= selectedDate) || lr.startDate === selectedDate;
+        if (!appliesToDate) return false;
+
+        const lrStudentId = (lr.studentId || "").toLowerCase().trim();
+        const lrUid = (lr.studentUid || "").toLowerCase().trim();
+        const lrNisn = (lr.studentNisn || "").toLowerCase().trim();
+        const lrName = (lr.studentName || "").toLowerCase().trim();
+
+        if (sId && lrStudentId && (sId === lrStudentId || lrStudentId.includes(sId) || sId.includes(lrStudentId))) return true;
+        if (sUid && lrUid && sUid === lrUid) return true;
+        if (sNisn && lrNisn && sNisn === lrNisn) return true;
+        if (sName && lrName && (sName === lrName || sName.includes(lrName) || lrName.includes(sName))) return true;
+
+        return false;
+      });
+
+      // 2. Check if there is an existing record for this student on this date
       const existing = attendanceRecords.find((r) => {
         if (r.date !== selectedDate) return false;
         // 1. Direct studentId match
@@ -766,19 +802,38 @@ export default function AttendancePage() {
         const resolvedTime = extractValidTimeHM(
           (existing as any).time || (existing as any).jamMasuk || existing.timestamp,
           existing.createdAt
-        );
+        ) || (matchingLeave ? "07:00" : "-");
+
+        const isUnconfirmedOrAlpa = (existing.status as string) === "Belum Absen" || existing.status === "Alpa";
+        const finalStatus: AttendanceStatus | "Belum Absen" = isUnconfirmedOrAlpa && matchingLeave
+          ? matchingLeave.type
+          : existing.status;
+
+        const finalImage = matchingLeave?.attachmentUrl || existing.capturedImage || existing.photoUrl;
+        const finalNotes = matchingLeave && (isUnconfirmedOrAlpa || existing.status === "Izin" || existing.status === "Sakit")
+          ? (matchingLeave.reason ? `Pengajuan ${matchingLeave.type}: ${matchingLeave.reason}` : (existing.notes || ""))
+          : (existing.notes || "");
 
         map[student.id] = {
-          status: existing.status,
-          notes: existing.notes || "",
+          status: finalStatus,
+          notes: finalNotes,
           time: resolvedTime,
-          isRecorded: true,
-          source: existing.source,
+          isRecorded: (finalStatus as string) !== "Belum Absen",
+          source: matchingLeave && isUnconfirmedOrAlpa ? "permit" : existing.source,
           faceVerified: existing.faceVerified,
           faceMatchScore: existing.faceMatchScore,
-          capturedImage: existing.capturedImage || existing.photoUrl,
+          capturedImage: finalImage,
           location: existing.location,
           record: existing
+        };
+      } else if (matchingLeave) {
+        map[student.id] = {
+          status: matchingLeave.type,
+          notes: matchingLeave.reason ? `Pengajuan ${matchingLeave.type}: ${matchingLeave.reason}` : `Pengajuan ${matchingLeave.type} Siswa`,
+          time: "07:00",
+          isRecorded: true,
+          source: "permit",
+          capturedImage: matchingLeave.attachmentUrl
         };
       } else {
         if (shouldAutoMarkAlpa) {
@@ -804,7 +859,7 @@ export default function AttendancePage() {
     });
 
     setClassAttendanceMap(map);
-  }, [selectedClass, selectedDate, classStudents, attendanceRecords, config.absentThresholdTime, currentMinutesTick]);
+  }, [selectedClass, selectedDate, classStudents, attendanceRecords, leaveRequestsList, config.absentThresholdTime, currentMinutesTick]);
 
   // Class Level KPI & Monitoring Statistics
   const classStats = useMemo(() => {
@@ -930,18 +985,20 @@ export default function AttendancePage() {
   };
 
   // Quick single change
-  const handleStudentStatusChange = (studentId: string, status: AttendanceStatus | "Belum Absen") => {
+  const handleStudentStatusChange = async (studentId: string, status: AttendanceStatus | "Belum Absen") => {
     if (isAttendanceLocked) {
-      toast.showError("Waktu absensi siswa telah melewati pukul 10:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat diedit).", "Absensi Terkunci (Final)");
+      toast.showError("Waktu absensi siswa telah melewati batas yang ditentukan dan berstatus terkunci.", "Absensi Terkunci");
       return;
     }
     if (!canMutateAttendance) {
       toast.showError("Akun Anda berstatus Monitoring Executive (Hanya Lihat). Anda tidak memiliki izin untuk mengubah data absensi.", "Akses Terbatas");
       return;
     }
+    const student = classStudents.find((s) => s.id === studentId);
+    const prevItem = classAttendanceMap[studentId] || { notes: "", time: "07:00", isRecorded: false };
+    const defaultTime = status === "Belum Absen" ? "-" : (prevItem.time === "-" ? (config.schoolStartTime || "07:00") : prevItem.time);
+
     setClassAttendanceMap((prev) => {
-      const prevItem = prev[studentId] || { notes: "", time: "07:00", isRecorded: false };
-      const defaultTime = status === "Belum Absen" ? "-" : (prevItem.time === "-" ? (config.schoolStartTime || "07:00") : prevItem.time);
       return {
         ...prev,
         [studentId]: {
@@ -953,6 +1010,58 @@ export default function AttendancePage() {
         }
       };
     });
+
+    if (status !== "Belum Absen" && student) {
+      try {
+        const studentClassName = student.classId || student.className || student.class || (selectedClass !== "Semua Kelas" ? selectedClass : "Umum");
+        const docId = `att_rec_${selectedDate}_${student.id}`;
+        const payload: AttendanceRecord = {
+          id: docId,
+          type: "attendance_record" as any,
+          studentId: student.id,
+          studentName: student.name,
+          className: studentClassName,
+          academicYear: activeAcademicYear || "2025/2026",
+          semester: activeSemester || "Ganjil",
+          date: selectedDate,
+          timestamp: defaultTime,
+          time: defaultTime,
+          jamMasuk: defaultTime,
+          status: status as AttendanceStatus,
+          notes: prevItem.notes || (status === "Izin" ? "Izin" : status === "Sakit" ? "Sakit" : ""),
+          source: prevItem.source || "manual",
+          markedBy: currentUser?.displayName || currentUser?.email || "Admin",
+          faceVerified: status === "Hadir" || status === "Terlambat",
+          faceMatchScore: prevItem.faceMatchScore || 100,
+          capturedImage: prevItem.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
+          location: prevItem.location || {
+            lat: config.schoolCenterLat,
+            lng: config.schoolCenterLng,
+            distance: 5,
+            inRadius: true
+          },
+          createdAt: new Date().toISOString()
+        };
+
+        // Write to roles & attendance collections
+        await setDoc(doc(db, "roles", docId), payload, { merge: true });
+        try {
+          await setDoc(doc(db, "attendance", docId), payload, { merge: true });
+        } catch (e) {}
+
+        // Save to localStorage
+        try {
+          const stored = localStorage.getItem("quick_schools_attendance_records");
+          const list: AttendanceRecord[] = stored ? JSON.parse(stored) : [];
+          const mergedLocal = mergeAttendanceRecords(list, [payload]);
+          localStorage.setItem("quick_schools_attendance_records", JSON.stringify(mergedLocal.slice(0, 200)));
+        } catch (e) {}
+
+        setAttendanceRecords((prev) => mergeAttendanceRecords(prev, [payload]));
+      } catch (err) {
+        console.warn("Auto-save student attendance error:", err);
+      }
+    }
   };
 
   const handleStudentNotesChange = (studentId: string, notes: string) => {
@@ -2375,6 +2484,14 @@ export default function AttendancePage() {
                                   title="Tandai Izin"
                                 >
                                   Izin
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStudentStatusChange(student.id, "Sakit")}
+                                  className="px-2 py-1 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer border border-blue-200"
+                                  title="Tandai Sakit"
+                                >
+                                  Sakit
                                 </button>
                                 <button
                                   type="button"
