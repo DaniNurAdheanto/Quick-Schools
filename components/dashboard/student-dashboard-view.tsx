@@ -574,8 +574,8 @@ export function StudentDashboardView({
     const nowD = new Date();
     const currentTotalMinutes = nowD.getHours() * 60 + nowD.getMinutes();
     const isPastAbsentThreshold = currentTotalMinutes >= absentTotalMinutes;
-    // Aturan penguncian otomatis setelah pukul 10:00 WIB (600 menit)
-    const isAttendanceLocked = currentTotalMinutes >= 10 * 60;
+    // Aturan penguncian otomatis setelah pukul 12:00 WIB (720 menit - Data Final)
+    const isAttendanceLocked = currentTotalMinutes >= 12 * 60;
 
     const total = myRecords.length;
     const hadirTepatWaktu = myRecords.filter((r) => r.status === "Hadir").length;
@@ -939,7 +939,7 @@ export function StudentDashboardView({
     if (attendanceData.isAttendanceLocked) {
       if (showError) {
         showError(
-          "Waktu absensi telah melewati pukul 10:00 WIB. Data absensi hari ini telah dikunci otomatis dan berstatus FINAL. Presensi tidak dapat dicatat atau diubah lagi.",
+          "Waktu absensi telah melewati pukul 12:00 WIB. Data absensi hari ini telah dikunci otomatis dan berstatus FINAL. Presensi tidak dapat dicatat atau diubah lagi.",
           "Data Absensi Terkunci (Final)"
         );
       }
@@ -1031,7 +1031,7 @@ export function StudentDashboardView({
             ) : attendanceData.isAttendanceLocked ? (
               <>
                 <Lock className="w-4 h-4 text-amber-600" />
-                <span>Presensi Terkunci (Pukul 10:00 WIB)</span>
+                <span>Presensi Terkunci (Pukul 12:00 WIB)</span>
               </>
             ) : (
               <>
@@ -1190,7 +1190,7 @@ export function StudentDashboardView({
             {attendanceData.isAttendanceLocked ? (
               <div className="px-3.5 py-2 bg-rose-500/20 text-rose-100 rounded-xl text-xs font-bold border border-rose-400/30 flex items-center gap-1.5 shrink-0 self-start sm:self-auto shadow-xs">
                 <Lock className="w-3.5 h-3.5 text-rose-300" />
-                <span>Data Final Terkunci (Pukul 10:00 WIB)</span>
+                <span>Data Final Terkunci (Pukul 12:00 WIB)</span>
               </div>
             ) : null}
           </div>
@@ -1213,7 +1213,7 @@ export function StudentDashboardView({
                   {attendanceData.isAttendanceLocked && (
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
                       <Lock className="w-3 h-3 text-amber-700" />
-                      Data Final (Terkunci 10:00 WIB)
+                      Data Final (Terkunci 12:00 WIB)
                     </span>
                   )}
                 </div>
@@ -1254,7 +1254,7 @@ export function StudentDashboardView({
                   {attendanceData.isAttendanceLocked && (
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
                       <Lock className="w-3 h-3 text-amber-700" />
-                      Data Final (Terkunci 10:00 WIB)
+                      Data Final (Terkunci 12:00 WIB)
                     </span>
                   )}
                 </div>
@@ -1440,7 +1440,7 @@ export function StudentDashboardView({
           {attendanceData.isAttendanceLocked && !attendanceData.todayRecord ? (
             <div className="mt-3 w-full py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 bg-gray-100 text-gray-500 border border-gray-200">
               <Lock className="w-3.5 h-3.5 text-gray-400" />
-              <span>Data Final (Terkunci 10:00 WIB)</span>
+              <span>Data Final (Terkunci 12:00 WIB)</span>
             </div>
           ) : !attendanceData.todayRecord ? (
             <button
@@ -1779,7 +1779,7 @@ export function StudentDashboardView({
               {attendanceData.isAttendanceLocked && !attendanceData.todayRecord ? (
                 <div className="w-full py-2.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 text-xs font-bold flex items-center justify-center gap-2 shadow-2xs">
                   <Lock className="w-4 h-4 text-amber-600" />
-                  <span>Data Presensi Telah Dikunci (Final Pukul 10:00 WIB)</span>
+                  <span>Data Presensi Telah Dikunci (Final Pukul 12:00 WIB)</span>
                 </div>
               ) : !attendanceData.todayRecord ? (
                 <button

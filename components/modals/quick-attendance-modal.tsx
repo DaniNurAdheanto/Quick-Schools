@@ -803,12 +803,12 @@ export function QuickAttendanceModal({
     const now = new Date();
     const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
 
-    // Aturan Kunci Otomatis Pukul 10:00 WIB
-    if (currentTotalMinutes >= 10 * 60) {
+    // Aturan Kunci Otomatis Pukul 12:00 WIB (12 Siang - Data Final)
+    if (currentTotalMinutes >= 12 * 60) {
       if (showError) {
         showError(
-          "Waktu absensi siswa telah melewati batas pukul 10:00 WIB. Data absensi telah dikunci otomatis dan berstatus final.",
-          "Absensi Ditutup (Terkunci)"
+          "Waktu absensi siswa telah melewati batas pukul 12:00 WIB. Data absensi pada hari ini sudah FINAL dan tidak dapat dilakukan presensi/pengeditan lagi.",
+          "Absensi Ditutup (Data Final)"
         );
       }
       setIsSubmitting(false);

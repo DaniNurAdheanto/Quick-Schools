@@ -43,7 +43,7 @@ import {
 } from "lucide-react";
 import { cn, getTodayDateString } from "@/lib/utils";
 
-const ATTENDANCE_LOCK_HOUR_MINUTES = 10 * 60; // 10:00 WIB (600 menit)
+const ATTENDANCE_LOCK_HOUR_MINUTES = 12 * 60; // 12:00 WIB (720 menit - Data Final)
 import { db, auth } from "@/lib/firebase";
 import {
   collection,
@@ -351,14 +351,10 @@ export default function AttendancePage() {
   const isToday = useMemo(() => selectedDate === todayDateStr, [selectedDate, todayDateStr]);
   const isPastLockTimeToday = useMemo(() => isToday && currentMinutesTick >= ATTENDANCE_LOCK_HOUR_MINUTES, [isToday, currentMinutesTick]);
 
-  // Aturan Kunci Otomatis: Jika tanggal lampau atau hari ini sudah melewati pukul 10:00 WIB, data absensi dikunci
+  // Aturan Kunci Otomatis: Jika tanggal lampau atau hari ini sudah melewati pukul 12:00 WIB (12 Siang), data absensi berstatus FINAL & dikunci total
   const isAttendanceLocked = useMemo(() => {
-    // Admin, Super Admin, dan Wali Kelas / Guru yang berwenang tetap dapat mengelola dan memvalidasi presensi
-    if (canMutateAttendance && (rawRole.includes("admin") || rawRole.includes("guru") || rawRole.includes("teacher") || rawRole.includes("wali") || !isKepalaSekolah)) {
-      return false;
-    }
     return isPastDate || isPastLockTimeToday;
-  }, [isPastDate, isPastLockTimeToday, canMutateAttendance, rawRole, isKepalaSekolah]);
+  }, [isPastDate, isPastLockTimeToday]);
 
   // Tab 2: Biometric Log State
   const [biometricSearch, setBiometricSearch] = useState("");
@@ -925,7 +921,7 @@ export default function AttendancePage() {
   // Quick action: Mark all as Hadir
   const handleMarkAllHadir = () => {
     if (isAttendanceLocked) {
-      toast.showError("Waktu absensi siswa telah melewati pukul 10:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat diedit).", "Absensi Terkunci (Final)");
+      toast.showError("Waktu absensi siswa telah melewati pukul 12:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat diedit).", "Absensi Terkunci (Final)");
       return;
     }
     if (!canMutateAttendance) {
@@ -954,7 +950,7 @@ export default function AttendancePage() {
   // Quick action: Mark all unrecorded as Alpa
   const handleMarkRemainingAlpa = () => {
     if (isAttendanceLocked) {
-      toast.showError("Waktu absensi siswa telah melewati pukul 10:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat diedit).", "Absensi Terkunci (Final)");
+      toast.showError("Waktu absensi siswa telah melewati pukul 12:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat diedit).", "Absensi Terkunci (Final)");
       return;
     }
     if (!canMutateAttendance) {
@@ -987,7 +983,7 @@ export default function AttendancePage() {
   // Quick single change
   const handleStudentStatusChange = async (studentId: string, status: AttendanceStatus | "Belum Absen") => {
     if (isAttendanceLocked) {
-      toast.showError("Waktu absensi siswa telah melewati batas yang ditentukan dan berstatus terkunci.", "Absensi Terkunci");
+      toast.showError("Waktu absensi siswa telah melewati pukul 12:00 WIB. Data absensi pada hari ini sudah FINAL dan tidak dapat dilakukan pengeditan.", "Absensi Terkunci (Final)");
       return;
     }
     if (!canMutateAttendance) {
@@ -1078,7 +1074,7 @@ export default function AttendancePage() {
   // Save Batch Class Attendance to Firestore (using allowed roles collection + local cache)
   const handleSaveClassAttendance = async () => {
     if (isAttendanceLocked) {
-      toast.showError("Waktu absensi siswa telah melewati pukul 10:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat disimpan ulang).", "Absensi Terkunci (Final)");
+      toast.showError("Waktu absensi siswa telah melewati pukul 12:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat disimpan ulang).", "Absensi Terkunci (Final)");
       return;
     }
     if (!canMutateAttendance) {
@@ -1879,7 +1875,7 @@ export default function AttendancePage() {
               <div className="flex flex-wrap items-center gap-2 justify-end">
                 <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs font-extrabold text-amber-900 shadow-xs">
                   <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Data Terkunci (Final): Melewati 10:00 WIB</span>
+                  <span>Data Terkunci (Final): Melewati 12:00 WIB</span>
                 </div>
               </div>
             ) : canMutateAttendance ? (
@@ -2083,7 +2079,7 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          {/* Lock Status Banner (Pukul 10:00 WIB Lock Enforcement) */}
+          {/* Lock Status Banner (Pukul 12:00 WIB Lock Enforcement) */}
           {isAttendanceLocked ? (
             <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border-l-4 border-amber-500 p-4 rounded-r-xl flex items-start sm:items-center justify-between gap-3 shadow-xs animate-in fade-in duration-200">
               <div className="flex items-start sm:items-center gap-3">
@@ -2102,13 +2098,13 @@ export default function AttendancePage() {
                   <p className="text-[11px] sm:text-xs text-amber-900 font-medium mt-0.5 leading-relaxed">
                     {isPastDate
                       ? `Data absensi untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} sudah melewati batas waktu dan berstatus data final.`
-                      : "Sesuai aturan sekolah, waktu presensi hari ini telah melewati batas pukul 10:00 WIB. Data absensi yang telah tersimpan di database otomatis dikunci dan tidak dapat diubah atau diedit lagi."}
+                      : "Sesuai aturan sekolah, waktu presensi hari ini telah mencapai batas pukul 12:00 WIB. Data absensi yang telah tersimpan di database otomatis berstatus FINAL dan tidak dapat diubah atau diedit lagi."}
                   </p>
                 </div>
               </div>
               <div className="shrink-0 hidden md:flex items-center gap-1.5 text-[11px] font-bold text-amber-800 bg-white/90 border border-amber-200 px-3 py-1.5 rounded-lg shadow-2xs">
                 <Clock className="w-3.5 h-3.5 text-amber-600" />
-                <span>Batas Edit: 10:00 WIB</span>
+                <span>Batas Edit: 12:00 WIB</span>
               </div>
             </div>
           ) : isToday ? (
@@ -2119,7 +2115,7 @@ export default function AttendancePage() {
                 </div>
                 <div className="text-xs text-emerald-900 font-medium">
                   <span className="font-extrabold text-emerald-950">Pengeditan Presensi Aktif: </span>
-                  Data absensi siswa dapat diinput & disunting hingga pukul <strong className="font-black text-emerald-950">10:00 WIB</strong> hari ini.
+                  Data absensi siswa dapat diinput & disunting hingga pukul <strong className="font-black text-emerald-950">12:00 WIB</strong> hari ini.
                 </div>
               </div>
               <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-md hidden sm:inline-block">
