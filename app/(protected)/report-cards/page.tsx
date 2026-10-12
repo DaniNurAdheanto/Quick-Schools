@@ -423,15 +423,27 @@ export default function ReportCardsPage() {
     if (!isGuru) return students;
     if (teacherHomeroomClasses.length === 0) return [];
     return students.filter((s) => {
-      const sc = (s.classId || s.className || s.kelas || s.class || "").trim().toLowerCase();
-      const scNoSpace = sc.replace(/\s+/g, "");
+      const studentClassVals = [
+        s.className,
+        s.class,
+        s.kelas,
+        s.classId,
+      ].filter(Boolean).map((v) => String(v).trim().toLowerCase());
+
       return teacherHomeroomClasses.some((tc) => {
         const target = tc.trim().toLowerCase();
-        const targetNoSpace = target.replace(/\s+/g, "");
-        return sc === target || scNoSpace === targetNoSpace;
+        const targetNoSpace = target.replace(/[\s\-_]/g, "");
+
+        return studentClassVals.some((sc) => {
+          if (sc === target) return true;
+          if (sc.replace(/[\s\-_]/g, "") === targetNoSpace) return true;
+          const matchedClass = classes.find((c) => (c.name || "").trim().toLowerCase() === target);
+          if (matchedClass && (matchedClass.id === sc || matchedClass._firestoreId === sc)) return true;
+          return false;
+        });
       });
     });
-  }, [isGuru, teacherHomeroomClasses, students]);
+  }, [isGuru, teacherHomeroomClasses, students, classes]);
 
   // Fetch Data from PostgreSQL API (Classes, Grades, Subjects, Schedules)
   useEffect(() => {

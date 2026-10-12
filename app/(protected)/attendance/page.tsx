@@ -66,6 +66,7 @@ import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { subscribeLeaveRequests, LeaveRequest } from "@/lib/leave-requests-service";
+import { isStudentInClass, normalizeClassName } from "@/lib/class-relations";
 
 // -------------------------------------------------------------
 // Types & Defaults
@@ -371,35 +372,35 @@ export default function AttendancePage() {
   // -------------------------------------------------------------
   useEffect(() => {
 
-    // 2. Fetch Classes from Firestore
-    const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
-      const list: any[] = [];
-      snap.forEach((d) => {
-        list.push({ id: d.id, ...d.data() });
-      });
-      list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-      if (list.length > 0) {
-        setClassesList(list);
-      } else {
-        // Fallback default school classes
-        const defaultClasses = [
-          { id: "c1", name: "10 MIPA 1" },
-          { id: "c2", name: "10 MIPA 2" },
-          { id: "c3", name: "10 MIPA 3" },
-          { id: "c4", name: "11 MIPA 1" },
-          { id: "c5", name: "12 MIPA 1" }
-        ];
-        setClassesList(defaultClasses);
+    // 2. Fetch Classes from PostgreSQL API with real database classes
+    let classInterval: any = null;
+    const fetchClasses = async () => {
+      try {
+        const res = await fetch("/api/classes");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.classes) && data.classes.length > 0) {
+          setClassesList(data.classes);
+          return;
+        }
+      } catch (err) {
+        console.warn("Classes fetch API error:", err);
       }
-    }, (err) => {
-      console.warn("Classes snapshot error, using default classes:", err);
-      setClassesList([
-        { id: "c1", name: "10 MIPA 1" },
-        { id: "c2", name: "10 MIPA 2" },
-        { id: "c3", name: "11 MIPA 1" },
-        { id: "c4", name: "12 MIPA 1" }
-      ]);
-    });
+    };
+    fetchClasses();
+    classInterval = setInterval(fetchClasses, 20000);
+
+    const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
+      if (!snap.empty) {
+        const list: any[] = [];
+        snap.forEach((d) => {
+          list.push({ id: d.id, ...d.data() });
+        });
+        list.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        if (list.length > 0) {
+          setClassesList(list);
+        }
+      }
+    }, () => {});
 
     // 4. Fetch Attendance Records from localStorage, roles collection, and attendance collection (strictly real records only)
     try {
@@ -556,6 +557,7 @@ export default function AttendancePage() {
     });
 
     return () => {
+      if (classInterval) clearInterval(classInterval);
       unsubClasses();
       unsubRolesAtt();
       unsubAttendance();
@@ -581,16 +583,17 @@ export default function AttendancePage() {
     const tName = (currentUserData?.fullName || currentUserData?.name || currentUser?.displayName || "").trim().toLowerCase();
     const tNip = (currentUserData?.nip || currentUserData?.id || "").trim().toLowerCase();
     const tEmail = (currentUserData?.email || currentUser?.email || "").trim().toLowerCase();
-    const tUid = currentUser?.uid;
+    const tUid = currentUser?.uid || currentUserData?.uid || currentUserData?.id;
+    const tId = currentUserData?.id || currentUserData?.teacherId;
 
     const matched = new Set<string>();
 
-    // 1. Match from classes collection
+    // 1. Match from classes collection / API
     classesList.forEach((c) => {
       const cName = c.name || c.id;
       const cHomeroom = (c.homeroom || c.homeroomTeacher || c.waliKelas || "").trim().toLowerCase();
       const cNip = (c.homeroomNip || "").trim().toLowerCase();
-      const cId = (c.homeroomId || "").trim();
+      const cId = (c.homeroomId || c.homeroomTeacherId || "").trim();
 
       const matchName = tName && cHomeroom && (
         cHomeroom === tName ||
@@ -598,7 +601,9 @@ export default function AttendancePage() {
         (cHomeroom.length > 5 && tName.includes(cHomeroom))
       );
       const matchNip = tNip && cNip && cNip === tNip;
-      const matchId = tUid && cId && cId === tUid;
+      const matchId = (tUid && cId && cId === tUid) ||
+                      (tId && cId && cId === tId) ||
+                      (currentUserData?.teacherId && cId === currentUserData.teacherId);
 
       if (matchName || matchNip || matchId) {
         if (cName) matched.add(cName);
@@ -608,7 +613,16 @@ export default function AttendancePage() {
     // 2. Direct field in user document
     const directClass = currentUserData?.homeroomClass || currentUserData?.homeroom || currentUserData?.className || currentUserData?.classId;
     if (directClass && directClass !== "-" && directClass !== "Semua Kelas") {
-      matched.add(directClass);
+      const foundByDirect = classesList.find(c =>
+        c.id === directClass ||
+        c.name === directClass ||
+        normalizeClassName(c.name) === normalizeClassName(directClass)
+      );
+      if (foundByDirect?.name) {
+        matched.add(foundByDirect.name);
+      } else {
+        matched.add(directClass);
+      }
     }
 
     // 3. Match from teachers collection
@@ -616,12 +630,22 @@ export default function AttendancePage() {
       (tEmail && t.email?.toLowerCase() === tEmail) ||
       (tNip && (t.nip === tNip || t.id === tNip)) ||
       (tUid && (t.uid === tUid || t._firestoreId === tUid || t.id === tUid)) ||
+      (tId && (t.id === tId || t._firestoreId === tId)) ||
       (tName && (t.name?.toLowerCase() === tName || (tName.length > 5 && t.name?.toLowerCase().includes(tName))))
     );
     if (tDoc) {
       const tClass = tDoc.homeroomClass || tDoc.homeroom || tDoc.class || tDoc.className || tDoc.waliKelas;
       if (tClass && tClass !== "-" && tClass !== "Semua Kelas") {
-        matched.add(tClass);
+        const found = classesList.find(c =>
+          c.id === tClass ||
+          c.name === tClass ||
+          normalizeClassName(c.name) === normalizeClassName(tClass)
+        );
+        if (found?.name) {
+          matched.add(found.name);
+        } else {
+          matched.add(tClass);
+        }
       }
     }
 
@@ -635,18 +659,24 @@ export default function AttendancePage() {
   }, [isGuru, currentUser, currentUserData, classesList, teachersList, previewAsGuru]);
 
   const isTeacherWaliKelas = Boolean(isGuru && teacherHomeroomClasses.length > 0);
-  const primaryTeacherClass = teacherHomeroomClasses.length > 0 ? teacherHomeroomClasses[0] : "";
 
   // Auto-synchronize selectedClass, biometricClassFilter, monthlyClassFilter for Guru
   useEffect(() => {
     if (isGuru && teacherHomeroomClasses.length > 0) {
-      if (!teacherHomeroomClasses.includes(selectedClass)) {
+      const isCurrentMatching = (curr: string) =>
+        teacherHomeroomClasses.some(
+          (tc) =>
+            tc.trim().toLowerCase() === curr.trim().toLowerCase() ||
+            normalizeClassName(tc) === normalizeClassName(curr)
+        );
+
+      if (!isCurrentMatching(selectedClass)) {
         setSelectedClass(teacherHomeroomClasses[0]);
       }
-      if (!teacherHomeroomClasses.includes(biometricClassFilter)) {
+      if (!isCurrentMatching(biometricClassFilter)) {
         setBiometricClassFilter(teacherHomeroomClasses[0]);
       }
-      if (!teacherHomeroomClasses.includes(monthlyClassFilter)) {
+      if (!isCurrentMatching(monthlyClassFilter)) {
         setMonthlyClassFilter(teacherHomeroomClasses[0]);
       }
     }
@@ -655,7 +685,14 @@ export default function AttendancePage() {
   // Selectable classes list (Restricted exclusively to homeroom for Guru)
   const selectableClasses = useMemo(() => {
     if (isGuru) {
-      return classesList.filter((c) => teacherHomeroomClasses.includes(c.name || c.id));
+      return classesList.filter((c) =>
+        teacherHomeroomClasses.some(
+          (tc) =>
+            (c.name || "").trim().toLowerCase() === tc.trim().toLowerCase() ||
+            normalizeClassName(c.name) === normalizeClassName(tc) ||
+            c.id === tc
+        )
+      );
     }
     return classesList;
   }, [isGuru, classesList, teacherHomeroomClasses]);
@@ -664,16 +701,51 @@ export default function AttendancePage() {
   const scopedStudentsList = useMemo(() => {
     if (!isGuru) return studentsList;
     if (teacherHomeroomClasses.length === 0) return [];
+
+    const targetClassObjs = classesList.filter((c) =>
+      teacherHomeroomClasses.some(
+        (tc) =>
+          (c.name || "").trim().toLowerCase() === tc.trim().toLowerCase() ||
+          normalizeClassName(c.name) === normalizeClassName(tc) ||
+          c.id === tc
+      )
+    );
+
     return studentsList.filter((s) => {
-      const sc = (s.classId || s.className || s.kelas || s.class || "").trim().toLowerCase();
-      const scNoSpace = sc.replace(/\s+/g, "");
+      // 1. Check using isStudentInClass with matched class objects
+      if (targetClassObjs.length > 0 && targetClassObjs.some((cObj) => isStudentInClass(s, cObj))) {
+        return true;
+      }
+
+      // 2. Comprehensive check of all class fields against teacherHomeroomClasses
+      const studentClassVals = [
+        s.className,
+        s.class,
+        s.kelas,
+        s.classId,
+        s.classDocId,
+      ]
+        .filter(Boolean)
+        .map((v) => String(v).trim().toLowerCase());
+
       return teacherHomeroomClasses.some((tc) => {
         const target = tc.trim().toLowerCase();
-        const targetNoSpace = target.replace(/\s+/g, "");
-        return sc === target || scNoSpace === targetNoSpace;
+        const targetNorm = normalizeClassName(tc);
+
+        return studentClassVals.some((sc) => {
+          if (sc === target) return true;
+          if (normalizeClassName(sc) === targetNorm) return true;
+          const matchedClass = classesList.find(
+            (c) =>
+              (c.name || "").trim().toLowerCase() === target ||
+              normalizeClassName(c.name) === targetNorm
+          );
+          if (matchedClass && (matchedClass.id === sc || matchedClass._firestoreId === sc)) return true;
+          return false;
+        });
       });
     });
-  }, [isGuru, teacherHomeroomClasses, studentsList]);
+  }, [isGuru, teacherHomeroomClasses, studentsList, classesList]);
 
   // Scoped attendance records for Guru and Active Period
   const scopedAttendanceRecords = useMemo(() => {
@@ -684,14 +756,21 @@ export default function AttendancePage() {
     if (teacherHomeroomClasses.length === 0) return [];
     return periodFiltered.filter((r) => {
       const rc = (r.className || "").trim().toLowerCase();
-      const rcNoSpace = rc.replace(/\s+/g, "");
+      const rcNorm = normalizeClassName(rc);
       return teacherHomeroomClasses.some((tc) => {
         const target = tc.trim().toLowerCase();
-        const targetNoSpace = target.replace(/\s+/g, "");
-        return rc === target || rcNoSpace === targetNoSpace;
+        const targetNorm = normalizeClassName(target);
+        if (rc === target || rcNorm === targetNorm) return true;
+        const matchedClass = classesList.find(
+          (c) =>
+            (c.name || "").trim().toLowerCase() === target ||
+            normalizeClassName(c.name) === targetNorm
+        );
+        if (matchedClass && (matchedClass.id === rc || matchedClass._firestoreId === rc)) return true;
+        return false;
       });
     });
-  }, [isGuru, teacherHomeroomClasses, attendanceRecords, matchesCurrentPeriod]);
+  }, [isGuru, teacherHomeroomClasses, attendanceRecords, matchesCurrentPeriod, classesList]);
 
   // -------------------------------------------------------------
   // Filtered Students for the selected class (Tab 1)
@@ -703,15 +782,7 @@ export default function AttendancePage() {
     }
 
     if (studentsList.length === 0) {
-      // Fallback sample students if students collection is empty
-      const fallbackClass = primaryTeacherClass || "12 MIPA 1";
-      return [
-        { id: "S101", name: "Ahmad Rizqi Pratama", classId: fallbackClass, nisn: "2023001" },
-        { id: "S102", name: "Budi Santoso", classId: fallbackClass, nisn: "2023002" },
-        { id: "S103", name: "Bintang Pratama", classId: fallbackClass, nisn: "2023003" },
-        { id: "S104", name: "Citra Lestari", classId: fallbackClass, nisn: "2023004" },
-        { id: "S105", name: "Wahyu Hidayat", classId: fallbackClass, nisn: "2023005" }
-      ];
+      return [];
     }
 
     // Source pool of students
@@ -723,18 +794,41 @@ export default function AttendancePage() {
     }
 
     // 2. Filter students matching the selected class
+    const targetClassObj = classesList.find(
+      (c) =>
+        (c.name || "").trim().toLowerCase() === selectedClass.trim().toLowerCase() ||
+        normalizeClassName(c.name) === normalizeClassName(selectedClass) ||
+        c.id === selectedClass
+    );
+
     const target = selectedClass.toLowerCase().trim();
-    const targetNoSpace = target.replace(/\s+/g, "");
+    const targetNorm = normalizeClassName(target);
 
     const filtered = pool.filter((s) => {
-      const cName = (s.classId || s.className || s.class || s.kelas || "").toString().toLowerCase().trim();
-      const cNameNoSpace = cName.replace(/\s+/g, "");
-      return cName === target || cNameNoSpace === targetNoSpace;
+      if (targetClassObj && isStudentInClass(s, targetClassObj)) {
+        return true;
+      }
+
+      const studentClassVals = [
+        s.className,
+        s.class,
+        s.kelas,
+        s.classId,
+        s.classDocId,
+      ]
+        .filter(Boolean)
+        .map((v) => String(v).trim().toLowerCase());
+
+      return studentClassVals.some((sc) => {
+        if (sc === target) return true;
+        if (normalizeClassName(sc) === targetNorm) return true;
+        if (targetClassObj && (targetClassObj.id === sc || targetClassObj._firestoreId === sc)) return true;
+        return false;
+      });
     });
 
-    // Return only students matching this class. If none, return [] (do not fallback to other classes)
     return filtered;
-  }, [studentsList, selectedClass, isGuru, teacherHomeroomClasses, scopedStudentsList, primaryTeacherClass]);
+  }, [studentsList, selectedClass, isGuru, teacherHomeroomClasses, scopedStudentsList, classesList]);
 
   // Synchronize classAttendanceMap when class, date, records, leave requests, config, or clock tick changes
   useEffect(() => {
@@ -1011,7 +1105,7 @@ export default function AttendancePage() {
 
     if (status !== "Belum Absen" && student) {
       try {
-        const studentClassName = student.classId || student.className || student.class || (selectedClass !== "Semua Kelas" ? selectedClass : "Umum");
+        const studentClassName = student.className || student.class || student.kelas || student.classId || (selectedClass !== "Semua Kelas" ? selectedClass : "Umum");
         const docId = `att_rec_${selectedDate}_${student.id}`;
         const payload: AttendanceRecord = {
           id: docId,
@@ -1092,7 +1186,7 @@ export default function AttendancePage() {
         const effectiveStatus: AttendanceStatus = att.status === "Belum Absen" ? "Alpa" : att.status;
         const effectiveTime = att.time === "-" ? (config.schoolStartTime || "07:00") : extractValidTimeHM(att.time);
         const effectiveNotes = att.notes || (att.status === "Belum Absen" ? "Tanpa Keterangan (Belum Absen)" : "");
-        const studentClassName = student.classId || student.className || student.class || (selectedClass !== "Semua Kelas" ? selectedClass : "Umum");
+        const studentClassName = student.className || student.class || student.kelas || student.classId || (selectedClass !== "Semua Kelas" ? selectedClass : "Umum");
 
         const docId = `att_rec_${selectedDate}_${student.id}`;
         const payload: AttendanceRecord = {
@@ -1225,7 +1319,10 @@ export default function AttendancePage() {
 
       const matchClass =
         (!isGuru && biometricClassFilter === "Semua Kelas") ||
-        item.className === biometricClassFilter;
+        Boolean(item.className && (
+          item.className.trim().toLowerCase() === biometricClassFilter.trim().toLowerCase() ||
+          normalizeClassName(item.className) === normalizeClassName(biometricClassFilter)
+        ));
 
       return matchSearch && matchStatus && matchClass;
     });
@@ -1272,10 +1369,11 @@ export default function AttendancePage() {
 
     // Populate from scoped students
     pool.forEach((st) => {
+      const displayClass = st.className || st.class || st.kelas || st.classId || "10 MIPA 1";
       map[st.id] = {
         id: st.id,
-        name: st.name || "Siswa",
-        className: st.classId || st.className || "10 MIPA 1",
+        name: st.name || st.fullName || "Siswa",
+        className: displayClass,
         hadir: 0,
         terlambat: 0,
         sakit: 0,
@@ -1291,7 +1389,11 @@ export default function AttendancePage() {
         let entry = map[r.studentId];
         if (!entry) {
           // If student not in map, create only if student belongs to homeroom or not guru
-          const studentMatches = !isGuru || teacherHomeroomClasses.some(tc => (r.className || "").trim().toLowerCase() === tc.trim().toLowerCase());
+          const rcNorm = normalizeClassName(r.className);
+          const studentMatches = !isGuru || teacherHomeroomClasses.some(tc => 
+            (r.className || "").trim().toLowerCase() === tc.trim().toLowerCase() ||
+            rcNorm === normalizeClassName(tc)
+          );
           if (studentMatches) {
             entry = {
               id: r.studentId,
@@ -1322,9 +1424,13 @@ export default function AttendancePage() {
     const arr = Object.values(map);
 
     // Filter by class if selected
+    const normMonthlyFilter = normalizeClassName(monthlyClassFilter);
     const filtered = (monthlyClassFilter === "Semua" && !isGuru)
       ? arr
-      : arr.filter(i => i.className === monthlyClassFilter);
+      : arr.filter(i => 
+          i.className.trim().toLowerCase() === monthlyClassFilter.trim().toLowerCase() ||
+          normalizeClassName(i.className) === normMonthlyFilter
+        );
 
     // Calculate attendance percentage & sort by most issues first
     return filtered.map((item) => {
@@ -1362,7 +1468,7 @@ export default function AttendancePage() {
     const dataToExport = activeTab === "daily"
       ? classStudents.map((st) => {
           const val = classAttendanceMap[st.id] || { status: "Belum Absen", notes: "", time: "-" };
-          const stClass = st.classId || st.className || st.class || (selectedClass !== "Semua Kelas" ? selectedClass : "Umum");
+          const stClass = st.className || st.class || st.kelas || st.classId || (selectedClass !== "Semua Kelas" ? selectedClass : "Umum");
           return [st.id, `"${st.name}"`, `"${stClass}"`, selectedDate, val.time, val.status, "Manual/Kelas", `"${val.notes}"`];
         })
       : filteredBiometricData.map((r) => [
@@ -2321,9 +2427,9 @@ export default function AttendancePage() {
                                   {att.status === "Belum Absen" && (
                                     <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" title="Belum absen" />
                                   )}
-                                  {(student.classId || student.className || student.class) && (
+                                  {(student.className || student.class || student.kelas || student.classId) && (
                                     <span className="px-1.5 py-0.5 rounded bg-purple-50 text-[#531FFF] text-[10px] font-extrabold border border-purple-100">
-                                      {student.classId || student.className || student.class}
+                                      {student.className || student.class || student.kelas || student.classId}
                                     </span>
                                   )}
                                 </div>

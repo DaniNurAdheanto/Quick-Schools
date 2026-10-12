@@ -180,7 +180,11 @@ export default function LeaveRequestsPage() {
       if (teacherHomeroomClasses.length > 0) {
         return leaveRequests.filter((r) => {
           const reqClass = (r.className || "").trim().toLowerCase();
-          return teacherHomeroomClasses.some((tc) => tc.trim().toLowerCase() === reqClass);
+          return teacherHomeroomClasses.some(
+            (tc) =>
+              tc.trim().toLowerCase() === reqClass ||
+              tc.replace(/[\s\-_]/g, "").toLowerCase() === reqClass.replace(/[\s\-_]/g, "")
+          );
         });
       }
       return leaveRequests;

@@ -15,6 +15,7 @@ import {
   MapPin,
   X,
   Loader2,
+  Eye,
 } from "lucide-react";
 
 const playShutterSound = () => {
@@ -474,10 +475,10 @@ export function QuickAttendanceModal({
         setAutoScanScore(comp.similarity);
 
         if (comp.match) {
-          // If human hasn't verified liveness yet, prompt them to hold position
+          // If human hasn't verified liveness yet, prompt them to blink
           if (!livenessHistoryRef.current.isLivenessPassed) {
             setAutoScanStatus("blinking");
-            setAutoScanFeedback("Menyelaraskan wajah asli... Mohon tahan posisi sejenak");
+            setAutoScanFeedback("Wajah cocok! Silakan KEDIPKAN MATA Anda untuk verifikasi keaslian");
             isAutoScanningRef.current = false;
             return;
           }
@@ -636,17 +637,17 @@ export function QuickAttendanceModal({
           return;
         }
 
-        // Must have verified liveness (passive stability or natural organic check) in live session
+        // Must have verified active liveness (blink) in live session
         if (!livenessHistoryRef.current.isLivenessPassed) {
           showError?.(
-            "Presensi ditolak: Wajah belum terverifikasi sebagai wajah asli di depan kamera langsung (Bukan Foto/Layar HP). Mohon tahan posisi sejenak.",
-            "Verifikasi Wajah Asli"
+            "Presensi ditolak: Wajah belum terverifikasi sebagai wajah asli. Pastikan Anda berada langsung di depan kamera dan KEDIPKAN MATA Anda (Bukan Foto/Layar HP).",
+            "Verifikasi Wajah Asli Gagal (Anti-Spoofing)"
           );
           setFaceVerificationResult({
             tested: true,
             match: false,
             similarity: 0,
-            error: "Wajah asli belum terverifikasi (Pastikan bukan foto/layar HP).",
+            error: "Wajah asli belum terverifikasi (Harap kedipkan mata langsung di depan kamera).",
           });
           return;
         }
@@ -1265,7 +1266,7 @@ export function QuickAttendanceModal({
                               {autoScanStatus === "matched" ? (
                                 <CheckCircle2 className="w-4 h-4 text-emerald-400 animate-bounce" />
                               ) : autoScanStatus === "blinking" ? (
-                                <ScanFace className="w-4 h-4 text-cyan-300 animate-pulse" />
+                                <Eye className="w-4 h-4 text-cyan-300 animate-pulse" />
                               ) : autoScanStatus === "verifying" ? (
                                 <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
                               ) : autoScanStatus === "spoof" ? (
@@ -1316,6 +1317,20 @@ export function QuickAttendanceModal({
                             )}
 
                             <ScanFace className={cn("w-10 h-10 transition-colors", autoScanStatus === "matched" ? "text-emerald-400/70" : autoScanStatus === "spoof" ? "text-rose-400/80" : autoScanStatus === "blinking" ? "text-cyan-300 animate-pulse" : "text-cyan-400/40")} />
+
+                            {/* Floating Action Badge under Bounding Box */}
+                            {autoScanStatus === "blinking" && (
+                              <div className="absolute -bottom-8 px-3.5 py-1.5 bg-cyan-950/95 border border-cyan-400/80 rounded-full text-[11px] font-black text-cyan-200 tracking-wide shadow-xl flex items-center gap-1.5 whitespace-nowrap animate-bounce">
+                                <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                                <span>Kedipkan Mata Sekarang</span>
+                              </div>
+                            )}
+                            {autoScanStatus === "spoof" && (
+                              <div className="absolute -bottom-8 px-3.5 py-1.5 bg-rose-950/95 border border-rose-500 rounded-full text-[11px] font-black text-rose-200 tracking-wide shadow-xl flex items-center gap-1.5 whitespace-nowrap animate-pulse">
+                                <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                                <span>Terdeteksi Layar HP / Foto</span>
+                              </div>
+                            )}
                           </div>
                         </div>
 

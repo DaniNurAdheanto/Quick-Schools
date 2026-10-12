@@ -180,8 +180,8 @@ export function calculateEyeAspectRatio(mesh?: number[][]): {
 }
 
 /**
- * Detects physical screen artifacts (specular reflections, screen backlight clipping, moire)
- * produced when a smartphone or tablet screen is held up against a camera.
+ * Detects physical screen artifacts (specular reflections, screen backlight clipping, moire,
+ * and high-contrast smartphone screen bezel/frames around the face box).
  */
 export function detectScreenSpoofArtifacts(
   input: HTMLCanvasElement | HTMLVideoElement | HTMLImageElement,
@@ -202,6 +202,7 @@ export function detectScreenSpoofArtifacts(
 
     if (bw < 30 || bh < 30) return { isScreenSpoof: false, glareScore: 0, reason: "" };
 
+    // 1. Check inside face box for intense specular glare or excessive unnatural blue tint
     const imgData = ctx.getImageData(bx, by, bw, bh);
     const data = imgData.data;
 
@@ -216,12 +217,12 @@ export function detectScreenSpoofArtifacts(
       totalSamples++;
 
       // Specular glare reflection from phone glass
-      if (r > 248 && g > 248 && b > 248) {
+      if (r > 245 && g > 245 && b > 245) {
         clippedPixels++;
       }
 
       // Strong artificial blue emission typical of phone screens
-      if (b > r + 45 && b > g + 35) {
+      if (b > r + 38 && b > g + 28) {
         screenBlueTint++;
       }
     }
@@ -229,7 +230,7 @@ export function detectScreenSpoofArtifacts(
     const clipRatio = totalSamples > 0 ? clippedPixels / totalSamples : 0;
     const blueRatio = totalSamples > 0 ? screenBlueTint / totalSamples : 0;
 
-    if (clipRatio > 0.09) {
+    if (clipRatio > 0.065) {
       return {
         isScreenSpoof: true,
         glareScore: Math.round(clipRatio * 100),
@@ -237,7 +238,7 @@ export function detectScreenSpoofArtifacts(
       };
     }
 
-    if (blueRatio > 0.38) {
+    if (blueRatio > 0.32) {
       return {
         isScreenSpoof: true,
         glareScore: Math.round(blueRatio * 100),
@@ -245,9 +246,99 @@ export function detectScreenSpoofArtifacts(
       };
     }
 
+    // 2. Check perimeter around face for rectangular device frame / phone bezel
+    const marginX = Math.round(bw * 0.35);
+    const marginY = Math.round(bh * 0.35);
+    const pX = Math.max(0, bx - marginX);
+    const pY = Math.max(0, by - marginY);
+    const pW = Math.min(input.width - pX, bw + marginX * 2);
+    const pH = Math.min(input.height - pY, bh + marginY * 2);
+
+    if (pW > bw && pH > bh) {
+      const perimeterData = ctx.getImageData(pX, pY, pW, pH).data;
+      let sharpEdgeCount = 0;
+      let perimeterSamples = 0;
+
+      for (let y = 2; y < pH - 2; y += 4) {
+        for (let x = 2; x < pW - 2; x += 4) {
+          const relX = x - (bx - pX);
+          const relY = y - (by - pY);
+          const isInsideFace = relX > 0 && relX < bw && relY > 0 && relY < bh;
+          if (isInsideFace) continue;
+
+          perimeterSamples++;
+          const idx = (y * pW + x) * 4;
+          const leftIdx = idx - 16;
+          const rightIdx = idx + 16;
+
+          const diffL = Math.abs(perimeterData[idx] - perimeterData[leftIdx]);
+          const diffR = Math.abs(perimeterData[idx] - perimeterData[rightIdx]);
+
+          if (diffL > 65 || diffR > 65) {
+            sharpEdgeCount++;
+          }
+        }
+      }
+
+      const edgeRatio = perimeterSamples > 0 ? sharpEdgeCount / perimeterSamples : 0;
+      if (edgeRatio > 0.38) {
+        return {
+          isScreenSpoof: true,
+          glareScore: Math.round(edgeRatio * 100),
+          reason: "Terdeteksi bingkai / tepi layar smartphone (Device Bezel Spoof).",
+        };
+      }
+    }
+
     return { isScreenSpoof: false, glareScore: 0, reason: "" };
-  } catch (e) {
+  } catch {
     return { isScreenSpoof: false, glareScore: 0, reason: "" };
+  }
+}
+
+/**
+ * Checks relative 3D facial depth relief to distinguish a genuine 3D human head
+ * from a flat 2D photo print or 2D image displayed on a phone screen.
+ */
+export function check3DFaceDepth(mesh?: number[][]): {
+  isFlat2D: boolean;
+  depthScore: number;
+  reason: string;
+} {
+  if (!mesh || mesh.length < 468) {
+    return { isFlat2D: false, depthScore: 50, reason: "" };
+  }
+
+  try {
+    const noseZ = mesh[1]?.[2] ?? mesh[4]?.[2] ?? 0;
+    const earAvgZ = ((mesh[234]?.[2] ?? 0) + (mesh[454]?.[2] ?? 0)) / 2;
+    const faceWidth = Math.hypot(
+      (mesh[454]?.[0] ?? 0) - (mesh[234]?.[0] ?? 0),
+      (mesh[454]?.[1] ?? 0) - (mesh[234]?.[1] ?? 0)
+    );
+
+    if (faceWidth < 50) {
+      return { isFlat2D: false, depthScore: 50, reason: "" };
+    }
+
+    const depthDelta = Math.abs(noseZ - earAvgZ);
+    const depthRatio = depthDelta / faceWidth;
+
+    if (depthRatio < 0.038) {
+      return {
+        isFlat2D: true,
+        depthScore: Math.round(depthRatio * 1000),
+        reason: "Terdeteksi gambar datar 2D (Foto kertas / Layar HP tanpa kedalaman 3D asli).",
+      };
+    }
+
+    return {
+      isFlat2D: false,
+      depthScore: Math.round(depthRatio * 1000),
+      reason: "",
+    };
+  } catch {
+    return { isFlat2D: false, depthScore: 50, reason: "" };
   }
 }
 
@@ -484,7 +575,7 @@ export function evaluateFaceLiveness(
   const openRight = current.ear?.openRight ?? 0.4;
   const gestures = current.gestures ?? [];
 
-  // 1. Direct Phone Screen Glass / Glare Detection
+  // 1. Direct Phone Screen Glass / Glare / Device Bezel Detection
   if (current.screenArtifacts?.isScreenSpoof) {
     history.passiveStreak = 0;
     return {
@@ -499,6 +590,22 @@ export function evaluateFaceLiveness(
     };
   }
 
+  // 2. 3D Face Depth & Curvature Check (Rejects flat 2D paper/screen photos)
+  const depthCheck = check3DFaceDepth(current.mesh);
+  if (depthCheck.isFlat2D) {
+    history.passiveStreak = 0;
+    return {
+      isLive: false,
+      isSpoof: true,
+      hasBlinked: false,
+      blinkCount: 0,
+      realScore: 15,
+      avgEAR,
+      reason: depthCheck.reason || "Terdeteksi foto datar 2D tanpa kedalaman wajah asli!",
+      actionPrompt: "Gunakan wajah asli langsung di depan kamera.",
+    };
+  }
+
   // Record baseline when face is stable
   if (history.baselineYaw === null && Math.abs(current.angles.roll) < 15) {
     history.baselineYaw = current.angles.yaw;
@@ -506,57 +613,94 @@ export function evaluateFaceLiveness(
   if (history.baselinePitch === null) {
     history.baselinePitch = current.angles.pitch;
   }
-  if (history.baselineEAR === null && avgEAR > 0.15) {
+  if (history.baselineEAR === null && avgEAR > 0.18) {
     history.baselineEAR = avgEAR;
   }
 
-  // 2. Natural Organic Actions (Blink, Smile/Mouth, Head micro-turn)
-  const hasGestureBlink = gestures.some(g => g.includes("blink"));
-  const hasApertureBlink = openLeft < 0.22 || openRight < 0.22;
-  const isEyeClosed = avgEAR <= 0.17 || (history.baselineEAR !== null && avgEAR <= history.baselineEAR * 0.78);
+  // Track EAR history for temporal variance analysis
+  history.earHistory.push(avgEAR);
+  if (history.earHistory.length > 25) history.earHistory.shift();
 
-  if (hasGestureBlink || hasApertureBlink) {
-    history.hasBlinked = true;
-    history.isLivenessPassed = true;
-    history.livenessType = "blink";
-    history.livenessReason = "Wajah asli terverifikasi ✓";
-  } else if (history.blinkState === "eyes_open" && isEyeClosed) {
-    history.blinkState = "eyes_closed";
-    history.closeStartTime = now;
-  } else if (history.blinkState === "eyes_closed") {
-    const isEyeReopened = avgEAR >= 0.19 || (history.baselineEAR !== null && avgEAR >= history.baselineEAR * 0.85);
-    if (isEyeReopened) {
-      history.blinkState = "eyes_open";
-      history.hasBlinked = true;
-      history.isLivenessPassed = true;
-      history.livenessType = "blink";
-      history.livenessReason = "Wajah asli terverifikasi ✓";
+  if (history.firstDetectedTime === 0) {
+    history.firstDetectedTime = now;
+  }
+
+  // 3. Static Photo Freeze Detector (A static photo on a phone NEVER has micro-biological variance)
+  if (history.earHistory.length >= 10 && (now - history.firstDetectedTime >= 1500) && !history.hasBlinked) {
+    const mean = history.earHistory.reduce((a, b) => a + b, 0) / history.earHistory.length;
+    const variance = history.earHistory.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / history.earHistory.length;
+    const stdDev = Math.sqrt(variance);
+
+    // If EAR is completely frozen with standard deviation < 0.0018 over 10 frames (~1.5s), it is an inanimate static photo!
+    if (stdDev < 0.0018) {
+      return {
+        isLive: false,
+        isSpoof: true,
+        hasBlinked: false,
+        blinkCount: 0,
+        realScore: 20,
+        avgEAR,
+        reason: "Terdeteksi foto statis / Layar HP digital! Hadirkan wajah asli dan berkedip.",
+        actionPrompt: "Kedipkan mata Anda untuk verifikasi keaslian",
+      };
     }
   }
 
-  // 3D Head movement (if user naturally shifts slightly)
+  // 4. Biological Eye Blink Transition State Machine
+  // (Crucial: Requires genuine OPEN -> CLOSED -> OPEN cycle within 80ms - 950ms!)
+  const isEyeClosed = avgEAR <= 0.165 || (history.baselineEAR !== null && avgEAR <= history.baselineEAR * 0.72) || (openLeft < 0.18 && openRight < 0.18);
+  const isEyeOpen = avgEAR >= 0.20 && openLeft >= 0.23 && openRight >= 0.23;
+  const hasGestureBlink = gestures.some(g => g.includes("blink"));
+
+  if (hasGestureBlink) {
+    history.hasBlinked = true;
+    history.isLivenessPassed = true;
+    history.livenessType = "blink";
+    history.livenessReason = "Wajah asli terverifikasi (Kedipan aktif ✓)";
+  } else if (history.blinkState === "eyes_open") {
+    if (isEyeClosed) {
+      history.blinkState = "eyes_closed";
+      history.closeStartTime = now;
+    }
+  } else if (history.blinkState === "eyes_closed") {
+    const closeDuration = now - (history.closeStartTime || now);
+    // Biological human blink duration: 80ms to 950ms
+    if (isEyeOpen && closeDuration >= 80 && closeDuration <= 950) {
+      history.blinkState = "eyes_open";
+      history.blinkCount += 1;
+      history.hasBlinked = true;
+      history.isLivenessPassed = true;
+      history.livenessType = "blink";
+      history.livenessReason = "Wajah asli terverifikasi (Kedipan aktif ✓)";
+    } else if (closeDuration > 1200) {
+      // Eyes closed too long or stuck shut, reset to open
+      history.blinkState = "eyes_open";
+    }
+  }
+
+  // Also support natural 3D head movement (if user tilts or turns head naturally >= 9°)
   if (history.baselineYaw !== null) {
     const yawOffset = Math.abs(current.angles.yaw - history.baselineYaw);
-    if (yawOffset >= 7) {
+    if (yawOffset >= 9) {
       history.hasTurnedHead = true;
       history.isLivenessPassed = true;
       history.livenessType = "head_turn";
-      history.livenessReason = "Wajah asli terverifikasi ✓";
+      history.livenessReason = "Wajah asli terverifikasi (Gerakan 3D ✓)";
     }
   }
 
   // Mouth Expression / Smile
-  const hasMouthGesture = gestures.some(g => g.includes("mouth"));
+  const hasMouthGesture = gestures.some(g => g.includes("mouth") || g.includes("smile"));
   if (hasMouthGesture) {
     history.hasOpenedMouth = true;
     history.isLivenessPassed = true;
     history.livenessType = "mouth";
-    history.livenessReason = "Wajah asli terverifikasi ✓";
+    history.livenessReason = "Wajah asli terverifikasi (Ekspresi aktif ✓)";
   }
 
   const realScore = current.liveness?.realScore ?? 50;
 
-  // 3. Anti-Spoofing Neural Model Check (Screen/Paper photo classifier)
+  // 5. Anti-Spoofing Neural Model Check (Screen/Paper photo classifier)
   if (realScore < 25) {
     history.passiveStreak = 0;
     return {
@@ -571,65 +715,22 @@ export function evaluateFaceLiveness(
     };
   }
 
-  // 4. Passive Liveness Multi-Frame Verification (Tahan Posisi Sejenak)
-  if (history.firstDetectedTime === 0) {
-    history.firstDetectedTime = now;
-  }
-
-  // Track micro-angle variations to ensure living 3D face
-  if (history.lastAngles) {
-    const angleDelta = Math.hypot(
-      current.angles.yaw - history.lastAngles.yaw,
-      current.angles.pitch - history.lastAngles.pitch,
-      current.angles.roll - history.lastAngles.roll
-    );
-    // Humans naturally have micro-tremors (~0.05° to 4°); record sample
-    if (angleDelta >= 0.05) {
-      history.samples.push({
-        yaw: current.angles.yaw,
-        pitch: current.angles.pitch,
-        boxX: current.box.x,
-        boxY: current.box.y,
-        boxW: current.box.width,
-        boxH: current.box.height,
-        avgEAR,
-        realScore,
-        timestamp: now,
-      });
-      if (history.samples.length > 25) history.samples.shift();
-    }
-  }
-  history.lastAngles = { yaw: current.angles.yaw, pitch: current.angles.pitch, roll: current.angles.roll };
-
-  // If no spoof detected and neural score is valid:
-  if (realScore >= 30 && current.box.width >= 50 && current.box.height >= 50) {
-    history.passiveStreak = (history.passiveStreak || 0) + 1;
-    
-    // Automatically passes when stable and verified for ~3-4 frames (~500ms - 800ms)
-    if (history.passiveStreak >= 3 || (now - history.firstDetectedTime >= 600 && history.passiveStreak >= 2)) {
-      history.isLivenessPassed = true;
-      if (!history.livenessType) {
-        history.livenessType = "passive_stable";
-      }
-      history.livenessReason = "Wajah asli terverifikasi ✓";
-    }
-  }
-
-  // 5. Verification In Progress: Passive Alignment Prompt
+  // 6. Mandatory Active Liveness Gate:
+  // A STATIC PHOTO CANNOT PASS! Must have verified active biological blink or motion!
   if (!history.isLivenessPassed) {
     return {
       isLive: false,
-      isSpoof: false, // NOT spoof! System is verifying genuine presence
+      isSpoof: false,
       hasBlinked: false,
       blinkCount: 0,
       realScore,
       avgEAR,
-      reason: "Menyelaraskan wajah asli... Mohon tahan posisi sejenak",
-      actionPrompt: "Menyelaraskan wajah asli... Mohon tahan posisi sejenak",
+      reason: "Wajah cocok! Silakan KEDIPKAN MATA Anda untuk verifikasi keaslian (Bukan Foto/Layar HP)",
+      actionPrompt: "Kedipkan mata Anda untuk verifikasi keaslian",
     };
   }
 
-  // 6. Verified Genuine Live Human Presence!
+  // 7. Verified Genuine Live Human Presence!
   return {
     isLive: true,
     isSpoof: false,
@@ -637,7 +738,7 @@ export function evaluateFaceLiveness(
     blinkCount: Math.max(history.blinkCount, 1),
     realScore: Math.max(realScore, 95),
     avgEAR,
-    reason: history.livenessReason || "Wajah asli terverifikasi ✓",
+    reason: history.livenessReason || "Wajah asli terverifikasi (Kedipan aktif ✓)",
     actionPrompt: "Wajah asli terverifikasi ✓",
   };
 }

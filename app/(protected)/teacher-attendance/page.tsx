@@ -816,7 +816,7 @@ export default function TeacherAttendancePage() {
           // Passive Liveness Challenge: Require verified living human presence (Passive alignment)
           if (!livenessHistoryRef.current.isLivenessPassed) {
             setAutoScanStatus("blinking");
-            setAutoScanFeedback(`Wajah Cocok (${comp.similarity}%)! Menyelaraskan wajah asli... Mohon tahan posisi sejenak`);
+            setAutoScanFeedback(`Wajah Cocok (${comp.similarity}%)! Silakan KEDIPKAN MATA Anda untuk verifikasi keaslian (Bukan Foto/Layar)`);
             isAutoScanningRef.current = false;
             return;
           }

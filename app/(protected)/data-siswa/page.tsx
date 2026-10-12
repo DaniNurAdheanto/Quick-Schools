@@ -35,7 +35,7 @@ import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
-import { isStudentInClass } from "@/lib/class-relations";
+import { isStudentInClass, normalizeClassName } from "@/lib/class-relations";
 import { autoLinkStudentWithParent } from "@/lib/parent-student-sync";
 
 // Helper to clean undefined fields before saving to Firestore
@@ -142,7 +142,7 @@ export default function DataSiswaPage() {
       const cName = c.name || c.id;
       const cHomeroom = (c.homeroom || "").trim().toLowerCase();
       const cNip = (c.homeroomNip || "").trim().toLowerCase();
-      const cId = (c.homeroomId || "").trim();
+      const cId = (c.homeroomTeacherId || c.homeroomId || "").trim();
 
       const matchName = teacherName && cHomeroom && (
         cHomeroom === teacherName ||
@@ -150,7 +150,9 @@ export default function DataSiswaPage() {
         (cHomeroom.length > 5 && teacherName.includes(cHomeroom))
       );
       const matchNip = teacherNip && cNip && cNip === teacherNip;
-      const matchId = (teacherUid && cId && cId === teacherUid) || (currentUser.id && cId === currentUser.id);
+      const matchId = (teacherUid && cId && cId === teacherUid) || 
+                      (currentUser.id && cId === currentUser.id) ||
+                      (currentUser.teacherId && cId === currentUser.teacherId);
 
       if (matchName || matchNip || matchId) {
         if (cName) matched.add(cName);
@@ -159,7 +161,7 @@ export default function DataSiswaPage() {
 
     // 2. Direct field in users collection
     const directClass = currentUser.homeroomClass || currentUser.homeroom || currentUser.className || currentUser.classId;
-    if (directClass && directClass !== "-" && classes.some(c => (c.name || c.id) === directClass)) {
+    if (directClass && directClass !== "-") {
       matched.add(directClass);
     }
 
@@ -192,13 +194,55 @@ export default function DataSiswaPage() {
       if (!teacherClasses || teacherClasses.length === 0) {
         return []; // Guru not assigned as wali kelas sees 0 students
       }
+
+      // Find matched class objects corresponding to teacherClasses
+      const targetClassObjs = classes.filter(c =>
+        teacherClasses.some(tc =>
+          tc.trim().toLowerCase() === (c.name || "").trim().toLowerCase() ||
+          normalizeClassName(tc) === normalizeClassName(c.name) ||
+          tc === c.id ||
+          tc === c._firestoreId
+        )
+      );
+
       return students.filter(s => {
-        const sc = (s.classId || s.className || s.kelas || s.class || "").trim().toLowerCase();
-        return teacherClasses.some(tc => tc.trim().toLowerCase() === sc);
+        // 1. Check using isStudentInClass with matched class objects
+        if (targetClassObjs.length > 0 && targetClassObjs.some(cObj => isStudentInClass(s, cObj))) {
+          return true;
+        }
+
+        // 2. Comprehensive check of all class fields against teacherClasses
+        const studentClassVals = [
+          s.className,
+          s.class,
+          s.kelas,
+          s.classId,
+          s.classDocId,
+        ].filter(Boolean).map(v => String(v).trim().toLowerCase());
+
+        return teacherClasses.some(tc => {
+          const tcClean = tc.trim().toLowerCase();
+          const tcNorm = normalizeClassName(tc);
+
+          return studentClassVals.some(sc => {
+            if (sc === tcClean) return true;
+            if (normalizeClassName(sc) === tcNorm) return true;
+
+            // Also check if sc matches the class id of tc
+            const matchedClass = classes.find(c => 
+              (c.name || "").trim().toLowerCase() === tcClean ||
+              normalizeClassName(c.name) === tcNorm
+            );
+            if (matchedClass && (matchedClass.id === sc || matchedClass._firestoreId === sc)) {
+              return true;
+            }
+            return false;
+          });
+        });
       });
     }
     return students;
-  }, [students, isGuru, teacherClasses]);
+  }, [students, isGuru, teacherClasses, classes]);
 
   // Count unboarded students
   const unboardedCount = useMemo(() => {
@@ -907,15 +951,27 @@ export default function DataSiswaPage() {
     return baseStudents.filter(student => {
       const matchSearch = !searchQuery || 
         (student.name && student.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (student.fullName && student.fullName.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (student.id && student.id.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (student.nisn && student.nisn.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (student.className && student.className.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (student.classId && student.classId.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const targetClassObj = selectedClass !== "All"
-        ? classes.find(c => c.name === selectedClass || c._firestoreId === selectedClass || c.id === selectedClass)
+        ? classes.find(c => 
+            c.name === selectedClass || 
+            c._firestoreId === selectedClass || 
+            c.id === selectedClass ||
+            normalizeClassName(c.name) === normalizeClassName(selectedClass)
+          )
         : null;
 
+      const normSelected = normalizeClassName(selectedClass);
       const matchClass = selectedClass === "All" ||
         (targetClassObj ? isStudentInClass(student, targetClassObj) : false) ||
+        normalizeClassName(student.className) === normSelected ||
+        normalizeClassName(student.class) === normSelected ||
+        normalizeClassName(student.kelas) === normSelected ||
         student.classId === selectedClass ||
         student.className === selectedClass ||
         student.class === selectedClass;
@@ -923,7 +979,7 @@ export default function DataSiswaPage() {
 
       return matchSearch && matchClass && matchStatus;
     });
-  }, [baseStudents, searchQuery, selectedClass, selectedStatus]);
+  }, [baseStudents, searchQuery, selectedClass, selectedStatus, classes]);
 
   // Synchronize selectedClass for Wali Kelas
   useEffect(() => {
