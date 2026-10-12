@@ -29,6 +29,7 @@ import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { SubjectGroup, fetchSubjectGroupsFromDb } from "@/lib/subject-groups";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { isStudentInClass, normalizeClassName } from "@/lib/class-relations";
 
 // Standard Indonesian Curriculum Subject Presets (Kurikulum Merdeka & Nasional)
 const STANDARD_SUBJECT_PRESETS = [
@@ -346,16 +347,17 @@ export default function ReportCardsPage() {
     const tName = (currentUserData?.fullName || currentUserData?.name || auth.currentUser?.displayName || "").trim().toLowerCase();
     const tNip = (currentUserData?.nip || currentUserData?.id || "").trim().toLowerCase();
     const tEmail = (currentUserData?.email || userEmail || auth.currentUser?.email || "").trim().toLowerCase();
-    const tUid = currentUserData?.uid || auth.currentUser?.uid;
+    const tUid = currentUserData?.uid || auth.currentUser?.uid || currentUserData?.id;
+    const tId = currentUserData?.id || currentUserData?.teacherId;
 
     const matched = new Set<string>();
 
-    // 1. Match from classes collection
+    // 1. Match from classes collection / API
     classes.forEach((c) => {
       const cName = c.name || c.id;
       const cHomeroom = (c.homeroom || c.homeroomTeacher || c.waliKelas || "").trim().toLowerCase();
       const cNip = (c.homeroomNip || "").trim().toLowerCase();
-      const cId = (c.homeroomId || "").trim();
+      const cId = (c.homeroomId || c.homeroomTeacherId || "").trim();
 
       const matchName = tName && cHomeroom && (
         cHomeroom === tName ||
@@ -363,7 +365,9 @@ export default function ReportCardsPage() {
         (cHomeroom.length > 5 && tName.includes(cHomeroom))
       );
       const matchNip = tNip && cNip && cNip === tNip;
-      const matchId = tUid && cId && cId === tUid;
+      const matchId = (tUid && cId && cId === tUid) ||
+                      (tId && cId && cId === tId) ||
+                      (currentUserData?.teacherId && cId === currentUserData.teacherId);
 
       if (matchName || matchNip || matchId) {
         if (cName) matched.add(cName);
@@ -373,7 +377,12 @@ export default function ReportCardsPage() {
     // 2. Direct field in user document
     const directClass = currentUserData?.homeroomClass || currentUserData?.homeroom || currentUserData?.className || currentUserData?.classId;
     if (directClass && directClass !== "-" && directClass !== "All" && directClass !== "Semua Kelas") {
-      matched.add(directClass);
+      const found = classes.find(c => c.id === directClass || c.name === directClass || normalizeClassName(c.name) === normalizeClassName(directClass));
+      if (found?.name) {
+        matched.add(found.name);
+      } else {
+        matched.add(directClass);
+      }
     }
 
     // 3. Match from teachers collection
@@ -381,12 +390,18 @@ export default function ReportCardsPage() {
       (tEmail && t.email?.toLowerCase() === tEmail) ||
       (tNip && (t.nip === tNip || t.id === tNip)) ||
       (tUid && (t.uid === tUid || t._firestoreId === tUid || t.id === tUid)) ||
+      (tId && (t.id === tId || t._firestoreId === tId)) ||
       (tName && (t.name?.toLowerCase() === tName || (tName.length > 5 && t.name?.toLowerCase().includes(tName))))
     );
     if (tDoc) {
       const tClass = tDoc.homeroomClass || tDoc.homeroom || tDoc.class || tDoc.className || tDoc.waliKelas;
       if (tClass && tClass !== "-" && tClass !== "All" && tClass !== "Semua Kelas") {
-        matched.add(tClass);
+        const found = classes.find(c => c.id === tClass || c.name === tClass || normalizeClassName(c.name) === normalizeClassName(tClass));
+        if (found?.name) {
+          matched.add(found.name);
+        } else {
+          matched.add(tClass);
+        }
       }
     }
 
@@ -404,7 +419,11 @@ export default function ReportCardsPage() {
   // Auto-synchronize selectedClass for Guru
   useEffect(() => {
     if (isGuru && teacherHomeroomClasses.length > 0) {
-      if (!teacherHomeroomClasses.includes(selectedClass)) {
+      const isCurrentMatching = teacherHomeroomClasses.some(
+        tc => tc.trim().toLowerCase() === selectedClass.trim().toLowerCase() ||
+              normalizeClassName(tc) === normalizeClassName(selectedClass)
+      );
+      if (!isCurrentMatching) {
         setSelectedClass(teacherHomeroomClasses[0]);
       }
     }
@@ -413,7 +432,13 @@ export default function ReportCardsPage() {
   // Selectable classes list (Restricted exclusively to homeroom for Guru)
   const selectableClasses = useMemo(() => {
     if (isGuru) {
-      return classes.filter(c => teacherHomeroomClasses.includes(c.name || c.id));
+      return classes.filter(c => 
+        teacherHomeroomClasses.some(tc => 
+          (c.name || "").trim().toLowerCase() === tc.trim().toLowerCase() ||
+          normalizeClassName(c.name) === normalizeClassName(tc) ||
+          c.id === tc
+        )
+      );
     }
     return classes;
   }, [isGuru, classes, teacherHomeroomClasses]);
@@ -422,22 +447,41 @@ export default function ReportCardsPage() {
   const scopedStudents = useMemo(() => {
     if (!isGuru) return students;
     if (teacherHomeroomClasses.length === 0) return [];
+
+    const targetClassObjs = classes.filter(c =>
+      teacherHomeroomClasses.some(tc =>
+        (c.name || "").trim().toLowerCase() === tc.trim().toLowerCase() ||
+        normalizeClassName(c.name) === normalizeClassName(tc) ||
+        c.id === tc
+      )
+    );
+
     return students.filter((s) => {
+      // 1. Check using isStudentInClass with target class objects
+      if (targetClassObjs.length > 0 && targetClassObjs.some(cObj => isStudentInClass(s, cObj))) {
+        return true;
+      }
+
+      // 2. Comprehensive check of student class fields
       const studentClassVals = [
         s.className,
         s.class,
         s.kelas,
         s.classId,
+        s.classDocId,
       ].filter(Boolean).map((v) => String(v).trim().toLowerCase());
 
       return teacherHomeroomClasses.some((tc) => {
         const target = tc.trim().toLowerCase();
-        const targetNoSpace = target.replace(/[\s\-_]/g, "");
+        const targetNorm = normalizeClassName(tc);
 
         return studentClassVals.some((sc) => {
           if (sc === target) return true;
-          if (sc.replace(/[\s\-_]/g, "") === targetNoSpace) return true;
-          const matchedClass = classes.find((c) => (c.name || "").trim().toLowerCase() === target);
+          if (normalizeClassName(sc) === targetNorm) return true;
+          const matchedClass = classes.find(c =>
+            (c.name || "").trim().toLowerCase() === target ||
+            normalizeClassName(c.name) === targetNorm
+          );
           if (matchedClass && (matchedClass.id === sc || matchedClass._firestoreId === sc)) return true;
           return false;
         });
@@ -447,6 +491,7 @@ export default function ReportCardsPage() {
 
   // Fetch Data from PostgreSQL API (Classes, Grades, Subjects, Schedules)
   useEffect(() => {
+    let cardInterval: any = null;
     const loadReportCardData = async () => {
       try {
         const [resClasses, resGrades, resSubjects, resSchedules] = await Promise.all([
@@ -456,15 +501,19 @@ export default function ReportCardsPage() {
           fetch("/api/schedules").then(r => r.json()).catch(() => ({ schedules: [] })),
         ]);
 
-        if (resClasses.success && Array.isArray(resClasses.classes)) setClasses(resClasses.classes);
-        if (resGrades.success && Array.isArray(resGrades.grades)) setGrades(resGrades.grades);
-        if (resSubjects.success && Array.isArray(resSubjects.subjects)) setSubjects(resSubjects.subjects);
-        if (resSchedules.success && Array.isArray(resSchedules.schedules)) setSchedules(resSchedules.schedules);
+        if (resClasses.success && Array.isArray(resClasses.classes) && resClasses.classes.length > 0) setClasses(resClasses.classes);
+        if (resGrades.success && Array.isArray(resGrades.grades) && resGrades.grades.length > 0) setGrades(resGrades.grades);
+        if (resSubjects.success && Array.isArray(resSubjects.subjects) && resSubjects.subjects.length > 0) setSubjects(resSubjects.subjects);
+        if (resSchedules.success && Array.isArray(resSchedules.schedules) && resSchedules.schedules.length > 0) setSchedules(resSchedules.schedules);
       } catch (err) {
         console.error("Error loading report cards data:", err);
       }
     };
     loadReportCardData();
+    cardInterval = setInterval(loadReportCardData, 20000);
+    return () => {
+      if (cardInterval) clearInterval(cardInterval);
+    };
   }, []);
 
   useEffect(() => {
@@ -561,12 +610,58 @@ export default function ReportCardsPage() {
     setTeachers(unifiedTeachers);
   }, [unifiedTeachers]);
 
-  // Initialize selectedStudentId when students load
+  // Filtered Students List
+  const filteredStudents = useMemo(() => {
+    const targetClassObj = classes.find(c =>
+      (c.name || "").trim().toLowerCase() === selectedClass.trim().toLowerCase() ||
+      normalizeClassName(c.name) === normalizeClassName(selectedClass) ||
+      c.id === selectedClass
+    );
+    const target = selectedClass.trim().toLowerCase();
+    const targetNorm = normalizeClassName(target);
+
+    return scopedStudents.filter(s => {
+      let matchClass = (!isGuru && selectedClass === "All");
+      if (!matchClass) {
+        if (targetClassObj && isStudentInClass(s, targetClassObj)) {
+          matchClass = true;
+        } else {
+          const studentClassVals = [
+            s.className,
+            s.class,
+            s.kelas,
+            s.classId,
+            s.classDocId,
+          ].filter(Boolean).map(v => String(v).trim().toLowerCase());
+          matchClass = studentClassVals.some(sc => sc === target || normalizeClassName(sc) === targetNorm);
+        }
+      }
+
+      const nisnVal = getStudentNisn(s).toLowerCase();
+      const matchQuery = !searchQuery ||
+        (s.name && s.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (s.fullName && s.fullName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (s.id && s.id.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        nisnVal.includes(searchQuery.toLowerCase());
+      return matchClass && matchQuery;
+    });
+  }, [scopedStudents, selectedClass, searchQuery, isGuru, classes]);
+
+  // Initialize selectedStudentId when filteredStudents or scopedStudents load
   useEffect(() => {
-    if (students.length > 0 && !selectedStudentId) {
-      setSelectedStudentId(students[0]._firestoreId || students[0].uid || students[0].id);
+    const pool = filteredStudents.length > 0 ? filteredStudents : scopedStudents;
+    if (pool.length > 0) {
+      const isCurrentSelectedInPool = pool.some(s =>
+        (s._firestoreId && s._firestoreId === selectedStudentId) ||
+        (s.uid && s.uid === selectedStudentId) ||
+        (s.id && s.id === selectedStudentId) ||
+        (s.nisn && s.nisn === selectedStudentId)
+      );
+      if (!selectedStudentId || !isCurrentSelectedInPool) {
+        setSelectedStudentId(pool[0]._firestoreId || pool[0].uid || pool[0].id);
+      }
     }
-  }, [students, selectedStudentId]);
+  }, [filteredStudents, scopedStudents, selectedStudentId]);
 
   // Auto-select student if student role or parent role
   useEffect(() => {
@@ -585,20 +680,6 @@ export default function ReportCardsPage() {
       }
     }
   }, [isParent, isStudentRole, students, userEmail, currentUserData]);
-
-  // Filtered Students List
-  const filteredStudents = useMemo(() => {
-    return scopedStudents.filter(s => {
-      const matchClass = (!isGuru && selectedClass === "All") || s.classId === selectedClass || s.className === selectedClass;
-      const nisnVal = getStudentNisn(s).toLowerCase();
-      const matchQuery = !searchQuery ||
-        (s.name && s.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (s.fullName && s.fullName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (s.id && s.id.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        nisnVal.includes(searchQuery.toLowerCase());
-      return matchClass && matchQuery;
-    });
-  }, [scopedStudents, selectedClass, searchQuery, isGuru]);
 
   // Selected Student Object (Resilient lookup across _firestoreId, uid, id, and nisn)
   const currentStudent = useMemo(() => {
@@ -621,6 +702,7 @@ export default function ReportCardsPage() {
     }
     if (!currentStudent) return null;
     const studentClass = classes.find(c =>
+      isStudentInClass(currentStudent, c) ||
       c.id === currentStudent.classId ||
       c.name === currentStudent.classId ||
       c.name === currentStudent.className
@@ -862,9 +944,11 @@ export default function ReportCardsPage() {
   const selectedStudentClassObj = useMemo(() => {
     if (!currentStudent) return null;
     return classes.find(c => 
+      isStudentInClass(currentStudent, c) ||
+      c.id === currentStudent.classId ||
+      c.name === currentStudent.className || 
       c.name === currentStudent.classId || 
       c.className === currentStudent.classId || 
-      c.id === currentStudent.classId || 
       c._firestoreId === currentStudent.classDocId ||
       c._firestoreId === currentStudent.classId
     ) || null;
@@ -882,7 +966,7 @@ export default function ReportCardsPage() {
       return String(selectedStudentClassObj.major).trim();
     }
     // 3. Fallback: deteksi dari nama kelas (misal "XII RPL 1" -> "RPL", "XI MIPA 2" -> "MIPA")
-    const classStr = (currentStudent.classId || currentStudent.className || selectedStudentClassObj?.name || "").toUpperCase();
+    const classStr = (currentStudent.className || currentStudent.class || selectedStudentClassObj?.name || currentStudent.classId || "").toUpperCase();
     for (const opt of majorOptions) {
       const val = (opt.value || "").toUpperCase().trim();
       if (val && val !== "ALL" && val !== "UMUM" && classStr.includes(val)) {
@@ -1014,11 +1098,14 @@ export default function ReportCardsPage() {
     });
 
     // 2. Ambil dari jadwal dan nilai siswa HANYA yang sesuai dengan jurusan siswa saat ini
-    if (currentStudent.classId) {
+    if (currentStudent) {
       schedules.forEach(sc => {
         if (
           sc.subject &&
-          (sc.classId === currentStudent.classId || sc.className === currentStudent.classId || sc.class === currentStudent.classId)
+          (isStudentInClass(currentStudent, { id: sc.classId, name: sc.className || sc.class }) ||
+            sc.classId === currentStudent.classId ||
+            sc.className === currentStudent.className ||
+            sc.class === currentStudent.className)
         ) {
           const norm = normalizeSubjectName(sc.subject);
           if (isSubjectAllowedForStudent(norm, sMajor)) {
@@ -1030,7 +1117,11 @@ export default function ReportCardsPage() {
       grades.forEach(g => {
         if (
           g.subject &&
-          (g.classId === currentStudent.classId || g.className === currentStudent.classId || g.class === currentStudent.classId)
+          (g.studentId === currentStudent.id ||
+            g.studentId === currentStudent.uid ||
+            g.studentId === currentStudent._firestoreId ||
+            (g.studentName && currentStudent.name && g.studentName.toLowerCase().trim() === currentStudent.name.toLowerCase().trim()) ||
+            isStudentInClass(currentStudent, { id: g.classId, name: g.className || g.class }))
         ) {
           const norm = normalizeSubjectName(g.subject);
           if (isSubjectAllowedForStudent(norm, sMajor)) {
@@ -1429,7 +1520,8 @@ export default function ReportCardsPage() {
           studentUid: currentStudent.uid || currentStudent._firestoreId || "",
           studentNisn,
           studentName: currentStudent.name,
-          classId: currentStudent.classId || "",
+          classId: currentStudent.className || currentStudent.class || currentStudent.kelas || currentStudent.classId || "",
+          className: currentStudent.className || currentStudent.class || currentStudent.kelas || currentStudent.classId || "",
           major: studentMajor,
           semester,
           academicYear,
@@ -1501,9 +1593,14 @@ export default function ReportCardsPage() {
 
   // Calculate Ranking in Class
   const studentRank = useMemo(() => {
-    if (!currentStudent || !currentStudent.classId) return { rank: 1, totalInClass: 1 };
+    if (!currentStudent) return { rank: 1, totalInClass: 1 };
 
-    const classStudents = students.filter(s => s.classId === currentStudent.classId || s.className === currentStudent.classId);
+    const classStudents = students.filter(s => {
+      if (selectedStudentClassObj && isStudentInClass(s, selectedStudentClassObj)) return true;
+      const c1 = (currentStudent.className || currentStudent.class || currentStudent.kelas || currentStudent.classId || "").toLowerCase();
+      const c2 = (s.className || s.class || s.kelas || s.classId || "").toLowerCase();
+      return c1 === c2 || normalizeClassName(c1) === normalizeClassName(c2);
+    });
 
     const rankedList = classStudents.map(st => {
       const stGrades = grades.filter(g =>
@@ -1711,7 +1808,8 @@ export default function ReportCardsPage() {
         studentUid: currentStudent.uid || currentStudent._firestoreId || "",
         studentNisn,
         studentName: currentStudent.name,
-        classId: currentStudent.classId || "",
+        classId: currentStudent.className || currentStudent.class || currentStudent.kelas || currentStudent.classId || "",
+        className: currentStudent.className || currentStudent.class || currentStudent.kelas || currentStudent.classId || "",
         semester,
         academicYear,
         overallAverage,
@@ -2226,7 +2324,7 @@ export default function ReportCardsPage() {
                             ) : null}
                           </div>
                           <p className={cn("text-[11px] font-medium mt-0.5 truncate", isSelected ? "text-white/80" : "text-gray-400")}>
-                            NISN: {studentNisn} · {student.classId || student.className || "Kelas -"}
+                            NISN: {studentNisn} · {student.className || student.class || student.kelas || student.classId || "Kelas -"}
                           </p>
                         </div>
                       </div>
@@ -2331,7 +2429,7 @@ export default function ReportCardsPage() {
                   <div>
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Kelas & Jurusan</span>
                     <span className="font-bold text-gray-800 block truncate">
-                      {currentStudent?.classId || currentStudent?.className || "-"} {studentMajor ? `• ${studentMajor}` : ""}
+                      {currentStudent?.className || currentStudent?.class || currentStudent?.kelas || currentStudent?.classId || "-"} {studentMajor ? `• ${studentMajor}` : ""}
                     </span>
                   </div>
                   <div>
@@ -2397,7 +2495,7 @@ export default function ReportCardsPage() {
                             NISN: {getStudentNisn(currentStudent)}
                           </span>
                           <span>•</span>
-                          <span>Kelas: <span className="font-bold text-gray-900">{currentStudent.classId || currentStudent.className || "-"}</span></span>
+                          <span>Kelas: <span className="font-bold text-gray-900">{currentStudent.className || currentStudent.class || currentStudent.kelas || currentStudent.classId || "-"}</span></span>
                           {studentMajor && (
                             <>
                               <span>•</span>
@@ -3770,7 +3868,7 @@ export default function ReportCardsPage() {
                   <p><span className="text-gray-500 font-normal">Program Keahlian:</span> <span className="font-bold text-gray-800">{studentMajor || "Umum"}</span></p>
                 </div>
                 <div className="space-y-1.5">
-                  <p><span className="text-gray-500 font-normal">Kelas / Fase:</span> <span className="font-bold text-gray-800">{currentStudent.classId || "-"}</span></p>
+                  <p><span className="text-gray-500 font-normal">Kelas / Fase:</span> <span className="font-bold text-gray-800">{currentStudent.className || currentStudent.class || currentStudent.kelas || currentStudent.classId || "-"}</span></p>
                   <p><span className="text-gray-500 font-normal">Semester:</span> <span className="font-bold text-gray-800">{semester}</span></p>
                   <p><span className="text-gray-500 font-normal">NPSN:</span> <span className="font-bold text-gray-800">{schoolProfile?.npsn || "-"}</span></p>
                 </div>

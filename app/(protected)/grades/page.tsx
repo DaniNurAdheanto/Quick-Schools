@@ -54,6 +54,7 @@ import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { isTeacherAssignedToSubject, getSubjectsForTeacher } from "@/lib/subject-teacher-relations";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { isStudentInClass, normalizeClassName } from "@/lib/class-relations";
 
 // 6 Core Assessment Types requested by user
 const ASSESSMENT_TYPES = [
@@ -228,12 +229,12 @@ export default function GradesPage() {
     const tNip = teacherInfo.nip.toLowerCase();
     const tUid = teacherInfo.uid;
 
-    // Match from classes collection
+    // Match from classes collection / API
     classes.forEach(c => {
       const cName = c.name || c.id;
-      const cHomeroom = (c.homeroom || "").trim().toLowerCase();
+      const cHomeroom = (c.homeroom || c.homeroomTeacher || "").trim().toLowerCase();
       const cNip = (c.homeroomNip || "").trim().toLowerCase();
-      const cId = (c.homeroomId || "").trim();
+      const cId = (c.homeroomId || c.homeroomTeacherId || "").trim();
 
       const matchName = tName && cHomeroom && (
         cHomeroom === tName ||
@@ -241,17 +242,24 @@ export default function GradesPage() {
         (cHomeroom.length > 5 && tName.includes(cHomeroom))
       );
       const matchNip = tNip && tNip !== "-" && cNip && cNip === tNip;
-      const matchId = tUid && cId && cId === tUid;
+      const matchId = (tUid && cId && cId === tUid) ||
+                      (currentUserData?.id && cId === currentUserData.id) ||
+                      (currentUserData?.teacherId && cId === currentUserData.teacherId);
 
       if (matchName || matchNip || matchId) {
-        matched.add(cName);
+        if (cName) matched.add(cName);
       }
     });
 
     // Direct homeroomClass in teacherDoc or currentUserData
     const directClass = teacherInfo.teacherDoc?.homeroomClass || teacherInfo.teacherDoc?.homeroom || currentUserData?.homeroomClass || currentUserData?.homeroom || currentUserData?.className || currentUserData?.classId;
-    if (directClass && directClass !== "-") {
-      matched.add(directClass);
+    if (directClass && directClass !== "-" && directClass !== "All" && directClass !== "Semua Kelas") {
+      const found = classes.find(c => c.id === directClass || c.name === directClass || normalizeClassName(c.name) === normalizeClassName(directClass));
+      if (found?.name) {
+        matched.add(found.name);
+      } else {
+        matched.add(directClass);
+      }
     }
 
     return Array.from(matched);
@@ -455,6 +463,30 @@ export default function GradesPage() {
 
   // Realtime Listeners for Grades, Students, Users, Classes, Subjects, Teachers, Schedules, Settings
   useEffect(() => {
+    let academicInterval: any = null;
+    const loadAcademicData = async () => {
+      try {
+        const [resClasses, resSubjects, resSchedules] = await Promise.all([
+          fetch("/api/classes").then(r => r.json()).catch(() => ({ classes: [] })),
+          fetch("/api/subjects").then(r => r.json()).catch(() => ({ subjects: [] })),
+          fetch("/api/schedules").then(r => r.json()).catch(() => ({ schedules: [] })),
+        ]);
+        if (resClasses.success && Array.isArray(resClasses.classes) && resClasses.classes.length > 0) {
+          setClasses(resClasses.classes);
+        }
+        if (resSubjects.success && Array.isArray(resSubjects.subjects) && resSubjects.subjects.length > 0) {
+          setSubjects(resSubjects.subjects);
+        }
+        if (resSchedules.success && Array.isArray(resSchedules.schedules) && resSchedules.schedules.length > 0) {
+          setSchedules(resSchedules.schedules);
+        }
+      } catch (err) {
+        console.warn("Error loading academic data in grades page:", err);
+      }
+    };
+    loadAcademicData();
+    academicInterval = setInterval(loadAcademicData, 20000);
+
     const unsubGrades = onSnapshot(collection(db, "grades"), (snap) => {
       const data = snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() }));
       setGrades(data);
@@ -465,16 +497,22 @@ export default function GradesPage() {
     });
 
     const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
-      setClasses(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
-    });
+      if (!snap.empty) {
+        setClasses(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
+      }
+    }, () => {});
 
     const unsubSubjects = onSnapshot(collection(db, "subjects"), (snap) => {
-      setSubjects(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
-    });
+      if (!snap.empty) {
+        setSubjects(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
+      }
+    }, () => {});
 
     const unsubSchedules = onSnapshot(collection(db, "schedules"), (snap) => {
-      setSchedules(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
-    });
+      if (!snap.empty) {
+        setSchedules(snap.docs.map(docSnap => ({ id: docSnap.id, _firestoreId: docSnap.id, ...docSnap.data() })));
+      }
+    }, () => {});
 
     const unsubSettings = onSnapshot(doc(db, "settings", "school_configuration"), (snap) => {
       if (snap.exists()) {
@@ -491,6 +529,7 @@ export default function GradesPage() {
     });
 
     return () => {
+      if (academicInterval) clearInterval(academicInterval);
       unsubGrades();
       unsubClasses();
       unsubSubjects();
@@ -515,7 +554,7 @@ export default function GradesPage() {
   // Available Classes Options: dynamic count from synchronized students
   const availableClassOptions = useMemo(() => {
     const classNamesFromClasses = classes.map(c => c.name?.trim()).filter(Boolean);
-    const classNamesFromStudents = students.map(s => (s.classId || s.className || s.class)?.trim()).filter(Boolean);
+    const classNamesFromStudents = students.map(s => (s.className || s.class || s.kelas)?.trim()).filter(Boolean);
     let uniqueClassNames = Array.from(new Set([...classNamesFromClasses, ...classNamesFromStudents])).sort();
 
     // For Guru role: limit to authorized classes (homeroom + taught classes)
@@ -524,12 +563,24 @@ export default function GradesPage() {
         return [];
       }
       uniqueClassNames = uniqueClassNames.filter(cName =>
-        authorizedClasses.some(ac => ac.trim().toLowerCase() === cName.toLowerCase())
+        authorizedClasses.some(ac => 
+          ac.trim().toLowerCase() === cName.toLowerCase() ||
+          normalizeClassName(ac) === normalizeClassName(cName)
+        )
       );
     }
 
     return uniqueClassNames.map(cName => {
-      const count = students.filter(s => (s.classId || s.className || s.class)?.trim().toLowerCase() === cName.toLowerCase()).length;
+      const targetClassObj = classes.find(c => 
+        (c.name || "").trim().toLowerCase() === cName.toLowerCase() ||
+        normalizeClassName(c.name) === normalizeClassName(cName) ||
+        c.id === cName
+      );
+      const count = students.filter(s => {
+        if (targetClassObj && isStudentInClass(s, targetClassObj)) return true;
+        const sClass = (s.className || s.class || s.kelas || "").trim().toLowerCase();
+        return sClass === cName.toLowerCase() || normalizeClassName(sClass) === normalizeClassName(cName);
+      }).length;
       const isWali = homeroomClasses.some(hc => hc.trim().toLowerCase() === cName.toLowerCase());
       const taughtInThisClass = taughtSubjectClassPairs
         .filter(p => p.class.trim().toLowerCase() === cName.toLowerCase())
@@ -686,18 +737,47 @@ export default function GradesPage() {
     if (!matrixClassId) return [];
     if (isGuru) {
       if (!authorizedClasses || authorizedClasses.length === 0) return [];
-      const isAllowed = authorizedClasses.some(ac => ac.trim().toLowerCase() === matrixClassId.trim().toLowerCase());
+      const isAllowed = authorizedClasses.some(ac => 
+        ac.trim().toLowerCase() === matrixClassId.trim().toLowerCase() ||
+        normalizeClassName(ac) === normalizeClassName(matrixClassId) ||
+        ac === matrixClassId
+      );
       if (!isAllowed) return [];
       if (matrixSubject && !isTeacherAuthorizedFor(matrixClassId, matrixSubject)) {
         return [];
       }
     }
+
+    const targetClassObj = classes.find(c =>
+      (c.name || "").trim().toLowerCase() === matrixClassId.trim().toLowerCase() ||
+      normalizeClassName(c.name) === normalizeClassName(matrixClassId) ||
+      c.id === matrixClassId
+    );
+
     const target = matrixClassId.trim().toLowerCase();
+    const targetNorm = normalizeClassName(target);
+
     return students.filter(s => {
-      const c = (s.classId || s.className || s.class || "").trim().toLowerCase();
-      return c === target;
+      if (targetClassObj && isStudentInClass(s, targetClassObj)) {
+        return true;
+      }
+
+      const studentClassVals = [
+        s.className,
+        s.class,
+        s.kelas,
+        s.classId,
+        s.classDocId,
+      ].filter(Boolean).map(v => String(v).trim().toLowerCase());
+
+      return studentClassVals.some(sc => {
+        if (sc === target) return true;
+        if (normalizeClassName(sc) === targetNorm) return true;
+        if (targetClassObj && (targetClassObj.id === sc || targetClassObj._firestoreId === sc)) return true;
+        return false;
+      });
     });
-  }, [students, matrixClassId, matrixSubject, isGuru, authorizedClasses, homeroomClasses, taughtSubjectClassPairs]);
+  }, [students, matrixClassId, matrixSubject, isGuru, authorizedClasses, homeroomClasses, taughtSubjectClassPairs, classes]);
 
   // Pre-populate gridValues from Firestore grades when matrix filters change or grades update
   useEffect(() => {
@@ -957,13 +1037,29 @@ export default function GradesPage() {
       if (isGuru) {
         if (!hasAnyGradingAccess) return false;
         const student = getStudentByIdOrName(g.studentId) || getStudentByIdOrName(g.studentName);
-        const studentClass = (g.classId || student?.classId || student?.className || student?.class || "").trim().toLowerCase();
+        const studentClassVals = [
+          g.className,
+          g.classId,
+          student?.className,
+          student?.class,
+          student?.kelas,
+          student?.classId,
+          student?.classDocId
+        ].filter(Boolean).map(v => String(v).trim().toLowerCase());
         const gradeSubject = (g.subject || "").trim().toLowerCase();
 
-        const isHomeroom = homeroomClasses.some(hc => hc.trim().toLowerCase() === studentClass);
-        const isTaughtSubject = taughtSubjectClassPairs.some(
-          p => p.class.trim().toLowerCase() === studentClass && p.subject.trim().toLowerCase() === gradeSubject
-        );
+        const isHomeroom = homeroomClasses.some(hc => {
+          const hcClean = hc.trim().toLowerCase();
+          const hcNorm = normalizeClassName(hc);
+          return studentClassVals.some(sc => sc === hcClean || normalizeClassName(sc) === hcNorm);
+        });
+
+        const isTaughtSubject = taughtSubjectClassPairs.some(p => {
+          const pClassClean = p.class.trim().toLowerCase();
+          const pClassNorm = normalizeClassName(p.class);
+          const pSubjClean = p.subject.trim().toLowerCase();
+          return studentClassVals.some(sc => (sc === pClassClean || normalizeClassName(sc) === pClassNorm) && pSubjClean === gradeSubject);
+        });
 
         if (!isHomeroom && !isTaughtSubject) return false;
       }
@@ -981,8 +1077,29 @@ export default function GradesPage() {
       // 4. Class Filter
       if (selectedClass !== "All") {
         const student = getStudentByIdOrName(g.studentId) || getStudentByIdOrName(g.studentName);
-        const studentClass = (g.classId || student?.classId || student?.className || student?.class || "").trim().toLowerCase();
-        if (studentClass !== selectedClass.trim().toLowerCase()) return false;
+        const targetClassObj = classes.find(c =>
+          (c.name || "").trim().toLowerCase() === selectedClass.trim().toLowerCase() ||
+          normalizeClassName(c.name) === normalizeClassName(selectedClass) ||
+          c.id === selectedClass
+        );
+
+        if (student && targetClassObj && isStudentInClass(student, targetClassObj)) {
+          // match
+        } else {
+          const studentClassVals = [
+            g.className,
+            g.classId,
+            student?.className,
+            student?.class,
+            student?.kelas,
+            student?.classId,
+            student?.classDocId
+          ].filter(Boolean).map(v => String(v).trim().toLowerCase());
+          const target = selectedClass.trim().toLowerCase();
+          const targetNorm = normalizeClassName(target);
+          const match = studentClassVals.some(sc => sc === target || normalizeClassName(sc) === targetNorm);
+          if (!match) return false;
+        }
       }
 
       // 5. Subject Filter
@@ -1105,14 +1222,32 @@ export default function GradesPage() {
     if (isGuru) {
       if (!authorizedClasses || authorizedClasses.length === 0) return [];
       baseStudentList = students.filter(s => {
-        const c = (s.classId || s.className || s.class || "").trim().toLowerCase();
-        return authorizedClasses.some(ac => ac.trim().toLowerCase() === c);
+        return authorizedClasses.some(ac => {
+          const targetObj = classes.find(c =>
+            (c.name || "").toLowerCase() === ac.toLowerCase() ||
+            normalizeClassName(c.name) === normalizeClassName(ac) ||
+            c.id === ac
+          );
+          if (targetObj && isStudentInClass(s, targetObj)) return true;
+          const sVals = [s.className, s.class, s.kelas, s.classId, s.classDocId].filter(Boolean).map(v => String(v).trim().toLowerCase());
+          return sVals.some(sc => sc === ac.toLowerCase() || normalizeClassName(sc) === normalizeClassName(ac));
+        });
       });
     }
 
+    const targetClassObj = classes.find(c =>
+      (c.name || "").trim().toLowerCase() === target ||
+      normalizeClassName(c.name) === normalizeClassName(target) ||
+      c.id === selectedClass
+    );
+
     const targetStudents = selectedClass === "All"
       ? baseStudentList
-      : baseStudentList.filter(s => (s.classId || s.className || s.class || "").trim().toLowerCase() === target);
+      : baseStudentList.filter(s => {
+          if (targetClassObj && isStudentInClass(s, targetClassObj)) return true;
+          const sVals = [s.className, s.class, s.kelas, s.classId, s.classDocId].filter(Boolean).map(v => String(v).trim().toLowerCase());
+          return sVals.some(sc => sc === target || normalizeClassName(sc) === normalizeClassName(target));
+        });
 
     targetStudents.forEach(s => {
       const key = s.id || s._firestoreId || s.uid;
@@ -1209,14 +1344,22 @@ export default function GradesPage() {
     if (isGuru) {
       if (!authorizedClasses || authorizedClasses.length === 0) return [];
       pool = students.filter(s => {
-        const c = (s.classId || s.className || s.class || "").trim().toLowerCase();
-        return authorizedClasses.some(ac => ac.trim().toLowerCase() === c);
+        return authorizedClasses.some(ac => {
+          const targetObj = classes.find(c =>
+            (c.name || "").toLowerCase() === ac.toLowerCase() ||
+            normalizeClassName(c.name) === normalizeClassName(ac) ||
+            c.id === ac
+          );
+          if (targetObj && isStudentInClass(s, targetObj)) return true;
+          const sVals = [s.className, s.class, s.kelas, s.classId, s.classDocId].filter(Boolean).map(v => String(v).trim().toLowerCase());
+          return sVals.some(sc => sc === ac.toLowerCase() || normalizeClassName(sc) === normalizeClassName(ac));
+        });
       });
     }
 
     if (!currentFormData.classId) {
       return pool.map(s => {
-        const c = s.classId || s.className || s.class || "Tanpa Kelas";
+        const c = s.className || s.class || s.kelas || s.classId || "Tanpa Kelas";
         return {
           label: `${s.fullName || s.name} (${c})`,
           value: s.id
@@ -1224,10 +1367,21 @@ export default function GradesPage() {
       });
     }
     const target = currentFormData.classId.trim().toLowerCase();
+    const targetNorm = normalizeClassName(target);
+    const targetClassObj = classes.find(c =>
+      (c.name || "").trim().toLowerCase() === target ||
+      normalizeClassName(c.name) === targetNorm ||
+      c.id === currentFormData.classId
+    );
+
     return pool
-      .filter(s => (s.classId || s.className || s.class || "").trim().toLowerCase() === target)
+      .filter(s => {
+        if (targetClassObj && isStudentInClass(s, targetClassObj)) return true;
+        const sVals = [s.className, s.class, s.kelas, s.classId, s.classDocId].filter(Boolean).map(v => String(v).trim().toLowerCase());
+        return sVals.some(sc => sc === target || normalizeClassName(sc) === targetNorm);
+      })
       .map(s => ({ label: `${s.fullName || s.name} (NISN: ${s.nisn || s.id})`, value: s.id }));
-  }, [students, currentFormData.classId, isGuru, authorizedClasses]);
+  }, [students, currentFormData.classId, isGuru, authorizedClasses, classes]);
 
   // Dynamic Subject Options for Single Form (filtered based on selected class in form)
   const availableSubjectOptionsForSingleForm = useMemo(() => {

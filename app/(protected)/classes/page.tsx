@@ -40,7 +40,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
-import { isStudentInClass } from "@/lib/class-relations";
+import { isStudentInClass, normalizeClassName } from "@/lib/class-relations";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 
@@ -697,8 +697,8 @@ export default function ClassesPage() {
     // Filter from students collection using relational matching
     const list = students.filter(s => {
       if (studentMyClass && isStudentInClass(s, studentMyClass)) return true;
-      const c = (s.classId || s.className || s.class || "").toLowerCase();
-      return c === targetClassName;
+      const c = (s.className || s.class || s.classId || "").toLowerCase();
+      return c === targetClassName || normalizeClassName(c) === normalizeClassName(targetClassName);
     });
 
     // If current student is not in list, add current user
@@ -2109,7 +2109,7 @@ export default function ClassesPage() {
                     <div className="space-y-2">
                       {availableStudentsToAdd.map((s) => {
                         const isSelected = selectedStudentIdsToAdd.includes(s._firestoreId);
-                        const currentClass = s.classId || s.className || s.class;
+                        const currentClass = s.className || s.class || s.classId;
 
                         return (
                           <div
