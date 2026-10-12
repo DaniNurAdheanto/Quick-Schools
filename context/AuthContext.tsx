@@ -398,76 +398,136 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-        // Fast hydration: only use cache if it strictly belongs to this authenticated user
-        try {
-          const raw = localStorage.getItem(AUTH_CACHE_KEY);
-          if (raw) {
-            const cached = JSON.parse(raw);
-            if (cached && cached.uid === currentUser.uid) {
-              if (cached.userData) setUserData(cached.userData);
-              if (cached.role) {
-                const norm = normalizeRole(cached.role) as UserRole;
-                setRole(norm);
-                setRolePermissions(DEFAULT_PERMISSIONS[norm] || {});
-              }
-              if (cached.rawRole) setRawRole(cached.rawRole);
-            }
-          }
-        } catch (e) {}
-
-        // Predictive role only if email clearly defines it; otherwise let fetchUserData resolve accurately
-        const email = (currentUser.email || "").toLowerCase().trim();
-        let instantRole: UserRole | null = null;
-        if (
-          email.includes("kelapa") ||
-          email.includes("kepala") ||
-          email.includes("seokolah") ||
-          email.includes("tohar") ||
-          email.includes("kepsek") ||
-          email.includes("principal")
-        ) {
-          instantRole = "kepala-sekolah";
-        } else if (email === "dani@gmail.com" || email.includes("superadmin")) {
-          instantRole = "super-admin";
-        } else if (email.includes(".guru@") || email.includes("guru.") || email.includes("teacher")) {
-          instantRole = "guru";
-        } else if (email.includes(".wali@") || email.includes("wali.") || email.includes("parent") || email.includes("orangtua")) {
-          instantRole = "orang-tua";
-        } else if (email.includes("siswa") || email.includes("student")) {
-          instantRole = "siswa";
-        }
-
-        if (instantRole) {
-          setRole((prev) => prev || instantRole);
-          setRawRole((prev) => prev || instantRole);
-          setRolePermissions((prev) => (Object.keys(prev).length ? prev : (DEFAULT_PERMISSIONS[instantRole!] || {})));
-        }
-
-        await fetchUserData(currentUser);
-      } else {
-        setUser(null);
-        setUserData(null);
-        setRole(null);
-        setRawRole("");
-        setRolePermissions({});
+  const fetchSessionFromPg = useCallback(async () => {
+    try {
+      const res = await fetch("/api/auth/me");
+      const data = await res.json();
+      if (data.authenticated && data.user) {
+        const pgUser = data.user;
+        const uRole = normalizeRole(pgUser.role) as UserRole;
+        setUser({
+          uid: pgUser.id,
+          id: pgUser.id,
+          email: pgUser.email,
+          displayName: pgUser.name,
+        } as any);
+        setUserData(pgUser);
+        setRole(uRole);
+        setRawRole(pgUser.role);
+        setRolePermissions(DEFAULT_PERMISSIONS[uRole] || DEFAULT_PERMISSIONS["admin"] || {});
         setIsAuthLoading(false);
         try {
-          localStorage.removeItem(AUTH_CACHE_KEY);
+          localStorage.setItem(
+            AUTH_CACHE_KEY,
+            JSON.stringify({
+              uid: pgUser.id,
+              role: uRole,
+              rawRole: pgUser.role,
+              userData: pgUser,
+            })
+          );
         } catch (e) {}
+        return true;
       }
-    });
+      return false;
+    } catch (err) {
+      console.error("fetchSessionFromPg error:", err);
+      return false;
+    }
+  }, []);
 
-    return () => unsubscribe();
-  }, [fetchUserData]);
+  useEffect(() => {
+    let isMounted = true;
+
+    const initAuth = async () => {
+      // 1. First check PostgreSQL session
+      const hasPgSession = await fetchSessionFromPg();
+      if (hasPgSession) {
+        return;
+      }
+
+      // 2. Fast hydration from cache if available
+      try {
+        const raw = localStorage.getItem(AUTH_CACHE_KEY);
+        if (raw) {
+          const cached = JSON.parse(raw);
+          if (cached && cached.userData && cached.role) {
+            const norm = normalizeRole(cached.role) as UserRole;
+            setUser({
+              uid: cached.uid,
+              id: cached.uid,
+              email: cached.userData.email,
+              displayName: cached.userData.name,
+            } as any);
+            setUserData(cached.userData);
+            setRole(norm);
+            setRawRole(cached.rawRole || norm);
+            setRolePermissions(DEFAULT_PERMISSIONS[norm] || {});
+            setIsAuthLoading(false);
+          }
+        }
+      } catch (e) {}
+
+      // 3. Fallback check Firebase auth during transition
+      const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+        if (!isMounted) return;
+        if (currentUser) {
+          setUser(currentUser);
+          await fetchUserData(currentUser);
+        } else {
+          // If no PostgreSQL session AND no Firebase user, then clear session
+          const pgStillActive = await fetchSessionFromPg();
+          if (!pgStillActive) {
+            setUser(null);
+            setUserData(null);
+            setRole(null);
+            setRawRole("");
+            setRolePermissions({});
+            setIsAuthLoading(false);
+            try {
+              localStorage.removeItem(AUTH_CACHE_KEY);
+            } catch (e) {}
+          }
+        }
+      });
+
+      return () => {
+        unsubscribe();
+      };
+    };
+
+    initAuth();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [fetchSessionFromPg, fetchUserData]);
 
   const refreshUserData = useCallback(async () => {
-    if (auth.currentUser) {
-      setIsAuthLoading(true);
-      await fetchUserData(auth.currentUser);
+    setIsAuthLoading(true);
+    try {
+      const res = await fetch("/api/auth/me");
+      const data = await res.json();
+      if (data.authenticated && data.user) {
+        const uRole = normalizeRole(data.user.role) as UserRole;
+        setUser({
+          uid: data.user.id,
+          email: data.user.email,
+          displayName: data.user.name,
+        } as any);
+        setUserData(data.user);
+        setRole(uRole);
+        setRawRole(data.user.role);
+        setRolePermissions(DEFAULT_PERMISSIONS[uRole] || DEFAULT_PERMISSIONS["admin"] || {});
+      } else if (auth.currentUser) {
+        await fetchUserData(auth.currentUser);
+      }
+    } catch (e) {
+      if (auth.currentUser) {
+        await fetchUserData(auth.currentUser);
+      }
+    } finally {
+      setIsAuthLoading(false);
     }
   }, [fetchUserData]);
 
@@ -484,8 +544,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionStorage.clear();
       } catch (e) {}
 
+      // Clear PostgreSQL session cookie
+      try {
+        await fetch("/api/auth/logout", { method: "POST" });
+      } catch (e) {}
+
       // Sign out from Firebase
-      await signOut(auth);
+      try {
+        await signOut(auth);
+      } catch (e) {}
 
       setUser(null);
       setUserData(null);

@@ -44,8 +44,6 @@ import {
   AreaChart,
   Area
 } from "recharts";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { formatRupiah } from "@/lib/spp-payments";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { useAcademicYear } from "@/context/AcademicYearContext";
@@ -58,19 +56,6 @@ interface PrincipalDashboardViewProps {
   academicYear: string;
   currentDate: string;
   currentDay: string;
-}
-
-function toDateMillis(val: any): number {
-  if (!val) return 0;
-  if (typeof val === "number") return val;
-  if (typeof val.toMillis === "function") return val.toMillis();
-  if (typeof val.toDate === "function") return val.toDate().getTime();
-  if (val.seconds) return val.seconds * 1000;
-  if (typeof val === "string") {
-    const t = new Date(val).getTime();
-    return isNaN(t) ? 0 : t;
-  }
-  return 0;
 }
 
 function formatDateDisplay(val: any, fallback: string = "-"): string {
@@ -123,8 +108,8 @@ export function PrincipalDashboardView({
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [grades, setGrades] = useState<any[]>([]);
   const [bills, setBills] = useState<any[]>([]);
-  const [activities, setActivities] = useState<any[]>([]);
-  const [teacherAttendance, setTeacherAttendance] = useState<any[]>([]);
+  const [activities] = useState<any[]>([]);
+  const [teacherAttendance] = useState<any[]>([]);
   const [lastSyncTime, setLastSyncTime] = useState<string>("");
 
   // ─── Interactive Filter States ────────────────────────────────────────────
@@ -147,99 +132,60 @@ export function PrincipalDashboardView({
     setTeachers(unifiedTeachers);
   }, [unifiedTeachers]);
 
-  // ─── Firestore Subscriptions (Live Data) ──────────────────────────────────
+  // ─── PostgreSQL Data Fetching (Live Data) ──────────────────────────────────
   useEffect(() => {
-    // Classes
-    const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
-      setClasses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Principal Classes unsub error:", err));
+    let isMounted = true;
 
-    // Student Attendance
-    const unsubAttendance = onSnapshot(collection(db, "attendance"), (snap) => {
-      const dbRecords = snap.docs
-        .filter(d => !d.id.startsWith("ATT-100") && !d.id.startsWith("MOCK"))
-        .map(d => ({ id: d.id, ...d.data() }));
-
+    const loadData = async () => {
       try {
-        const stored = localStorage.getItem("quick_schools_attendance_records");
-        if (stored) {
-          const localList = JSON.parse(stored);
-          if (Array.isArray(localList)) {
-            const cleanLocal = localList.filter((r: any) => r && !r.id?.startsWith("ATT-100") && !r.id?.startsWith("MOCK"));
-            const map: Record<string, any> = {};
-            dbRecords.forEach((r: any) => { map[r.id] = r; });
-            cleanLocal.forEach((r: any) => { map[r.id] = r; });
-            setAttendance(Object.values(map));
-            return;
-          }
+        const [
+          classesRes,
+          attendanceRes,
+          schedulesRes,
+          announcementsRes,
+          gradesRes,
+          paymentsRes
+        ] = await Promise.allSettled([
+          fetch("/api/classes").then((r) => r.json()),
+          fetch("/api/attendance").then((r) => r.json()),
+          fetch("/api/schedules").then((r) => r.json()),
+          fetch("/api/announcements").then((r) => r.json()),
+          fetch("/api/grades").then((r) => r.json()),
+          fetch("/api/payments").then((r) => r.json()),
+        ]);
+
+        if (!isMounted) return;
+
+        if (classesRes.status === "fulfilled" && classesRes.value.classes) {
+          setClasses(classesRes.value.classes);
         }
-      } catch (e) {}
-
-      setAttendance(dbRecords);
-    }, (err) => console.warn("Principal Attendance unsub error:", err));
-
-    // Also roles attendance records
-    const qRolesAtt = query(collection(db, "roles"), where("type", "==", "attendance_record"));
-    const unsubRolesAtt = onSnapshot(qRolesAtt, (snap) => {
-      if (!snap.empty) {
-        const rolesRecords = snap.docs
-          .filter(d => !d.id.startsWith("ATT-100") && !d.id.startsWith("MOCK"))
-          .map(d => ({ id: d.id, ...d.data() }));
-
-        setAttendance((prev) => {
-          const map: Record<string, any> = {};
-          prev.forEach((r: any) => { map[r.id] = r; });
-          rolesRecords.forEach((r: any) => { map[r.id] = r; });
-          return Object.values(map);
-        });
+        if (attendanceRes.status === "fulfilled" && attendanceRes.value.attendance) {
+          setAttendance(attendanceRes.value.attendance);
+        }
+        if (schedulesRes.status === "fulfilled" && schedulesRes.value.schedules) {
+          setSchedules(schedulesRes.value.schedules);
+        }
+        if (announcementsRes.status === "fulfilled" && announcementsRes.value.announcements) {
+          setAnnouncements(announcementsRes.value.announcements);
+        }
+        if (gradesRes.status === "fulfilled" && gradesRes.value.grades) {
+          setGrades(gradesRes.value.grades);
+        }
+        if (paymentsRes.status === "fulfilled" && paymentsRes.value.bills) {
+          setBills(paymentsRes.value.bills);
+        }
+        setLastSyncTime(new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }));
+      } catch (e) {
+        console.warn("Error loading principal dashboard data:", e);
       }
-    }, (err) => console.warn("Principal Roles attendance unsub error:", err));
+    };
 
-    // Teacher Attendance
-    const qTeacherAtt = query(collection(db, "roles"), where("type", "==", "teacher_attendance"));
-    const unsubTeacherAtt = onSnapshot(qTeacherAtt, (snap) => {
-      setTeacherAttendance(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Principal Teacher attendance unsub error:", err));
-
-    // Schedules
-    const unsubSchedules = onSnapshot(collection(db, "schedules"), (snap) => {
-      setSchedules(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Principal Schedules unsub error:", err));
-
-    // Announcements
-    const unsubAnnouncements = onSnapshot(collection(db, "announcements"), (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      list.sort((a: any, b: any) => toDateMillis(b.createdAt || b.date) - toDateMillis(a.createdAt || a.date));
-      setAnnouncements(list);
-    }, (err) => console.warn("Principal Announcements unsub error:", err));
-
-    // Grades
-    const unsubGrades = onSnapshot(collection(db, "grades"), (snap) => {
-      setGrades(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Principal Grades unsub error:", err));
-
-    // Bills
-    const unsubBills = onSnapshot(collection(db, "bills"), (snap) => {
-      setBills(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Principal Bills unsub error:", err));
-
-    // Activities
-    const unsubActivities = onSnapshot(collection(db, "activities"), (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      list.sort((a: any, b: any) => toDateMillis(b.timestamp || b.createdAt) - toDateMillis(a.timestamp || a.createdAt));
-      setActivities(list);
-    }, (err) => console.warn("Principal Activities unsub error:", err));
+    loadData();
+    const interval = setInterval(loadData, 15000);
 
     return () => {
-      unsubClasses();
-      unsubAttendance();
-      unsubRolesAtt();
-      unsubTeacherAtt();
-      unsubSchedules();
-      unsubAnnouncements();
-      unsubGrades();
-      unsubBills();
-      unsubActivities();
+      isMounted = false;
+      clearInterval(interval);
     };
   }, []);
 

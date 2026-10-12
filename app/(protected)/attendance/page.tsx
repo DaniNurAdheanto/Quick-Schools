@@ -801,8 +801,9 @@ export default function AttendancePage() {
         ) || (matchingLeave ? "07:00" : "-");
 
         const isUnconfirmedOrAlpa = (existing.status as string) === "Belum Absen" || existing.status === "Alpa";
+        const leaveStatusMap: AttendanceStatus = matchingLeave?.type === "Sakit" ? "Sakit" : "Izin";
         const finalStatus: AttendanceStatus | "Belum Absen" = isUnconfirmedOrAlpa && matchingLeave
-          ? matchingLeave.type
+          ? leaveStatusMap
           : existing.status;
 
         const finalImage = matchingLeave?.attachmentUrl || existing.capturedImage || existing.photoUrl;
@@ -823,8 +824,9 @@ export default function AttendancePage() {
           record: existing
         };
       } else if (matchingLeave) {
+        const leaveStatusMap: AttendanceStatus = matchingLeave.type === "Sakit" ? "Sakit" : "Izin";
         map[student.id] = {
-          status: matchingLeave.type,
+          status: leaveStatusMap,
           notes: matchingLeave.reason ? `Pengajuan ${matchingLeave.type}: ${matchingLeave.reason}` : `Pengajuan ${matchingLeave.type} Siswa`,
           time: "07:00",
           isRecorded: true,

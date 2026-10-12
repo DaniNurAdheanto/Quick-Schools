@@ -7,7 +7,7 @@ import {
   Users, School, Loader2, ShieldAlert,
   CheckCircle2, ShieldCheck, FolderArchive, X, Clock
 } from "lucide-react";
-import { collection, onSnapshot, doc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { doc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import { useAcademicYear, AcademicYearItem } from "@/context/AcademicYearContext";
@@ -79,13 +79,20 @@ export default function AcademicYearsPage() {
     setTargetNewYear(defaultNextYear);
   }, [defaultNextYear]);
 
-  // Firestore Subscriptions for Classes & Students
+  // Fetch Classes from PostgreSQL API
   useEffect(() => {
-    const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
-      setClasses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    return () => unsubClasses();
+    const fetchClasses = async () => {
+      try {
+        const res = await fetch("/api/classes");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.classes)) {
+          setClasses(data.classes);
+        }
+      } catch (err) {
+        console.error("Error fetching classes:", err);
+      }
+    };
+    fetchClasses();
   }, []);
 
   useEffect(() => {

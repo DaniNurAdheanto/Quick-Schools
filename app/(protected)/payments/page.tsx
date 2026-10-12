@@ -46,8 +46,6 @@ import {
   Lock,
   Activity,
 } from "lucide-react";
-import { collection, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useToast } from "@/context/ToastContext";
@@ -254,12 +252,18 @@ export default function PaymentsPage() {
   const [teachersList, setTeachersList] = useState<any[]>([]);
 
   useEffect(() => {
-    const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
-      setClassesList(snap.docs.map((d) => ({ _firestoreId: d.id, ...d.data() })));
-    });
-    return () => {
-      unsubClasses();
+    const fetchClasses = async () => {
+      try {
+        const res = await fetch("/api/classes");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.classes)) {
+          setClassesList(data.classes);
+        }
+      } catch (err) {
+        console.error("Error fetching classes in payments:", err);
+      }
     };
+    fetchClasses();
   }, []);
 
   useEffect(() => {

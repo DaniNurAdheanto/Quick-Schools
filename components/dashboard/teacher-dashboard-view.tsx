@@ -40,7 +40,7 @@ import {
   Cell
 } from "recharts";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, collection, onSnapshot, query, where } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { cn, getTodayDateString } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
@@ -113,7 +113,7 @@ export function TeacherDashboardView({
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [grades, setGrades] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
-  const [schoolKkm, setSchoolKkm] = useState<number>(75);
+  const schoolKkm = 75;
 
   // Selected Day Filter for Schedule (Default to today)
   const [selectedDayTab, setSelectedDayTab] = useState<string>(() => {
@@ -265,83 +265,59 @@ export function TeacherDashboardView({
     return () => unsubAuth();
   }, [userName]);
 
-  // 3. Realtime Firestore Subscriptions
+  // 3. PostgreSQL Data Fetching
   useEffect(() => {
-    // Initial read from local storage for instant sync
-    try {
-      const stored = localStorage.getItem("quick_schools_attendance_records");
-      if (stored) {
-        const list = JSON.parse(stored);
-        if (Array.isArray(list)) {
-          setAttendanceRecords((prev) => {
-            const map = new Map<string, any>();
-            prev.forEach((r) => { if (r?.id) map.set(r.id, r); });
-            list.forEach((r) => { if (r?.id) map.set(r.id, r); });
-            return Array.from(map.values());
-          });
+    let isMounted = true;
+
+    const loadData = async () => {
+      try {
+        const [
+          schedulesRes,
+          classesRes,
+          attendanceRes,
+          gradesRes,
+          announcementsRes
+        ] = await Promise.allSettled([
+          fetch("/api/schedules").then((r) => r.json()),
+          fetch("/api/classes").then((r) => r.json()),
+          fetch("/api/attendance").then((r) => r.json()),
+          fetch("/api/grades").then((r) => r.json()),
+          fetch("/api/announcements").then((r) => r.json()),
+        ]);
+
+        if (!isMounted) return;
+
+        if (schedulesRes.status === "fulfilled" && schedulesRes.value.schedules) {
+          setSchedules(schedulesRes.value.schedules);
         }
+        if (classesRes.status === "fulfilled" && classesRes.value.classes) {
+          setClasses(classesRes.value.classes);
+        }
+        if (attendanceRes.status === "fulfilled" && attendanceRes.value.attendance) {
+          setAttendanceRecords(attendanceRes.value.attendance);
+        }
+        if (gradesRes.status === "fulfilled" && gradesRes.value.grades) {
+          setGrades(gradesRes.value.grades);
+        }
+        if (announcementsRes.status === "fulfilled" && announcementsRes.value.announcements) {
+          setAnnouncements(announcementsRes.value.announcements);
+        }
+      } catch (e) {
+        console.warn("Error loading teacher dashboard data:", e);
       }
-    } catch {}
+    };
 
-    const unsubSchedules = onSnapshot(collection(db, "schedules"), (snap) => {
-      setSchedules(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
-      setClasses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    const unsubAttendance = onSnapshot(collection(db, "attendance"), (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setAttendanceRecords((prev) => {
-        const map = new Map<string, any>();
-        prev.forEach((r) => { if (r?.id) map.set(r.id, r); });
-        list.forEach((r) => { if (r?.id) map.set(r.id, r); });
-        return Array.from(map.values());
-      });
-    });
-
-    const qRolesAtt = query(collection(db, "roles"), where("type", "==", "attendance_record"));
-    const unsubRolesAtt = onSnapshot(qRolesAtt, (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setAttendanceRecords((prev) => {
-        const map = new Map<string, any>();
-        prev.forEach((r) => { if (r?.id) map.set(r.id, r); });
-        list.forEach((r) => { if (r?.id) map.set(r.id, r); });
-        return Array.from(map.values());
-      });
-    });
+    loadData();
+    const interval = setInterval(loadData, 15000);
 
     const unsubLeave = subscribeLeaveRequests((requests) => {
-      setLeaveRequests(requests);
-    });
-
-    const unsubGrades = onSnapshot(collection(db, "grades"), (snap) => {
-      setGrades(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    const unsubAnnounce = onSnapshot(collection(db, "announcements"), (snap) => {
-      setAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    const unsubSettings = onSnapshot(doc(db, "settings", "school_configuration"), (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data?.grading?.kkmScore) {
-          setSchoolKkm(Number(data.grading.kkmScore) || 75);
-        }
-      }
+      if (isMounted) setLeaveRequests(requests);
     });
 
     return () => {
-      unsubSchedules();
-      unsubClasses();
-      unsubAttendance();
-      unsubRolesAtt();
+      isMounted = false;
+      clearInterval(interval);
       unsubLeave();
-      unsubGrades();
-      unsubAnnounce();
-      unsubSettings();
     };
   }, []);
 
@@ -916,12 +892,14 @@ export function TeacherDashboardView({
                   <div className="flex flex-wrap items-center gap-1.5">
                     {teacherProfile.subjects.map((subj, idx) => (
                       <span key={idx} className="font-bold text-amber-200 bg-white/10 px-2 py-0.5 rounded text-xs">
-                        {subj}
+                        {typeof subj === "object" ? (subj as any)?.name : subj}
                       </span>
                     ))}
                   </div>
                 ) : (
-                  <span className="font-bold text-amber-200">{teacherProfile.subject}</span>
+                  <span className="font-bold text-amber-200">
+                    {typeof teacherProfile.subject === "object" ? (teacherProfile.subject as any)?.name || "Matematika" : teacherProfile.subject}
+                  </span>
                 )}
               </div>
 
@@ -1424,7 +1402,7 @@ export function TeacherDashboardView({
               <div>
                 <h3 className="text-base font-black text-gray-900 tracking-tight flex items-center gap-2">
                   <TrendingUp className="w-5 h-5 text-emerald-600" />
-                  Rata-rata Nilai Per Kelas ({teacherProfile.subject})
+                  Rata-rata Nilai Per Kelas ({typeof teacherProfile.subject === "object" ? (teacherProfile.subject as any)?.name : (teacherProfile.subject || "Mata Pelajaran")})
                 </h3>
                 <p className="text-xs text-gray-500 mt-0.5">
                   Perbandingan rata-rata capaian nilai siswa terhadap batas KKM Sekolah ({schoolKkm}).

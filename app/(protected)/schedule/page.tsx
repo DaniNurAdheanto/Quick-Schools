@@ -6,8 +6,6 @@ import {
   Search, Filter, AlertTriangle, User, BookOpen, GraduationCap, X,
   BadgeCheck, AlertCircle, Settings, Sparkles
 } from "lucide-react";
-import { db, auth } from "@/lib/firebase";
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
 import { useTimePresets, DEFAULT_TIME_PRESETS } from "@/lib/time-presets";
@@ -22,6 +20,7 @@ import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const ALL_DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
 const COLOR_PALETTES = [
   { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-900", badge: "bg-blue-100 text-blue-800", dot: "bg-blue-500", hover: "hover:bg-blue-100/70" },
@@ -95,7 +94,7 @@ export default function SchedulePage() {
   const currentTimeString = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }).replace('.', ':');
 
   // Centralized useAuth
-  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
+  const { user: authUser, role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
   const rawR = (authRawRole || authRole || "").toLowerCase();
   const userRole = (rawR === "student" || rawR === "siswa") ? "siswa" : rawR;
   const currentUserData = userData;
@@ -108,34 +107,32 @@ export default function SchedulePage() {
     return currentTimeString >= schedule.startTime && currentTimeString <= schedule.endTime;
   };
 
+  const loadAllData = async () => {
+    try {
+      const [resSchedules, resSubjects, resClasses] = await Promise.all([
+        fetch("/api/schedules").then((r) => r.json()).catch(() => ({ schedules: [] })),
+        fetch("/api/subjects").then((r) => r.json()).catch(() => ({ subjects: [] })),
+        fetch("/api/classes").then((r) => r.json()).catch(() => ({ classes: [] })),
+      ]);
+
+      if (resSchedules.success && Array.isArray(resSchedules.schedules)) {
+        setSchedules(resSchedules.schedules);
+      }
+      if (resSubjects.success && Array.isArray(resSubjects.subjects)) {
+        setSubjects(resSubjects.subjects);
+      }
+      if (resClasses.success && Array.isArray(resClasses.classes)) {
+        setClasses(resClasses.classes);
+      }
+    } catch (err) {
+      console.error("Error loading schedule data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const q = query(collection(db, "schedules"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const schedulesData = snapshot.docs.map(doc => ({
-        _firestoreId: doc.id,
-        ...doc.data()
-      }));
-      setSchedules(schedulesData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching schedules:", error);
-      setLoading(false);
-    });
-
-    const unsubSubjects = onSnapshot(query(collection(db, "subjects")), (snapshot) => {
-      setSubjects(snapshot.docs.map(d => ({ _firestoreId: d.id, ...d.data() })));
-    });
-
-    const unsubClasses = onSnapshot(query(collection(db, "classes")), (snapshot) => {
-      const classData = snapshot.docs.map(d => ({ _firestoreId: d.id, ...d.data() } as any));
-      setClasses(classData);
-    });
-
-    return () => {
-      unsubscribe();
-      unsubSubjects();
-      unsubClasses();
-    };
+    loadAllData();
   }, []);
 
   useEffect(() => {
@@ -171,9 +168,9 @@ export default function SchedulePage() {
     setModalMode("edit");
     setActiveItem(schedule);
     setFormDay(schedule.day || "Senin");
-    setFormClass(schedule.class || "");
-    setFormSubject(schedule.subject || "");
-    setFormTeacher(schedule.teacher || "");
+    setFormClass(schedule.class || schedule.className || "");
+    setFormSubject(schedule.subject || schedule.subjectName || "");
+    setFormTeacher(schedule.teacher || schedule.teacherName || "");
     setFormStartTime(schedule.startTime || "07:00");
     setFormEndTime(schedule.endTime || "08:30");
     setConflictError(null);
@@ -223,15 +220,22 @@ export default function SchedulePage() {
     }
     setConflictError(null);
 
-    if (modalMode === "delete" && activeItem?._firestoreId) {
+    const scheduleId = activeItem?.id || activeItem?._firestoreId;
+
+    if (modalMode === "delete" && scheduleId) {
       setIsSubmitting(true);
       try {
-        await deleteDoc(doc(db, "schedules", activeItem._firestoreId));
-        toast.showError("Jadwal pelajaran berhasil dihapus.", "Berhasil Hapus");
+        const res = await fetch(`/api/schedules?id=${scheduleId}`, { method: "DELETE" });
+        const resData = await res.json();
+        if (!res.ok || !resData.success) {
+          throw new Error(resData.error || "Gagal menghapus jadwal");
+        }
+        toast.showError("Jadwal pelajaran berhasil dihapus dari database PostgreSQL.", "Berhasil Hapus");
         setIsModalOpen(false);
-      } catch (err) {
+        await loadAllData();
+      } catch (err: any) {
         console.error("Delete error:", err);
-        const msg = "Gagal menghapus jadwal. Pastikan Anda memiliki izin.";
+        const msg = err.message || "Gagal menghapus jadwal. Pastikan Anda memiliki izin.";
         setConflictError(msg);
         toast.showError(msg, "Gagal Hapus");
       } finally {
@@ -248,19 +252,18 @@ export default function SchedulePage() {
     }
 
     // Resolve entities & IDs
-    const teacherObj = teachers.find(t => t.name === formTeacher);
-    const formTeacherId = teacherObj?.id || teacherObj?._firestoreId || teacherObj?.nip || "";
-    const formTeacherNip = teacherObj?.nip || teacherObj?.id || "";
+    const teacherObj = teachers.find(t => t.name === formTeacher || t.fullName === formTeacher);
+    const formTeacherId = teacherObj?._firestoreId || teacherObj?.id || "";
 
     const subjectObj = subjects.find(s => s.name === formSubject);
-    const formSubjectId = subjectObj?._firestoreId || subjectObj?.id || subjectObj?.code || "";
+    const formSubjectId = subjectObj?._firestoreId || subjectObj?.id || "";
 
     const classObj = classes.find(c => c.name === formClass);
-    const formClassId = classObj?._firestoreId || classObj?.id || formClass;
+    const formClassId = classObj?._firestoreId || classObj?.id || "";
 
     // Check conflict using ID & Name
     const conflict = schedules.find((s: any) => {
-      if (modalMode === "edit" && s._firestoreId === activeItem?._firestoreId) return false;
+      if (modalMode === "edit" && (s.id === scheduleId || s._firestoreId === scheduleId)) return false;
       if (s.day !== formDay) return false;
 
       const teacherMatches = 
@@ -281,38 +284,45 @@ export default function SchedulePage() {
 
     setIsSubmitting(true);
     try {
+      const dayIdx = ALL_DAYS.indexOf(formDay);
       const schedulePayload = {
-        academicYear: activeAcademicYear,
-        semester: activeSemester,
-        day: formDay,
-        class: formClass,
+        dayOfWeek: dayIdx >= 0 ? dayIdx : 1,
         classId: formClassId,
-        subject: formSubject,
         subjectId: formSubjectId,
-        teacher: formTeacher,
         teacherId: formTeacherId,
-        teacherNip: formTeacherNip,
         startTime: formStartTime,
         endTime: formEndTime,
       };
 
       if (modalMode === "create") {
-        await addDoc(collection(db, "schedules"), {
-          ...schedulePayload,
-          createdAt: new Date().toISOString()
+        const res = await fetch("/api/schedules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(schedulePayload),
         });
-        toast.showSuccess(`Jadwal pelajaran ${formSubject} di ${formClass} berhasil ditambahkan.`, "Berhasil Tambah");
-      } else if (modalMode === "edit" && activeItem?._firestoreId) {
-        await updateDoc(doc(db, "schedules", activeItem._firestoreId), {
-          ...schedulePayload,
-          updatedAt: new Date().toISOString()
+        const resData = await res.json();
+        if (!res.ok || !resData.success) throw new Error(resData.error || "Gagal membuat jadwal");
+
+        toast.showSuccess(`Jadwal pelajaran ${formSubject} di ${formClass} berhasil ditambahkan di PostgreSQL.`, "Berhasil Tambah");
+      } else if (modalMode === "edit" && scheduleId) {
+        const res = await fetch("/api/schedules", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: scheduleId,
+            ...schedulePayload,
+          }),
         });
-        toast.showEdit(`Jadwal pelajaran ${formSubject} di ${formClass} berhasil diperbarui.`, "Berhasil Edit");
+        const resData = await res.json();
+        if (!res.ok || !resData.success) throw new Error(resData.error || "Gagal memperbarui jadwal");
+
+        toast.showEdit(`Jadwal pelajaran ${formSubject} di ${formClass} berhasil diperbarui di PostgreSQL.`, "Berhasil Edit");
       }
       setIsModalOpen(false);
-    } catch (err) {
+      await loadAllData();
+    } catch (err: any) {
       console.error("Save error:", err);
-      const msg = "Gagal menyimpan data jadwal.";
+      const msg = err.message || "Gagal menyimpan data jadwal.";
       setConflictError(msg);
       toast.showError(msg, "Gagal");
     } finally {
@@ -328,15 +338,15 @@ export default function SchedulePage() {
 
   const resolvedParentChild = useMemo(() => {
     if (!isParent) return null;
-    return resolveParentStudent(auth.currentUser, currentUserData, students);
-  }, [isParent, students, currentUserData]);
+    return resolveParentStudent(authUser, currentUserData, students);
+  }, [isParent, authUser, students, currentUserData]);
 
   const studentClassId = useMemo(() => {
     if (isParent) {
       return resolvedParentChild?.classId || resolvedParentChild?.className || null;
     }
-    if (!auth.currentUser) return null;
-    const user = auth.currentUser;
+    if (!authUser) return null;
+    const user = authUser;
     const matched = students.find(s => 
       s.id === user.uid || 
       s._firestoreId === user.uid || 
@@ -347,7 +357,7 @@ export default function SchedulePage() {
       return matched.classId || matched.className;
     }
     return currentUserData?.classId || currentUserData?.className || null;
-  }, [isParent, resolvedParentChild, students, currentUserData]);
+  }, [isParent, resolvedParentChild, authUser, students, currentUserData]);
 
   const studentMyClass = useMemo(() => {
     if (!studentClassId) return null;

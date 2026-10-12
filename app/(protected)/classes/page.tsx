@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { 
   Users, 
   Plus, 
@@ -31,11 +31,8 @@ import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
 import { db, auth } from "@/lib/firebase";
 import { 
   collection, 
-  query, 
-  onSnapshot, 
   addDoc, 
   setDoc,
-  deleteDoc, 
   doc 
 } from "firebase/firestore";
 import { useToast } from "@/context/ToastContext";
@@ -43,7 +40,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
-import { isStudentInClass, cascadeUpdateClassRelations } from "@/lib/class-relations";
+import { isStudentInClass } from "@/lib/class-relations";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 
@@ -115,23 +112,26 @@ export default function ClassesPage() {
     mode: "create"
   });
 
-  // Real-time synchronization for classes and teachers
-  useEffect(() => {
-    // 1. Classes
-    const qClasses = query(collection(db, "classes"));
-    const unsubClasses = onSnapshot(qClasses, (snapshot) => {
-      const cls = snapshot.docs.map(doc => ({ _firestoreId: doc.id, id: doc.id, ...doc.data() }));
-      setClasses(cls);
+  const fetchClassesFromApi = useCallback(async () => {
+    try {
+      setClassesLoading(true);
+      const res = await fetch("/api/classes");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.classes)) {
+        setClasses(data.classes);
+      }
+    } catch (e) {
+      console.error("Error fetching classes from PostgreSQL:", e);
+    } finally {
       setClassesLoading(false);
-    }, (error) => {
-      console.error("Classes listener error:", error);
-      setClassesLoading(false);
-    });
-
-    return () => {
-      unsubClasses();
-    };
+    }
   }, []);
+
+  useEffect(() => {
+    fetchClassesFromApi();
+    const interval = setInterval(fetchClassesFromApi, 15000);
+    return () => clearInterval(interval);
+  }, [fetchClassesFromApi]);
 
   useEffect(() => {
     setTeachers(unifiedTeachers);
@@ -188,7 +188,7 @@ export default function ClassesPage() {
       colSpan: 1
     },
     { 
-      name: "homeroom", 
+      name: "homeroomTeacherId", 
       label: "Wali Kelas",
       type: "select",
       category: "akademik",
@@ -199,7 +199,7 @@ export default function ClassesPage() {
           const subjectsDisplay = Array.isArray(t.subjects) && t.subjects.length > 0 
             ? t.subjects.join(", ") 
             : (t.subject || t.role || "Guru");
-          return { label: `${t.name} (${subjectsDisplay})`, value: t.name };
+          return { label: `${t.name || t.fullName} (${subjectsDisplay})`, value: t._firestoreId || t.id };
         })
       ],
       colSpan: 1
@@ -235,46 +235,52 @@ export default function ClassesPage() {
 
     try {
       const payload = {
+        id: data.id || data._firestoreId,
         name: (data.name || "").trim(),
-        level: data.level || gradeLevels[0] || "Kelas 10",
-        major: data.major || majorOptions[0]?.value || "Umum",
-        homeroom: data.homeroom || "",
-        maxCapacity: Number(data.maxCapacity) || 36,
-        status: data.status || "Aktif",
-        updatedAt: new Date().toISOString()
+        level: data.level || gradeLevels[0] || "10",
+        major: data.major || majorOptions[0]?.value || "MIPA",
+        homeroomTeacherId: data.homeroomTeacherId || data.homeroomId || null,
       };
 
       if (crudState.mode === "create") {
-        await addDoc(collection(db, "classes"), {
-          id: data.id || `C${Math.floor(100 + Math.random() * 900)}`,
-          ...payload,
-          previousNames: [],
-          createdAt: new Date().toISOString()
+        const res = await fetch("/api/classes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
         });
-        toast.showSuccess(`Kelas ${payload.name} berhasil dibuat!`, "Kelas Ditambahkan");
-      } else if (crudState.mode === "edit" && data._firestoreId) {
-        const existingClass = classes.find(c => c._firestoreId === data._firestoreId) || data;
-        const result = await cascadeUpdateClassRelations(db, existingClass, payload);
-        if (result.studentsUpdated > 0) {
-          toast.showSuccess(
-            `Kelas berhasil diperbarui! Seluruh ${result.studentsUpdated} siswa tetap terhubung otomatis pada nama kelas '${payload.name}'.`,
-            "Sinkronisasi Relasi Sukses"
-          );
+        const resData = await res.json();
+        if (resData.success) {
+          toast.showSuccess(`Kelas ${payload.name} berhasil dibuat!`, "Kelas Ditambahkan");
+          await fetchClassesFromApi();
         } else {
+          toast.showError(resData.error || "Gagal membuat kelas.", "Gagal");
+        }
+      } else if (crudState.mode === "edit") {
+        const targetId = data.id || data._firestoreId;
+        const res = await fetch("/api/classes", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload, id: targetId }),
+        });
+        const resData = await res.json();
+        if (resData.success) {
           toast.showSuccess(`Informasi kelas ${payload.name} berhasil diperbarui.`, "Kelas Diperbarui");
+          await fetchClassesFromApi();
+        } else {
+          toast.showError(resData.error || "Gagal memperbarui kelas.", "Gagal");
         }
-      } else if (crudState.mode === "delete" && data._firestoreId) {
-        const targetClass = classes.find(c => c._firestoreId === data._firestoreId) || data;
-        const enrolledStudents = students.filter(s => isStudentInClass(s, targetClass));
-        if (enrolledStudents.length > 0) {
-          toast.showError(
-            `Kelas ${targetClass.name} tidak dapat dihapus karena masih memiliki ${enrolledStudents.length} siswa terdaftar. Silakan pindahkan atau keluarkan siswa terlebih dahulu demi menjaga keutuhan relasi data.`,
-            "Penghapusan Ditolak"
-          );
-          return;
+      } else if (crudState.mode === "delete") {
+        const targetId = data.id || data._firestoreId;
+        const res = await fetch(`/api/classes?id=${encodeURIComponent(targetId)}`, {
+          method: "DELETE",
+        });
+        const resData = await res.json();
+        if (resData.success) {
+          toast.showSuccess(`Kelas berhasil dihapus.`, "Kelas Dihapus");
+          await fetchClassesFromApi();
+        } else {
+          toast.showError(resData.error || "Gagal menghapus kelas.", "Gagal");
         }
-        await deleteDoc(doc(db, "classes", data._firestoreId));
-        toast.showSuccess(`Kelas ${targetClass.name} berhasil dihapus.`, "Kelas Dihapus");
       }
     } catch (error) {
       console.error("Error saving class data:", error);

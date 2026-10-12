@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { 
   Users, 
   UserCheck, 
@@ -36,7 +36,6 @@ import {
   collection, 
   onSnapshot, 
   doc, 
-  getDoc,
   updateDoc, 
   deleteDoc, 
   setDoc, 
@@ -80,54 +79,6 @@ const ROLE_CONFIG: Record<string, { label: string; bg: string; text: string; bor
   "parent": { label: "Orang Tua / Wali", bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", icon: Users },
   "kepala-sekolah": { label: "Kepala Sekolah", bg: "bg-cyan-50", text: "text-cyan-700", border: "border-cyan-200", icon: BookUser },
 };
-
-function resolveAccountRole(data: any): string {
-  const email = (data.email || "").toLowerCase().trim();
-  const name = (data.name || data.fullName || "").toLowerCase().trim();
-  
-  if (email === "dani@gmail.com" || email.includes("superadmin")) {
-    return "super-admin";
-  }
-  if (
-    email.includes("kelapa") ||
-    email.includes("kepala") ||
-    email.includes("seokolah") ||
-    email.includes("kepsek") ||
-    email.includes("principal") ||
-    email.includes("headmaster") ||
-    email.includes("tohar") ||
-    name.includes("tohar") ||
-    name.includes("kepala sekolah") ||
-    name.includes("principal")
-  ) {
-    return "kepala-sekolah";
-  }
-  if (email.includes(".guru@") || email.includes("guru.") || email.includes("teacher")) {
-    return "guru";
-  }
-  if (email.includes(".wali@") || email.includes("wali.") || email.includes("parent") || email.includes("orangtua")) {
-    return "orang-tua";
-  }
-  if (email.includes("admin")) {
-    return "admin";
-  }
-
-  if (data.role) {
-    return normalizeRole(data.role);
-  }
-
-  if (data.nip || data.subject || data.subjectIds) {
-    return "guru";
-  }
-  if (data.studentId || data.studentIds || data.children) {
-    return "orang-tua";
-  }
-  if (data.nisn || data.nis || data.className) {
-    return "siswa";
-  }
-
-  return "admin";
-}
 
 export default function AccountManagementPage() {
   const toast = useToast();
@@ -238,154 +189,56 @@ export default function AccountManagementPage() {
     };
   }, [formPassword]);
 
-  const [currentUserRole, setCurrentUserRole] = useState<string>("");
+  const [currentUserRole, setCurrentUserRole] = useState<string>("admin");
 
-  // 1. Listen to Auth State and load user role
+  // 0. Primary load all accounts directly from PostgreSQL API
+  const loadAccountsFromPostgres = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/accounts");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.users)) {
+        setUsersList(data.users);
+        try {
+          localStorage.setItem(ACCOUNTS_CACHE_KEY, JSON.stringify(data.users));
+        } catch (e) {}
+      }
+    } catch (e) {
+      console.error("Error loading accounts from PostgreSQL:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAccountsFromPostgres();
+    const interval = setInterval(loadAccountsFromPostgres, 15000);
+    return () => clearInterval(interval);
+  }, [loadAccountsFromPostgres]);
+
+  // 1. Listen to Auth State
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
-      if (user) {
-        try {
-          const userSnap = await getDoc(doc(db, "users", user.uid));
-          if (userSnap.exists()) {
-            const role = (userSnap.data().role || "admin").toLowerCase();
-            setCurrentUserRole(role);
-          } else {
-            setCurrentUserRole("admin");
-          }
-        } catch (err) {
-          console.error("Error fetching current user role:", err);
-          setCurrentUserRole("admin");
-        }
-      }
       setAuthChecking(false);
-      if (!user) {
-        setLoading(false);
+      if (user) {
+        if (user.email === "dani@gmail.com") {
+          setCurrentUserRole("super-admin");
+        } else {
+          try {
+            const res = await fetch("/api/auth/me");
+            const data = await res.json();
+            if (data.success && data.user?.role) {
+              setCurrentUserRole(data.user.role.toLowerCase());
+            }
+          } catch (err) {}
+        }
       }
     });
     return () => unsubAuth();
   }, []);
 
   const isSuperAdmin = isSuperAdminRole(currentUserRole) || (currentUserRole || "").toLowerCase() === "admin";
-
-  // 2. Subscribe to real-time users collection once authenticated with automatic deduplication
-  useEffect(() => {
-    if (!currentUser) return;
-
-    setLoading(true);
-    const qUsers = query(collection(db, "users"));
-    const unsubscribe = onSnapshot(qUsers, async (snapshot) => {
-      // Check deleted accounts to prevent ghost entries
-      const deletedIds = new Set<string>();
-      try {
-        const delSnap = await getDocs(collection(db, "deleted_accounts"));
-        delSnap.forEach(d => {
-          deletedIds.add(d.id);
-          const email = (d.data().email || "").toLowerCase().trim();
-          if (email) deletedIds.add(email);
-        });
-      } catch (e) {}
-
-      const userMap = new Map<string, AccountUser>();
-
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        const docId = docSnap.id;
-        const uid = data.uid || docId;
-        const email = (data.email || "").toLowerCase().trim();
-
-        // Skip deleted / purged accounts
-        if (
-          deletedIds.has(docId) || 
-          deletedIds.has(uid) || 
-          (email && deletedIds.has(email)) ||
-          data.status === "deleted" ||
-          data.isDeleted === true
-        ) {
-          return;
-        }
-        
-        let statusNormalized = data.status || "Aktif";
-        if (data.onboardingCompleted === false && statusNormalized !== "Nonaktif") {
-          statusNormalized = "Belum Onboarding";
-        }
-
-        // Deduplication key: prioritized by UID -> normalized Email -> docId
-        let key = "";
-        if (uid && uid.length >= 10) {
-          key = `uid_${uid}`;
-        } else if (email && email !== "-" && email.length >= 3) {
-          key = `email_${email}`;
-        } else {
-          key = `doc_${docId}`;
-        }
-
-        // If duplicate entry exists (e.g. from multiple docs with same UID/Email), merge safely
-        if (userMap.has(key)) {
-          const existing = userMap.get(key)!;
-          if (!existing._allDocIds?.includes(docId)) {
-            existing._allDocIds = [...(existing._allDocIds || [existing.id]), docId];
-          }
-
-          // If this document's ID is the true UID, adopt it as primary canonical record
-          if (docId === uid || (!existing.uid && uid)) {
-            existing.id = docId;
-            existing.uid = uid;
-          }
-          if (data.name) existing.name = data.name;
-          if (data.email) existing.email = data.email;
-          if (data.phone) existing.phone = data.phone;
-          
-          existing.role = resolveAccountRole(data);
-          existing.status = statusNormalized;
-          if (typeof data.onboardingCompleted === "boolean") {
-            existing.onboardingCompleted = data.onboardingCompleted;
-          }
-          return;
-        }
-
-        const resolvedRole = resolveAccountRole(data);
-
-        const accountObj: AccountUser = {
-          id: docId,
-          uid: uid,
-          _allDocIds: [docId],
-          name: data.name || data.fullName || data.email?.split("@")[0] || "Tanpa Nama",
-          email: data.email || "-",
-          role: resolvedRole,
-          status: statusNormalized,
-          onboardingCompleted: data.onboardingCompleted ?? true,
-          createdAt: data.createdAt || null,
-          updatedAt: data.updatedAt || null,
-          phone: data.phone || data.contact || "-",
-          pendingOnboardingReminder: data.pendingOnboardingReminder || false,
-          reminderSentAt: data.reminderSentAt || null,
-          studentId: data.studentId || null,
-          studentName: data.studentName || null,
-          studentIds: data.studentIds || (data.studentId ? [data.studentId] : []),
-          nisn: data.nisn || data.id || null,
-          nip: data.nip || data.id || null
-        };
-
-        userMap.set(key, accountObj);
-      });
-
-      const list = Array.from(userMap.values());
-      list.sort((a, b) => a.name.localeCompare(b.name));
-
-      try {
-        localStorage.setItem(ACCOUNTS_CACHE_KEY, JSON.stringify(list));
-      } catch (e) {}
-
-      setUsersList(list);
-      setLoading(false);
-    }, (err) => {
-      console.warn("Firestore snapshot error:", err);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [currentUser]);
 
   // Quick Login as Admin
   const handleQuickLoginAdmin = async () => {
@@ -440,6 +293,15 @@ export default function AccountManagementPage() {
     
     // Update local state immediately
     setUsersList(prev => prev.map(u => u.id === user.id ? { ...u, status: nextStatus } : u));
+
+    // 1. Update in PostgreSQL
+    try {
+      await fetch("/api/accounts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user.id, status: nextStatus }),
+      });
+    } catch (e) {}
 
     try {
       await updateDoc(doc(db, "users", user.id), {
@@ -656,6 +518,25 @@ export default function AccountManagementPage() {
 
     setIsSubmitting(true);
     try {
+      // 0. Create in PostgreSQL
+      try {
+        await fetch("/api/accounts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: formName.trim(),
+            email: formEmail.trim().toLowerCase(),
+            password: formPassword,
+            role: formRole,
+            status: formStatus,
+            nip: formNip.trim(),
+            nisn: formNip.trim(),
+            className: formClass.trim(),
+            subject: formSubject.trim(),
+          }),
+        });
+      } catch (e) {}
+
       // 1. Create in Firebase Authentication via isolated secondary app
       const authResult = await createAuthAccount(
         formEmail.trim().toLowerCase(),
@@ -787,6 +668,11 @@ export default function AccountManagementPage() {
 
     // Optimistically update local state so the row disappears immediately
     setUsersList((prev) => prev.filter((u) => u.id !== targetId && u.uid !== targetUid && (targetEmail ? u.email?.toLowerCase() !== targetEmail : true)));
+
+    // Delete in PostgreSQL
+    try {
+      await fetch(`/api/accounts?id=${encodeURIComponent(targetId)}`, { method: "DELETE" });
+    } catch (e) {}
 
     try {
       // 1. Record in `deleted_accounts` collection so any subsequent login or token refresh is instantly rejected and purged

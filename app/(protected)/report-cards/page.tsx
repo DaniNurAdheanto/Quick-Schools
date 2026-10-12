@@ -433,20 +433,29 @@ export default function ReportCardsPage() {
     });
   }, [isGuru, teacherHomeroomClasses, students]);
 
-  // Firestore Realtime Subscriptions (Classes, Grades, Subjects, Teachers, Attendance, ReportCards)
+  // Fetch Data from PostgreSQL API (Classes, Grades, Subjects, Schedules)
   useEffect(() => {
-    const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
-      setClasses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    const loadReportCardData = async () => {
+      try {
+        const [resClasses, resGrades, resSubjects, resSchedules] = await Promise.all([
+          fetch("/api/classes").then(r => r.json()).catch(() => ({ classes: [] })),
+          fetch("/api/grades").then(r => r.json()).catch(() => ({ grades: [] })),
+          fetch("/api/subjects").then(r => r.json()).catch(() => ({ subjects: [] })),
+          fetch("/api/schedules").then(r => r.json()).catch(() => ({ schedules: [] })),
+        ]);
 
-    const unsubGrades = onSnapshot(collection(db, "grades"), (snap) => {
-      setGrades(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+        if (resClasses.success && Array.isArray(resClasses.classes)) setClasses(resClasses.classes);
+        if (resGrades.success && Array.isArray(resGrades.grades)) setGrades(resGrades.grades);
+        if (resSubjects.success && Array.isArray(resSubjects.subjects)) setSubjects(resSubjects.subjects);
+        if (resSchedules.success && Array.isArray(resSchedules.schedules)) setSchedules(resSchedules.schedules);
+      } catch (err) {
+        console.error("Error loading report cards data:", err);
+      }
+    };
+    loadReportCardData();
+  }, []);
 
-    const unsubSubjects = onSnapshot(collection(db, "subjects"), (snap) => {
-      setSubjects(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
+  useEffect(() => {
     const qGroups = query(collection(db, "subject_groups"), orderBy("order", "asc"));
     const unsubSubjectGroups = onSnapshot(qGroups, (snap) => {
       if (!snap.empty) {
@@ -462,11 +471,12 @@ export default function ReportCardsPage() {
       });
     });
 
-    const unsubSchedules = onSnapshot(collection(db, "schedules"), (snap) => {
-      setSchedules(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    return () => unsubSubjectGroups();
+  }, [currentStage, majorOptions]);
 
-    // 1. Initial read from localStorage (same storage key as attendance page)
+  // Attendance & Report Cards Subscriptions
+  useEffect(() => {
+    // 1. Initial read from localStorage
     try {
       if (typeof window !== "undefined") {
         const stored = localStorage.getItem("quick_schools_attendance_records");
@@ -521,7 +531,7 @@ export default function ReportCardsPage() {
 
     const unsubReportCards = onSnapshot(collection(db, "reportCards"), (snap) => {
       const map: Record<string, any> = {};
-      snap.docs.forEach(d => {
+      snap.docs.forEach((d) => {
         map[d.id] = d.data();
       });
       setReportCardsData(map);
@@ -529,16 +539,11 @@ export default function ReportCardsPage() {
     });
 
     return () => {
-      unsubClasses();
-      unsubGrades();
-      unsubSubjects();
-      unsubSubjectGroups();
-      unsubSchedules();
       unsubRolesAtt();
       unsubAttendance();
       unsubReportCards();
     };
-  }, [currentStage, majorOptions]);
+  }, []);
 
   useEffect(() => {
     setTeachers(unifiedTeachers);

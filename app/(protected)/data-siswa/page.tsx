@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
 import { useToast } from "@/context/ToastContext";
 import { db, storage } from "@/lib/firebase";
-import { collection, query, onSnapshot, setDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { setDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
@@ -285,18 +285,18 @@ export default function DataSiswaPage() {
   });
 
   useEffect(() => {
-    const qClasses = query(collection(db, "classes"));
-    const unsubscribeClasses = onSnapshot(qClasses, (snapshot) => {
-      const classesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setClasses(classesData);
-    }, (error) => {
-      console.error("Error fetching classes:", error);
-    });
-    
-    return () => unsubscribeClasses();
+    const fetchClasses = async () => {
+      try {
+        const res = await fetch("/api/classes");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.classes)) {
+          setClasses(data.classes);
+        }
+      } catch (error) {
+        console.error("Error fetching classes:", error);
+      }
+    };
+    fetchClasses();
   }, []);
 
   // Send Onboarding Reminder to a specific student

@@ -26,24 +26,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
-import { db, auth } from "@/lib/firebase";
-import { 
-  collection, 
-  query, 
-  onSnapshot, 
-  doc, 
-  getDoc 
-} from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import {
   findAssignedClassForTeacher,
   findAssignedTeacherForClass,
-  assignHomeroomTeacher,
-  unassignHomeroomTeacher,
-  reconcileAllHomeroomData
 } from "@/lib/homeroom-sync-service";
 
 export default function HomeroomPage() {
@@ -52,14 +40,13 @@ export default function HomeroomPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   
   const [classes, setClasses] = useState<any[]>([]);
-  const { teachers: unifiedTeachers } = useUnifiedTeachers();
+  const { teachers: unifiedTeachers, refreshTeachers } = useUnifiedTeachers();
   const [teachers, setTeachers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isReconciling, setIsReconciling] = useState(false);
   const { role: authRole, rawRole: authRawRole, isAuthLoading: isUserAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
-  const [userRole, setUserRole] = useState<string>("");
 
-  const resolvedRole = (authRawRole || authRole || userRole || "").toLowerCase();
+  const resolvedRole = (authRawRole || authRole || "").toLowerCase();
   const isGuru = resolvedRole === "guru" || resolvedRole === "teacher";
   const canMutateHomeroom = (resolvedRole === "super-admin" || resolvedRole === "admin" || Boolean(rolePermissions?.academic?.write)) && (!isKepalaSekolah || Boolean(rolePermissions?.academic?.write));
   const isReadOnly = !canMutateHomeroom || isGuru;
@@ -99,45 +86,23 @@ export default function HomeroomPage() {
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
 
-  // Listen to classes and teachers
-  useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          const userDocSnap = await getDoc(doc(db, "users", user.uid));
-          if (userDocSnap.exists()) {
-            const data = userDocSnap.data();
-            const r = (data.role || "admin").toLowerCase();
-            setUserRole(r === "teacher" || r === "guru" ? "guru" : r);
-          }
-        } catch (err) {
-          console.warn("Error fetching user role in homeroom:", err);
-        }
-
-        const qClasses = query(collection(db, "classes"));
-        const unsubClasses = onSnapshot(qClasses, (snapshot) => {
-          const classesData = snapshot.docs.map(doc => ({
-            _firestoreId: doc.id,
-            ...doc.data()
-          }));
-          setClasses(classesData);
-          setLoading(false);
-        }, (error) => {
-          console.error("Error fetching classes:", error);
-          setLoading(false);
-        });
-
-        return () => {
-          unsubClasses();
-        };
-      } else {
-        setClasses([]);
-        setUserRole("admin");
-        setLoading(false);
+  // Fetch classes from PostgreSQL API
+  const fetchClasses = async () => {
+    try {
+      const res = await fetch("/api/classes");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.classes)) {
+        setClasses(data.classes);
       }
-    });
+    } catch (err) {
+      console.error("Error fetching classes:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return () => unsubscribeAuth();
+  useEffect(() => {
+    fetchClasses();
   }, []);
 
   useEffect(() => {
@@ -231,14 +196,16 @@ export default function HomeroomPage() {
     });
   };
 
-  // Execute two-way unified assignment
+  // Execute two-way assignment to PostgreSQL
   const handleSaveAssignment = async () => {
     if (isReadOnly) {
       toast.showError("Akses ditolak. Anda hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
 
-    if (!assignModal.targetClass?._firestoreId) {
+    const targetClass = assignModal.targetClass;
+    const targetClassId = targetClass?.id || targetClass?._firestoreId;
+    if (!targetClassId) {
       toast.showError("Target kelas tidak valid.", "Gagal");
       return;
     }
@@ -246,28 +213,39 @@ export default function HomeroomPage() {
     try {
       setIsSaving(true);
       const selectedTeacher = teachers.find(
-        t => t._firestoreId === selectedTeacherId || t.id === selectedTeacherId || t.uid === selectedTeacherId
+        t => t._firestoreId === selectedTeacherId || t.id === selectedTeacherId || t.nip === selectedTeacherId || t.uid === selectedTeacherId
       ) || null;
 
-      const targetClass = assignModal.targetClass;
-      const targetClassName = targetClass.name;
+      const teacherDbId = selectedTeacher?._firestoreId || selectedTeacher?.id || null;
 
-      // Centralized two-way sync across classes, teachers, and users
-      await assignHomeroomTeacher(db, selectedTeacher, targetClass, classes, teachers);
+      const res = await fetch("/api/classes", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: targetClassId,
+          homeroomTeacherId: teacherDbId,
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || "Gagal memperbarui wali kelas di database");
+      }
 
       if (selectedTeacher) {
         toast.showSuccess(
-          `${selectedTeacher.name} berhasil ditetapkan sebagai wali kelas ${targetClassName}. Data guru dan kelas tersinkronisasi.`,
+          `${selectedTeacher.name || selectedTeacher.fullName} berhasil ditetapkan sebagai wali kelas ${targetClass.name}. Data tersimpan di PostgreSQL.`,
           "Wali Kelas Ditetapkan"
         );
       } else {
         toast.showEdit(
-          `Penugasan wali kelas untuk ${targetClassName} telah dikosongkan.`,
+          `Penugasan wali kelas untuk ${targetClass.name} telah dikosongkan.`,
           "Wali Kelas Dikosongkan"
         );
       }
 
       setAssignModal({ open: false });
+      await Promise.all([fetchClasses(), refreshTeachers()]);
     } catch (error: any) {
       console.error("Error updating homeroom:", error);
       toast.showError(error?.message || "Gagal memperbarui penugasan wali kelas.", "Gagal");
@@ -276,24 +254,39 @@ export default function HomeroomPage() {
     }
   };
 
-  // Execute two-way unassign
+  // Execute unassign in PostgreSQL
   const handleConfirmUnassign = async () => {
     if (isReadOnly) {
       toast.showError("Akses ditolak. Anda hanya memiliki hak akses lihat data.", "Akses Ditolak");
       return;
     }
 
-    if (!unassignModal.targetClass?._firestoreId) return;
+    const targetClass = unassignModal.targetClass;
+    const targetClassId = targetClass?.id || targetClass?._firestoreId;
+    if (!targetClassId) return;
 
     try {
       setIsSaving(true);
-      await unassignHomeroomTeacher(db, unassignModal.targetClass, teachers);
+      const res = await fetch("/api/classes", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: targetClassId,
+          homeroomTeacherId: null,
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || "Gagal melepas wali kelas di database");
+      }
 
       toast.showEdit(
-        `Penugasan wali kelas pada ${unassignModal.targetClass.name} berhasil dilepas dan disinkronkan ke data guru.`,
+        `Penugasan wali kelas pada ${targetClass.name} berhasil dilepas dan disinkronkan ke database.`,
         "Wali Kelas Dilepas"
       );
       setUnassignModal({ open: false });
+      await Promise.all([fetchClasses(), refreshTeachers()]);
     } catch (error: any) {
       console.error("Error unassigning homeroom:", error);
       toast.showError("Gagal melepas penugasan wali kelas.", "Gagal");
@@ -302,23 +295,16 @@ export default function HomeroomPage() {
     }
   };
 
-  // One-click Reconcile Database Handler
+  // Reconcile / Refresh Database Handler
   const handleReconcileDatabase = async () => {
     if (isReadOnly) return;
     try {
       setIsReconciling(true);
-      const res = await reconcileAllHomeroomData(db, classes, teachers);
-      if (res.reconciledCount > 0) {
-        toast.showSuccess(
-          `Berhasil menyelaraskan ${res.reconciledCount} data relasi kelas & guru.`,
-          "Sinkronisasi Berhasil"
-        );
-      } else {
-        toast.showSuccess(
-          "Seluruh data Guru dan Wali Kelas sudah selaras sempurna!",
-          "Data Tersinkronisasi"
-        );
-      }
+      await Promise.all([fetchClasses(), refreshTeachers()]);
+      toast.showSuccess(
+        "Seluruh data Guru dan Wali Kelas telah disegarkan dan selaras dengan database PostgreSQL!",
+        "Data Tersinkronisasi"
+      );
     } catch (err: any) {
       console.error("Reconcile error:", err);
       toast.showError("Gagal melakukan penyelarasan data database.", "Gagal");

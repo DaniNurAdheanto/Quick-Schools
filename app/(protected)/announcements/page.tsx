@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { 
   Megaphone, Plus, Search, Calendar, User, 
   Eye, AlertCircle, BookOpen, CreditCard, Activity, Info, Clock, CheckCircle2,
@@ -9,8 +9,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnnouncementFormModal } from "@/components/announcements/announcement-form-modal";
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { isParentRole } from "@/lib/roles-config";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
@@ -20,7 +18,6 @@ import {
   isAnnouncementVisibleForRole, 
   getTargetsBadgeList,
   packAnnouncementDesc, 
-  unpackAnnouncementDesc,
   cleanAnnouncementDesc 
 } from "@/lib/announcements-helper";
 import { AnnouncementDetailDrawer } from "@/components/announcements/announcement-detail-drawer";
@@ -52,7 +49,7 @@ export default function AnnouncementsPage() {
   const [quickTarget, setQuickTarget] = useState<string>("Semua");
   
   // Centralized useAuth
-  const { role: authRole, rawRole: authRawRole, isAuthLoading, isRoleReady, isSuperAdmin, isAdmin, user } = useAuth();
+  const { role: authRole, rawRole: authRawRole, isAuthLoading, isRoleReady, isSuperAdmin, isAdmin } = useAuth();
   const userRole = (authRawRole || authRole || "").toLowerCase();
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,53 +57,36 @@ export default function AnnouncementsPage() {
   const isParent = isParentRole(userRole) || userRole === "orang-tua" || userRole === "parent";
   const isReadOnly = isStudent || isParent;
 
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, "announcements"), (snap) => {
-      const data = snap.docs.map(doc => {
-        const raw = doc.data() as any;
-        const meta = unpackAnnouncementDesc(raw.desc || "");
-        return {
-          id: doc.id,
-          ...raw,
-          desc: meta.cleanDesc,
-          eventDate: raw.eventDate || meta.eventDate || "",
-          eventTime: raw.eventTime || meta.eventTime || "",
-          room: raw.room || meta.room || ""
-        };
-      });
-      setAnnouncements(data);
+  const fetchAnnouncementsFromApi = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/announcements");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.announcements)) {
+        const formatted = data.announcements.map((a: any) => ({
+          id: a.id,
+          title: a.title,
+          desc: a.content,
+          targetRole: a.targetRole,
+          isPinned: a.isPinned,
+          authorName: a.author?.name || "Admin",
+          createdAt: a.createdAt,
+          tag: a.targetRole === "Semua" ? "INFORMASI" : a.targetRole.toUpperCase(),
+        }));
+        setAnnouncements(formatted);
+      }
+    } catch (e) {
+      console.error("Error fetching announcements:", e);
+    } finally {
       setLoading(false);
-    }, (error) => {
-      console.error("Announcements listener error:", error);
-      setLoading(false);
-    });
-
-    return () => {
-      unsub();
-    };
+    }
   }, []);
 
-  const getTheme = (tag: string) => {
-    switch (tag) {
-      case 'PENTING': return 'purple';
-      case 'AKADEMIK': return 'orange';
-      case 'KEUANGAN': return 'green';
-      case 'KEGIATAN': return 'purple';
-      case 'INFORMASI': return 'teal';
-      default: return 'purple';
-    }
-  };
-
-  const getTagColor = (tag: string) => {
-    switch (tag) {
-      case 'PENTING': return 'text-red-500 bg-red-50';
-      case 'AKADEMIK': return 'text-blue-500 bg-blue-50';
-      case 'KEUANGAN': return 'text-emerald-500 bg-emerald-50';
-      case 'KEGIATAN': return 'text-[#531FFF] bg-[#531FFF]/10';
-      case 'INFORMASI': return 'text-blue-500 bg-blue-50';
-      default: return 'text-gray-500 bg-gray-50';
-    }
-  };
+  useEffect(() => {
+    fetchAnnouncementsFromApi();
+    const interval = setInterval(fetchAnnouncementsFromApi, 15000);
+    return () => clearInterval(interval);
+  }, [fetchAnnouncementsFromApi]);
 
   /**
    * Parse Indonesian short-date strings like "10 Apr 2026", "5 Mei 2025", "2 Agu 2026"
@@ -160,8 +140,6 @@ export default function AnnouncementsPage() {
 
     try {
       if (crudState.mode === "create") {
-        const id = crypto.randomUUID();
-        const tag = data.tag || "INFORMASI";
         const cleanDescText = cleanAnnouncementDesc(data.desc || "");
         const packedDesc = packAnnouncementDesc(cleanDescText, {
           eventDate: data.eventDate || "",
@@ -181,24 +159,19 @@ export default function AnnouncementsPage() {
           targetString = data.target.trim();
         }
 
-        // Exactly 11 keys required by Firestore security rules:
-        // ['title', 'desc', 'target', 'tag', 'author', 'status', 'tagColor', 'theme', 'date', 'createdAt', 'updatedAt']
-        await setDoc(doc(db, "announcements", id), {
-          title: (data.title || "Pengumuman Baru").slice(0, 200),
-          desc: packedDesc.slice(0, 2000),
-          target: targetString.slice(0, 100),
-          tag: tag.slice(0, 50),
-          author: (user?.displayName || (isSuperAdmin ? "Super Admin" : "Admin Sekolah")).slice(0, 100),
-          status: data.status || "Aktif",
-          tagColor: getTagColor(tag),
-          theme: getTheme(tag),
-          date: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
+        await fetch("/api/announcements", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: data.title || "Pengumuman Baru",
+            content: packedDesc,
+            targetRole: targetString,
+            isPinned: false,
+          }),
         });
         toast.showSuccess("Pengumuman baru berhasil dibuat dan dipublikasikan.", "Berhasil Buat");
+        await fetchAnnouncementsFromApi();
       } else if (crudState.mode === "edit" && crudState.data?.id) {
-        const tag = data.tag || crudState.data.tag || "INFORMASI";
         const cleanDescText = cleanAnnouncementDesc(data.desc !== undefined ? data.desc : crudState.data.desc || "");
         const packedDesc = packAnnouncementDesc(cleanDescText, {
           eventDate: data.eventDate !== undefined ? data.eventDate : crudState.data.eventDate || "",
@@ -206,7 +179,6 @@ export default function AnnouncementsPage() {
           room: data.room !== undefined ? data.room : crudState.data.room || ""
         });
 
-        // Normalize target (handles array from multiselect)
         let targetString = crudState.data.target || "Semua";
         if (data.target !== undefined) {
           if (Array.isArray(data.target)) {
@@ -220,22 +192,24 @@ export default function AnnouncementsPage() {
           }
         }
 
-        // Update fields matching security rules:
-        // ['title', 'desc', 'target', 'tag', 'author', 'status', 'tagColor', 'theme', 'date', 'updatedAt']
-        await updateDoc(doc(db, "announcements", crudState.data.id), {
-          title: (data.title || crudState.data.title || "Pengumuman").slice(0, 200),
-          desc: packedDesc.slice(0, 2000),
-          target: targetString.slice(0, 100),
-          tag: tag.slice(0, 50),
-          status: data.status || crudState.data.status || "Aktif",
-          tagColor: getTagColor(tag),
-          theme: getTheme(tag),
-          updatedAt: serverTimestamp()
+        await fetch("/api/announcements", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: data.title || crudState.data.title || "Pengumuman",
+            content: packedDesc,
+            targetRole: targetString,
+            isPinned: false,
+          }),
         });
         toast.showEdit("Pengumuman berhasil diperbarui.", "Berhasil Edit");
+        await fetchAnnouncementsFromApi();
       } else if (crudState.mode === "delete" && crudState.data?.id) {
-        await deleteDoc(doc(db, "announcements", crudState.data.id));
+        await fetch(`/api/announcements?id=${encodeURIComponent(crudState.data.id)}`, {
+          method: "DELETE",
+        });
         toast.showError("Pengumuman telah berhasil dihapus dari sistem.", "Berhasil Hapus");
+        await fetchAnnouncementsFromApi();
       }
     } catch (error) {
       console.error("Error saving announcement", error);

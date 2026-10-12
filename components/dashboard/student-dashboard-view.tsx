@@ -40,7 +40,7 @@ import {
   Cell
 } from "recharts";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, collection, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { isAnnouncementVisibleForRole, cleanAnnouncementDesc } from "@/lib/announcements-helper";
 import { cn, getTodayDateString } from "@/lib/utils";
@@ -95,7 +95,7 @@ export function StudentDashboardView({
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
   const [gradesRecords, setGradesRecords] = useState<any[]>([]);
   const [schedulesList, setSchedulesList] = useState<any[]>([]);
-  const [examSchedulesList, setExamSchedulesList] = useState<any[]>([]);
+  const [examSchedulesList] = useState<any[]>([]);
   const [sppBillsList, setSppBillsList] = useState<any[]>([]);
   const [announcementsList, setAnnouncementsList] = useState<any[]>([]);
   const [classesList, setClassesList] = useState<any[]>([]);
@@ -298,92 +298,64 @@ export function StudentDashboardView({
     };
   }, []);
 
-  // 2. Realtime Subscriptions directly from Firestore
+  // 2. PostgreSQL Data Fetching
   useEffect(() => {
-    // 2a. Attendance (Dual collection listener: attendance + roles attendance_record)
-    let directRecords: any[] = [];
-    let rolesRecords: any[] = [];
+    let isMounted = true;
 
-    const mergeAndSetAttendance = () => {
-      const map = new Map<string, any>();
-      directRecords.forEach((d) => map.set(d.id, d));
-      rolesRecords.forEach((d) => {
-        if (!map.has(d.id)) map.set(d.id, d);
-      });
-      setAttendanceRecords(Array.from(map.values()));
+    const loadData = async () => {
+      try {
+        const [
+          attendanceRes,
+          gradesRes,
+          schedulesRes,
+          paymentsRes,
+          announcementsRes,
+          classesRes,
+          leaveRes
+        ] = await Promise.allSettled([
+          fetch("/api/attendance").then((r) => r.json()),
+          fetch("/api/grades").then((r) => r.json()),
+          fetch("/api/schedules").then((r) => r.json()),
+          fetch("/api/payments").then((r) => r.json()),
+          fetch("/api/announcements").then((r) => r.json()),
+          fetch("/api/classes").then((r) => r.json()),
+          fetch("/api/leave-requests").then((r) => r.json()),
+        ]);
+
+        if (!isMounted) return;
+
+        if (attendanceRes.status === "fulfilled" && attendanceRes.value.attendance) {
+          setAttendanceRecords(attendanceRes.value.attendance);
+        }
+        if (gradesRes.status === "fulfilled" && gradesRes.value.grades) {
+          setGradesRecords(gradesRes.value.grades);
+        }
+        if (schedulesRes.status === "fulfilled" && schedulesRes.value.schedules) {
+          setSchedulesList(schedulesRes.value.schedules);
+        }
+        if (paymentsRes.status === "fulfilled" && paymentsRes.value.bills) {
+          setSppBillsList(paymentsRes.value.bills);
+        }
+        if (announcementsRes.status === "fulfilled" && announcementsRes.value.announcements) {
+          setAnnouncementsList(announcementsRes.value.announcements);
+        }
+        if (classesRes.status === "fulfilled" && classesRes.value.classes) {
+          setClassesList(classesRes.value.classes);
+        }
+        if (leaveRes.status === "fulfilled" && leaveRes.value.leaveRequests) {
+          setLeaveRequestsList(leaveRes.value.leaveRequests);
+        }
+      } catch (e) {
+        console.warn("Error loading student dashboard data:", e);
+      }
     };
 
-    const unsubAttendance = onSnapshot(collection(db, "attendance"), (snap) => {
-      directRecords = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      mergeAndSetAttendance();
-    }, (err) => console.warn("Attendance listener warning:", err));
-
-    const unsubRolesAtt = onSnapshot(
-      collection(db, "roles"),
-      (snap) => {
-        rolesRecords = snap.docs
-          .filter((d) => {
-            const data = d.data();
-            if (data.type === "leave_request" || data.typeMarker === "leave_request" || d.id.startsWith("leave_")) {
-              return false;
-            }
-            return (
-              d.id.startsWith("att_") ||
-              d.id.startsWith("att_rec_") ||
-              data.type === "attendance_record"
-            );
-          })
-          .map((d) => ({ id: d.id, ...d.data() }));
-        mergeAndSetAttendance();
-      },
-      (err) => console.warn("Roles attendance listener warning:", err)
-    );
-
-    // 2b. Grades
-    const unsubGrades = onSnapshot(collection(db, "grades"), (snap) => {
-      setGradesRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Grades listener warning:", err));
-
-    // 2c. Schedules
-    const unsubSchedules = onSnapshot(collection(db, "schedules"), (snap) => {
-      setSchedulesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Schedules listener warning:", err));
-
-    // 2d. Exam Schedules
-    const unsubExams = onSnapshot(collection(db, "examSchedules"), (snap) => {
-      setExamSchedulesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Exams listener warning:", err));
-
-    // 2e. SPP Bills
-    const unsubBills = onSnapshot(collection(db, "sppBills"), (snap) => {
-      setSppBillsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("SppBills listener warning:", err));
-
-    // 2f. Announcements
-    const unsubAnnouncements = onSnapshot(collection(db, "announcements"), (snap) => {
-      setAnnouncementsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Announcements listener warning:", err));
-
-    // 2g. Classes
-    const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
-      setClassesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Classes listener warning:", err));
-
-    // 2h. Leave Requests (Permits / Sick Leave)
-    const unsubLeave = onSnapshot(collection(db, "leave_requests"), (snap) => {
-      setLeaveRequestsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Leave requests listener warning:", err));
+    loadData();
+    const interval = setInterval(loadData, 15000);
 
     return () => {
-      unsubAttendance();
-      unsubRolesAtt();
-      unsubGrades();
-      unsubSchedules();
-      unsubExams();
-      unsubBills();
-      unsubAnnouncements();
-      unsubClasses();
-      unsubLeave();
+      isMounted = false;
+      clearInterval(interval);
     };
   }, []);
 
@@ -1583,7 +1555,9 @@ export function StudentDashboardView({
 
                       <div>
                         <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-gray-900">{item.subject}</h4>
+                          <h4 className="text-sm font-bold text-gray-900">
+                            {typeof item.subject === "object" ? (item.subject as any)?.name : (item.subject || "Mata Pelajaran")}
+                          </h4>
                           {item.status === "Berlangsung" && (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 animate-pulse">
                               Sedang Berlangsung
@@ -1691,7 +1665,9 @@ export function StudentDashboardView({
                         className="p-3.5 rounded-xl border border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3"
                       >
                         <div>
-                          <div className="text-xs font-bold text-gray-900">{evalItem.subject}</div>
+                          <div className="text-xs font-bold text-gray-900">
+                            {typeof evalItem.subject === "object" ? (evalItem.subject as any)?.name : (evalItem.subject || "Evaluasi")}
+                          </div>
                           <div className="text-[11px] text-gray-500 font-medium mt-0.5">{evalItem.type} • {evalItem.date}</div>
                         </div>
                         <div className="text-right">

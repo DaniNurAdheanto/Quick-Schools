@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { 
   BookOpen, 
   Plus, 
@@ -129,35 +129,44 @@ export default function SubjectsPage() {
     subject: null
   });
 
-  // Real-time subjects, teachers, classes, schedules, students & subject_groups listener
+  const fetchSubjectsFromApi = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [subRes, clsRes, schRes] = await Promise.all([
+        fetch("/api/subjects"),
+        fetch("/api/classes"),
+        fetch("/api/schedules"),
+      ]);
+      const [subData, clsData, schData] = await Promise.all([
+        subRes.json(),
+        clsRes.json(),
+        schRes.json(),
+      ]);
+
+      if (subData.success && Array.isArray(subData.subjects)) {
+        setSubjects(subData.subjects);
+      }
+      if (clsData.success && Array.isArray(clsData.classes)) {
+        setClasses(clsData.classes);
+      }
+      if (schData.success && Array.isArray(schData.schedules)) {
+        setSchedules(schData.schedules);
+      }
+    } catch (e) {
+      console.error("Error fetching subjects data:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    // 1. Subjects
-    const qSubjects = query(collection(db, "subjects"));
-    const unsubSubjects = onSnapshot(qSubjects, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        _firestoreId: doc.id,
-        ...doc.data()
-      }));
-      setSubjects(data);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching subjects:", error);
-      setLoading(false);
-    });
+    fetchSubjectsFromApi();
+    const interval = setInterval(fetchSubjectsFromApi, 15000);
+    return () => clearInterval(interval);
+  }, [fetchSubjectsFromApi]);
 
-    // 2. Classes
-    const qClasses = query(collection(db, "classes"));
-    const unsubClasses = onSnapshot(qClasses, (snapshot) => {
-      setClasses(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
-    });
-
-    // 3. Schedules
-    const qSchedules = query(collection(db, "schedules"));
-    const unsubSchedules = onSnapshot(qSchedules, (snapshot) => {
-      setSchedules(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
-    });
-
-    // 4. Subject Groups listener
+  // 4. Subject Groups listener
+  useEffect(() => {
     const qGroups = query(collection(db, "subject_groups"), orderBy("order", "asc"));
     const unsubGroups = onSnapshot(qGroups, (snapshot) => {
       if (!snapshot.empty) {
@@ -181,9 +190,6 @@ export default function SubjectsPage() {
     });
     
     return () => {
-      unsubSubjects();
-      unsubClasses();
-      unsubSchedules();
       unsubGroups();
     };
   }, [currentStage, majorOptions]);

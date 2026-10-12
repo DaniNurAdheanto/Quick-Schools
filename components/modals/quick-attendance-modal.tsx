@@ -945,6 +945,24 @@ export function QuickAttendanceModal({
         localStorage.setItem("quick_schools_attendance_records", JSON.stringify(filtered.slice(0, 100)));
       } catch (e) {}
 
+      // 4. Save to PostgreSQL API backend
+      try {
+        await fetch("/api/attendance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            studentId: cleanStudentId,
+            nisn: studentId && studentId !== "-" ? studentId : "",
+            date: dateStr,
+            time: cleanTimeHM,
+            status: resolvedStatus,
+            notes: resolvedNotes,
+            latitude: locationData.lat,
+            longitude: locationData.lng,
+          }),
+        });
+      } catch (e) {}
+
       // 4. Dispatch custom event for instant cross-component reactivity
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("attendance_updated", { detail: recordPayload }));

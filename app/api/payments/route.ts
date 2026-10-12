@@ -1,16 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { prisma } from "@/lib/prisma";
 import { isStudentRole, isTeacherRole, isKepalaSekolahRole } from "@/lib/roles-config";
 
-/**
- * Backend Route Handler for SPP Payments
- * Enforces role-based security on the server side:
- * - Siswa: Read-only, strictly scoped to student's own bills.
- * - Guru (Wali Kelas): Read-only, strictly scoped to students in their homeroom class.
- * - Kepala Sekolah: Read-only, full school monitoring across all classes.
- * - Admin / Super Admin: Full Read/Write CRUD access.
- */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -19,162 +10,116 @@ export async function GET(request: NextRequest) {
     const email = (searchParams.get("email") || "").toLowerCase();
     const homeroomClass = searchParams.get("homeroomClass") || "";
 
-    // 1. Fetch all bills from Firestore backend
-    const billsDocRef = doc(db, "roles", "spp_bills");
-    const snap = await getDoc(billsDocRef);
-    const allBills: any[] = snap.exists() && Array.isArray(snap.data()?.bills) ? snap.data()?.bills : [];
+    const payments = await prisma.payment.findMany({
+      include: {
+        student: {
+          include: {
+            class: true,
+            user: { select: { email: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
 
-    // 2. Enforce Backend Role Scoping
+    const formattedBills = payments.map((p) => ({
+      id: p.id,
+      invoiceNumber: p.invoiceNumber,
+      title: p.title,
+      amount: p.amount,
+      status: p.status === "LUNAS" ? "Lunas" : p.status === "PENDING" ? "Menunggu Verifikasi" : "Belum Bayar",
+      dueDate: p.dueDate ? p.dueDate.toISOString().split("T")[0] : null,
+      paidAt: p.paidAt ? p.paidAt.toISOString() : null,
+      paymentMethod: p.paymentMethod || null,
+      receiptUrl: p.receiptUrl || null,
+      studentId: p.studentId,
+      studentName: p.student.fullName,
+      studentEmail: p.student.user?.email || "",
+      nisn: p.student.nisn,
+      classId: p.student.class?.name || "",
+      className: p.student.class?.name || "",
+    }));
+
     if (isStudentRole(role)) {
-      // Siswa can ONLY see their own bills
-      const scopedBills = allBills.filter((b) => {
-        return (
-          b.studentId === uid ||
-          (email && b.studentEmail?.toLowerCase() === email) ||
-          b.nisn === searchParams.get("nisn")
-        );
-      });
-      return NextResponse.json({
-        success: true,
-        role: "siswa",
-        readOnly: true,
-        bills: scopedBills,
-      });
+      const scopedBills = formattedBills.filter(
+        (b) => b.studentId === uid || (email && b.studentEmail?.toLowerCase() === email)
+      );
+      return NextResponse.json({ success: true, role: "siswa", readOnly: true, bills: scopedBills });
     }
 
     if (isTeacherRole(role)) {
-      // Wali Kelas can ONLY see bills from their assigned homeroom class and is Read-Only
       if (!homeroomClass) {
-        return NextResponse.json({
-          success: true,
-          role: "guru",
-          readOnly: true,
-          homeroomClass: "",
-          message: "Guru belum ditugaskan sebagai Wali Kelas pada kelas tertentu.",
-          bills: [],
-        });
+        return NextResponse.json({ success: true, role: "guru", readOnly: true, homeroomClass: "", bills: [] });
       }
-
       const normalizedHomeroom = homeroomClass.trim().toLowerCase();
-      const scopedBills = allBills.filter((b) => {
-        const billClass = (b.classId || "").trim().toLowerCase();
-        return billClass === normalizedHomeroom || billClass.replace(/\s+/g, "") === normalizedHomeroom.replace(/\s+/g, "");
-      });
-
-      return NextResponse.json({
-        success: true,
-        role: "guru",
-        readOnly: true,
-        homeroomClass,
-        bills: scopedBills,
-      });
+      const scopedBills = formattedBills.filter(
+        (b) => b.className.trim().toLowerCase() === normalizedHomeroom
+      );
+      return NextResponse.json({ success: true, role: "guru", readOnly: true, homeroomClass, bills: scopedBills });
     }
 
     if (isKepalaSekolahRole(role)) {
-      // Kepala Sekolah has full monitoring access to all bills across the entire school, marked as Read-Only
-      return NextResponse.json({
-        success: true,
-        role: "kepala-sekolah",
-        readOnly: true,
-        bills: allBills,
-      });
+      return NextResponse.json({ success: true, role: "kepala-sekolah", readOnly: true, bills: formattedBills });
     }
 
-    // Default: Admin / Super Admin
-    return NextResponse.json({
-      success: true,
-      role: "admin",
-      readOnly: false,
-      bills: allBills,
-    });
+    return NextResponse.json({ success: true, role: "admin", readOnly: false, bills: formattedBills });
   } catch (error: any) {
-    console.error("Backend SPP GET error:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Gagal mengambil data SPP di backend" },
-      { status: 500 }
-    );
+    console.error("GET /api/payments error:", error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const role = (body.role || "").toLowerCase();
+    const { action, payload, role = "" } = body;
 
-    // Strict Backend Permission Check
     if (isStudentRole(role)) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Akses Ditolak (403): Siswa tidak memiliki izin untuk menerbitkan atau mengubah data SPP.",
-        },
+        { success: false, error: "Akses Ditolak: Siswa tidak memiliki izin." },
         { status: 403 }
       );
     }
-
-    if (isTeacherRole(role)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Akses Ditolak (403): Wali Kelas hanya memiliki hak akses baca (Read-Only). Pencatatan pembayaran dan penerbitan tagihan hanya dapat dilakukan oleh Bendahara atau Administrator.",
-        },
-        { status: 403 }
-      );
-    }
-
-    if (isKepalaSekolahRole(role)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Akses Ditolak (403): Kepala Sekolah memiliki hak akses pemantauan (Read-Only). Transaksi, pengubahan, atau penghapusan data pembayaran SPP hanya dapat dilakukan oleh Bendahara atau Administrator.",
-        },
-        { status: 403 }
-      );
-    }
-
-    // Process action (create / bulk / pay)
-    const { action, payload } = body;
-    const billsDocRef = doc(db, "roles", "spp_bills");
-    const snap = await getDoc(billsDocRef);
-    const existingBills: any[] = snap.exists() && Array.isArray(snap.data()?.bills) ? snap.data()?.bills : [];
-
-    let updatedBills = [...existingBills];
 
     if (action === "create_bill") {
-      updatedBills = [payload, ...existingBills];
-    } else if (action === "bulk_create") {
-      updatedBills = [...payload, ...existingBills];
-    } else if (action === "record_payment") {
-      const idx = updatedBills.findIndex((b) => b.id === payload.billId);
-      if (idx !== -1) {
-        updatedBills[idx] = payload.updatedBill;
-      }
-    } else if (action === "update_bill") {
-      const idx = updatedBills.findIndex((b) => b.id === payload.id);
-      if (idx !== -1) {
-        updatedBills[idx] = payload;
-      }
-    } else if (action === "delete_bill") {
-      updatedBills = updatedBills.filter((b) => b.id !== payload.billId);
+      const invoiceNumber = payload.invoiceNumber || `INV-${Date.now()}`;
+      const created = await prisma.payment.create({
+        data: {
+          invoiceNumber,
+          title: payload.title || "Tagihan SPP",
+          amount: Number(payload.amount || 0),
+          status: payload.status === "Lunas" ? "LUNAS" : "BELUM_BAYAR",
+          dueDate: payload.dueDate ? new Date(payload.dueDate) : undefined,
+          studentId: payload.studentId,
+          paymentMethod: payload.paymentMethod,
+        },
+      });
+      return NextResponse.json({ success: true, bill: created });
     }
 
-    await setDoc(
-      billsDocRef,
-      {
-        bills: updatedBills,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    if (action === "record_payment") {
+      const updated = await prisma.payment.update({
+        where: { id: payload.billId },
+        data: {
+          status: "LUNAS",
+          paidAt: new Date(),
+          paymentMethod: payload.paymentMethod || "Transfer Bank",
+          receiptUrl: payload.receiptUrl,
+        },
+      });
+      return NextResponse.json({ success: true, bill: updated });
+    }
 
-    return NextResponse.json({ success: true, updatedCount: updatedBills.length });
+    if (action === "delete_bill") {
+      await prisma.payment.delete({
+        where: { id: payload.billId },
+      });
+      return NextResponse.json({ success: true, message: "Tagihan dihapus" });
+    }
+
+    return NextResponse.json({ success: false, error: "Invalid action" }, { status: 400 });
   } catch (error: any) {
-    console.error("Backend SPP POST error:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Gagal memproses transaksi SPP di backend" },
-      { status: 500 }
-    );
+    console.error("POST /api/payments error:", error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

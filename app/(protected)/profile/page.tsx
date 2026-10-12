@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { 
   User, 
   Mail, 
@@ -24,25 +24,14 @@ import {
   Trash2,
   RotateCcw,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  MapPin
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useToast } from "@/context/ToastContext";
-import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged, updatePassword, updateProfile } from "firebase/auth";
-import { 
-  doc, 
-  getDoc, 
-  getDocs, 
-  collection, 
-  query, 
-  where, 
-  updateDoc, 
-  serverTimestamp 
-} from "firebase/firestore";
-import { ROLES } from "@/lib/roles-config";
-import { syncStudentRecord, syncTeacherRecord } from "@/lib/unified-sync-service";
+import { useAuth } from "@/context/AuthContext";
+import { ROLES, normalizeRole } from "@/lib/roles-config";
 import dynamic from "next/dynamic";
 import { getUserFaceBiometric, deleteUserFaceBiometric, FaceBiometricData } from "@/lib/face-biometric-service";
 
@@ -53,7 +42,7 @@ const FaceEnrolmentModal = dynamic(
 
 type ProfileTab = "biodata" | "security" | "biometric";
 
-// Helper to compress uploaded photo into lightweight Base64 JPEG data URL (~15KB)
+// Helper to compress uploaded photo into lightweight Base64 JPEG data URL (~15-25KB)
 async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0.75): Promise<string> {
   return new Promise((resolve) => {
     try {
@@ -89,24 +78,36 @@ async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0
 
 export default function ProfilePage() {
   const toast = useToast();
+  const { userData, role: authRole, refreshUserData } = useAuth();
+  
   const [activeTab, setActiveTab] = useState<ProfileTab>("biodata");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const photoInputRef = React.useRef<HTMLInputElement | null>(null);
-  const [currentUid, setCurrentUid] = useState<string>("");
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  // User Data State
+  // User Profile State
   const [profileData, setProfileData] = useState<any>({
+    id: "",
+    uid: "",
     name: "",
     email: "",
     role: "admin",
+    rawRole: "ADMIN",
     phone: "",
     nip: "",
     nisn: "",
+    nis: "",
     subject: "",
+    homeroomClass: "",
+    className: "",
+    major: "",
+    level: "",
+    childName: "",
+    childClass: "",
+    childNisn: "",
     address: "",
     status: "Aktif",
     gender: "Laki-laki",
@@ -115,7 +116,6 @@ export default function ProfilePage() {
   });
 
   const [formData, setFormData] = useState<any>({});
-  const [matchedTeacher, setMatchedTeacher] = useState<any>(null);
 
   // Password update states
   const [newPassword, setNewPassword] = useState("");
@@ -128,114 +128,103 @@ export default function ProfilePage() {
   const [isFaceModalOpen, setIsFaceModalOpen] = useState(false);
   const [deletingBiometric, setDeletingBiometric] = useState(false);
 
-  const handleDeleteBiometric = async () => {
-    if (!currentUid) return;
-    if (!window.confirm("Apakah Anda yakin ingin menghapus data acuan wajah master biometrik Anda? Anda perlu merekam ulang jika ingin menggunakan Face Recognition AI.")) {
-      return;
-    }
-    setDeletingBiometric(true);
+  // Load Profile from DB
+  const fetchProfile = async () => {
     try {
-      await deleteUserFaceBiometric(currentUid, profileData.role);
-      setFaceBiometric(null);
-      toast.showSuccess("Data wajah master biometrik berhasil dihapus.", "Dihapus");
-    } catch (err: any) {
-      toast.showError("Gagal menghapus data wajah: " + err.message, "Gagal");
+      const res = await fetch("/api/auth/profile", {
+        method: "GET",
+        headers: { "Cache-Control": "no-cache" }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.user) {
+          const u = json.user;
+          const formattedDate = u.createdAt
+            ? new Date(u.createdAt).toLocaleDateString("id-ID", {
+                day: "numeric",
+                month: "long",
+                year: "numeric"
+              })
+            : "Terdaftar";
+
+          const merged = {
+            id: u.id || u.uid,
+            uid: u.id || u.uid,
+            name: u.name || u.fullName || "User",
+            email: u.email || "",
+            role: u.role || normalizeRole(u.rawRole || "admin"),
+            rawRole: u.rawRole || "ADMIN",
+            phone: u.phone || "",
+            nip: u.nip || "",
+            nisn: u.nisn || "",
+            nis: u.nis || "",
+            subject: u.subject || "",
+            homeroomClass: u.homeroomClass || "",
+            className: u.className || "",
+            major: u.major || "",
+            level: u.level || "",
+            childName: u.childName || "",
+            childClass: u.childClass || "",
+            childNisn: u.childNisn || "",
+            address: u.address || "",
+            status: u.status || "Aktif",
+            gender: u.gender || "Laki-laki",
+            createdAt: formattedDate,
+            imageUrl: u.avatarUrl || u.imageUrl || u.photoUrl || ""
+          };
+
+          setProfileData(merged);
+          setFormData(merged);
+
+          // Fetch Face Biometric for this user
+          if (merged.id) {
+            getUserFaceBiometric(merged.id)
+              .then((bio) => {
+                if (bio && bio.isEnrolled) {
+                  setFaceBiometric(bio);
+                }
+              })
+              .catch(() => {});
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch profile:", err);
     } finally {
-      setDeletingBiometric(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setCurrentUid(user.uid);
-        try {
-          // Fetch Face Biometric
-          getUserFaceBiometric(user.uid).then((bio) => {
-            if (bio && bio.isEnrolled) {
-              setFaceBiometric(bio);
-            }
-          }).catch(() => {});
+    // If context already has user data, pre-populate to avoid flashing
+    if (userData) {
+      const roleStr = authRole || normalizeRole(userData.role || "admin");
+      setProfileData((prev: any) => ({
+        ...prev,
+        id: userData.uid || userData.id || prev.id,
+        uid: userData.uid || userData.id || prev.uid,
+        name: userData.fullName || userData.name || prev.name,
+        email: userData.email || prev.email,
+        role: roleStr,
+        phone: userData.phone || prev.phone,
+        nip: userData.nip || prev.nip,
+        nisn: userData.nisn || prev.nisn,
+        subject: userData.subject || prev.subject,
+        homeroomClass: userData.homeroomClass || prev.homeroomClass,
+        className: userData.className || userData.class || prev.className,
+        imageUrl: userData.avatarUrl || userData.imageUrl || userData.photoUrl || prev.imageUrl,
+      }));
+    }
+    fetchProfile();
+  }, [userData, authRole]);
 
-          // 1. Fetch Primary User Doc
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          let userData: any = {};
-          if (userDoc.exists()) {
-            userData = userDoc.data();
-          }
+  // Matched Role Definition from ROLES configuration in roles-config
+  const roleDefinition = useMemo(() => {
+    const roleId = profileData.role || "admin";
+    const found = ROLES.find((r: any) => r.id === roleId || r.id === normalizeRole(roleId));
+    if (found) return found;
 
-          const rawRole = userData.role || "admin";
-          const normalizedRole = 
-            rawRole === "student" ? "siswa" :
-            rawRole === "teacher" ? "guru" : rawRole;
-
-          const combined = {
-            name: userData.name || user.displayName || "User",
-            email: userData.email || user.email || "",
-            role: normalizedRole,
-            rawRole: rawRole,
-            phone: userData.phone || userData.contact || "",
-            nip: userData.nip || userData.id || "",
-            nisn: userData.nisn || userData.id || "",
-            subject: userData.subject || "",
-            address: userData.address || "",
-            status: userData.status || "Aktif",
-            gender: userData.gender || "Laki-laki",
-            createdAt: userData.createdAt?.toDate 
-              ? userData.createdAt.toDate().toLocaleDateString("id-ID", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric"
-                }) 
-              : "Terdaftar",
-            imageUrl: userData.imageUrl || userData.photoUrl || user.photoURL || ""
-          };
-
-          setProfileData(combined);
-          setFormData(combined);
-
-          // 2. Synchronize teacher record if guru
-          try {
-            let teacherFound: any = null;
-            const tDoc = await getDoc(doc(db, "teachers", user.uid));
-            if (tDoc.exists()) {
-              teacherFound = { _id: tDoc.id, ...tDoc.data() };
-            } else {
-              const tSnap = await getDocs(query(collection(db, "teachers"), where("name", "==", combined.name)));
-              if (!tSnap.empty) {
-                teacherFound = { _id: tSnap.docs[0].id, ...tSnap.docs[0].data() };
-              }
-            }
-            if (teacherFound) {
-              setMatchedTeacher(teacherFound);
-              if (!combined.nip && (teacherFound.nip || teacherFound.id)) {
-                setProfileData((p: any) => ({ ...p, nip: teacherFound.nip || teacherFound.id }));
-              }
-              if (!combined.subject && (teacherFound.role || teacherFound.subject)) {
-                setProfileData((p: any) => ({ ...p, subject: teacherFound.role || teacherFound.subject }));
-              }
-            }
-          } catch (err) {
-            console.warn("Could not sync teacher details:", err);
-          }
-
-        } catch (error) {
-          console.error("Error fetching user profile data:", error);
-        } finally {
-          setLoading(false);
-        }
-      } else {
-        setLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Matched Role Definition from ROLES configuration in admin/roles
-  const roleDefinition = React.useMemo(() => {
-    const roleId = profileData.role;
-    return ROLES.find((r: any) => r.id === roleId) || ROLES.find((r: any) => r.id === "admin") || {
+    return {
       id: roleId,
       name: roleId.charAt(0).toUpperCase() + roleId.slice(1),
       icon: ShieldCheck,
@@ -257,54 +246,25 @@ export default function ProfilePage() {
 
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !currentUid) return;
+    if (!file) return;
 
     try {
       setUploadingPhoto(true);
       const compressed = await compressImageFileToBase64(file, 360, 0.75);
       if (!compressed) throw new Error("Gagal memproses gambar");
 
-      // 1. Update users collection
-      await updateDoc(doc(db, "users", currentUid), {
-        imageUrl: compressed,
-        photoUrl: compressed,
-        updatedAt: serverTimestamp()
+      const res = await fetch("/api/auth/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatarUrl: compressed })
       });
 
-      // 2. Update Firebase Auth profile
-      if (auth.currentUser) {
-        await updateProfile(auth.currentUser, {
-          photoURL: compressed
-        });
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal mengunggah foto profil");
 
-      // 3. Synchronize cross-collection (teachers/students)
-      if (profileData.role === "guru") {
-        await syncTeacherRecord(db, {
-          uid: currentUid,
-          name: profileData.name,
-          email: profileData.email,
-          imageUrl: compressed,
-          photoUrl: compressed,
-          nip: profileData.nip,
-          subject: profileData.subject,
-          status: profileData.status
-        });
-      } else if (profileData.role === "siswa" || profileData.role === "student") {
-        await syncStudentRecord(db, {
-          uid: currentUid,
-          name: profileData.name,
-          email: profileData.email,
-          imageUrl: compressed,
-          photoUrl: compressed,
-          nisn: profileData.nisn,
-          className: profileData.className || profileData.class,
-          status: profileData.status
-        });
-      }
-
-      setProfileData((prev: any) => ({ ...prev, imageUrl: compressed, photoUrl: compressed }));
-      setFormData((prev: any) => ({ ...prev, imageUrl: compressed, photoUrl: compressed }));
+      setProfileData((prev: any) => ({ ...prev, imageUrl: compressed, avatarUrl: compressed }));
+      setFormData((prev: any) => ({ ...prev, imageUrl: compressed, avatarUrl: compressed }));
+      await refreshUserData();
       toast.showSuccess("Foto profil berhasil diperbarui dan diselaraskan ke semua menu!", "Foto Tersimpan");
     } catch (err: any) {
       console.error("Error uploading profile photo:", err);
@@ -317,7 +277,6 @@ export default function ProfilePage() {
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUid) return;
 
     try {
       setSaving(true);
@@ -325,49 +284,25 @@ export default function ProfilePage() {
         name: formData.name || "",
         phone: formData.phone || "",
         address: formData.address || "",
-        gender: formData.gender || "Laki-laki",
-        updatedAt: serverTimestamp()
+        gender: formData.gender || "Laki-laki"
       };
 
-      if (profileData.role === "guru") {
-        payload.nip = formData.nip || "";
-        payload.subject = formData.subject || "";
-        await syncTeacherRecord(db, {
-          uid: currentUid,
-          name: payload.name,
-          email: profileData.email,
-          phone: payload.phone,
-          address: payload.address,
-          gender: payload.gender,
-          nip: payload.nip,
-          subject: payload.subject,
-          imageUrl: profileData.imageUrl
-        });
-      } else if (profileData.role === "siswa" || profileData.role === "student") {
-        if (formData.nisn) payload.nisn = formData.nisn;
-        await syncStudentRecord(db, {
-          uid: currentUid,
-          name: payload.name,
-          email: profileData.email,
-          phone: payload.phone,
-          address: payload.address,
-          gender: payload.gender,
-          nisn: formData.nisn || profileData.nisn,
-          className: profileData.className || profileData.class,
-          imageUrl: profileData.imageUrl
-        });
-      } else {
-        await updateDoc(doc(db, "users", currentUid), payload);
+      if (profileData.role === "guru" && formData.nip !== undefined) {
+        payload.nip = formData.nip;
       }
 
-      if (auth.currentUser && formData.name) {
-        await updateProfile(auth.currentUser, {
-          displayName: formData.name
-        });
-      }
+      const res = await fetch("/api/auth/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal memperbarui profil");
 
       setProfileData((prev: any) => ({ ...prev, ...payload }));
       setIsEditing(false);
+      await refreshUserData();
       toast.showSuccess("Informasi profil Anda berhasil diperbarui dan diselaraskan di seluruh sistem.", "Profil Tersimpan");
     } catch (error: any) {
       console.error("Error updating profile:", error);
@@ -388,23 +323,43 @@ export default function ProfilePage() {
       return;
     }
 
-    if (!auth.currentUser) return;
-
     try {
       setUpdatingPassword(true);
-      await updatePassword(auth.currentUser, newPassword);
+      const res = await fetch("/api/auth/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: newPassword })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal mengubah kata sandi");
+
       setNewPassword("");
       setConfirmPassword("");
       toast.showSuccess("Kata sandi akun Anda berhasil diperbarui.", "Sandi Berhasil Diubah");
     } catch (error: any) {
       console.error("Error updating password:", error);
-      if (error.code === "auth/requires-recent-login") {
-        toast.showError("Untuk alasan keamanan, silakan logout dan login ulang sebelum mengganti kata sandi.", "Perlu Re-login");
-      } else {
-        toast.showError(error?.message || "Gagal mengubah kata sandi.", "Gagal");
-      }
+      toast.showError(error?.message || "Gagal mengubah kata sandi.", "Gagal");
     } finally {
       setUpdatingPassword(false);
+    }
+  };
+
+  const handleDeleteBiometric = async () => {
+    const targetUid = profileData.id || profileData.uid;
+    if (!targetUid) return;
+    if (!window.confirm("Apakah Anda yakin ingin menghapus data acuan wajah master biometrik Anda? Anda perlu merekam ulang jika ingin menggunakan Face Recognition AI.")) {
+      return;
+    }
+    setDeletingBiometric(true);
+    try {
+      await deleteUserFaceBiometric(targetUid, profileData.role);
+      setFaceBiometric(null);
+      toast.showSuccess("Data wajah master biometrik berhasil dihapus.", "Dihapus");
+    } catch (err: any) {
+      toast.showError("Gagal menghapus data wajah: " + err.message, "Gagal");
+    } finally {
+      setDeletingBiometric(false);
     }
   };
 
@@ -412,7 +367,7 @@ export default function ProfilePage() {
     return (
       <div className="py-32 flex flex-col items-center justify-center gap-3 text-gray-400">
         <Loader2 className="w-8 h-8 animate-spin text-[#531FFF]" />
-        <p className="text-sm font-semibold">Memuat data profil pengguna...</p>
+        <p className="text-sm font-semibold">Memuat data profil akun...</p>
       </div>
     );
   }
@@ -449,7 +404,10 @@ export default function ProfilePage() {
         <div className="flex items-center gap-3 relative z-10">
           {!isEditing ? (
             <button
-              onClick={() => setIsEditing(true)}
+              onClick={() => {
+                setFormData(profileData);
+                setIsEditing(true);
+              }}
               className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#4314cc] text-white px-5 py-2.5 rounded-lg text-xs sm:text-sm font-extrabold shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer active:scale-95"
             >
               <Edit3 className="w-4 h-4" />
@@ -525,7 +483,7 @@ export default function ProfilePage() {
 
             {/* Name & Role */}
             <h2 className="text-xl font-black text-gray-900 tracking-tight leading-snug">
-              {profileData.name}
+              {profileData.name || "Nama Pengguna"}
             </h2>
             
             <div className="flex flex-wrap items-center justify-center gap-1.5 mt-2">
@@ -599,13 +557,13 @@ export default function ProfilePage() {
                   <div className="min-w-0">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">No. WhatsApp</p>
                     <p className="text-xs font-bold text-gray-900 truncate">
-                      {profileData.phone || (matchedTeacher?.contact) || "Belum ditambahkan"}
+                      {profileData.phone || "Belum ditambahkan"}
                     </p>
                   </div>
                 </div>
-                {(profileData.phone || matchedTeacher?.contact) ? (
+                {profileData.phone ? (
                   <a
-                    href={`https://wa.me/${(profileData.phone || matchedTeacher?.contact).replace(/[^0-9]/g, "")}`}
+                    href={`https://wa.me/${profileData.phone.replace(/[^0-9]/g, "")}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
@@ -618,6 +576,7 @@ export default function ProfilePage() {
                     type="button"
                     onClick={() => {
                       setActiveTab("biodata");
+                      setFormData(profileData);
                       setIsEditing(true);
                     }}
                     className="text-[10px] font-bold text-[#531FFF] hover:underline cursor-pointer"
@@ -647,7 +606,7 @@ export default function ProfilePage() {
               <h4 className="text-xs font-black uppercase tracking-wider">Keamanan Akun</h4>
             </div>
             <p className="text-xs font-medium text-gray-600 leading-relaxed">
-              Akun Anda terlindungi dengan sistem otentikasi aman dan hak akses peran institusi.
+              Akun Anda terlindungi dengan sistem otentikasi database terenkripsi dan hak akses institusi resmi.
             </p>
             <div className="flex items-center justify-between text-[11px] font-bold pt-1 text-gray-700">
               <span>Status Proteksi:</span>
@@ -658,12 +617,12 @@ export default function ProfilePage() {
         </div>
 
         {/* ========================================================================= */}
-        {/* RIGHT COLUMN: FOCUSED 2 TABS (BIODATA & KEAMANAN)                         */}
+        {/* RIGHT COLUMN: 3 TABS (BIODATA, KEAMANAN, BIOMETRIK)                       */}
         {/* ========================================================================= */}
         <div className="lg:col-span-8 space-y-6">
           
           {/* Navigation Tabs Bar */}
-          <div className="flex items-center gap-2 bg-gray-100/90 p-1.5 rounded-lg border border-gray-200 w-full sm:w-fit">
+          <div className="flex items-center gap-2 bg-gray-100/90 p-1.5 rounded-lg border border-gray-200 w-full sm:w-fit overflow-x-auto">
             <button
               type="button"
               onClick={() => setActiveTab("biodata")}
@@ -724,7 +683,10 @@ export default function ProfilePage() {
                 </div>
                 {!isEditing && (
                   <button
-                    onClick={() => setIsEditing(true)}
+                    onClick={() => {
+                      setFormData(profileData);
+                      setIsEditing(true);
+                    }}
                     className="flex items-center gap-1.5 text-xs font-extrabold text-[#531FFF] hover:underline cursor-pointer"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
@@ -755,7 +717,7 @@ export default function ProfilePage() {
                         disabled
                         className="w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-lg text-sm font-semibold text-gray-400 cursor-not-allowed"
                       />
-                      <p className="text-[10px] text-gray-400">Email akun terikat pada kredensial login.</p>
+                      <p className="text-[10px] text-gray-400">Email akun terikat pada kredensial login institusi.</p>
                     </div>
 
                     <div className="space-y-1.5">
@@ -782,27 +744,16 @@ export default function ProfilePage() {
                     </div>
 
                     {profileData.role === "guru" && (
-                      <>
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-gray-700">NIP (Nomor Induk Pegawai)</label>
-                          <input
-                            type="text"
-                            value={formData.nip || ""}
-                            onChange={(e) => setFormData({ ...formData, nip: e.target.value })}
-                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-gray-700">Mata Pelajaran Utama</label>
-                          <input
-                            type="text"
-                            value={formData.subject || ""}
-                            onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
-                          />
-                        </div>
-                      </>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-gray-700">NIP (Nomor Induk Pegawai)</label>
+                        <input
+                          type="text"
+                          value={formData.nip || ""}
+                          onChange={(e) => setFormData({ ...formData, nip: e.target.value })}
+                          placeholder="Nomor Induk Pegawai"
+                          className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+                        />
+                      </div>
                     )}
 
                     <div className="space-y-1.5 md:col-span-2">
@@ -841,45 +792,118 @@ export default function ProfilePage() {
                   </div>
                 </form>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
-                    <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Nama Lengkap</p>
-                    <p className="text-sm font-bold text-gray-900 mt-1">{profileData.name}</p>
+                <div className="space-y-5">
+                  {/* General Profile Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
+                      <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Nama Lengkap</p>
+                      <p className="text-sm font-bold text-gray-900 mt-1">{profileData.name || "-"}</p>
+                    </div>
+
+                    <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
+                      <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Email Utama</p>
+                      <p className="text-sm font-bold text-gray-900 mt-1">{profileData.email || "-"}</p>
+                    </div>
+
+                    <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
+                      <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">No. WhatsApp / HP</p>
+                      <p className="text-sm font-bold text-gray-900 mt-1">
+                        {profileData.phone || "Belum dilengkapi"}
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
+                      <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Jenis Kelamin</p>
+                      <p className="text-sm font-bold text-gray-900 mt-1">{profileData.gender || "Laki-laki"}</p>
+                    </div>
                   </div>
 
-                  <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
-                    <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Email Utama</p>
-                    <p className="text-sm font-bold text-gray-900 mt-1">{profileData.email || "-"}</p>
+                  {/* Role Specific Section */}
+                  <div className="pt-2">
+                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <RoleIcon className="w-4 h-4 text-[#531FFF]" />
+                      Informasi Penugasan & Data Institusi ({roleDefinition.name})
+                    </h4>
+
+                    {/* Siswa Details */}
+                    {profileData.role === "siswa" && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100">
+                          <p className="text-[10px] font-bold text-[#531FFF] uppercase tracking-wider">NISN</p>
+                          <p className="text-sm font-black text-gray-900 mt-1">{profileData.nisn || "-"}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100">
+                          <p className="text-[10px] font-bold text-[#531FFF] uppercase tracking-wider">Kelas</p>
+                          <p className="text-sm font-black text-gray-900 mt-1">{profileData.className || "-"}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100">
+                          <p className="text-[10px] font-bold text-[#531FFF] uppercase tracking-wider">Jurusan</p>
+                          <p className="text-sm font-black text-gray-900 mt-1">{profileData.major || "MIPA / IPS"}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100">
+                          <p className="text-[10px] font-bold text-[#531FFF] uppercase tracking-wider">Jenjang</p>
+                          <p className="text-sm font-black text-gray-900 mt-1">{profileData.level ? `Tingkat ${profileData.level}` : "SMA"}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Guru Details */}
+                    {profileData.role === "guru" && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100">
+                          <p className="text-[10px] font-bold text-[#531FFF] uppercase tracking-wider">NIP (Nomor Induk Pegawai)</p>
+                          <p className="text-sm font-black text-gray-900 mt-1">{profileData.nip || "-"}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100">
+                          <p className="text-[10px] font-bold text-[#531FFF] uppercase tracking-wider">Mata Pelajaran</p>
+                          <p className="text-sm font-black text-[#531FFF] mt-1">{profileData.subject || "-"}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100">
+                          <p className="text-[10px] font-bold text-[#531FFF] uppercase tracking-wider">Wali Kelas</p>
+                          <p className="text-sm font-black text-gray-900 mt-1">{profileData.homeroomClass ? `Kelas ${profileData.homeroomClass}` : "Bukan Wali Kelas"}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Orang Tua Details */}
+                    {profileData.role === "orang-tua" && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100">
+                          <p className="text-[10px] font-bold text-[#531FFF] uppercase tracking-wider">Anak yang Didampingi</p>
+                          <p className="text-sm font-black text-gray-900 mt-1">{profileData.childName || "-"}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100">
+                          <p className="text-[10px] font-bold text-[#531FFF] uppercase tracking-wider">Kelas Anak</p>
+                          <p className="text-sm font-black text-[#531FFF] mt-1">{profileData.childClass || "-"}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100">
+                          <p className="text-[10px] font-bold text-[#531FFF] uppercase tracking-wider">NISN Siswa</p>
+                          <p className="text-sm font-black text-gray-900 mt-1">{profileData.childNisn || "-"}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Admin / Kepala Sekolah Details */}
+                    {["admin", "super-admin", "kepala-sekolah"].includes(profileData.role) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100">
+                          <p className="text-[10px] font-bold text-[#531FFF] uppercase tracking-wider">Hak Akses Sistem</p>
+                          <p className="text-sm font-black text-gray-900 mt-1">{roleDefinition.badge}</p>
+                        </div>
+                        <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100">
+                          <p className="text-[10px] font-bold text-[#531FFF] uppercase tracking-wider">Institusi / Sekolah</p>
+                          <p className="text-sm font-black text-[#531FFF] mt-1">SMA Keren Parah</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
+                  {/* Address Section */}
                   <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
-                    <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">No. WhatsApp / HP</p>
-                    <p className="text-sm font-bold text-gray-900 mt-1">
-                      {profileData.phone || matchedTeacher?.contact || "Belum dilengkapi"}
+                    <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                      Alamat Domisili
                     </p>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
-                    <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Jenis Kelamin</p>
-                    <p className="text-sm font-bold text-gray-900 mt-1">{profileData.gender || "Laki-laki"}</p>
-                  </div>
-
-                  {profileData.role === "guru" && (
-                    <>
-                      <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
-                        <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">NIP (Nomor Induk Pegawai)</p>
-                        <p className="text-sm font-bold text-gray-900 mt-1">{profileData.nip || matchedTeacher?.nip || matchedTeacher?.id || "-"}</p>
-                      </div>
-
-                      <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100">
-                        <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Mata Pelajaran</p>
-                        <p className="text-sm font-bold text-[#531FFF] mt-1">{profileData.subject || matchedTeacher?.role || matchedTeacher?.subject || "-"}</p>
-                      </div>
-                    </>
-                  )}
-
-                  <div className="p-4 rounded-lg bg-gray-50/70 border border-gray-100 md:col-span-2">
-                    <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">Alamat Domisili</p>
                     <p className="text-sm font-bold text-gray-900 mt-1 leading-relaxed">
                       {profileData.address || "Belum ada informasi alamat yang dicantumkan."}
                     </p>
@@ -1139,10 +1163,10 @@ export default function ProfilePage() {
       <FaceEnrolmentModal
         isOpen={isFaceModalOpen}
         onClose={() => setIsFaceModalOpen(false)}
-        userUid={currentUid}
+        userUid={profileData.id || profileData.uid}
         userName={profileData.name || "Pengguna"}
         userRole={profileData.role || "user"}
-        studentId={profileData.nisn || currentUid}
+        studentId={profileData.nisn || profileData.id}
         nip={profileData.nip || ""}
         onSuccess={(bio) => {
           setFaceBiometric(bio);

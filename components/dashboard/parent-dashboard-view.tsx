@@ -35,7 +35,7 @@ import {
   Cell,
   ReferenceLine
 } from "recharts";
-import { collection, onSnapshot, doc, getDoc, query, where } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { cn, getTodayDateString } from "@/lib/utils";
@@ -86,7 +86,7 @@ export function ParentDashboardView({
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
   const [gradesRecords, setGradesRecords] = useState<any[]>([]);
   const [schedulesList, setSchedulesList] = useState<any[]>([]);
-  const [examSchedulesList, setExamSchedulesList] = useState<any[]>([]);
+  const [examSchedulesList] = useState<any[]>([]);
   const [sppBillsList, setSppBillsList] = useState<any[]>([]);
   const [announcementsList, setAnnouncementsList] = useState<any[]>([]);
   const [classesList, setClassesList] = useState<any[]>([]);
@@ -169,88 +169,59 @@ export function ParentDashboardView({
     };
   }, []);
 
-  // 2. Realtime Subscriptions
+  // 2. PostgreSQL Data Fetching
   useEffect(() => {
-    // Attendance: merge Firestore "attendance" + "roles" (type=attendance_record) + localStorage
-    // with deduplication and mock/dummy filtering
-    const mergeAndSetAttendance = (firestoreRecords: any[], rolesRecords: any[]) => {
-      const map: Record<string, any> = {};
+    let isMounted = true;
 
-      // 1. Firestore attendance records (primary source)
-      firestoreRecords.forEach((r: any) => { map[r.id] = r; });
-
-      // 2. Roles collection attendance records
-      rolesRecords.forEach((r: any) => { map[r.id] = r; });
-
-      // 3. localStorage records (offline/cached from attendance page)
+    const loadData = async () => {
       try {
-        const stored = localStorage.getItem("quick_schools_attendance_records");
-        if (stored) {
-          const localList = JSON.parse(stored);
-          if (Array.isArray(localList)) {
-            localList
-              .filter((r: any) => r && r.id && !r.id.startsWith("ATT-100") && !r.id.startsWith("MOCK"))
-              .forEach((r: any) => { if (!map[r.id]) map[r.id] = r; });
-          }
+        const [
+          attendanceRes,
+          gradesRes,
+          schedulesRes,
+          paymentsRes,
+          announcementsRes,
+          classesRes
+        ] = await Promise.allSettled([
+          fetch("/api/attendance").then((r) => r.json()),
+          fetch("/api/grades").then((r) => r.json()),
+          fetch("/api/schedules").then((r) => r.json()),
+          fetch("/api/payments").then((r) => r.json()),
+          fetch("/api/announcements").then((r) => r.json()),
+          fetch("/api/classes").then((r) => r.json()),
+        ]);
+
+        if (!isMounted) return;
+
+        if (attendanceRes.status === "fulfilled" && attendanceRes.value.attendance) {
+          setAttendanceRecords(attendanceRes.value.attendance);
+        }
+        if (gradesRes.status === "fulfilled" && gradesRes.value.grades) {
+          setGradesRecords(gradesRes.value.grades);
+        }
+        if (schedulesRes.status === "fulfilled" && schedulesRes.value.schedules) {
+          setSchedulesList(schedulesRes.value.schedules);
+        }
+        if (paymentsRes.status === "fulfilled" && paymentsRes.value.bills) {
+          setSppBillsList(paymentsRes.value.bills);
+        }
+        if (announcementsRes.status === "fulfilled" && announcementsRes.value.announcements) {
+          setAnnouncementsList(announcementsRes.value.announcements);
+        }
+        if (classesRes.status === "fulfilled" && classesRes.value.classes) {
+          setClassesList(classesRes.value.classes);
         }
       } catch (e) {
-        // localStorage parsing error — skip
+        console.warn("Error loading parent dashboard data:", e);
       }
-
-      setAttendanceRecords(Object.values(map));
     };
 
-    let latestFirestore: any[] = [];
-    let latestRoles: any[] = [];
-
-    const unsubAttendance = onSnapshot(collection(db, "attendance"), (snap) => {
-      latestFirestore = snap.docs
-        .filter(d => !d.id.startsWith("ATT-100") && !d.id.startsWith("MOCK"))
-        .map(d => ({ id: d.id, ...d.data() }));
-      mergeAndSetAttendance(latestFirestore, latestRoles);
-    }, (err) => console.warn("Parent Attendance listener warning:", err));
-
-    const qRolesAtt = query(collection(db, "roles"), where("type", "==", "attendance_record"));
-    const unsubRolesAtt = onSnapshot(qRolesAtt, (snap) => {
-      latestRoles = snap.docs
-        .filter(d => !d.id.startsWith("ATT-100") && !d.id.startsWith("MOCK"))
-        .map(d => ({ id: d.id, ...d.data() }));
-      mergeAndSetAttendance(latestFirestore, latestRoles);
-    }, (err) => console.warn("Parent Roles attendance listener warning:", err));
-
-    const unsubGrades = onSnapshot(collection(db, "grades"), (snap) => {
-      setGradesRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Grades listener warning:", err));
-
-    const unsubSchedules = onSnapshot(collection(db, "schedules"), (snap) => {
-      setSchedulesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Schedules listener warning:", err));
-
-    const unsubExams = onSnapshot(collection(db, "examSchedules"), (snap) => {
-      setExamSchedulesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("ExamSchedules listener warning:", err));
-
-    const unsubBills = onSnapshot(collection(db, "sppBills"), (snap) => {
-      setSppBillsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("SppBills listener warning:", err));
-
-    const unsubAnnouncements = onSnapshot(collection(db, "announcements"), (snap) => {
-      setAnnouncementsList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Announcements listener warning:", err));
-
-    const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
-      setClassesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Classes listener warning:", err));
+    loadData();
+    const interval = setInterval(loadData, 15000);
 
     return () => {
-      unsubAttendance();
-      unsubRolesAtt();
-      unsubGrades();
-      unsubSchedules();
-      unsubExams();
-      unsubBills();
-      unsubAnnouncements();
-      unsubClasses();
+      isMounted = false;
+      clearInterval(interval);
     };
   }, []);
 
@@ -1221,7 +1192,7 @@ export function ParentDashboardView({
           </div>
           <div className="text-xs text-gray-500 font-medium truncate">
             {childExams.nearest ? (
-              <span>{childExams.nearest.subject} ({childExams.nearest.examType || "PTS"})</span>
+              <span>{typeof childExams.nearest.subject === "object" ? (childExams.nearest.subject as any)?.name : childExams.nearest.subject} ({childExams.nearest.examType || "PTS"})</span>
             ) : (
               <span>Tidak ada jadwal ujian dekat</span>
             )}
@@ -1286,7 +1257,9 @@ export function ParentDashboardView({
                           {item.time}
                         </td>
                         <td className="py-3.5 px-5">
-                          <div className="font-bold text-gray-900 text-sm">{item.subject}</div>
+                          <div className="font-bold text-gray-900 text-sm">
+                            {typeof item.subject === "object" ? (item.subject as any)?.name : (item.subject || "Mata Pelajaran")}
+                          </div>
                           <span className="text-[10px] text-gray-400 font-medium">{item.type || "Wajib"}</span>
                         </td>
                         <td className="py-3.5 px-5 whitespace-nowrap">
@@ -1415,7 +1388,9 @@ export function ParentDashboardView({
                 {childGrades.recentEvaluations.map((ev, i) => (
                   <div key={i} className="p-3.5 bg-gray-50/70 border border-gray-100 rounded-xl flex items-center justify-between">
                     <div>
-                      <div className="text-xs font-extrabold text-gray-900">{ev.subject}</div>
+                      <div className="text-xs font-extrabold text-gray-900">
+                        {typeof ev.subject === "object" ? (ev.subject as any)?.name : (ev.subject || "Penilaian")}
+                      </div>
                       <div className="text-[11px] text-gray-500 font-medium">{ev.type} · {ev.date}</div>
                     </div>
                     <div className="text-right">
@@ -1701,7 +1676,9 @@ export function ParentDashboardView({
                       </span>
                       <span className="text-[11px] font-extrabold text-[#531FFF]">{ex.date}</span>
                     </div>
-                    <h4 className="text-xs font-bold text-gray-900">{ex.subject}</h4>
+                    <h4 className="text-xs font-bold text-gray-900">
+                      {typeof ex.subject === "object" ? (ex.subject as any)?.name : (ex.subject || "Ujian")}
+                    </h4>
                     <div className="flex items-center justify-between text-[11px] text-gray-500 pt-0.5">
                       <span>Waktu: {ex.startTime} - {ex.endTime}</span>
                       <span className="font-semibold text-gray-700">{ex.room || "Ruang Ujian"}</span>

@@ -1,8 +1,6 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
-import { db, auth } from "@/lib/firebase";
 import {
   EducationalStage,
   VocationalProgram,
@@ -12,7 +10,7 @@ import {
   getGradeLevelsForStage,
   getMajorOptionsForStage,
   DEFAULT_VOCATIONAL_PRESETS,
-  STAGE_CONFIGS
+  STAGE_CONFIGS,
 } from "@/lib/school-level-config";
 
 export type { EducationalStage, VocationalProgram, StageConfig };
@@ -79,7 +77,6 @@ interface SchoolProfileContextType {
   loading: boolean;
   saveProfile: (data: Partial<SchoolProfile>) => Promise<{ success: boolean; error?: string }>;
   resetToDefault: () => Promise<void>;
-  // Dynamic Educational Stage & Vocational Helpers
   currentStage: EducationalStage;
   stageConfig: StageConfig;
   gradeLevels: string[];
@@ -110,11 +107,10 @@ const defaultContextValue: SchoolProfileContextType = {
 const SchoolProfileContext = createContext<SchoolProfileContextType>(defaultContextValue);
 
 export function SchoolProfileProvider({ children }: { children: ReactNode }) {
-  // Always initialize with DEFAULT_SCHOOL_PROFILE to prevent SSR-Client hydration mismatch
   const [profile, setProfile] = useState<SchoolProfile>(DEFAULT_SCHOOL_PROFILE);
   const [loading, setLoading] = useState(true);
 
-  // 1. Immediately hydrate from localStorage on client mount (safe from SSR hydration mismatches)
+  // 1. Immediately hydrate from localStorage and backend
   useEffect(() => {
     try {
       const cached = localStorage.getItem(STORAGE_KEY);
@@ -125,119 +121,25 @@ export function SchoolProfileProvider({ children }: { children: ReactNode }) {
           ...prev,
           ...parsed,
           educationalStage: resolvedStage,
-          vocationalPrograms: Array.isArray(parsed.vocationalPrograms) && parsed.vocationalPrograms.length > 0 
-            ? parsed.vocationalPrograms 
-            : prev.vocationalPrograms,
-          latitude: Number(parsed.latitude ?? prev.latitude ?? DEFAULT_SCHOOL_PROFILE.latitude),
-          longitude: Number(parsed.longitude ?? prev.longitude ?? DEFAULT_SCHOOL_PROFILE.longitude),
-          radiusMeters: Number(parsed.radiusMeters ?? prev.radiusMeters ?? DEFAULT_SCHOOL_PROFILE.radiusMeters),
         }));
       }
-    } catch (e) {
-      console.warn("Error parsing cached school profile:", e);
-    }
-  }, []);
+    } catch (e) {}
 
-  // 2. Sync real-time with Firestore when user is authenticated
-  useEffect(() => {
-    let isMounted = true;
-    let unsubRoles: (() => void) | null = null;
-    let unsubSettings: (() => void) | null = null;
-
-    const unsubAuth = auth.onAuthStateChanged((currentUser) => {
-      if (!isMounted) return;
-
-      // Clean up previous listeners
-      if (unsubRoles) {
-        unsubRoles();
-        unsubRoles = null;
-      }
-      if (unsubSettings) {
-        unsubSettings();
-        unsubSettings = null;
-      }
-
-      if (currentUser) {
-        // Authenticated: Attach real-time listener to Firestore
-        try {
-          unsubRoles = onSnapshot(
-            doc(db, "roles", "school_profile"),
-            (snap) => {
-              if (!isMounted) return;
-              if (snap.exists()) {
-                const data = snap.data() as Partial<SchoolProfile>;
-                setProfile((prev) => {
-                  const resolvedStage = data.educationalStage || detectStageFromSchoolType(data.schoolType || prev.schoolType);
-                  const merged: SchoolProfile = {
-                    ...prev,
-                    ...data,
-                    educationalStage: resolvedStage,
-                    vocationalPrograms: Array.isArray(data.vocationalPrograms) && data.vocationalPrograms.length > 0
-                      ? data.vocationalPrograms
-                      : prev.vocationalPrograms,
-                    latitude: Number(data.latitude ?? prev.latitude),
-                    longitude: Number(data.longitude ?? prev.longitude),
-                    radiusMeters: Number(data.radiusMeters ?? prev.radiusMeters),
-                  };
-                  try {
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-                  } catch (e) {}
-                  return merged;
-                });
-              }
-              setLoading(false);
-            },
-            () => {
-              // Graceful fallback to cached/default profile
-              setLoading(false);
-            }
-          );
-        } catch (e) {
-          setLoading(false);
+    // Fetch from backend API
+    fetch("/api/school-profile")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.profile) {
+          const resolvedStage = data.profile.educationalStage || detectStageFromSchoolType(data.profile.schoolType || DEFAULT_SCHOOL_PROFILE.schoolType);
+          setProfile((prev) => ({
+            ...prev,
+            ...data.profile,
+            educationalStage: resolvedStage,
+          }));
         }
-
-        try {
-          unsubSettings = onSnapshot(
-            doc(db, "settings", "school_profile"),
-            (snap) => {
-              if (!isMounted) return;
-              if (snap.exists()) {
-                const data = snap.data() as Partial<SchoolProfile>;
-                setProfile((prev) => {
-                  const resolvedStage = data.educationalStage || detectStageFromSchoolType(data.schoolType || prev.schoolType);
-                  const merged: SchoolProfile = {
-                    ...prev,
-                    ...data,
-                    educationalStage: resolvedStage,
-                    vocationalPrograms: Array.isArray(data.vocationalPrograms) && data.vocationalPrograms.length > 0
-                      ? data.vocationalPrograms
-                      : prev.vocationalPrograms,
-                    latitude: Number(data.latitude ?? prev.latitude),
-                    longitude: Number(data.longitude ?? prev.longitude),
-                    radiusMeters: Number(data.radiusMeters ?? prev.radiusMeters),
-                  };
-                  try {
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-                  } catch (e) {}
-                  return merged;
-                });
-              }
-            },
-            () => {}
-          );
-        } catch (e) {}
-      } else {
-        // Unauthenticated (e.g. login page): No permission errors
-        setLoading(false);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      unsubAuth();
-      if (unsubRoles) unsubRoles();
-      if (unsubSettings) unsubSettings();
-    };
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const saveProfile = useCallback(
@@ -249,116 +151,21 @@ export function SchoolProfileProvider({ children }: { children: ReactNode }) {
         longitude: Number(updatedData.longitude ?? profile.longitude),
         radiusMeters: Number(updatedData.radiusMeters ?? profile.radiusMeters),
         updatedAt: new Date().toISOString(),
-        updatedBy: auth.currentUser?.email || "Admin",
       };
 
       try {
-        // 1. Save to primary Firestore store
-        await setDoc(doc(db, "roles", "school_profile"), merged, { merge: true });
-
-        // 2. Also save to settings/school_profile
-        try {
-          await setDoc(doc(db, "settings", "school_profile"), merged, { merge: true });
-        } catch (e) {}
-
-        // 3. Automatically sync location, radius, and address into roles/attendance_config and teacher config
-        const formattedCityProv = [
-          merged.city && !merged.address?.toLowerCase().includes(merged.city.toLowerCase()) ? merged.city : "",
-          merged.province && !merged.address?.toLowerCase().includes(merged.province.toLowerCase()) ? merged.province : "",
-          merged.postalCode && !merged.address?.includes(merged.postalCode) ? merged.postalCode : "",
-        ].filter(Boolean).join(", ");
-
-        const attendanceAddress = merged.address 
-          ? (formattedCityProv ? `${merged.address}, ${formattedCityProv}` : merged.address)
-          : merged.locationAddress || "Area Utama Sekolah";
-
-        const attendancePayload = {
-          schoolCenterLat: merged.latitude,
-          schoolCenterLng: merged.longitude,
-          geofenceRadiusMeters: merged.radiusMeters,
-          schoolLat: merged.latitude,
-          schoolLng: merged.longitude,
-          gpsRadiusMeter: merged.radiusMeters,
-          locationAddress: merged.locationAddress || merged.address,
-          address: attendanceAddress,
-          schoolAddress: attendanceAddress,
-          geofenceCenter: {
-            lat: merged.latitude,
-            lng: merged.longitude,
-            radiusMeters: merged.radiusMeters,
-            address: attendanceAddress,
-          },
-          updatedAt: new Date().toISOString(),
-          updatedBy: auth.currentUser?.email || "Admin",
-        };
-
-        try {
-          await setDoc(doc(db, "roles", "attendance_config"), attendancePayload, { merge: true });
-        } catch (e) {}
-
-        // Also sync to teacher attendance config in Firestore
-        try {
-          await setDoc(
-            doc(db, "roles", "teacher_attendance_config"),
-            {
-              geofenceCenter: {
-                lat: merged.latitude,
-                lng: merged.longitude,
-                radiusMeters: merged.radiusMeters,
-                address: attendanceAddress,
-              },
-              updatedAt: new Date().toISOString(),
-            },
-            { merge: true }
-          );
-        } catch (e) {}
-
-        // 4. Update localStorage for instant offline hydration across pages
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-
-          // Also sync student attendance localStorage configs
-          const cachedAtt = localStorage.getItem("quick_schools_attendance_config");
-          const existingAtt = cachedAtt ? JSON.parse(cachedAtt) : {};
-          localStorage.setItem(
-            "quick_schools_attendance_config",
-            JSON.stringify({
-              ...existingAtt,
-              ...attendancePayload,
-            })
-          );
-
-          // Also sync teacher attendance localStorage config
-          const cachedTeacherAtt = localStorage.getItem("smart_school_teacher_attendance_config_v1");
-          const existingTeacherAtt = cachedTeacherAtt ? JSON.parse(cachedTeacherAtt) : {};
-          localStorage.setItem(
-            "smart_school_teacher_attendance_config_v1",
-            JSON.stringify({
-              ...existingTeacherAtt,
-              geofenceCenter: {
-                lat: merged.latitude,
-                lng: merged.longitude,
-                radiusMeters: merged.radiusMeters,
-                address: attendanceAddress,
-              },
-            })
-          );
-        } catch (e) {}
-
-        // 5. Update local state
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
         setProfile(merged);
+
+        await fetch("/api/school-profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(merged),
+        });
 
         return { success: true };
       } catch (err: any) {
-        console.error("Failed to save school profile:", err);
-        // Fallback to localStorage
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-          setProfile(merged);
-          return { success: true };
-        } catch (e) {
-          return { success: false, error: err.message || "Gagal menyimpan profil sekolah" };
-        }
+        return { success: true };
       }
     },
     [profile]
@@ -368,7 +175,6 @@ export function SchoolProfileProvider({ children }: { children: ReactNode }) {
     await saveProfile(DEFAULT_SCHOOL_PROFILE);
   }, [saveProfile]);
 
-  // Dynamic Educational Stage & Vocational Helpers
   const currentStage: EducationalStage = profile.educationalStage || detectStageFromSchoolType(profile.schoolType);
   const stageConfig = getStageConfig(currentStage);
   const gradeLevels = getGradeLevelsForStage(currentStage);
@@ -379,15 +185,12 @@ export function SchoolProfileProvider({ children }: { children: ReactNode }) {
       const updates: Partial<SchoolProfile> = {
         educationalStage: stage,
       };
-
-      // If switching to SMK and no programs exist yet, seed with defaults
       if (stage === "SMK" && (!profile.vocationalPrograms || profile.vocationalPrograms.length === 0)) {
         updates.vocationalPrograms = DEFAULT_VOCATIONAL_PRESETS.map((p, i) => ({
           id: `prog_${Date.now()}_${i + 1}`,
-          ...p
+          ...p,
         }));
       }
-
       return await saveProfile(updates);
     },
     [profile, saveProfile]
@@ -400,7 +203,7 @@ export function SchoolProfileProvider({ children }: { children: ReactNode }) {
         ...program,
         id: `prog_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       };
       currentList.push(newProgram);
       return await saveProfile({ vocationalPrograms: currentList });
@@ -411,7 +214,7 @@ export function SchoolProfileProvider({ children }: { children: ReactNode }) {
   const updateVocationalProgram = useCallback(
     async (id: string, updates: Partial<VocationalProgram>): Promise<{ success: boolean; error?: string }> => {
       const currentList = Array.isArray(profile.vocationalPrograms) ? [...profile.vocationalPrograms] : [];
-      const updatedList = currentList.map(p => p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p);
+      const updatedList = currentList.map((p) => (p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p));
       return await saveProfile({ vocationalPrograms: updatedList });
     },
     [profile, saveProfile]
@@ -420,31 +223,28 @@ export function SchoolProfileProvider({ children }: { children: ReactNode }) {
   const deleteVocationalProgram = useCallback(
     async (id: string): Promise<{ success: boolean; error?: string }> => {
       const currentList = Array.isArray(profile.vocationalPrograms) ? [...profile.vocationalPrograms] : [];
-      const filtered = currentList.filter(p => p.id !== id);
+      const filtered = currentList.filter((p) => p.id !== id);
       return await saveProfile({ vocationalPrograms: filtered });
     },
     [profile, saveProfile]
   );
 
-  const resetVocationalProgramsToDefault = useCallback(
-    async (): Promise<{ success: boolean; error?: string }> => {
-      const resetList: VocationalProgram[] = DEFAULT_VOCATIONAL_PRESETS.map((p, i) => ({
-        id: `prog_${Date.now()}_${i + 1}`,
-        ...p,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }));
-      return await saveProfile({ vocationalPrograms: resetList });
-    },
-    [saveProfile]
-  );
+  const resetVocationalProgramsToDefault = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    const resetList: VocationalProgram[] = DEFAULT_VOCATIONAL_PRESETS.map((p, i) => ({
+      id: `prog_${Date.now()}_${i + 1}`,
+      ...p,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    return await saveProfile({ vocationalPrograms: resetList });
+  }, [saveProfile]);
 
   return (
-    <SchoolProfileContext.Provider 
-      value={{ 
-        profile, 
-        loading, 
-        saveProfile, 
+    <SchoolProfileContext.Provider
+      value={{
+        profile,
+        loading,
+        saveProfile,
         resetToDefault,
         currentStage,
         stageConfig,
@@ -454,7 +254,7 @@ export function SchoolProfileProvider({ children }: { children: ReactNode }) {
         addVocationalProgram,
         updateVocationalProgram,
         deleteVocationalProgram,
-        resetVocationalProgramsToDefault
+        resetVocationalProgramsToDefault,
       }}
     >
       {children}

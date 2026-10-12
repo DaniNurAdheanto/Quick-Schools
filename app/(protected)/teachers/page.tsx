@@ -23,7 +23,6 @@ import {
 import { cn } from "@/lib/utils";
 import { CrudSheet } from "@/components/layouts/crud-sheet";
 import { db, storage } from "@/lib/firebase";
-import { collection, query, onSnapshot } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useToast } from "@/context/ToastContext";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
@@ -110,20 +109,24 @@ export default function TeachersPage() {
   });
 
   useEffect(() => {
-    const qSubjects = query(collection(db, "subjects"));
-    const unsubscribeSubjects = onSnapshot(qSubjects, (snapshot) => {
-      setSubjectsList(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
-    });
-
-    const qClasses = query(collection(db, "classes"));
-    const unsubscribeClasses = onSnapshot(qClasses, (snapshot) => {
-      setClassesList(snapshot.docs.map(doc => ({ _firestoreId: doc.id, ...doc.data() })));
-    });
-
-    return () => {
-      unsubscribeSubjects();
-      unsubscribeClasses();
+    const fetchAuxData = async () => {
+      try {
+        const [subRes, clsRes] = await Promise.all([
+          fetch("/api/subjects"),
+          fetch("/api/classes"),
+        ]);
+        const [subData, clsData] = await Promise.all([subRes.json(), clsRes.json()]);
+        if (subData.success && Array.isArray(subData.subjects)) {
+          setSubjectsList(subData.subjects);
+        }
+        if (clsData.success && Array.isArray(clsData.classes)) {
+          setClassesList(clsData.classes);
+        }
+      } catch (e) {
+        console.error("Error fetching auxiliary data for teachers:", e);
+      }
     };
+    fetchAuxData();
   }, []);
 
   const teacherFields = [

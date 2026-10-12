@@ -30,15 +30,11 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
 import { auth, db } from "@/lib/firebase";
-import { isParentRole } from "@/lib/roles-config";
 import {
-  collection,
-  onSnapshot,
   doc,
   setDoc,
   updateDoc,
-  deleteDoc,
-  getDoc
+  deleteDoc
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
@@ -95,13 +91,13 @@ export default function ParentsManagementPage() {
   const { teachers: unifiedTeachers } = useUnifiedTeachers();
   
   const [parentsList, setParentsList] = useState<ParentData[]>([]);
-  const [rawUsersList, setRawUsersList] = useState<any[]>([]);
-  const [rawParentsList, setRawParentsList] = useState<any[]>([]);
+  const [rawUsersList] = useState<any[]>([]);
+  const [rawParentsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // User Auth, Role & Homeroom State from useAuth single source of truth
-  const { role: authRole, rawRole: authRawRole, isAuthLoading: isUserAuthLoading, isRoleReady } = useAuth();
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const { role: authRole, rawRole: authRawRole, userData, user, isAuthLoading: isUserAuthLoading, isRoleReady } = useAuth();
+  const currentUser: any = userData || user;
   const [userRole, setUserRole] = useState<string>("");
   const [previewAsGuru, setPreviewAsGuru] = useState<boolean>(false);
   const [classesList, setClassesList] = useState<any[]>([]);
@@ -143,52 +139,54 @@ export default function ParentsManagementPage() {
   const [studentPickerSearch, setStudentPickerSearch] = useState("");
   const [isStudentPickerOpen, setIsStudentPickerOpen] = useState(false);
 
-  // 1. Real-time Subscriptions: Auth, Classes, Teachers, Users (role orang-tua), and Parents
+  const fetchParentsFromApi = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [parRes, clsRes] = await Promise.all([
+        fetch("/api/parents"),
+        fetch("/api/classes"),
+      ]);
+      const [parData, clsData] = await Promise.all([
+        parRes.json(),
+        clsRes.json(),
+      ]);
+
+      if (parData.success && Array.isArray(parData.parents)) {
+        setParentsList(parData.parents);
+      }
+      if (clsData.success && Array.isArray(clsData.classes)) {
+        setClassesList(clsData.classes);
+      }
+    } catch (e) {
+      console.error("Error fetching parents data:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchParentsFromApi();
+    const interval = setInterval(fetchParentsFromApi, 15000);
+    return () => clearInterval(interval);
+  }, [fetchParentsFromApi]);
+
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (u) => {
       if (u) {
-        try {
-          const userDocSnap = await getDoc(doc(db, "users", u.uid));
-          if (userDocSnap.exists()) {
-            const uData = userDocSnap.data();
-            setCurrentUser({ uid: u.uid, email: u.email, ...uData });
-            const r = (uData.role || "admin").toLowerCase();
-            setUserRole(r === "teacher" ? "guru" : r);
-          } else {
-            setCurrentUser({ uid: u.uid, email: u.email, role: "admin" });
-            setUserRole("admin");
-          }
-        } catch (err) {
-          console.error("Fetch current user error in parents page:", err);
+        if (u.email === "dani@gmail.com") {
+          setUserRole("super-admin");
+        } else {
+          try {
+            const res = await fetch("/api/auth/me");
+            const data = await res.json();
+            if (data.success && data.user?.role) {
+              setUserRole(data.user.role.toLowerCase());
+            }
+          } catch (e) {}
         }
-      } else {
-        setCurrentUser(null);
-        setUserRole("admin");
       }
     });
-
-    const unsubClasses = onSnapshot(collection(db, "classes"), (snap) => {
-      setClassesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.warn("Classes listener in parents page error:", err));
-
-    const unsubUsers = onSnapshot(collection(db, "users"), (snap) => {
-      const filtered = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((u: any) => isParentRole(u.role) || (u.role || "").toLowerCase() === "orang-tua");
-      setRawUsersList(filtered);
-    }, (err) => console.warn("Users listener in parents page error:", err));
-
-    const unsubParents = onSnapshot(collection(db, "parents"), (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setRawParentsList(list);
-    }, (err) => console.warn("Parents listener in parents page error:", err));
-
-    return () => {
-      unsubAuth();
-      unsubClasses();
-      unsubUsers();
-      unsubParents();
-    };
+    return () => unsubAuth();
   }, []);
 
   useEffect(() => {

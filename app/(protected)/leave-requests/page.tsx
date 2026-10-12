@@ -31,8 +31,6 @@ import {
 import { CreateLeaveRequestModal } from "@/components/modals/create-leave-request-modal";
 import { LeaveRequestDetailModal } from "@/components/modals/leave-request-detail-modal";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
-import { db } from "@/lib/firebase";
-import { collection, onSnapshot } from "firebase/firestore";
 
 export default function LeaveRequestsPage() {
   const toast = useToast();
@@ -63,15 +61,20 @@ export default function LeaveRequestsPage() {
   const isGuru = roleLower === "guru" || roleLower === "teacher";
   const isAdmin = ["admin", "super-admin", "super admin", "kepala-sekolah", "kepala sekolah"].includes(roleLower);
 
-  // 1. Subscribe to classes collection
+  // 1. Fetch classes from PostgreSQL API
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "classes"), (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setClassesList(list);
-    }, (err) => {
-      console.warn("Error fetching classes in leave requests:", err);
-    });
-    return () => unsub();
+    const fetchClasses = async () => {
+      try {
+        const res = await fetch("/api/classes");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.classes)) {
+          setClassesList(data.classes);
+        }
+      } catch (err) {
+        console.warn("Error fetching classes in leave requests:", err);
+      }
+    };
+    fetchClasses();
   }, []);
 
   // 2. Subscribe to real-time leave requests

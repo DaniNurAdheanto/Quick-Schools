@@ -5,16 +5,14 @@ import Link from "next/link";
 import Image from "next/image";
 
 import { useState, useEffect, useRef, Suspense } from "react";
-import { signInWithEmailAndPassword, deleteUser, onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
-import { useRouter, useSearchParams } from "next/navigation";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { useSearchParams } from "next/navigation";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { useToast } from "@/context/ToastContext";
 import { executeGoogleAuth, getPostLoginRedirect } from "@/lib/auth-helpers";
 
 function LoginFormContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const toast = useToast();
   const { profile } = useSchoolProfile();
@@ -34,20 +32,18 @@ function LoginFormContent() {
   // If user already has an active, valid session, smoothly verify onboarding and redirect
   useEffect(() => {
     if (isSessionExpired) return;
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        try {
-          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-          const uData = userDoc.exists() ? userDoc.data() : null;
-          const destination = getPostLoginRedirect(uData, targetRedirect);
-          router.replace(destination);
-        } catch (e) {
-          router.replace(targetRedirect);
+    
+    // Check PostgreSQL Session
+    fetch("/api/auth/me")
+      .then(res => res.json())
+      .then(data => {
+        if (data.authenticated && data.user) {
+          const destination = getPostLoginRedirect(data.user, targetRedirect);
+          window.location.replace(destination);
         }
-      }
-    });
-    return () => unsubscribe();
-  }, [router, targetRedirect, isSessionExpired]);
+      })
+      .catch(() => {});
+  }, [targetRedirect, isSessionExpired]);
 
   useEffect(() => {
     if (isSessionExpired && !sessionAlertShownRef.current) {
@@ -69,7 +65,7 @@ function LoginFormContent() {
     try {
       const { redirectUrl } = await executeGoogleAuth();
       toast.showSuccess("Berhasil masuk dengan akun Google.", "Login Berhasil");
-      router.push(redirectUrl);
+      window.location.replace(redirectUrl);
     } catch (err: any) {
       if (err.code !== "auth/popup-closed-by-user" && err.code !== "auth/cancelled-popup-request") {
         console.error("Google Auth error:", err);
@@ -86,75 +82,33 @@ function LoginFormContent() {
     setLoading(true);
     setError("");
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      const cleanEmail = email.toLowerCase().trim();
+      // 1. Authenticate with PostgreSQL backend
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      });
 
-      // Check account activation and deletion status in Firestore
-      let userDocData: any = null;
-      try {
-        let isDeleted = false;
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (!userDoc.exists()) {
-          isDeleted = true;
-        } else {
-          userDocData = userDoc.data();
-          try {
-            const delByUid = await getDoc(doc(db, "deleted_accounts", user.uid));
-            if (delByUid.exists()) isDeleted = true;
-          } catch (e) {}
+      const data = await res.json();
 
-          if (!isDeleted && cleanEmail) {
-            try {
-              const delByEmail = await getDoc(doc(db, "deleted_accounts", cleanEmail.replace(/[^a-z0-9]/g, "_")));
-              if (delByEmail.exists()) isDeleted = true;
-            } catch (e) {}
-          }
-        }
-
-        if (isDeleted) {
-          try {
-            await deleteUser(user);
-          } catch (delAuthErr) {}
-          try {
-            await auth.signOut();
-          } catch (signOutErr) {}
-          try {
-            localStorage.removeItem("quick_schools_auth_session");
-            localStorage.removeItem("qs_auth_role_cache_v1");
-          } catch (e) {}
-          setError("Akun ini telah dihapus oleh Administrator dan tidak dapat digunakan lagi.");
-          setLoading(false);
-          return;
-        }
-
-        if (userDocData && (userDocData.status === "Nonaktif" || userDocData.status === "deleted" || userDocData.isDeleted === true)) {
-          try {
-            await auth.signOut();
-          } catch (e) {}
-          try {
-            localStorage.removeItem("quick_schools_auth_session");
-            localStorage.removeItem("qs_auth_role_cache_v1");
-          } catch (e) {}
-          setError("Akun Anda berstatus Nonaktif. Silakan hubungi Super Admin untuk mengaktifkan akun Anda.");
-          setLoading(false);
-          return;
-        }
-      } catch (checkErr) {
-        console.warn("Status check warning:", checkErr);
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal masuk. Periksa email dan kata sandi Anda.");
       }
+
+      toast.showSuccess(data.message || `Selamat datang kembali, ${data.user?.name || "Pengguna"}!`, "Login Berhasil");
+
+      // Optional sync with Firebase auth session during transitional phase
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (fbErr) {}
 
       // Check if user onboarding is complete in database
-      const destination = getPostLoginRedirect(userDocData, targetRedirect);
-      router.push(destination);
+      const destination = getPostLoginRedirect(data.user, targetRedirect);
+      window.location.replace(destination);
     } catch (err: any) {
-      if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
-        setError("Email atau kata sandi salah. Silakan periksa kembali.");
-      } else if (err.code === "auth/too-many-requests") {
-        setError("Terlalu banyak percobaan masuk yang gagal. Silakan coba beberapa saat lagi.");
-      } else {
-        setError(err.message || "Gagal masuk");
-      }
+      console.error("Login error:", err);
+      setError(err.message || "Gagal masuk. Periksa kembali email dan kata sandi.");
+      toast.showError(err.message || "Gagal masuk", "Login Gagal");
     } finally {
       setLoading(false);
     }
