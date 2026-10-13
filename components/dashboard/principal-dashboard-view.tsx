@@ -549,7 +549,7 @@ export function PrincipalDashboardView({
   };
 
   return (
-    <div className="space-y-6 pb-12 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1700px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       {/* ─── A. Header & Executive Greeting Banner ─────────────────────────── */}
       <div className="bg-gradient-to-r from-[#531FFF] via-[#6329ff] to-[#7944ff] rounded-2xl p-6 sm:p-7 text-white shadow-xl shadow-[#531FFF]/15 relative overflow-hidden">
         {/* Subtle decorative circles */}

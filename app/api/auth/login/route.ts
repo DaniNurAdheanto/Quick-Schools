@@ -16,11 +16,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const cleanEmail = String(email).toLowerCase().trim();
+    const cleanIdentifier = String(email).trim();
+    const cleanEmail = cleanIdentifier.toLowerCase();
 
-    // 1. Search user in PostgreSQL
-    const user = await prisma.user.findUnique({
-      where: { email: cleanEmail },
+    // 1. Search user in PostgreSQL (by email, teacher NIP, or student NISN/NIS)
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: cleanEmail },
+          { teacher: { nip: cleanIdentifier } },
+          { student: { nisn: cleanIdentifier } },
+          { student: { nis: cleanIdentifier } },
+        ],
+      },
       include: {
         student: {
           include: {
@@ -42,7 +50,7 @@ export async function POST(req: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { error: "Akun dengan email ini tidak ditemukan." },
+        { error: "Akun tidak ditemukan. Periksa kembali email atau username Anda." },
         { status: 404 }
       );
     }
@@ -81,7 +89,11 @@ export async function POST(req: NextRequest) {
     };
     const normalizedRole = roleMap[user.role] || user.role.toLowerCase().replace(/_/g, "-");
 
-    // 4. Generate JWT Session Token
+    // 4. Generate JWT Session Token (Keep cookie payload lightweight < 1KB)
+    const cookieAvatar = user.avatarUrl && !user.avatarUrl.startsWith("data:") && user.avatarUrl.length < 512
+      ? user.avatarUrl
+      : null;
+
     const sessionPayload = {
       id: user.id,
       email: user.email,
@@ -90,7 +102,7 @@ export async function POST(req: NextRequest) {
       status: user.status === "AKTIF" ? "Aktif" : user.status === "BELUM_ONBOARDING" ? "Belum Onboarding" : "Nonaktif",
       onboardingCompleted: user.onboardingCompleted,
       phone: user.phone || "-",
-      avatarUrl: user.avatarUrl || null,
+      avatarUrl: cookieAvatar,
       studentId: user.student?.id || null,
       teacherId: user.teacher?.id || null,
       parentId: user.parent?.id || null,
@@ -102,11 +114,14 @@ export async function POST(req: NextRequest) {
 
     const token = await signSessionToken(sessionPayload);
 
-    // 5. Response with HTTP-only cookie
+    // 5. Response with HTTP-only cookie (full avatar in JSON body for client)
     const response = NextResponse.json({
       success: true,
       message: `Selamat datang kembali, ${user.name}!`,
-      user: sessionPayload,
+      user: {
+        ...sessionPayload,
+        avatarUrl: user.avatarUrl || null,
+      },
     });
 
     response.cookies.set({

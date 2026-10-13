@@ -119,9 +119,9 @@ export function IdleTimeoutManager({
         if (now - storedTime < getTimeoutDuration()) {
           lastActivityRef.current = storedTime;
         } else {
-          // Stored time is already past timeout (e.g. from closed laptop)
-          handleTimeoutLogout();
-          return;
+          // Stored time is from an earlier session; reset to now so newly mounted active session isn't falsely ejected
+          lastActivityRef.current = now;
+          localStorage.setItem(LAST_ACTIVITY_KEY, now.toString());
         }
       } else {
         localStorage.setItem(LAST_ACTIVITY_KEY, now.toString());

@@ -15,7 +15,23 @@ export interface SessionPayload {
 }
 
 export async function signSessionToken(payload: SessionPayload): Promise<string> {
-  return new SignJWT(payload)
+  // Strip any properties that would inflate the JWT cookie beyond browser RFC 6265 limits (4KB)
+  const sanitizedPayload: SessionPayload = { ...payload };
+  if (
+    typeof sanitizedPayload.avatarUrl === "string" &&
+    (sanitizedPayload.avatarUrl.startsWith("data:") || sanitizedPayload.avatarUrl.length > 512)
+  ) {
+    sanitizedPayload.avatarUrl = null;
+  }
+
+  // Defensively strip any other property exceeding 1024 characters
+  for (const key of Object.keys(sanitizedPayload)) {
+    if (typeof sanitizedPayload[key] === "string" && sanitizedPayload[key].length > 1024) {
+      delete sanitizedPayload[key];
+    }
+  }
+
+  return new SignJWT(sanitizedPayload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")

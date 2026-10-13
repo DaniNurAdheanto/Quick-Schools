@@ -97,6 +97,11 @@ function LoginFormContent() {
 
       toast.showSuccess(data.message || `Selamat datang kembali, ${data.user?.name || "Pengguna"}!`, "Login Berhasil");
 
+      // Reset activity timestamp so idle timeout doesn't fire immediately on fresh session
+      try {
+        localStorage.setItem("quick_schools_last_activity_timestamp", Date.now().toString());
+      } catch (e) {}
+
       // Optional sync with Firebase auth session during transitional phase
       try {
         await signInWithEmailAndPassword(auth, email, password);
