@@ -177,8 +177,8 @@ export default function ProfilePage() {
           setFormData(merged);
 
           // Fetch Face Biometric for this user
-          if (merged.id) {
-            getUserFaceBiometric(merged.id)
+          if (merged.id || merged.nisn || merged.nip) {
+            getUserFaceBiometric(merged.id, merged.nisn || (merged as any).studentId || merged.nip)
               .then((bio) => {
                 if (bio && bio.isEnrolled) {
                   setFaceBiometric(bio);

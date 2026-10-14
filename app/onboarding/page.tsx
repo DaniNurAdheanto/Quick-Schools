@@ -203,17 +203,6 @@ export default function StudentOnboardingPage() {
   const [isFaceModalOpen, setIsFaceModalOpen] = useState(false);
   const [faceBiometric, setFaceBiometric] = useState<FaceBiometricData | null>(null);
 
-  // Check if biometric is already enrolled when landing on Step 6
-  useEffect(() => {
-    if (step === 6 && currentUser?.uid) {
-      getUserFaceBiometric(currentUser.uid).then((bio) => {
-        if (bio && bio.isEnrolled) {
-          setFaceBiometric(bio);
-        }
-      });
-    }
-  }, [step, currentUser]);
-
   // Auto-Save & Draft Recovery States
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
@@ -227,6 +216,17 @@ export default function StudentOnboardingPage() {
   // Photo upload preview
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>("");
+
+  // Check if biometric is already enrolled when landing on Step 6
+  useEffect(() => {
+    if (step === 6 && (currentUser?.uid || currentUser?.id || pribadi.nisn)) {
+      getUserFaceBiometric(currentUser?.uid || currentUser?.id || "", pribadi.nisn).then((bio) => {
+        if (bio && bio.isEnrolled) {
+          setFaceBiometric(bio);
+        }
+      });
+    }
+  }, [step, currentUser, pribadi.nisn]);
 
   // 1. Initial Mount: Hydrate saved draft from localStorage (Instant recovery on refresh/return)
   useEffect(() => {
@@ -2616,10 +2616,10 @@ export default function StudentOnboardingPage() {
       <FaceEnrolmentModal
         isOpen={isFaceModalOpen}
         onClose={() => setIsFaceModalOpen(false)}
-        userUid={currentUser?.uid || ""}
+        userUid={currentUser?.uid || currentUser?.id || pribadi.nisn || ""}
         userName={pribadi.fullName || "Siswa"}
         userRole="siswa"
-        studentId={pribadi.nisn || currentUser?.uid}
+        studentId={pribadi.nisn || currentUser?.uid || currentUser?.id}
         onSuccess={(bio) => {
           setFaceBiometric(bio);
           setIsFaceModalOpen(false);

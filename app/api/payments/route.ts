@@ -22,23 +22,31 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
-    const formattedBills = payments.map((p) => ({
-      id: p.id,
-      invoiceNumber: p.invoiceNumber,
-      title: p.title,
-      amount: p.amount,
-      status: p.status === "LUNAS" ? "Lunas" : p.status === "PENDING" ? "Menunggu Verifikasi" : "Belum Bayar",
-      dueDate: p.dueDate ? p.dueDate.toISOString().split("T")[0] : null,
-      paidAt: p.paidAt ? p.paidAt.toISOString() : null,
-      paymentMethod: p.paymentMethod || null,
-      receiptUrl: p.receiptUrl || null,
-      studentId: p.studentId,
-      studentName: p.student.fullName,
-      studentEmail: p.student.user?.email || "",
-      nisn: p.student.nisn,
-      classId: p.student.class?.name || "",
-      className: p.student.class?.name || "",
-    }));
+    const formattedBills = payments.map((p) => {
+      const isLunas = p.status === "LUNAS";
+      return {
+        id: p.id,
+        invoiceNumber: p.invoiceNumber,
+        title: p.title,
+        amount: p.amount,
+        paidAmount: isLunas ? p.amount : 0,
+        remainingAmount: isLunas ? 0 : p.amount,
+        status: isLunas ? "Lunas" : p.status === "PENDING" ? "Menunggu Verifikasi" : "Belum Bayar",
+        rawStatus: p.status,
+        dueDate: p.dueDate ? p.dueDate.toISOString().split("T")[0] : null,
+        paidAt: p.paidAt ? p.paidAt.toISOString() : null,
+        paymentMethod: p.paymentMethod || null,
+        receiptUrl: p.receiptUrl || null,
+        studentId: p.studentId,
+        studentName: p.student.fullName,
+        studentEmail: p.student.user?.email || "",
+        nisn: p.student.nisn,
+        classId: p.student.class?.id || p.student.class?.name || "",
+        className: p.student.class?.name || "",
+        periodMonth: p.title,
+        academicYear: "2025/2026",
+      };
+    });
 
     if (isStudentRole(role)) {
       const scopedBills = formattedBills.filter(

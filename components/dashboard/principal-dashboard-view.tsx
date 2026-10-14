@@ -109,7 +109,7 @@ export function PrincipalDashboardView({
   const [grades, setGrades] = useState<any[]>([]);
   const [bills, setBills] = useState<any[]>([]);
   const [activities] = useState<any[]>([]);
-  const [teacherAttendance] = useState<any[]>([]);
+  const [teacherAttendance, setTeacherAttendance] = useState<any[]>([]);
   const [lastSyncTime, setLastSyncTime] = useState<string>("");
 
   // ─── Interactive Filter States ────────────────────────────────────────────
@@ -124,13 +124,24 @@ export function PrincipalDashboardView({
   }, [activeAcademicYear, activeSemester]);
 
   useEffect(() => {
-    setStudents(unifiedStudents);
-    setLastSyncTime(new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }));
+    if (unifiedStudents && unifiedStudents.length > 0) {
+      setStudents(unifiedStudents);
+    }
   }, [unifiedStudents]);
 
   useEffect(() => {
-    setTeachers(unifiedTeachers);
+    if (unifiedTeachers && unifiedTeachers.length > 0) {
+      setTeachers(unifiedTeachers);
+    }
   }, [unifiedTeachers]);
+
+  const todayDateStr = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }, []);
 
   // ─── PostgreSQL Data Fetching (Live Data) ──────────────────────────────────
   useEffect(() => {
@@ -141,17 +152,23 @@ export function PrincipalDashboardView({
         const [
           classesRes,
           attendanceRes,
+          teacherAttendanceRes,
           schedulesRes,
           announcementsRes,
           gradesRes,
-          paymentsRes
+          paymentsRes,
+          studentsRes,
+          teachersRes
         ] = await Promise.allSettled([
           fetch("/api/classes").then((r) => r.json()),
-          fetch("/api/attendance").then((r) => r.json()),
+          fetch(`/api/attendance?date=${todayDateStr}`).then((r) => r.json()),
+          fetch(`/api/teacher-attendance?date=${todayDateStr}`).then((r) => r.json()),
           fetch("/api/schedules").then((r) => r.json()),
           fetch("/api/announcements").then((r) => r.json()),
           fetch("/api/grades").then((r) => r.json()),
-          fetch("/api/payments").then((r) => r.json()),
+          fetch("/api/payments?role=kepala-sekolah").then((r) => r.json()),
+          fetch("/api/students").then((r) => r.json()),
+          fetch("/api/teachers").then((r) => r.json()),
         ]);
 
         if (!isMounted) return;
@@ -159,8 +176,13 @@ export function PrincipalDashboardView({
         if (classesRes.status === "fulfilled" && classesRes.value.classes) {
           setClasses(classesRes.value.classes);
         }
-        if (attendanceRes.status === "fulfilled" && attendanceRes.value.attendance) {
-          setAttendance(attendanceRes.value.attendance);
+        if (attendanceRes.status === "fulfilled") {
+          const recs = attendanceRes.value.records || attendanceRes.value.attendance || [];
+          setAttendance(recs);
+        }
+        if (teacherAttendanceRes.status === "fulfilled") {
+          const tRecs = teacherAttendanceRes.value.records || teacherAttendanceRes.value.attendance || [];
+          setTeacherAttendance(tRecs);
         }
         if (schedulesRes.status === "fulfilled" && schedulesRes.value.schedules) {
           setSchedules(schedulesRes.value.schedules);
@@ -173,6 +195,12 @@ export function PrincipalDashboardView({
         }
         if (paymentsRes.status === "fulfilled" && paymentsRes.value.bills) {
           setBills(paymentsRes.value.bills);
+        }
+        if (studentsRes.status === "fulfilled" && studentsRes.value.students && studentsRes.value.students.length > 0) {
+          setStudents(studentsRes.value.students);
+        }
+        if (teachersRes.status === "fulfilled" && teachersRes.value.teachers && teachersRes.value.teachers.length > 0) {
+          setTeachers(teachersRes.value.teachers);
         }
         setLastSyncTime(new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }));
       } catch (e) {
@@ -187,9 +215,7 @@ export function PrincipalDashboardView({
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
-
-  const todayDateStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  }, [todayDateStr]);
 
   // ─── Distinct Filter Options Derived from Database ────────────────────────
   const availableAcademicYears = useMemo(() => {
@@ -199,7 +225,14 @@ export function PrincipalDashboardView({
     contextAcademicYears.forEach(y => { if (y.name) set.add(y.name.replace(/\s+/g, "")); });
     grades.forEach(g => { if (g.academicYear) set.add(g.academicYear.replace(/\s+/g, "")); });
     bills.forEach(b => { if (b.academicYear) set.add(b.academicYear.replace(/\s+/g, "")); });
-    students.forEach(s => { if (s.entryYear) set.add(`${s.entryYear}/${parseInt(s.entryYear) + 1}`); });
+    students.forEach(s => {
+      if (s.entryYear) {
+        const ey = s.entryYear.trim();
+        if (ey.includes("/")) set.add(ey.replace(/\s+/g, ""));
+        else if (/^\d{4}$/.test(ey)) set.add(`${ey}/${parseInt(ey) + 1}`);
+        else set.add(ey.replace(/\s+/g, ""));
+      }
+    });
     const list = Array.from(set).filter(Boolean);
     return ["Semua", ...list];
   }, [activeAcademicYear, academicYear, contextAcademicYears, grades, bills, students]);
@@ -246,11 +279,11 @@ export function PrincipalDashboardView({
     const sakit = todayRecords.filter((a: any) => (a.status || "").toLowerCase() === "sakit").length;
     const izin = todayRecords.filter((a: any) => (a.status || "").toLowerCase() === "izin").length;
     const alpa = todayRecords.filter((a: any) => ["alpa", "ditolak", "alpha"].includes((a.status || "").toLowerCase())).length;
-    const totalMarked = todayRecords.length;
+    const totalMarked = todayRecords.filter((a: any) => (a.status || "").toLowerCase() !== "belum absen").length;
 
-    const baseCount = studentCount || totalMarked || 1;
+    const baseCount = studentCount || todayRecords.length || 1;
     const belumAbsen = Math.max(0, baseCount - totalMarked);
-    const rateNumber = totalMarked > 0
+    const rateNumber = baseCount > 0
       ? Math.min(100, Math.round(((hadir + terlambat) / Math.max(1, baseCount)) * 1000) / 10)
       : 0;
 
@@ -270,7 +303,7 @@ export function PrincipalDashboardView({
   // ─── Teacher Attendance Stats (Real-Time Today) ───────────────────────────
   const teacherAttendanceToday = useMemo(() => {
     const todayRecords = teacherAttendance.filter((r: any) => r.date === todayDateStr);
-    const hadir = todayRecords.filter((r: any) => r.clockIn && r.status !== "Alpa").length;
+    const hadir = todayRecords.filter((r: any) => (r.clockIn && r.status !== "Alpa") || r.status === "Hadir" || r.status === "Terlambat").length;
     const tepatWaktu = todayRecords.filter((r: any) => r.clockIn?.status === "Tepat Waktu" || (!r.clockIn?.status && r.status === "Hadir")).length;
     const terlambat = todayRecords.filter((r: any) => r.clockIn?.status === "Terlambat" || r.status === "Terlambat").length;
     const izinSakit = todayRecords.filter((r: any) => ["Izin", "Sakit", "Cuti"].includes(r.status)).length;
@@ -293,25 +326,54 @@ export function PrincipalDashboardView({
   const financialStats = useMemo(() => {
     let relevantBills = bills;
     if (filterClass !== "Semua Kelas") {
-      relevantBills = relevantBills.filter(b => b.classId === filterClass);
+      relevantBills = relevantBills.filter(b => b.classId === filterClass || b.className === filterClass);
     }
     if (filterAcademicYear !== "Semua") {
-      relevantBills = relevantBills.filter(b => (b.academicYear || "").replace(/\s+/g, "") === filterAcademicYear.replace(/\s+/g, ""));
+      const fay = filterAcademicYear.replace(/\s+/g, "").toLowerCase();
+      relevantBills = relevantBills.filter(b => (b.academicYear || "").replace(/\s+/g, "").toLowerCase().includes(fay));
     }
 
-    const totalTagihan = relevantBills.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
-    const totalPemasukan = relevantBills.reduce((sum, b) => sum + (Number(b.paidAmount) || 0), 0);
-    const totalTertunggak = relevantBills
-      .filter(b => b.status === "Unpaid" || b.status === "Partial")
-      .reduce((sum, b) => sum + (Number(b.remainingAmount) || 0), 0);
-    const totalOverdue = relevantBills
-      .filter(b => b.status === "Overdue")
-      .reduce((sum, b) => sum + (Number(b.remainingAmount) || 0), 0);
+    const isBillPaid = (b: any) => {
+      const s = (b.status || "").toLowerCase();
+      const rs = (b.rawStatus || "").toUpperCase();
+      return s === "lunas" || s === "paid" || rs === "LUNAS";
+    };
 
-    const paidBillsCount = relevantBills.filter(b => b.status === "Paid").length;
-    const partialBillsCount = relevantBills.filter(b => b.status === "Partial").length;
-    const unpaidBillsCount = relevantBills.filter(b => b.status === "Unpaid").length;
-    const overdueBillsCount = relevantBills.filter(b => b.status === "Overdue").length;
+    const isBillPartial = (b: any) => {
+      const s = (b.status || "").toLowerCase();
+      const rs = (b.rawStatus || "").toUpperCase();
+      return s === "partial" || s === "sebagian" || rs === "PARTIAL";
+    };
+
+    const isBillOverdue = (b: any) => {
+      const s = (b.status || "").toLowerCase();
+      const rs = (b.rawStatus || "").toUpperCase();
+      const isPastDue = Boolean(b.dueDate && new Date(b.dueDate) < new Date());
+      return (s === "overdue" || s === "jatuh tempo" || rs === "OVERDUE" || isPastDue) && !isBillPaid(b);
+    };
+
+    const totalTagihan = relevantBills.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
+    const totalPemasukan = relevantBills.reduce((sum, b) => {
+      const paid = Number(b.paidAmount ?? (isBillPaid(b) ? b.amount : 0)) || 0;
+      return sum + paid;
+    }, 0);
+    const totalTertunggak = relevantBills
+      .filter(b => !isBillPaid(b))
+      .reduce((sum, b) => {
+        const rem = Number(b.remainingAmount ?? (isBillPartial(b) ? (b.amount - (b.paidAmount || 0)) : b.amount)) || 0;
+        return sum + rem;
+      }, 0);
+    const totalOverdue = relevantBills
+      .filter(b => isBillOverdue(b))
+      .reduce((sum, b) => {
+        const rem = Number(b.remainingAmount ?? b.amount) || 0;
+        return sum + rem;
+      }, 0);
+
+    const paidBillsCount = relevantBills.filter(isBillPaid).length;
+    const partialBillsCount = relevantBills.filter(isBillPartial).length;
+    const overdueBillsCount = relevantBills.filter(isBillOverdue).length;
+    const unpaidBillsCount = Math.max(0, relevantBills.length - paidBillsCount - partialBillsCount);
 
     const collectionRate = totalTagihan > 0 ? Math.min(100, Math.round((totalPemasukan / totalTagihan) * 100)) : 0;
 
@@ -336,10 +398,12 @@ export function PrincipalDashboardView({
       relevantGrades = relevantGrades.filter(g => (g.className || g.classId) === filterClass);
     }
     if (filterSemester !== "Semua") {
-      relevantGrades = relevantGrades.filter(g => (g.semester || "").toLowerCase() === filterSemester.toLowerCase());
+      const fs = filterSemester.toLowerCase();
+      relevantGrades = relevantGrades.filter(g => (g.semester || "").toLowerCase().includes(fs) || fs.includes((g.semester || "").toLowerCase()));
     }
     if (filterAcademicYear !== "Semua") {
-      relevantGrades = relevantGrades.filter(g => (g.academicYear || "").replace(/\s+/g, "") === filterAcademicYear.replace(/\s+/g, ""));
+      const fay = filterAcademicYear.replace(/\s+/g, "").toLowerCase();
+      relevantGrades = relevantGrades.filter(g => (g.academicYear || "").replace(/\s+/g, "").toLowerCase().includes(fay));
     }
 
     const subjectScores: Record<string, { total: number; count: number }> = {};
@@ -350,7 +414,7 @@ export function PrincipalDashboardView({
     let remedialCount = 0;
 
     relevantGrades.forEach((g: any) => {
-      const score = Number(g.finalScore || g.score || g.nilai || 0);
+      const score = Number(g.finalScore ?? g.score ?? g.nilai ?? 0);
       if (score > 0) {
         totalScore += score;
         validCount += 1;
@@ -370,9 +434,9 @@ export function PrincipalDashboardView({
       }
     });
 
-    const average = validCount > 0 ? Math.round((totalScore / validCount) * 10) / 10 : 84.6;
+    const average = validCount > 0 ? Math.round((totalScore / validCount) * 10) / 10 : 0;
     const averageScale4 = ((average / 100) * 4).toFixed(2);
-    const passRate = validCount > 0 ? Math.round((tuntasCount / validCount) * 100) : 88;
+    const passRate = validCount > 0 ? Math.round((tuntasCount / validCount) * 100) : 0;
 
     // Subjects average chart data
     const subjectChartData = Object.keys(subjectScores).map(sub => ({
@@ -382,8 +446,8 @@ export function PrincipalDashboardView({
       kkm: 75
     })).sort((a, b) => b.nilaiRataRata - a.nilaiRataRata).slice(0, 7);
 
-    // Fallback if grades not fully loaded
-    const finalSubjectChartData = subjectChartData.length > 0 ? subjectChartData : [
+    // Fallback only if no grades recorded anywhere in system yet
+    const finalSubjectChartData = subjectChartData.length > 0 ? subjectChartData : (grades.length === 0 ? [
       { subject: "B. Indo", fullName: "Bahasa Indonesia", nilaiRataRata: 88.5, kkm: 75 },
       { subject: "Matematika", fullName: "Matematika Wajib", nilaiRataRata: 82.4, kkm: 75 },
       { subject: "B. Inggris", fullName: "Bahasa Inggris", nilaiRataRata: 85.1, kkm: 75 },
@@ -391,14 +455,14 @@ export function PrincipalDashboardView({
       { subject: "Biologi", fullName: "Biologi", nilaiRataRata: 84.0, kkm: 75 },
       { subject: "Kimia", fullName: "Kimia", nilaiRataRata: 81.2, kkm: 75 },
       { subject: "Sejarah", fullName: "Sejarah Indonesia", nilaiRataRata: 87.3, kkm: 75 }
-    ];
+    ] : []);
 
     return {
-      average,
-      averageScale4,
-      passRate,
-      tuntasCount: tuntasCount || Math.round(studentCount * 0.88),
-      remedialCount: remedialCount || Math.max(1, Math.round(studentCount * 0.12)),
+      average: average || (validCount === 0 && grades.length === 0 ? 84.6 : 0),
+      averageScale4: average > 0 ? averageScale4 : (validCount === 0 && grades.length === 0 ? "3.38" : "0.00"),
+      passRate: passRate || (validCount === 0 && grades.length === 0 ? 88 : 0),
+      tuntasCount: tuntasCount || (validCount === 0 && grades.length === 0 ? Math.round(studentCount * 0.88) : 0),
+      remedialCount: remedialCount || (validCount === 0 && grades.length === 0 ? Math.max(1, Math.round(studentCount * 0.12)) : 0),
       subjectChartData: finalSubjectChartData
     };
   }, [grades, filterClass, filterSemester, filterAcademicYear, studentCount]);
@@ -502,26 +566,44 @@ export function PrincipalDashboardView({
   // ─── Chart 5: Tren Pembayaran Kas SPP Bulanan (Area Chart) ─────────────────
   const monthlyRevenueData = useMemo(() => {
     const monthNames = ["Jul", "Agu", "Sep", "Okt", "Nov", "Des", "Jan", "Feb", "Mar", "Apr", "Mei", "Jun"];
+    const monthMap: Record<number, string> = {
+      6: "Jul", 7: "Agu", 8: "Sep", 9: "Okt", 10: "Nov", 11: "Des",
+      0: "Jan", 1: "Feb", 2: "Mar", 3: "Apr", 4: "Mei", 5: "Jun"
+    };
     const monthRevenueMap: Record<string, number> = {};
     monthNames.forEach(m => { monthRevenueMap[m] = 0; });
 
     bills.forEach(b => {
-      const pm = (b.periodMonth || "").toLowerCase();
-      const paid = Number(b.paidAmount) || 0;
+      const isPaid = (b.status || "").toLowerCase() === "lunas" || (b.status || "").toLowerCase() === "paid" || (b.rawStatus || "").toUpperCase() === "LUNAS";
+      const paid = Number(b.paidAmount ?? (isPaid ? b.amount : 0)) || 0;
       if (paid > 0) {
-        if (pm.includes("juli") || pm.includes("jul")) monthRevenueMap["Jul"] += paid;
-        else if (pm.includes("agustus") || pm.includes("agu")) monthRevenueMap["Agu"] += paid;
-        else if (pm.includes("september") || pm.includes("sep")) monthRevenueMap["Sep"] += paid;
-        else if (pm.includes("oktober") || pm.includes("okt")) monthRevenueMap["Okt"] += paid;
-        else if (pm.includes("november") || pm.includes("nov")) monthRevenueMap["Nov"] += paid;
-        else if (pm.includes("desember") || pm.includes("des")) monthRevenueMap["Des"] += paid;
-        else if (pm.includes("januari") || pm.includes("jan")) monthRevenueMap["Jan"] += paid;
-        else if (pm.includes("februari") || pm.includes("feb")) monthRevenueMap["Feb"] += paid;
-        else if (pm.includes("maret") || pm.includes("mar")) monthRevenueMap["Mar"] += paid;
-        else if (pm.includes("april") || pm.includes("apr")) monthRevenueMap["Apr"] += paid;
-        else if (pm.includes("mei")) monthRevenueMap["Mei"] += paid;
-        else if (pm.includes("juni") || pm.includes("jun")) monthRevenueMap["Jun"] += paid;
-        else monthRevenueMap["Sep"] += paid; // fallback
+        let assignedMonth: string | null = null;
+        if (b.paidAt) {
+          const d = new Date(b.paidAt);
+          if (!isNaN(d.getTime())) {
+            assignedMonth = monthMap[d.getMonth()] || null;
+          }
+        }
+        if (!assignedMonth) {
+          const pm = ((b.periodMonth || b.title || "") + "").toLowerCase();
+          if (pm.includes("juli") || pm.includes("jul")) assignedMonth = "Jul";
+          else if (pm.includes("agustus") || pm.includes("agu")) assignedMonth = "Agu";
+          else if (pm.includes("september") || pm.includes("sep")) assignedMonth = "Sep";
+          else if (pm.includes("oktober") || pm.includes("okt")) assignedMonth = "Okt";
+          else if (pm.includes("november") || pm.includes("nov")) assignedMonth = "Nov";
+          else if (pm.includes("desember") || pm.includes("des")) assignedMonth = "Des";
+          else if (pm.includes("januari") || pm.includes("jan")) assignedMonth = "Jan";
+          else if (pm.includes("februari") || pm.includes("feb")) assignedMonth = "Feb";
+          else if (pm.includes("maret") || pm.includes("mar")) assignedMonth = "Mar";
+          else if (pm.includes("april") || pm.includes("apr")) assignedMonth = "Apr";
+          else if (pm.includes("mei")) assignedMonth = "Mei";
+          else if (pm.includes("juni") || pm.includes("jun")) assignedMonth = "Jun";
+        }
+        if (assignedMonth && monthRevenueMap[assignedMonth] !== undefined) {
+          monthRevenueMap[assignedMonth] += paid;
+        } else {
+          monthRevenueMap["Okt"] += paid;
+        }
       }
     });
 
@@ -539,6 +621,71 @@ export function PrincipalDashboardView({
     });
     return filtered.length > 0 ? filtered.slice(0, 4) : schedules.slice(0, 4);
   }, [schedules, currentDay]);
+
+  // ─── Real-Time Dynamic Activities Derived from DB ─────────────────────────
+  const dynamicActivities = useMemo(() => {
+    if (activities.length > 0) return activities;
+
+    const items: any[] = [];
+
+    // From Announcements
+    announcements.forEach((a: any) => {
+      items.push({
+        id: `ann-${a.id}`,
+        title: a.title,
+        description: `Pengumuman oleh ${a.author?.name || "Pimpinan Sekolah"} • Sasaran: ${a.targetRole || a.target || "Semua"}`,
+        timestamp: a.createdAt,
+        type: "announcement",
+      });
+    });
+
+    // From Payments
+    bills.forEach((p: any) => {
+      const isPaid = (p.status || "").toLowerCase() === "lunas" || (p.status || "").toLowerCase() === "paid" || (p.rawStatus || "").toUpperCase() === "LUNAS";
+      items.push({
+        id: `pay-${p.id}`,
+        title: isPaid ? `Pembayaran SPP Lunas: ${p.studentName}` : `Tagihan SPP: ${p.studentName}`,
+        description: `${p.title || p.periodMonth || "SPP"} • ${formatRupiah(p.amount)} (${p.className || "-"})`,
+        timestamp: p.paidAt || p.createdAt,
+        type: "payment",
+      });
+    });
+
+    // From Student Attendance
+    attendance.forEach((att: any) => {
+      if (att.status && att.status.toLowerCase() !== "belum absen") {
+        items.push({
+          id: `att-${att.id}`,
+          title: `Presensi Siswa: ${att.fullName || att.name}`,
+          description: `Status: ${att.status} (Kelas: ${att.className || "-"}) pada ${att.time || "-"} WIB`,
+          timestamp: att.date ? `${att.date}T${att.time && att.time !== "-" ? att.time : "08:00"}:00Z` : new Date().toISOString(),
+          type: "attendance",
+        });
+      }
+    });
+
+    // From Teacher Attendance
+    teacherAttendance.forEach((tAtt: any) => {
+      if (tAtt.status && tAtt.status.toLowerCase() !== "belum absen") {
+        items.push({
+          id: `tatt-${tAtt.id}`,
+          title: `Presensi Guru: ${tAtt.name || tAtt.fullName}`,
+          description: `Status: ${tAtt.status} (Waktu: ${tAtt.time || "-"} WIB)`,
+          timestamp: tAtt.date ? `${tAtt.date}T${tAtt.time && tAtt.time !== "-" ? tAtt.time : "07:00"}:00Z` : new Date().toISOString(),
+          type: "teacher-attendance",
+        });
+      }
+    });
+
+    // Sort newest first
+    items.sort((a, b) => {
+      const tA = new Date(a.timestamp || 0).getTime();
+      const tB = new Date(b.timestamp || 0).getTime();
+      return tB - tA;
+    });
+
+    return items;
+  }, [activities, announcements, bills, attendance, teacherAttendance]);
 
   // ─── Reset Filter Action ──────────────────────────────────────────────────
   const handleResetFilters = () => {
@@ -1414,7 +1561,7 @@ export function PrincipalDashboardView({
           </div>
 
           <div className="mt-4 pt-3 border-t border-purple-100 flex items-center justify-between text-xs text-gray-500 font-medium">
-            <span>Data diperbarui secara otomatis dari Firestore</span>
+            <span>Data diperbarui secara otomatis dari Database PostgreSQL</span>
             <div className="flex items-center gap-3">
               <Link href="/grades" className="text-[#531FFF] font-black hover:underline">
                 Lihat Penilaian →
@@ -1440,8 +1587,8 @@ export function PrincipalDashboardView({
             </div>
 
             <div className="mt-4 space-y-3 max-h-[300px] overflow-y-auto pr-1">
-              {activities.length > 0 ? (
-                activities.slice(0, 5).map((act: any, idx: number) => (
+              {dynamicActivities.length > 0 ? (
+                dynamicActivities.slice(0, 5).map((act: any, idx: number) => (
                   <div key={act.id || idx} className="flex items-start gap-2.5 text-xs pb-2.5 border-b border-gray-50 last:border-0">
                     <div className="w-6 h-6 rounded-full bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold shrink-0 mt-0.5">
                       <Clock3 className="w-3 h-3" />

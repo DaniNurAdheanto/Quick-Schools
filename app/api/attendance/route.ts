@@ -113,6 +113,7 @@ export async function GET(req: NextRequest) {
         rate: allStudents.length > 0 ? Math.round((hadirCount / allStudents.length) * 100) : 0,
       },
       records: mergedList,
+      attendance: mergedList,
     });
   } catch (err: any) {
     console.error("GET /api/attendance error:", err);

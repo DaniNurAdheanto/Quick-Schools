@@ -45,6 +45,7 @@ import { formatDistance } from "@/lib/geofence-utils";
 import { acquireCurrentLocation, type GeolocationErrorState } from "@/lib/geolocation-service";
 import AttendanceGeofenceMap from "@/components/attendance/attendance-geofence-map";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { useAuth } from "@/context/AuthContext";
 import dynamic from "next/dynamic";
 
 const FaceEnrolmentModal = dynamic(
@@ -109,6 +110,11 @@ export function QuickAttendanceModal({
   alreadyAttendedToday?: boolean;
   onAttendanceSuccess?: (record: any) => void;
 }) {
+  const { user: authUser, userData: authUserData } = useAuth();
+  const effectiveUserUid = authUserData?.id || (authUser as any)?.id || authUser?.uid || auth.currentUser?.uid || studentId || "";
+  const effectiveStudentId = studentId && studentId !== "-" ? studentId : (authUserData?.nisn || authUserData?.studentId || undefined);
+  const effectiveUserRole = authUserData?.role || (authUser as any)?.role || "siswa";
+
   const toastCtx = useToast();
   const showSuccess = toastCtx?.showSuccess;
   const showError = toastCtx?.showError;
@@ -186,14 +192,12 @@ export function QuickAttendanceModal({
   // Fetch biometric on open
   useEffect(() => {
     if (!isOpen) return;
-    const uid = auth.currentUser?.uid;
-    const altId = studentId && studentId !== "-" ? studentId : undefined;
-    getUserFaceBiometric(uid || "", altId).then((bio) => {
+    getUserFaceBiometric(effectiveUserUid, effectiveStudentId).then((bio) => {
       if (bio && bio.isEnrolled) {
         setFaceBiometric(bio);
       }
     });
-  }, [isOpen, studentId]);
+  }, [isOpen, effectiveUserUid, effectiveStudentId]);
 
   // 1. Fetch real-time attendance config from Firestore & localStorage
   useEffect(() => {
@@ -1766,10 +1770,11 @@ export function QuickAttendanceModal({
       <FaceEnrolmentModal
         isOpen={isFaceModalOpen}
         onClose={() => setIsFaceModalOpen(false)}
-        userUid={auth.currentUser?.uid || ""}
-        userName={userName || "Siswa"}
-        userRole="siswa"
-        studentId={studentId}
+        userUid={effectiveUserUid}
+        userName={userName || authUserData?.fullName || authUser?.displayName || "Siswa"}
+        userRole={effectiveUserRole}
+        studentId={effectiveStudentId || studentId}
+        nip={authUserData?.nip || (effectiveUserRole === "guru" ? studentId : undefined)}
         onSuccess={(bio) => {
           setFaceBiometric(bio);
           setIsFaceModalOpen(false);

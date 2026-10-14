@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
         student: { select: { id: true, fullName: true, nisn: true } },
         subject: { select: { id: true, name: true, code: true } },
         class: { select: { id: true, name: true } },
+        academicYear: true,
       },
       orderBy: { createdAt: "desc" },
     });
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
       _firestoreId: g.id,
       type: g.type,
       score: g.score,
+      finalScore: g.score,
       notes: g.notes || "-",
       studentId: g.studentId,
       studentName: g.student?.fullName || "-",
@@ -40,6 +42,8 @@ export async function GET(request: NextRequest) {
       classId: g.classId,
       className: g.class?.name || "-",
       class: g.class?.name || "-",
+      academicYear: g.academicYear?.name || "2025/2026",
+      semester: g.academicYear?.semester || "Ganjil",
       createdAt: g.createdAt.toISOString(),
       updatedAt: g.updatedAt.toISOString(),
     }));

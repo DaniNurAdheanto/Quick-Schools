@@ -40,25 +40,54 @@ export default function RegisterPage() {
     setLoading(true);
     setError("");
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = userCredential.user.uid;
-      
-      // 1. Create user profile in Firestore with default 'siswa' role & onboardingCompleted: false
-      await setDoc(doc(db, "users", uid), {
-        uid: uid,
-        email: email,
-        name: name || email.split('@')[0],
-        role: "siswa",
-        status: "Belum Onboarding",
-        onboardingCompleted: false,
-        createdAt: new Date().toISOString()
-      }, { merge: true });
+      // 1. Create account in PostgreSQL User table
+      const pgRes = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: (name || email.split("@")[0]).trim(),
+          email: email.trim().toLowerCase(),
+          password,
+          role: "siswa",
+          status: "Belum Onboarding",
+        }),
+      });
+
+      const pgData = await pgRes.json();
+      if (!pgRes.ok && pgRes.status !== 409) {
+        throw new Error(pgData.error || "Gagal mendaftarkan akun di database sekolah.");
+      }
+
+      // 2. Establish PostgreSQL session cookie via login
+      try {
+        await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        });
+      } catch (loginErr) {}
+
+      // 3. Optional Firebase sync
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const uid = userCredential.user.uid;
+        await setDoc(doc(db, "users", uid), {
+          uid: uid,
+          email: email.trim().toLowerCase(),
+          name: name || email.split('@')[0],
+          role: "siswa",
+          status: "Belum Onboarding",
+          onboardingCompleted: false,
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (fbErr) {}
 
       try {
         localStorage.setItem("onboarding_completed", "false");
+        localStorage.setItem("quick_schools_last_activity_timestamp", Date.now().toString());
       } catch (e) {}
 
-      // 3. Always redirect to onboarding
+      // 4. Redirect to onboarding
       router.push("/onboarding");
     } catch (err: any) {
       console.error("Register error:", err);

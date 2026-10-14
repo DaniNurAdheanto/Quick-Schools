@@ -385,7 +385,13 @@ export function FaceEnrolmentModal({
         nip,
       };
 
-      await saveUserFaceBiometric(userUid, biometricData, userRole);
+      const targetUid = userUid || studentId || nip || "";
+      const saved = await saveUserFaceBiometric(targetUid, biometricData, userRole);
+      if (!saved) {
+        showError("Gagal menyimpan data biometrik. Pastikan kamera mendeteksi wajah dengan jelas.", "Pendaftaran Gagal");
+        setPhase("center");
+        return;
+      }
 
       setPhase("completed");
       playCompleteChime();

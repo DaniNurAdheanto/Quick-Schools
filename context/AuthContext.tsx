@@ -138,6 +138,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // 1. Strict check with PostgreSQL User table
+      let pgData: any = null;
+      try {
+        const checkRes = await fetch("/api/auth/google", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: cleanEmail,
+            uid: firebaseUser.uid,
+            displayName: firebaseUser.displayName,
+            photoUrl: firebaseUser.photoURL,
+          }),
+        });
+
+        if (checkRes.ok) {
+          const resJson = await checkRes.json();
+          if (resJson.success && resJson.user) {
+            pgData = resJson.user;
+          }
+        } else if (checkRes.status === 404 || checkRes.status === 403) {
+          // ACCOUNT DOES NOT EXIST IN DATABASE USER TABLE OR IS NONAKTIF!
+          console.warn("Account does not exist in PostgreSQL User table or is deactivated:", cleanEmail);
+          try {
+            await signOut(auth);
+          } catch (e) {}
+          setUser(null);
+          setUserData(null);
+          setRole(null);
+          setRawRole("");
+          setRolePermissions({});
+          try {
+            localStorage.removeItem(AUTH_CACHE_KEY);
+          } catch (e) {}
+          setIsAuthLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("Error verifying user against PostgreSQL in fetchUserData:", err);
+      }
+
       let userSnap: any = null;
       try {
         const snap = await getDoc(doc(db, "users", firebaseUser.uid));
@@ -203,7 +243,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {}
 
       let data: UserProfileData;
-      if (userSnap && userSnap.exists()) {
+      if (pgData) {
+        data = {
+          id: pgData.id,
+          uid: pgData.id,
+          name: pgData.name,
+          fullName: pgData.name,
+          email: cleanEmail,
+          role: pgData.role,
+          status: pgData.status,
+          onboardingCompleted: pgData.onboardingCompleted,
+          isActive: pgData.status === "Aktif",
+          phone: pgData.phone,
+          avatarUrl: pgData.avatarUrl,
+          photoUrl: pgData.avatarUrl,
+          studentId: pgData.studentId,
+          teacherId: pgData.teacherId,
+          parentId: pgData.parentId,
+          classId: pgData.classId,
+          className: pgData.className,
+          nip: pgData.nip,
+          nisn: pgData.nisn,
+          ...pgData,
+        } as UserProfileData;
+      } else if (userSnap && userSnap.exists()) {
         data = { id: userSnap.id, uid: (userSnap.data() as any)?.uid || firebaseUser.uid, ...userSnap.data() } as UserProfileData;
       } else if (teacherSnap && teacherSnap.exists()) {
         data = { id: teacherSnap.id, uid: (teacherSnap.data() as any)?.uid || firebaseUser.uid, role: "guru", ...teacherSnap.data() } as UserProfileData;
@@ -212,43 +275,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else if (studentSnap && studentSnap.exists()) {
         data = { id: studentSnap.id, uid: (studentSnap.data() as any)?.uid || firebaseUser.uid, role: "siswa", ...studentSnap.data() } as UserProfileData;
       } else {
-        // Fallback user profile if users document does not exist yet
-        let fallbackRole: UserRole = "admin";
-        let fallbackName = firebaseUser.displayName || cleanEmail.split("@")[0] || "Pengguna";
-
-        if (cleanEmail === "dani@gmail.com" || cleanEmail.includes("superadmin")) {
-          fallbackRole = "super-admin";
-          fallbackName = "Dani Nur Adheanto";
-        } else if (
-          cleanEmail.includes("kelapa") ||
-          cleanEmail.includes("kepala") ||
-          cleanEmail.includes("seokolah") ||
-          cleanEmail.includes("kepsek") ||
-          cleanEmail.includes("principal") ||
-          cleanEmail.includes("headmaster") ||
-          cleanEmail.includes("tohar")
-        ) {
-          fallbackRole = "kepala-sekolah";
-          fallbackName = "Dr. Tohar Bahar, M.Pd";
-        } else if (cleanEmail.includes(".guru@") || cleanEmail.includes("guru.") || cleanEmail.includes("teacher")) {
-          fallbackRole = "guru";
-        } else if (cleanEmail.includes(".wali@") || cleanEmail.includes("wali.") || cleanEmail.includes("parent") || cleanEmail.includes("orangtua")) {
-          fallbackRole = "orang-tua";
-        } else if (cleanEmail.includes("student") || cleanEmail.includes("siswa")) {
-          fallbackRole = "siswa";
-        }
-
-        data = {
-          uid: firebaseUser.uid,
-          id: firebaseUser.uid,
-          name: fallbackName,
-          fullName: fallbackName,
-          email: cleanEmail,
-          role: fallbackRole,
-          status: "Aktif",
-          onboardingCompleted: true,
-          isActive: true
-        };
+        // Account does NOT exist in PostgreSQL or Firestore: reject completely!
+        console.warn("Unregistered account detected in fetchUserData:", cleanEmail);
+        try {
+          await signOut(auth);
+        } catch (e) {}
+        setUser(null);
+        setUserData(null);
+        setRole(null);
+        setRawRole("");
+        setRolePermissions({});
+        try {
+          localStorage.removeItem(AUTH_CACHE_KEY);
+        } catch (e) {}
+        setIsAuthLoading(false);
+        return;
       }
 
       // Check for inactive / disabled status
@@ -300,39 +341,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data = { ...studentSnap.data(), ...data, role: data.role || "siswa" };
       }
 
-      let uRawRole = data.role;
+      let uRawRole = pgData?.role || data.role;
 
-      if (cleanEmail === "dani@gmail.com" || cleanEmail.includes("superadmin")) {
-        uRawRole = "super-admin";
-      } else if (
-        cleanEmail.includes("kelapa") ||
-        cleanEmail.includes("kepala") ||
-        cleanEmail.includes("seokolah") ||
-        cleanEmail.includes("kepsek") ||
-        cleanEmail.includes("principal") ||
-        cleanEmail.includes("headmaster") ||
-        cleanEmail.includes("tohar") ||
-        (data.name && (data.name.toLowerCase().includes("tohar") || data.name.toLowerCase().includes("kepala sekolah"))) ||
-        (data.fullName && (data.fullName.toLowerCase().includes("tohar") || data.fullName.toLowerCase().includes("kepala sekolah"))) ||
-        isKepalaSekolahRole(data.role)
-      ) {
-        uRawRole = "kepala-sekolah";
-      } else if (cleanEmail.includes(".guru@") || cleanEmail.includes("guru.") || cleanEmail.includes("teacher")) {
-        uRawRole = "guru";
-      } else if (cleanEmail.includes(".wali@") || cleanEmail.includes("wali.") || cleanEmail.includes("parent") || cleanEmail.includes("orangtua")) {
-        uRawRole = "orang-tua";
-      } else if (cleanEmail.includes("siswa") || cleanEmail.includes("student")) {
-        uRawRole = "siswa";
-      } else if (cleanEmail.includes("admin") && !cleanEmail.includes("superadmin")) {
-        uRawRole = "admin";
-      } else if (data.role) {
-        uRawRole = data.role;
-      } else if (teacherSnap && teacherSnap.exists() || data.nip || data.subject) {
-        uRawRole = "guru";
-      } else if (parentSnap && parentSnap.exists() || data.studentId || data.studentIds) {
-        uRawRole = "orang-tua";
-      } else if (studentSnap && studentSnap.exists() || data.nisn || data.className || data.kelas) {
-        uRawRole = "siswa";
+      if (!uRawRole) {
+        if (cleanEmail === "dani@gmail.com" || cleanEmail.includes("superadmin")) {
+          uRawRole = "super-admin";
+        } else if (
+          cleanEmail.includes("kelapa") ||
+          cleanEmail.includes("kepala") ||
+          cleanEmail.includes("seokolah") ||
+          cleanEmail.includes("kepsek") ||
+          cleanEmail.includes("principal") ||
+          cleanEmail.includes("headmaster") ||
+          cleanEmail.includes("tohar") ||
+          (data.name && (data.name.toLowerCase().includes("tohar") || data.name.toLowerCase().includes("kepala sekolah"))) ||
+          (data.fullName && (data.fullName.toLowerCase().includes("tohar") || data.fullName.toLowerCase().includes("kepala sekolah"))) ||
+          isKepalaSekolahRole(data.role)
+        ) {
+          uRawRole = "kepala-sekolah";
+        } else if (cleanEmail.includes(".guru@") || cleanEmail.includes("guru.") || cleanEmail.includes("teacher")) {
+          uRawRole = "guru";
+        } else if (cleanEmail.includes(".wali@") || cleanEmail.includes("wali.") || cleanEmail.includes("parent") || cleanEmail.includes("orangtua")) {
+          uRawRole = "orang-tua";
+        } else if (cleanEmail.includes("siswa") || cleanEmail.includes("student")) {
+          uRawRole = "siswa";
+        } else if (cleanEmail.includes("admin") && !cleanEmail.includes("superadmin")) {
+          uRawRole = "admin";
+        } else if (data.role) {
+          uRawRole = data.role;
+        } else if (teacherSnap && teacherSnap.exists() || data.nip || data.subject) {
+          uRawRole = "guru";
+        } else if (parentSnap && parentSnap.exists() || data.studentId || data.studentIds) {
+          uRawRole = "orang-tua";
+        } else if (studentSnap && studentSnap.exists() || data.nisn || data.className || data.kelas) {
+          uRawRole = "siswa";
+        }
       }
 
       if (!uRawRole) {
@@ -369,30 +412,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {}
     } catch (error) {
       console.error("AuthContext fetchUserData error:", error);
-      // Emergency recovery fallback to prevent perpetual loading skeleton
-      const fallbackCleanEmail = (firebaseUser.email || "").toLowerCase().trim();
-      let emergencyRole: UserRole = "admin";
-      if (
-        fallbackCleanEmail.includes("kelapa") ||
-        fallbackCleanEmail.includes("kepala") ||
-        fallbackCleanEmail.includes("seokolah") ||
-        fallbackCleanEmail.includes("tohar") ||
-        fallbackCleanEmail.includes("kepsek") ||
-        fallbackCleanEmail.includes("principal")
-      ) {
-        emergencyRole = "kepala-sekolah";
-      } else if (fallbackCleanEmail === "dani@gmail.com" || fallbackCleanEmail.includes("superadmin")) {
-        emergencyRole = "super-admin";
-      } else if (fallbackCleanEmail.includes("guru") || fallbackCleanEmail.includes("teacher")) {
-        emergencyRole = "guru";
-      } else if (fallbackCleanEmail.includes("parent") || fallbackCleanEmail.includes("wali") || fallbackCleanEmail.includes("orangtua")) {
-        emergencyRole = "orang-tua";
-      } else if (fallbackCleanEmail.includes("siswa") || fallbackCleanEmail.includes("student")) {
-        emergencyRole = "siswa";
-      }
-      setRole(emergencyRole);
-      setRawRole(emergencyRole);
-      setRolePermissions(DEFAULT_PERMISSIONS[emergencyRole] || {});
+      try {
+        await signOut(auth);
+      } catch (e) {}
+      setUser(null);
+      setUserData(null);
+      setRole(null);
+      setRawRole("");
+      setRolePermissions({});
+      try {
+        localStorage.removeItem(AUTH_CACHE_KEY);
+      } catch (e) {}
     } finally {
       setIsAuthLoading(false);
     }

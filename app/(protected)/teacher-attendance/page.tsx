@@ -192,15 +192,16 @@ export default function TeacherAttendancePage() {
 
   // Fetch teacher face biometric
   useEffect(() => {
-    const targetUid = activeTeacherUid || authUser?.uid || currentUser?.uid;
-    if (targetUid) {
-      getUserFaceBiometric(targetUid).then((bio) => {
+    const targetUid = activeTeacherUid || authUser?.uid || currentUser?.uid || "";
+    const targetNip = authUserData?.nip;
+    if (targetUid || targetNip) {
+      getUserFaceBiometric(targetUid, targetNip).then((bio) => {
         if (bio && bio.isEnrolled) {
           setFaceBiometric(bio);
         }
       });
     }
-  }, [activeTeacherUid, authUser?.uid, currentUser?.uid]);
+  }, [activeTeacherUid, authUser?.uid, currentUser?.uid, authUserData?.nip]);
 
   // Drawer state for viewing teacher attendance detail & verification photos
   const [selectedDetailRecord, setSelectedDetailRecord] = useState<{

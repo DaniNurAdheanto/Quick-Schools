@@ -451,7 +451,12 @@ export async function saveUserFaceBiometric(
   biometric: FaceBiometricData,
   role?: string
 ): Promise<boolean> {
-  if (!uid) return false;
+  const effectiveUid = uid || biometric.studentId || biometric.nip;
+  if (!effectiveUid) {
+    console.error("Refusing to save biometric: no valid identifier (uid, studentId, or nip) provided");
+    return false;
+  }
+
   if (!biometric.faceDescriptor || biometric.faceDescriptor.length < 512) {
     console.error("Refusing to save biometric: faceDescriptor is not a valid >= 512-d AI embedding");
     return false;
@@ -476,21 +481,44 @@ export async function saveUserFaceBiometric(
     updatedAt: serverTimestamp(),
   };
 
-  // 1. Save to local storage for zero-latency retrieval
-  try {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}${uid}`, JSON.stringify(payload.faceBiometric));
-  } catch (e) {
-    console.warn("Could not save to localStorage cache:", e);
+  // 1. Save to local storage for zero-latency retrieval across all known candidate keys
+  const candidateKeys = Array.from(new Set([
+    uid,
+    effectiveUid,
+    biometric.studentId,
+    biometric.nip,
+  ].filter(Boolean))) as string[];
+
+  for (const k of candidateKeys) {
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}${k}`, JSON.stringify(payload.faceBiometric));
+    } catch (e) {
+      console.warn("Could not save to localStorage cache for key:", k, e);
+    }
   }
 
-  // 2. Save to Firestore users collection
+  // 2. Synchronize to persistent Server Biometrics API (Multi-layer backup)
   try {
-    await setDoc(doc(db, "users", uid), payload, { merge: true });
+    fetch("/api/biometrics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: effectiveUid,
+        studentId: biometric.studentId,
+        nip: biometric.nip,
+        biometric: payload.faceBiometric,
+      }),
+    }).catch(() => {});
+  } catch (apiErr) {}
+
+  // 3. Save to Firestore users collection
+  try {
+    await setDoc(doc(db, "users", effectiveUid), payload, { merge: true });
   } catch (err) {
     console.warn("Error saving biometric to users:", err);
   }
 
-  // 3. If teacher role, synchronize to teachers collection
+  // 4. If teacher role, synchronize to teachers collection
   const resolvedRole = (role || "").toLowerCase();
   if (resolvedRole.includes("guru") || resolvedRole.includes("teacher")) {
     try {
@@ -662,7 +690,57 @@ export async function getUserFaceBiometric(
     } catch (e) {}
   }
 
-  // 2. Fetch from Firestore users collection
+  // 1b. Deep local storage scan: find any cached biometric matching studentId, nip, or name
+  if (typeof window !== "undefined") {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const storageKey = localStorage.key(i);
+        if (storageKey && storageKey.startsWith(STORAGE_KEY_PREFIX)) {
+          const raw = localStorage.getItem(storageKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && parsed.isEnrolled && Array.isArray(parsed.faceDescriptor) && parsed.faceDescriptor.length > 0) {
+              const matches = candidateIds.some((cid) =>
+                cid === parsed.studentId ||
+                cid === parsed.nip ||
+                cid === parsed.userName ||
+                cid === parsed.id ||
+                cid === parsed.uid ||
+                storageKey.replace(STORAGE_KEY_PREFIX, "") === cid
+              );
+              if (matches) {
+                // Link candidate keys for instant subsequent lookups
+                for (const cid of candidateIds) {
+                  try {
+                    localStorage.setItem(`${STORAGE_KEY_PREFIX}${cid}`, raw);
+                  } catch {}
+                }
+                return parsed as FaceBiometricData;
+              }
+            }
+          }
+        }
+      }
+    } catch (scanErr) {}
+  }
+
+  // 2. Fetch from persistent Server Biometrics API (multi-layer fallback)
+  for (const cid of candidateIds) {
+    try {
+      const res = await fetch(`/api/biometrics?id=${encodeURIComponent(cid)}`);
+      const data = await res.json();
+      if (data.success && data.biometric && data.biometric.isEnrolled) {
+        for (const k of candidateIds) {
+          try {
+            localStorage.setItem(`${STORAGE_KEY_PREFIX}${k}`, JSON.stringify(data.biometric));
+          } catch {}
+        }
+        return data.biometric as FaceBiometricData;
+      }
+    } catch (apiErr) {}
+  }
+
+  // 3. Fetch from Firestore users collection
   for (const cid of candidateIds) {
     try {
       const userSnap = await getDoc(doc(db, "users", cid));
@@ -670,7 +748,9 @@ export async function getUserFaceBiometric(
         const data = userSnap.data();
         if (data?.faceBiometric?.isEnrolled) {
           try {
-            localStorage.setItem(`${STORAGE_KEY_PREFIX}${cid}`, JSON.stringify(data.faceBiometric));
+            for (const k of candidateIds) {
+              localStorage.setItem(`${STORAGE_KEY_PREFIX}${k}`, JSON.stringify(data.faceBiometric));
+            }
           } catch (e) {}
           return data.faceBiometric as FaceBiometricData;
         }
@@ -678,7 +758,7 @@ export async function getUserFaceBiometric(
     } catch (err) {}
   }
 
-  // 3. Fetch from Firestore students collection by direct doc ID
+  // 4. Fetch from Firestore students collection by direct doc ID
   for (const cid of candidateIds) {
     try {
       const studentSnap = await getDoc(doc(db, "students", cid));
@@ -686,7 +766,9 @@ export async function getUserFaceBiometric(
         const data = studentSnap.data();
         if (data?.faceBiometric?.isEnrolled) {
           try {
-            localStorage.setItem(`${STORAGE_KEY_PREFIX}${cid}`, JSON.stringify(data.faceBiometric));
+            for (const k of candidateIds) {
+              localStorage.setItem(`${STORAGE_KEY_PREFIX}${k}`, JSON.stringify(data.faceBiometric));
+            }
           } catch (e) {}
           return data.faceBiometric as FaceBiometricData;
         }
@@ -694,7 +776,7 @@ export async function getUserFaceBiometric(
     } catch (err) {}
   }
 
-  // 4. Query students collection by uid or nisn field
+  // 5. Query students collection by uid or nisn field
   for (const cid of candidateIds) {
     try {
       const qUid = query(collection(db, "students"), where("uid", "==", cid));
@@ -703,7 +785,9 @@ export async function getUserFaceBiometric(
         const data = d.data();
         if (data?.faceBiometric?.isEnrolled) {
           try {
-            localStorage.setItem(`${STORAGE_KEY_PREFIX}${cid}`, JSON.stringify(data.faceBiometric));
+            for (const k of candidateIds) {
+              localStorage.setItem(`${STORAGE_KEY_PREFIX}${k}`, JSON.stringify(data.faceBiometric));
+            }
           } catch (e) {}
           return data.faceBiometric as FaceBiometricData;
         }
@@ -715,7 +799,28 @@ export async function getUserFaceBiometric(
         const data = d.data();
         if (data?.faceBiometric?.isEnrolled) {
           try {
-            localStorage.setItem(`${STORAGE_KEY_PREFIX}${cid}`, JSON.stringify(data.faceBiometric));
+            for (const k of candidateIds) {
+              localStorage.setItem(`${STORAGE_KEY_PREFIX}${k}`, JSON.stringify(data.faceBiometric));
+            }
+          } catch (e) {}
+          return data.faceBiometric as FaceBiometricData;
+        }
+      }
+    } catch (err) {}
+  }
+
+  // 6. Query teachers collection by uid or nip field
+  for (const cid of candidateIds) {
+    try {
+      const qNip = query(collection(db, "teachers"), where("nip", "==", cid));
+      const snapNip = await getDocs(qNip);
+      for (const d of snapNip.docs) {
+        const data = d.data();
+        if (data?.faceBiometric?.isEnrolled) {
+          try {
+            for (const k of candidateIds) {
+              localStorage.setItem(`${STORAGE_KEY_PREFIX}${k}`, JSON.stringify(data.faceBiometric));
+            }
           } catch (e) {}
           return data.faceBiometric as FaceBiometricData;
         }
@@ -734,6 +839,11 @@ export async function deleteUserFaceBiometric(uid: string, role?: string): Promi
 
   try {
     localStorage.removeItem(`${STORAGE_KEY_PREFIX}${uid}`);
+  } catch (e) {}
+
+  // Delete from server biometrics store
+  try {
+    fetch(`/api/biometrics?id=${encodeURIComponent(uid)}`, { method: "DELETE" }).catch(() => {});
   } catch (e) {}
 
   try {

@@ -1,9 +1,9 @@
 import { auth, db } from "@/lib/firebase";
 import { User, GoogleAuthProvider, signInWithPopup, signOut, deleteUser } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
 
 /**
- * Checks if the user has completed onboarding and their profile data is complete in Firestore.
+ * Checks if the user has completed onboarding and their profile data is complete.
  */
 export function isUserOnboardingComplete(userData: any): boolean {
   if (!userData) return false;
@@ -158,9 +158,11 @@ export function getPostLoginRedirect(userData: any, targetRedirect?: string | nu
 }
 
 /**
- * Handles Google Sign-In with popup, checks deletion/activation status in Firestore,
- * provisions new users with pending onboarding status if first time,
- * and returns the appropriate redirect destination.
+ * Handles Google Sign-In with popup.
+ * Strictly verifies whether the account exists in the PostgreSQL User table.
+ * If the account does NOT exist in the database (or is deactivated), rejects the login,
+ * signs out from Firebase, purges caches, and throws a clear Indonesian error message.
+ * If valid, sets session cookie and returns authentic database profile and redirect URL.
  */
 export async function executeGoogleAuth(): Promise<{
   user: User;
@@ -186,25 +188,26 @@ export async function executeGoogleAuth(): Promise<{
     }
     throw authErr;
   }
+
   const user = result.user;
   const cleanEmail = (user.email || "").toLowerCase().trim();
   const sanitizedEmail = cleanEmail.replace(/[^a-z0-9]/g, "_");
 
-  // Check if account was deleted
-  let isDeleted = false;
+  // 1. Check if explicitly marked in deleted_accounts
+  let isDeletedAudit = false;
   try {
     const delByUid = await getDoc(doc(db, "deleted_accounts", user.uid));
-    if (delByUid.exists()) isDeleted = true;
+    if (delByUid.exists()) isDeletedAudit = true;
   } catch (e) {}
 
-  if (!isDeleted && sanitizedEmail) {
+  if (!isDeletedAudit && sanitizedEmail) {
     try {
       const delByEmail = await getDoc(doc(db, "deleted_accounts", sanitizedEmail));
-      if (delByEmail.exists()) isDeleted = true;
+      if (delByEmail.exists()) isDeletedAudit = true;
     } catch (e) {}
   }
 
-  if (isDeleted) {
+  if (isDeletedAudit) {
     try {
       await deleteUser(user);
     } catch (e) {}
@@ -212,51 +215,99 @@ export async function executeGoogleAuth(): Promise<{
       await signOut(auth);
     } catch (e) {}
     try {
+      localStorage.removeItem("quick_schools_auth_session_v3");
       localStorage.removeItem("quick_schools_auth_session");
       localStorage.removeItem("qs_auth_role_cache_v1");
+      sessionStorage.clear();
     } catch (e) {}
     throw new Error("Akun Google ini telah dihapus oleh Administrator dan tidak dapat digunakan lagi.");
   }
 
-  // Check user profile in Firestore
-  const userDocRef = doc(db, "users", user.uid);
-  const userDocSnap = await getDoc(userDocRef);
-
-  let userData: any = null;
-
-  if (!userDocSnap.exists()) {
-    // New user signing in with Google: provision initial profile with pending onboarding
-    userData = {
-      uid: user.uid,
-      email: cleanEmail,
-      name: user.displayName || cleanEmail.split("@")[0] || "Pengguna",
-      fullName: user.displayName || "",
-      photoUrl: user.photoURL || "",
-      role: "siswa",
-      status: "Belum Onboarding",
-      onboardingCompleted: false,
-      authProvider: "google",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    await setDoc(userDocRef, userData, { merge: true });
-  } else {
-    userData = userDocSnap.data();
-
-    // Check if account is inactive/disabled
-    if (userData.status === "Nonaktif" || userData.status === "deleted" || userData.isDeleted === true) {
-      try {
-        await signOut(auth);
-      } catch (e) {}
-      try {
-        localStorage.removeItem("quick_schools_auth_session");
-        localStorage.removeItem("qs_auth_role_cache_v1");
-      } catch (e) {}
-      throw new Error("Akun Anda berstatus Nonaktif. Silakan hubungi Super Admin untuk mengaktifkan akun Anda.");
-    }
+  // 2. STRICT CHECK: Verify that the account exists in PostgreSQL User table!
+  let dbCheckRes: Response;
+  let dbCheckData: any;
+  try {
+    dbCheckRes = await fetch("/api/auth/google", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: cleanEmail,
+        uid: user.uid,
+        displayName: user.displayName,
+        photoUrl: user.photoURL,
+      }),
+    });
+    dbCheckData = await dbCheckRes.json();
+  } catch (fetchErr: any) {
+    console.error("Failed to connect to /api/auth/google:", fetchErr);
+    try {
+      await signOut(auth);
+    } catch (e) {}
+    throw new Error("Gagal menghubungkan ke server untuk verifikasi akun database. Silakan coba beberapa saat lagi.");
   }
 
-  const redirectUrl = getPostLoginRedirect(userData);
-  return { user, redirectUrl, userData };
+  // 3. If account does NOT exist in PostgreSQL (or is deactivated), strictly reject!
+  if (!dbCheckRes.ok || !dbCheckData.success || !dbCheckData.user) {
+    // Purge session from Firebase
+    try {
+      await signOut(auth);
+    } catch (e) {}
+
+    // Purge any residual Firestore docs for this user to prevent ghost states
+    try {
+      await deleteDoc(doc(db, "users", user.uid));
+      if (sanitizedEmail) {
+        await deleteDoc(doc(db, "users", sanitizedEmail));
+      }
+    } catch (e) {}
+
+    // Purge client session caches
+    try {
+      localStorage.removeItem("quick_schools_auth_session_v3");
+      localStorage.removeItem("quick_schools_auth_session");
+      localStorage.removeItem("qs_auth_role_cache_v1");
+      sessionStorage.clear();
+    } catch (e) {}
+
+    const rejectionMessage =
+      dbCheckData.error ||
+      "Akun Google ini belum terdaftar di tabel akun database sekolah. Silakan hubungi Administrator untuk mendaftarkan akun Anda terlebih dahulu.";
+
+    throw new Error(rejectionMessage);
+  }
+
+  // 4. Account is valid and verified in PostgreSQL!
+  const dbUser = dbCheckData.user;
+
+  // Sync / update Firestore user doc with official database data
+  try {
+    const userDocRef = doc(db, "users", user.uid);
+    await setDoc(
+      userDocRef,
+      {
+        uid: user.uid,
+        id: dbUser.id,
+        email: cleanEmail,
+        name: dbUser.name || user.displayName || cleanEmail.split("@")[0],
+        fullName: dbUser.name || user.displayName || "",
+        photoUrl: user.photoURL || dbUser.avatarUrl || "",
+        role: dbUser.role,
+        status: dbUser.status,
+        onboardingCompleted: dbUser.onboardingCompleted,
+        authProvider: "google",
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  } catch (syncErr) {
+    console.warn("Firestore sync warning on Google login:", syncErr);
+  }
+
+  // Set fresh activity timestamp for idle timeout manager
+  try {
+    localStorage.setItem("quick_schools_last_activity_timestamp", Date.now().toString());
+  } catch (e) {}
+
+  const redirectUrl = getPostLoginRedirect(dbUser);
+  return { user, redirectUrl, userData: dbUser };
 }
