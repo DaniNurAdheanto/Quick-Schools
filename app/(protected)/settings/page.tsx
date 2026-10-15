@@ -434,6 +434,7 @@ export default function SettingsPage() {
     teacherAttendanceMode: "face_recognition" as "face_recognition" | "selfie_only",
     studentAttendanceMode: "face_recognition" as "face_recognition" | "selfie_only",
     attendanceMode: "face_recognition", // fallback alias
+    operationalDays: "Senin - Jumat" as "Senin - Jumat" | "Senin - Sabtu",
     methodFaceId: true,
     methodQr: true,
     methodManual: true,
@@ -855,8 +856,11 @@ export default function SettingsPage() {
     const targetLng = Number(profile.longitude ?? attendance.schoolCenterLng ?? 106.816666);
     const targetRadius = Number(profile.radiusMeters ?? attendance.geofenceRadiusMeters ?? 100);
 
+    const opDays = (profile.operationalDays || attendance.operationalDays || "Senin - Jumat") as "Senin - Jumat" | "Senin - Sabtu";
+
     const profilePayload: SchoolProfile = {
       ...profile,
+      operationalDays: opDays,
       educationalStage: profile.educationalStage || currentStage,
       vocationalPrograms: profile.vocationalPrograms || globalSchoolProfile?.vocationalPrograms || [],
       latitude: targetLat,
@@ -864,9 +868,10 @@ export default function SettingsPage() {
       radiusMeters: targetRadius,
     };
 
-    setProfile((prev) => ({ ...prev, latitude: targetLat, longitude: targetLng, radiusMeters: targetRadius }));
+    setProfile((prev) => ({ ...prev, operationalDays: opDays, latitude: targetLat, longitude: targetLng, radiusMeters: targetRadius }));
     setAttendance((prev) => ({
       ...prev,
+      operationalDays: opDays,
       schoolCenterLat: targetLat,
       schoolCenterLng: targetLng,
       schoolLat: targetLat,
@@ -883,6 +888,7 @@ export default function SettingsPage() {
           await setDoc(
             doc(db, "roles", "attendance_config"),
             {
+              operationalDays: opDays,
               schoolCenterLat: targetLat,
               schoolCenterLng: targetLng,
               schoolLat: targetLat,
@@ -909,6 +915,10 @@ export default function SettingsPage() {
           await setDoc(
             doc(db, "roles", "teacher_attendance_config"),
             {
+              operationalDays: opDays,
+              workDays: opDays === "Senin - Sabtu"
+                ? ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"]
+                : ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
               geofenceCenter: {
                 lat: targetLat,
                 lng: targetLng,
@@ -959,10 +969,16 @@ export default function SettingsPage() {
 
     const teacherMode = attendance.teacherAttendanceMode || "face_recognition";
     const studentMode = attendance.studentAttendanceMode || "face_recognition";
+    const opDays = (attendance.operationalDays || profile.operationalDays || "Senin - Jumat") as "Senin - Jumat" | "Senin - Sabtu";
+    const opWorkDays = opDays === "Senin - Sabtu"
+      ? ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"]
+      : ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"];
 
     const schoolAddr = profile.address || profile.locationAddress || "Area Utama Sekolah";
     const payload = {
       ...attendance,
+      operationalDays: opDays,
+      workDays: opWorkDays,
       teacherAttendanceMode: teacherMode,
       studentAttendanceMode: studentMode,
       attendanceMode: studentMode, // fallback alias
@@ -998,6 +1014,7 @@ export default function SettingsPage() {
     }));
     setProfile((prev) => ({
       ...prev,
+      operationalDays: opDays,
       latitude: targetLat,
       longitude: targetLng,
       radiusMeters: targetRadius,
@@ -1007,8 +1024,9 @@ export default function SettingsPage() {
       // 1. Primary allowed store in Firestore (roles/attendance_config)
       await setDoc(doc(db, "roles", "attendance_config"), payload, { merge: true });
 
-      // 2. Also update profile location in global store (roles/school_profile & settings/school_profile)
+      // 2. Also update profile location and operational days in global store (roles/school_profile & settings/school_profile)
       await saveGlobalSchoolProfile({
+        operationalDays: opDays,
         latitude: targetLat,
         longitude: targetLng,
         radiusMeters: targetRadius,
@@ -1021,6 +1039,8 @@ export default function SettingsPage() {
         localStorage.setItem("quick_schools_attendance_config", JSON.stringify(payload));
         localStorage.setItem("smart_school_teacher_attendance_config_v1", JSON.stringify({
           attendanceMode: teacherMode,
+          operationalDays: opDays,
+          workDays: opWorkDays,
           minFaceMatchScore: Number(attendance.minFaceMatchScore ?? 80),
           requireLiveness: Boolean(attendance.requireLiveness),
           geofenceEnabled: Boolean(attendance.requireRadius),
@@ -1047,6 +1067,8 @@ export default function SettingsPage() {
           {
             attendanceMode: teacherMode,
             requirePhoto: true,
+            operationalDays: opDays,
+            workDays: opWorkDays,
             minFaceMatchScore: Number(attendance.minFaceMatchScore ?? 80),
             requireLiveness: Boolean(attendance.requireLiveness),
             geofenceEnabled: Boolean(attendance.requireRadius),
@@ -1690,6 +1712,28 @@ export default function SettingsPage() {
                         placeholder="06:30 - 16:00 WIB"
                         className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block text-gray-700 font-bold mb-1.5 flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                        Hari Operasional Sekolah
+                      </label>
+                      <select 
+                        value={profile.operationalDays || "Senin - Jumat"}
+                        onChange={(e) => {
+                          const val = e.target.value as "Senin - Jumat" | "Senin - Sabtu";
+                          setProfile((prev) => ({ ...prev, operationalDays: val }));
+                          setAttendance((prev) => ({ ...prev, operationalDays: val }));
+                        }}
+                        className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] text-gray-900 font-bold"
+                      >
+                        <option value="Senin - Jumat">Senin – Jumat (5 Hari Kerja / Belajar)</option>
+                        <option value="Senin - Sabtu">Senin – Sabtu (6 Hari Kerja / Belajar)</option>
+                      </select>
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        Sistem absensi siswa &amp; guru otomatis mengikuti hari aktif operasional ini.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -3282,6 +3326,63 @@ export default function SettingsPage() {
                       className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-bold text-gray-900 focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none"
                     />
                     <p className="text-[10px] text-gray-400 mt-1">Presensi kepulangan dibuka setelah jam ini.</p>
+                  </div>
+                </div>
+
+                {/* Sub-Section: Jadwal Hari Operasional Sekolah (Senin-Jumat vs Senin-Sabtu) */}
+                <div className="p-4.5 rounded-xl bg-purple-50/70 border border-purple-200/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-[#531FFF] text-white flex items-center justify-center font-bold shrink-0 shadow-sm">
+                      <Calendar className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-extrabold text-sm text-gray-900">
+                          Jadwal Hari Operasional Sekolah
+                        </h4>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-[#531FFF] text-white">
+                          {attendance.operationalDays || "Senin - Jumat"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Sistem absensi guru &amp; siswa diselaraskan dengan hari operasional aktif. Pada hari libur (non-operasional), sistem tidak akan menandai siswa/guru sebagai Alpa dan absensi tidak diwajibkan.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttendance((prev) => ({ ...prev, operationalDays: "Senin - Jumat" }));
+                        setProfile((prev) => ({ ...prev, operationalDays: "Senin - Jumat" }));
+                      }}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center gap-2",
+                        (attendance.operationalDays || "Senin - Jumat") === "Senin - Jumat"
+                          ? "bg-[#531FFF] text-white border-[#531FFF] shadow-md shadow-[#531FFF]/20"
+                          : "bg-white text-gray-700 border-gray-200 hover:border-gray-300"
+                      )}
+                    >
+                      <CheckCircle2 className={cn("w-3.5 h-3.5", (attendance.operationalDays || "Senin - Jumat") === "Senin - Jumat" ? "opacity-100" : "opacity-0")} />
+                      <span>Senin – Jumat (5 Hari)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttendance((prev) => ({ ...prev, operationalDays: "Senin - Sabtu" }));
+                        setProfile((prev) => ({ ...prev, operationalDays: "Senin - Sabtu" }));
+                      }}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center gap-2",
+                        attendance.operationalDays === "Senin - Sabtu"
+                          ? "bg-[#531FFF] text-white border-[#531FFF] shadow-md shadow-[#531FFF]/20"
+                          : "bg-white text-gray-700 border-gray-200 hover:border-gray-300"
+                      )}
+                    >
+                      <CheckCircle2 className={cn("w-3.5 h-3.5", attendance.operationalDays === "Senin - Sabtu" ? "opacity-100" : "opacity-0")} />
+                      <span>Senin – Sabtu (6 Hari)</span>
+                    </button>
                   </div>
                 </div>
               </div>

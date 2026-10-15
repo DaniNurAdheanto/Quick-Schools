@@ -29,7 +29,8 @@ import {
   RefreshCw,
   Award,
   ChevronDown,
-  Activity
+  Activity,
+  CalendarDays
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -44,10 +45,12 @@ import {
   PieChart,
   Pie,
   Cell,
-  Line
+  Line,
+  LineChart
 } from "recharts";
 import { formatRupiah } from "@/lib/spp-payments";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { isSchoolOperationalDay, getOperationalDayStatus } from "@/lib/operational-days";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import { subscribeLeaveRequests, getDatesBetween, LeaveRequest } from "@/lib/leave-requests-service";
@@ -114,13 +117,27 @@ export function AdminDashboardView({
   const [grades, setGrades] = useState<any[]>([]);
   const [bills, setBills] = useState<any[]>([]);
   const [activities] = useState<any[]>([]);
-  const [teacherAttendance] = useState<any[]>([]);
+  const [teacherAttendance, setTeacherAttendance] = useState<any[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
 
   // ─── UI & Interactive Filter States ───────────────────────────────────────
   const [selectedTimeRange, setSelectedTimeRange] = useState<"7d" | "14d" | "30d">("7d");
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>("ALL");
   const [showRoleDropdown, setShowRoleDropdown] = useState<boolean>(false);
+
+  // ─── Attendance Mode & Historical States ──────────────────────────────────
+  const [selectedAttendanceMode, setSelectedAttendanceMode] = useState<"siswa" | "guru" | "komparasi">("siswa");
+  const [selectedAdminAttendanceDate, setSelectedAdminAttendanceDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [selectedDistributionMode, setSelectedDistributionMode] = useState<"siswa" | "guru">("siswa");
+  const [selectedDateStudentRecords, setSelectedDateStudentRecords] = useState<any[]>([]);
+  const [selectedDateTeacherRecords, setSelectedDateTeacherRecords] = useState<any[]>([]);
+  const [studentDailyTrends, setStudentDailyTrends] = useState<any[]>([]);
+  const [teacherDailyTrends, setTeacherDailyTrends] = useState<any[]>([]);
+
+  const operationalStatusForSelected = useMemo(
+    () => getOperationalDayStatus(selectedAdminAttendanceDate, schoolProfile?.operationalDays || "Senin - Jumat"),
+    [selectedAdminAttendanceDate, schoolProfile?.operationalDays]
+  );
 
   useEffect(() => {
     setStudents(unifiedStudents);
@@ -136,16 +153,23 @@ export function AdminDashboardView({
 
     const loadData = async () => {
       try {
+        const opDays = schoolProfile?.operationalDays || "Senin - Jumat";
         const [
           classesRes,
           attendanceRes,
+          teacherAttendanceRes,
+          dateAttendanceRes,
+          dateTeacherAttendanceRes,
           announcementsRes,
           paymentsRes,
           schedulesRes,
           gradesRes
         ] = await Promise.allSettled([
           fetch("/api/classes").then((r) => r.json()),
-          fetch("/api/attendance").then((r) => r.json()),
+          fetch(`/api/attendance?range=30d&operationalDays=${encodeURIComponent(opDays)}`).then((r) => r.json()),
+          fetch(`/api/teacher-attendance?range=30d&operationalDays=${encodeURIComponent(opDays)}`).then((r) => r.json()),
+          fetch(`/api/attendance?date=${selectedAdminAttendanceDate}&operationalDays=${encodeURIComponent(opDays)}`).then((r) => r.json()),
+          fetch(`/api/teacher-attendance?date=${selectedAdminAttendanceDate}&operationalDays=${encodeURIComponent(opDays)}`).then((r) => r.json()),
           fetch("/api/announcements").then((r) => r.json()),
           fetch("/api/payments").then((r) => r.json()),
           fetch("/api/schedules").then((r) => r.json()),
@@ -157,8 +181,23 @@ export function AdminDashboardView({
         if (classesRes.status === "fulfilled" && classesRes.value.classes) {
           setClasses(classesRes.value.classes);
         }
-        if (attendanceRes.status === "fulfilled" && attendanceRes.value.attendance) {
-          setAttendance(attendanceRes.value.attendance);
+        if (attendanceRes.status === "fulfilled") {
+          const val = attendanceRes.value;
+          const atts = val.records || val.attendance || [];
+          setAttendance(atts);
+          if (val.dailyTrends) setStudentDailyTrends(val.dailyTrends);
+        }
+        if (teacherAttendanceRes.status === "fulfilled") {
+          const val = teacherAttendanceRes.value;
+          const tAtts = val.records || val.attendance || [];
+          setTeacherAttendance(tAtts);
+          if (val.dailyTrends) setTeacherDailyTrends(val.dailyTrends);
+        }
+        if (dateAttendanceRes.status === "fulfilled" && dateAttendanceRes.value.success) {
+          setSelectedDateStudentRecords(dateAttendanceRes.value.records || []);
+        }
+        if (dateTeacherAttendanceRes.status === "fulfilled" && dateTeacherAttendanceRes.value.success) {
+          setSelectedDateTeacherRecords(dateTeacherAttendanceRes.value.records || []);
         }
         if (announcementsRes.status === "fulfilled" && announcementsRes.value.announcements) {
           setAnnouncements(announcementsRes.value.announcements);
@@ -189,7 +228,7 @@ export function AdminDashboardView({
       clearInterval(interval);
       unsubLeave();
     };
-  }, []);
+  }, [selectedAdminAttendanceDate, schoolProfile?.operationalDays]);
 
   // ─── Dynamic Metrics & Calculations ───────────────────────────────────────
   const todayDateStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -280,36 +319,55 @@ export function AdminDashboardView({
     return Array.from(map.values());
   }, [attendance, leaveRequests]);
 
-  // Today's student attendance stats (broken down cleanly)
+  // Selected Date's student attendance stats (synchronized with PostgreSQL & Menu Absensi Siswa)
   const attendanceToday = useMemo(() => {
+    const isTargetToday = selectedAdminAttendanceDate === todayDateStr;
+    const targetDate = selectedAdminAttendanceDate || todayDateStr;
+    const isOp = operationalStatusForSelected.isOperational;
+    const now = new Date();
+    const isPastDate = targetDate < todayDateStr;
+    const isPastCutoff = isPastDate || (isTargetToday && now.getHours() >= 12);
+
+    const map = new Map<string, any>();
+    selectedDateStudentRecords.forEach((r) => {
+      const key = r.studentId || r.nisn || r.id;
+      map.set(key, r);
+    });
+    effectiveAttendance.forEach((r) => {
+      if (r.date === targetDate || r.date?.startsWith(targetDate)) {
+        const key = r.studentId || r.nisn || r.id;
+        if (!map.has(key)) map.set(key, r);
+      }
+    });
+
+    let targetStudents = filteredStudents;
+    const totalStudents = Math.max(targetStudents.length, 1);
     let hadir = 0;
     let terlambat = 0;
     let sakit = 0;
     let izin = 0;
     let alpa = 0;
+    let belumAbsen = 0;
 
-    filteredStudents.forEach((student: any) => {
+    targetStudents.forEach((student: any) => {
       const sId = (student.id || "").toLowerCase().trim();
       const sNisn = (student.nisn || "").toLowerCase().trim();
-      const sUid = (student.uid || "").toLowerCase().trim();
       const sName = (student.name || "").toLowerCase().trim();
 
-      const record = effectiveAttendance.find((a: any) => {
-        const isToday = a.date === todayDateStr || a.date?.startsWith(todayDateStr);
-        if (!isToday) return false;
-
-        const aId = (a.studentId || a.id || "").toLowerCase().trim();
-        const aNisn = (a.nisn || "").toLowerCase().trim();
-        const aUid = (a.uid || a.studentUid || "").toLowerCase().trim();
-        const aName = (a.studentName || "").toLowerCase().trim();
-
-        return (
+      let record: any = null;
+      for (const val of map.values()) {
+        const aId = (val.studentId || val.id || "").toLowerCase().trim();
+        const aNisn = (val.nisn || "").toLowerCase().trim();
+        const aName = (val.studentName || val.name || val.fullName || "").toLowerCase().trim();
+        if (
           (sId && (aId === sId || aId.includes(sId) || sId.includes(aId))) ||
           (sNisn && (aNisn === sNisn || aId === sNisn)) ||
-          (sUid && (aUid === sUid || aId === sUid)) ||
           (sName && aName && (sName === aName || sName.includes(aName) || aName.includes(sName)))
-        );
-      });
+        ) {
+          record = val;
+          break;
+        }
+      }
 
       if (record) {
         const st = (record.status || "").toLowerCase().trim();
@@ -322,46 +380,25 @@ export function AdminDashboardView({
           sakit++;
         } else if (st === "izin") {
           izin++;
-        } else {
+        } else if (["alpa", "ditolak", "alpha"].includes(st)) {
           alpa++;
+        } else {
+          if (!isOp) belumAbsen++;
+          else if (isPastCutoff) alpa++;
+          else belumAbsen++;
         }
       } else {
-        // Siswa terdaftar tetapi belum memiliki data absen/izin -> dihitung Alpa / Tanpa Keterangan
-        alpa++;
+        if (!isOp) {
+          belumAbsen++;
+        } else if (isPastCutoff) {
+          alpa++;
+        } else {
+          belumAbsen++;
+        }
       }
     });
 
-    // Also account for any active records in effectiveAttendance that didn't match filteredStudents list
-    const unattachedRecords = effectiveAttendance.filter((a: any) => {
-      const isToday = a.date === todayDateStr || a.date?.startsWith(todayDateStr);
-      if (!isToday) return false;
-      if (selectedClassFilter !== "ALL") {
-        const c = (a.className || a.classId || "").toLowerCase().trim();
-        const target = selectedClassFilter.toLowerCase().trim();
-        if (c !== target && c.replace(/\s+/g, "") !== target.replace(/\s+/g, "")) return false;
-      }
-      const aId = (a.studentId || a.id || "").toLowerCase().trim();
-      const aNisn = (a.nisn || "").toLowerCase().trim();
-      const aName = (a.studentName || "").toLowerCase().trim();
-      return !filteredStudents.some((s: any) => {
-        const sId = (s.id || "").toLowerCase().trim();
-        const sNisn = (s.nisn || "").toLowerCase().trim();
-        const sName = (s.name || "").toLowerCase().trim();
-        return (sId && aId.includes(sId)) || (sNisn && (aNisn === sNisn || aId === sNisn)) || (sName && aName && sName === aName);
-      });
-    });
-
-    unattachedRecords.forEach((a: any) => {
-      const st = (a.status || "").toLowerCase().trim();
-      if (st === "hadir") hadir++;
-      else if (st === "terlambat") { terlambat++; hadir++; }
-      else if (st === "sakit") sakit++;
-      else if (st === "izin") izin++;
-      else alpa++;
-    });
-
-    const totalStudents = Math.max(filteredStudents.length, hadir + sakit + izin + alpa);
-    const rateNumber = totalStudents > 0
+    const rateNumber = isOp && totalStudents > 0
       ? Math.min(100, Math.round((hadir / Math.max(1, totalStudents)) * 1000) / 10)
       : 0;
 
@@ -371,12 +408,23 @@ export function AdminDashboardView({
       sakit,
       izin,
       alpa,
+      belumAbsen,
       tidakHadir: sakit + izin + alpa,
       rate: rateNumber,
       totalMarked: hadir + sakit + izin + alpa,
-      baseStudents: totalStudents
+      baseStudents: totalStudents,
+      isOperational: isOp,
+      targetDate,
+      isTargetToday,
     };
-  }, [effectiveAttendance, todayDateStr, filteredStudents, selectedClassFilter]);
+  }, [
+    selectedAdminAttendanceDate,
+    todayDateStr,
+    operationalStatusForSelected.isOperational,
+    selectedDateStudentRecords,
+    effectiveAttendance,
+    filteredStudents,
+  ]);
 
   // Leave Requests (Izin & Sakit Pending Review)
   const leaveStats = useMemo(() => {
@@ -392,20 +440,111 @@ export function AdminDashboardView({
     };
   }, [leaveRequests]);
 
-  // Today's teacher attendance stats
+  // Selected Date's teacher attendance stats (connected directly to PostgreSQL)
   const teacherAttendanceToday = useMemo(() => {
-    const todayRecords = teacherAttendance.filter((r: any) => r.date === todayDateStr);
-    const hadir = todayRecords.filter((r: any) => r.clockIn && r.status !== "Alpa").length;
-    const terlambat = todayRecords.filter((r: any) => r.clockIn && r.status === "Terlambat").length;
-    const totalTeachers = teachers.length || todayRecords.length || 1;
-    const rate = Math.round((hadir / totalTeachers) * 100);
+    const isTargetToday = selectedAdminAttendanceDate === todayDateStr;
+    const targetDate = selectedAdminAttendanceDate || todayDateStr;
+    const isOp = operationalStatusForSelected.isOperational;
+    const now = new Date();
+    const isPastDate = targetDate < todayDateStr;
+    const isPastCutoff = isPastDate || (isTargetToday && now.getHours() >= 12);
+
+    const map = new Map<string, any>();
+    selectedDateTeacherRecords.forEach((r) => {
+      const key = r.teacherId || r.nip || r.id;
+      map.set(key, r);
+    });
+    teacherAttendance.forEach((r) => {
+      if (r.date === targetDate || r.date?.startsWith(targetDate)) {
+        const key = r.teacherId || r.nip || r.id;
+        if (!map.has(key)) map.set(key, r);
+      }
+    });
+
+    const totalTeachers = teachers.length || unifiedTeachers.length || 1;
+    let hadir = 0;
+    let tepatWaktu = 0;
+    let terlambat = 0;
+    let izinSakit = 0;
+    let alpa = 0;
+    let belumPresensi = 0;
+
+    teachers.forEach((tc) => {
+      const tId = (tc.id || tc.uid || "").toLowerCase().trim();
+      const tNip = (tc.nip || "").toLowerCase().trim();
+      const tName = (tc.name || tc.fullName || "").toLowerCase().trim();
+
+      let rec: any = null;
+      for (const val of map.values()) {
+        const rId = (val.teacherId || val.id || "").toLowerCase().trim();
+        const rNip = (val.nip || "").toLowerCase().trim();
+        const rName = (val.teacherName || val.name || val.fullName || "").toLowerCase().trim();
+        if (
+          (tId && (rId === tId || rId.includes(tId) || tId.includes(rId))) ||
+          (tNip && tNip !== "-" && (rNip === tNip || rId === tNip)) ||
+          (tName && rName && (tName === rName || tName.includes(rName) || rName.includes(tName)))
+        ) {
+          rec = val;
+          break;
+        }
+      }
+
+      if (rec) {
+        const st = (rec.status || "").toLowerCase().trim();
+        if (st === "hadir" || (rec.clockIn && st !== "alpa")) {
+          hadir++;
+          if (rec.clockIn?.status === "Terlambat" || st === "terlambat") {
+            terlambat++;
+          } else {
+            tepatWaktu++;
+          }
+        } else if (st === "terlambat") {
+          hadir++;
+          terlambat++;
+        } else if (["izin", "sakit", "cuti"].includes(st)) {
+          izinSakit++;
+        } else if (st === "alpa") {
+          alpa++;
+        } else {
+          belumPresensi++;
+        }
+      } else {
+        if (!isOp) {
+          belumPresensi++;
+        } else if (isPastCutoff) {
+          alpa++;
+        } else {
+          belumPresensi++;
+        }
+      }
+    });
+
+    const rate = isOp && totalTeachers > 0
+      ? Math.min(100, Math.round((hadir / totalTeachers) * 100))
+      : 0;
+
     return {
       hadir,
+      tepatWaktu,
       terlambat,
+      izinSakit,
+      alpa,
+      belumPresensi,
       total: totalTeachers,
-      rate: Math.min(100, rate)
+      rate,
+      isOperational: isOp,
+      targetDate,
+      isTargetToday,
     };
-  }, [teacherAttendance, todayDateStr, teachers.length]);
+  }, [
+    selectedAdminAttendanceDate,
+    todayDateStr,
+    operationalStatusForSelected.isOperational,
+    selectedDateTeacherRecords,
+    teacherAttendance,
+    teachers,
+    unifiedTeachers.length,
+  ]);
 
   // Financial Stats from Real Bills
   const financialStats = useMemo(() => {
@@ -461,21 +600,45 @@ export function AdminDashboardView({
       d.setDate(d.getDate() - i);
       const dStr = d.toISOString().slice(0, 10);
       const dayName = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+      const isOp = isSchoolOperationalDay(dStr, schoolProfile?.operationalDays || "Senin - Jumat");
 
-      let h = 0;
-      let t = 0;
-      let s = 0;
-      let iz = 0;
-      let a = 0;
+      const sTrend = selectedClassFilter === "ALL" ? studentDailyTrends.find((t: any) => t.fullDate === dStr) : null;
 
-      if (dStr === todayDateStr) {
-        // Today syncs with current active calculation
-        h = attendanceToday.hadir + attendanceToday.terlambat;
-        t = attendanceToday.terlambat;
-        s = attendanceToday.sakit;
-        iz = attendanceToday.izin;
-        a = attendanceToday.alpa;
+      if (dStr === todayDateStr && selectedClassFilter === "ALL") {
+        const totalHadir = attendanceToday.hadir + attendanceToday.terlambat;
+        const totalTidakHadir = attendanceToday.sakit + attendanceToday.izin + (isOp ? attendanceToday.alpa : 0);
+        days.push({
+          date: dayName,
+          fullDate: dStr,
+          rate: attendanceToday.rate,
+          hadir: totalHadir,
+          terlambat: attendanceToday.terlambat,
+          izin: attendanceToday.izin,
+          sakit: attendanceToday.sakit,
+          alpa: isOp ? attendanceToday.alpa : 0,
+          tidakHadir: totalTidakHadir,
+          total: totalHadir + totalTidakHadir
+        });
+      } else if (sTrend) {
+        days.push({
+          date: dayName,
+          fullDate: dStr,
+          rate: sTrend.rate,
+          hadir: sTrend.hadir,
+          terlambat: sTrend.terlambat || 0,
+          izin: sTrend.izin || 0,
+          sakit: sTrend.sakit || 0,
+          alpa: sTrend.alpa || 0,
+          tidakHadir: (sTrend.izin || 0) + (sTrend.sakit || 0) + (sTrend.alpa || 0),
+          total: sTrend.total || sTrend.base || 0
+        });
       } else {
+        let h = 0;
+        let t = 0;
+        let s = 0;
+        let iz = 0;
+        let a = 0;
+
         const dayRecords = effectiveAttendance.filter((rec: any) => {
           const isMatch = rec.date === dStr || rec.date?.startsWith(dStr);
           if (!isMatch) return false;
@@ -491,50 +654,201 @@ export function AdminDashboardView({
           else if (st === "terlambat") { t++; h++; }
           else if (st === "sakit") s++;
           else if (st === "izin") iz++;
-          else a++;
+          else if (isOp) a++;
         });
 
-        if (dayRecords.length > 0 && filteredStudents.length > dayRecords.length) {
+        if (isOp && dayRecords.length > 0 && filteredStudents.length > dayRecords.length) {
           a += (filteredStudents.length - dayRecords.length);
         }
+
+        const totalHadir = h;
+        const totalTidakHadir = s + iz + a;
+        const base = filteredStudents.length || (totalHadir + totalTidakHadir) || 1;
+        const pct = isOp && (totalHadir + totalTidakHadir) > 0 ? Math.min(100, Math.round((totalHadir / Math.max(1, base)) * 100)) : 0;
+
+        days.push({
+          date: dayName,
+          fullDate: dStr,
+          rate: pct,
+          hadir: totalHadir,
+          terlambat: t,
+          izin: iz,
+          sakit: s,
+          alpa: a,
+          tidakHadir: totalTidakHadir,
+          total: totalHadir + totalTidakHadir
+        });
       }
-
-      const totalHadir = h;
-      const totalTidakHadir = s + iz + a;
-      const base = filteredStudents.length || (totalHadir + totalTidakHadir) || 1;
-      const pct = (totalHadir + totalTidakHadir) > 0 ? Math.min(100, Math.round((totalHadir / Math.max(1, base)) * 100)) : 0;
-
-      days.push({
-        date: dayName,
-        fullDate: dStr,
-        rate: pct,
-        hadir: totalHadir,
-        terlambat: t,
-        izin: iz,
-        sakit: s,
-        alpa: a,
-        tidakHadir: totalTidakHadir,
-        total: totalHadir + totalTidakHadir
-      });
     }
     return days;
-  }, [effectiveAttendance, filteredStudents.length, selectedTimeRange, selectedClassFilter, todayDateStr, attendanceToday]);
+  }, [
+    effectiveAttendance,
+    filteredStudents.length,
+    selectedTimeRange,
+    selectedClassFilter,
+    todayDateStr,
+    attendanceToday,
+    studentDailyTrends,
+    schoolProfile?.operationalDays
+  ]);
 
-  // Today's Status Donut Chart Data
+  // Multi-day Teacher Attendance Trend Data (7, 14, or 30 days)
+  const teacherAttendanceTrendData = useMemo(() => {
+    const daysCount = selectedTimeRange === "30d" ? 30 : selectedTimeRange === "14d" ? 14 : 7;
+    const days: {
+      date: string;
+      fullDate: string;
+      rate: number;
+      hadir: number;
+      tepatWaktu: number;
+      terlambat: number;
+      izinSakit: number;
+      alpa: number;
+      total: number;
+    }[] = [];
+    const now = new Date();
+    const countTeachers = teachers.length || unifiedTeachers.length || 1;
+
+    for (let i = daysCount - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dStr = d.toISOString().slice(0, 10);
+      const dayName = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+      const isOp = isSchoolOperationalDay(dStr, schoolProfile?.operationalDays || "Senin - Jumat");
+
+      if (dStr === todayDateStr) {
+        days.push({
+          date: dayName,
+          fullDate: dStr,
+          rate: teacherAttendanceToday.rate,
+          hadir: teacherAttendanceToday.hadir,
+          tepatWaktu: teacherAttendanceToday.tepatWaktu,
+          terlambat: teacherAttendanceToday.terlambat,
+          izinSakit: teacherAttendanceToday.izinSakit,
+          alpa: teacherAttendanceToday.alpa,
+          total: teacherAttendanceToday.total
+        });
+      } else {
+        const tTrend = teacherDailyTrends.find((t: any) => t.fullDate === dStr);
+        if (tTrend) {
+          days.push({
+            date: dayName,
+            fullDate: dStr,
+            rate: tTrend.rate,
+            hadir: tTrend.hadir,
+            tepatWaktu: Math.max(0, (tTrend.hadir || 0) - (tTrend.terlambat || 0)),
+            terlambat: tTrend.terlambat || 0,
+            izinSakit: (tTrend.izin || 0) + (tTrend.sakit || 0),
+            alpa: tTrend.alpa || 0,
+            total: tTrend.total || countTeachers
+          });
+        } else {
+          const tRecords = teacherAttendance.filter((r: any) => r.date === dStr || r.date?.startsWith(dStr));
+          let h = 0;
+          let tw = 0;
+          let ter = 0;
+          let is = 0;
+          let a = 0;
+
+          tRecords.forEach((r: any) => {
+            const st = (r.status || "").toLowerCase().trim();
+            if (st === "hadir" || (r.clockIn && st !== "alpa")) {
+              h++;
+              if (r.clockIn?.status === "Terlambat" || st === "terlambat") {
+                ter++;
+              } else {
+                tw++;
+              }
+            } else if (st === "terlambat") {
+              h++;
+              ter++;
+            } else if (["izin", "sakit", "cuti"].includes(st)) {
+              is++;
+            } else if (st === "alpa") {
+              a++;
+            }
+          });
+
+          if (isOp && countTeachers > tRecords.length) {
+            a += (countTeachers - tRecords.length);
+          }
+
+          const pct = isOp && countTeachers > 0 ? Math.min(100, Math.round((h / countTeachers) * 100)) : 0;
+
+          days.push({
+            date: dayName,
+            fullDate: dStr,
+            rate: pct,
+            hadir: h,
+            tepatWaktu: tw,
+            terlambat: ter,
+            izinSakit: is,
+            alpa: a,
+            total: countTeachers
+          });
+        }
+      }
+    }
+    return days;
+  }, [
+    teacherAttendance,
+    teachers.length,
+    unifiedTeachers.length,
+    selectedTimeRange,
+    todayDateStr,
+    teacherAttendanceToday,
+    teacherDailyTrends,
+    schoolProfile?.operationalDays
+  ]);
+
+  // Comparative Attendance Data (Siswa vs Guru)
+  const comparativeAttendanceData = useMemo(() => {
+    return attendanceTrendData.map((sItem) => {
+      const tItem = teacherAttendanceTrendData.find((t) => t.fullDate === sItem.fullDate);
+      return {
+        date: sItem.date,
+        fullDate: sItem.fullDate,
+        siswaRate: sItem.rate,
+        guruRate: tItem ? tItem.rate : 0,
+        siswaHadir: sItem.hadir,
+        guruHadir: tItem ? tItem.hadir : 0,
+        guruTepatWaktu: tItem ? tItem.tepatWaktu : 0,
+        guruTerlambat: tItem ? tItem.terlambat : 0,
+      };
+    });
+  }, [attendanceTrendData, teacherAttendanceTrendData]);
+
+  // Selected Date's Status Donut Chart Data (supports Siswa vs Guru toggle)
   const attendanceDonutData = useMemo(() => {
-    if (attendanceToday.totalMarked === 0) {
+    if (selectedDistributionMode === "guru") {
+      if (teacherAttendanceToday.total === 0 || (teacherAttendanceToday.hadir + teacherAttendanceToday.izinSakit + teacherAttendanceToday.alpa) === 0) {
+        return [
+          { name: "Belum Ada Data", value: 1, color: "#E2E8F0" }
+        ];
+      }
+      return [
+        { name: "Hadir Tepat Waktu", value: teacherAttendanceToday.tepatWaktu, color: "#10B981" },
+        { name: "Terlambat", value: teacherAttendanceToday.terlambat, color: "#F59E0B" },
+        { name: "Izin / Sakit / Cuti", value: teacherAttendanceToday.izinSakit, color: "#8B5CF6" },
+        { name: "Alpa / Tanpa Keterangan", value: teacherAttendanceToday.alpa, color: "#EF4444" },
+        { name: "Belum Presensi", value: teacherAttendanceToday.belumPresensi, color: "#94A3B8" }
+      ].filter((item) => item.value > 0);
+    }
+
+    if (attendanceToday.totalMarked === 0 && attendanceToday.belumAbsen === 0) {
       return [
         { name: "Belum Ada Data", value: 1, color: "#E2E8F0" }
       ];
     }
     return [
-      { name: "Hadir", value: attendanceToday.hadir, color: "#10B981" },
+      { name: "Hadir Tepat Waktu", value: attendanceToday.hadir, color: "#10B981" },
       { name: "Terlambat", value: attendanceToday.terlambat, color: "#F59E0B" },
       { name: "Sakit", value: attendanceToday.sakit, color: "#3B82F6" },
       { name: "Izin", value: attendanceToday.izin, color: "#8B5CF6" },
-      { name: "Alpa", value: attendanceToday.alpa, color: "#EF4444" }
+      { name: "Alpa", value: attendanceToday.alpa, color: "#EF4444" },
+      { name: "Belum Absen", value: attendanceToday.belumAbsen, color: "#94A3B8" }
     ].filter((item) => item.value > 0);
-  }, [attendanceToday]);
+  }, [selectedDistributionMode, attendanceToday, teacherAttendanceToday]);
 
   // Class by Class Comparison (Bar Chart)
   const classComparisonData = useMemo(() => {
@@ -1111,182 +1425,522 @@ export function AdminDashboardView({
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          CHART SECTION 1: PRESENSI SISWA & STATUS BREAKDOWN
+          CHART SECTION 1: RIWAYAT & TREN PRESENSI SISWA & GURU
       ═══════════════════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Left: Multi-Day Attendance Trend AreaChart (8 cols) */}
+        {/* Left: Multi-Day Attendance Trend Chart (8 cols) */}
         <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-                  <TrendingUp className="w-4 h-4" />
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className={cn(
+                    "w-8 h-8 rounded-lg flex items-center justify-center font-bold transition-colors",
+                    selectedAttendanceMode === "siswa" ? "bg-indigo-50 text-indigo-600" :
+                    selectedAttendanceMode === "guru" ? "bg-emerald-50 text-emerald-600" : "bg-purple-50 text-purple-600"
+                  )}>
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="font-black text-base text-gray-900">
+                      {selectedAttendanceMode === "siswa" && "Tren Riwayat Presensi Siswa"}
+                      {selectedAttendanceMode === "guru" && "Tren Riwayat Presensi Guru & Tendik"}
+                      {selectedAttendanceMode === "komparasi" && "Komparasi Tren Kehadiran: Siswa vs Guru"}
+                    </h2>
+                    <p className="text-xs text-gray-500">
+                      Dinamika tingkat kehadiran harian ({selectedTimeRange === "30d" ? "30 hari" : selectedTimeRange === "14d" ? "14 hari" : "7 hari"} terakhir) terhubung ke database
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="font-black text-base text-gray-900">Tren Presensi Siswa</h2>
-                  <p className="text-xs text-gray-500">
-                    Dinamika tingkat kehadiran harian ({selectedTimeRange === "30d" ? "30 hari" : selectedTimeRange === "14d" ? "14 hari" : "7 hari"} terakhir)
-                  </p>
+              </div>
+
+              {/* Mode Toggle & Average Badges */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex p-0.5 rounded-lg bg-gray-100 border border-gray-200 text-xs font-bold">
+                  <button
+                    onClick={() => setSelectedAttendanceMode("siswa")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md transition-all cursor-pointer",
+                      selectedAttendanceMode === "siswa" ? "bg-indigo-600 text-white shadow-xs" : "text-gray-600 hover:text-gray-900"
+                    )}
+                  >
+                    Siswa
+                  </button>
+                  <button
+                    onClick={() => setSelectedAttendanceMode("guru")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md transition-all cursor-pointer",
+                      selectedAttendanceMode === "guru" ? "bg-emerald-600 text-white shadow-xs" : "text-gray-600 hover:text-gray-900"
+                    )}
+                  >
+                    Guru & Tendik
+                  </button>
+                  <button
+                    onClick={() => setSelectedAttendanceMode("komparasi")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md transition-all cursor-pointer",
+                      selectedAttendanceMode === "komparasi" ? "bg-purple-600 text-white shadow-xs" : "text-gray-600 hover:text-gray-900"
+                    )}
+                  >
+                    Komparasi
+                  </button>
                 </div>
+
+                {selectedAttendanceMode === "siswa" && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-100">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                    Rata-rata: {Math.round(attendanceTrendData.reduce((acc, d) => acc + d.rate, 0) / Math.max(1, attendanceTrendData.filter(d => d.rate > 0).length)) || 0}%
+                  </span>
+                )}
+                {selectedAttendanceMode === "guru" && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    Rata-rata: {Math.round(teacherAttendanceTrendData.reduce((acc, d) => acc + d.rate, 0) / Math.max(1, teacherAttendanceTrendData.filter(d => d.rate > 0).length)) || 0}%
+                  </span>
+                )}
+                {selectedAttendanceMode === "komparasi" && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-bold border border-purple-100">
+                    Siswa: {Math.round(attendanceTrendData.reduce((acc, d) => acc + d.rate, 0) / Math.max(1, attendanceTrendData.filter(d => d.rate > 0).length)) || 0}% | Guru: {Math.round(teacherAttendanceTrendData.reduce((acc, d) => acc + d.rate, 0) / Math.max(1, teacherAttendanceTrendData.filter(d => d.rate > 0).length)) || 0}%
+                  </span>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                Rata-rata: {Math.round(attendanceTrendData.reduce((acc, d) => acc + d.rate, 0) / Math.max(1, attendanceTrendData.filter(d => d.rate > 0).length)) || 0}%
-              </span>
+            {/* Dynamic Charts: Student / Teacher / Comparison */}
+            <div className="h-[280px] w-full pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                {selectedAttendanceMode === "siswa" ? (
+                  <AreaChart data={attendanceTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="attendanceGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#4F46E5" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 600 }}
+                      dy={10}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 500 }}
+                      domain={[0, 100]}
+                      tickFormatter={(val) => `${val}%`}
+                    />
+                    <RechartsTooltip
+                      cursor={{ stroke: "#4F46E5", strokeWidth: 1.5, strokeDasharray: "4 4" }}
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-xl shadow-xl text-xs space-y-2 border border-white/10 min-w-[200px]">
+                              <p className="font-extrabold text-indigo-300 pb-1 border-b border-white/10">{label}</p>
+                              <div className="space-y-1.5">
+                                <p className="flex justify-between gap-4 text-emerald-400 font-bold">
+                                  <span>Tingkat Hadir Siswa:</span>
+                                  <span>{data.rate}% ({data.hadir} Siswa)</span>
+                                </p>
+                                <p className="flex justify-between gap-4 text-purple-300 font-medium">
+                                  <span>Izin:</span>
+                                  <span className="font-bold text-white">{data.izin} Siswa</span>
+                                </p>
+                                <p className="flex justify-between gap-4 text-blue-300 font-medium">
+                                  <span>Sakit:</span>
+                                  <span className="font-bold text-white">{data.sakit} Siswa</span>
+                                </p>
+                                <p className="flex justify-between gap-4 text-rose-300 font-medium">
+                                  <span>Alpa / Tanpa Ket.:</span>
+                                  <span className="font-bold text-white">{data.alpa} Siswa</span>
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="rate"
+                      name="Tingkat Hadir Siswa"
+                      stroke="#4F46E5"
+                      strokeWidth={3}
+                      fillOpacity={1}
+                      fill="url(#attendanceGradient)"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="izin"
+                      name="Izin"
+                      stroke="#8B5CF6"
+                      strokeWidth={2.5}
+                      dot={{ r: 3, fill: "#8B5CF6" }}
+                      activeDot={{ r: 5 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="sakit"
+                      name="Sakit"
+                      stroke="#3B82F6"
+                      strokeWidth={2.5}
+                      dot={{ r: 3, fill: "#3B82F6" }}
+                      activeDot={{ r: 5 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="alpa"
+                      name="Alpa"
+                      stroke="#EF4444"
+                      strokeWidth={2}
+                      strokeDasharray="3 3"
+                      dot={{ r: 2.5, fill: "#EF4444" }}
+                      activeDot={{ r: 4 }}
+                    />
+                  </AreaChart>
+                ) : selectedAttendanceMode === "guru" ? (
+                  <AreaChart data={teacherAttendanceTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="teacherAttendanceGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="#10B981" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 600 }}
+                      dy={10}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 500 }}
+                      domain={[0, 100]}
+                      tickFormatter={(val) => `${val}%`}
+                    />
+                    <RechartsTooltip
+                      cursor={{ stroke: "#10B981", strokeWidth: 1.5, strokeDasharray: "4 4" }}
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-xl shadow-xl text-xs space-y-2 border border-white/10 min-w-[210px]">
+                              <p className="font-extrabold text-emerald-300 pb-1 border-b border-white/10">{label}</p>
+                              <div className="space-y-1.5">
+                                <p className="flex justify-between gap-4 text-emerald-400 font-bold">
+                                  <span>Tingkat Hadir Guru:</span>
+                                  <span>{data.rate}% ({data.hadir} Guru)</span>
+                                </p>
+                                <p className="flex justify-between gap-4 text-emerald-300 font-medium">
+                                  <span>Tepat Waktu:</span>
+                                  <span className="font-bold text-white">{data.tepatWaktu} Guru</span>
+                                </p>
+                                <p className="flex justify-between gap-4 text-amber-300 font-medium">
+                                  <span>Terlambat:</span>
+                                  <span className="font-bold text-white">{data.terlambat} Guru</span>
+                                </p>
+                                <p className="flex justify-between gap-4 text-purple-300 font-medium">
+                                  <span>Izin / Sakit / Cuti:</span>
+                                  <span className="font-bold text-white">{data.izinSakit} Guru</span>
+                                </p>
+                                <p className="flex justify-between gap-4 text-rose-300 font-medium">
+                                  <span>Alpa / Belum Presensi:</span>
+                                  <span className="font-bold text-white">{data.alpa} Guru</span>
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="rate"
+                      name="Tingkat Hadir Guru"
+                      stroke="#10B981"
+                      strokeWidth={3}
+                      fillOpacity={1}
+                      fill="url(#teacherAttendanceGradient)"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="tepatWaktu"
+                      name="Tepat Waktu"
+                      stroke="#059669"
+                      strokeWidth={2}
+                      dot={{ r: 2.5, fill: "#059669" }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="terlambat"
+                      name="Terlambat"
+                      stroke="#F59E0B"
+                      strokeWidth={2}
+                      dot={{ r: 2.5, fill: "#F59E0B" }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="izinSakit"
+                      name="Izin/Sakit/Cuti"
+                      stroke="#8B5CF6"
+                      strokeWidth={2}
+                      dot={{ r: 2.5, fill: "#8B5CF6" }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="alpa"
+                      name="Alpa"
+                      stroke="#EF4444"
+                      strokeWidth={2}
+                      strokeDasharray="3 3"
+                      dot={{ r: 2.5, fill: "#EF4444" }}
+                    />
+                  </AreaChart>
+                ) : (
+                  <LineChart data={comparativeAttendanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 600 }}
+                      dy={10}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 500 }}
+                      domain={[0, 100]}
+                      tickFormatter={(val) => `${val}%`}
+                    />
+                    <RechartsTooltip
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-xl shadow-xl text-xs space-y-2 border border-white/10 min-w-[210px]">
+                              <p className="font-extrabold text-purple-300 pb-1 border-b border-white/10">{label}</p>
+                              <div className="space-y-1.5">
+                                <p className="flex justify-between gap-4 text-indigo-400 font-bold">
+                                  <span>Kehadiran Siswa:</span>
+                                  <span>{data.siswaRate}% ({data.siswaHadir} Siswa)</span>
+                                </p>
+                                <p className="flex justify-between gap-4 text-emerald-400 font-bold">
+                                  <span>Kehadiran Guru:</span>
+                                  <span>{data.guruRate}% ({data.guruHadir} Guru)</span>
+                                </p>
+                                <p className="flex justify-between gap-4 text-gray-300 text-[10px]">
+                                  <span>Guru Tepat Waktu:</span>
+                                  <span>{data.guruTepatWaktu} • Terlambat: {data.guruTerlambat}</span>
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="siswaRate"
+                      name="Kehadiran Siswa (%)"
+                      stroke="#4F46E5"
+                      strokeWidth={3}
+                      dot={{ r: 3.5, fill: "#4F46E5" }}
+                      activeDot={{ r: 6 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="guruRate"
+                      name="Kehadiran Guru (%)"
+                      stroke="#10B981"
+                      strokeWidth={3}
+                      dot={{ r: 3.5, fill: "#10B981" }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                )}
+              </ResponsiveContainer>
             </div>
-          </div>
-
-          {/* Area & Line Chart Container */}
-          <div className="h-[280px] w-full pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={attendanceTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="attendanceGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#4F46E5" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-                <XAxis
-                  dataKey="date"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 600 }}
-                  dy={10}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 500 }}
-                  domain={[0, 100]}
-                  tickFormatter={(val) => `${val}%`}
-                />
-                <RechartsTooltip
-                  cursor={{ stroke: "#4F46E5", strokeWidth: 1.5, strokeDasharray: "4 4" }}
-                  content={({ active, payload, label }) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-xl shadow-xl text-xs space-y-2 border border-white/10 min-w-[200px]">
-                          <p className="font-extrabold text-indigo-300 pb-1 border-b border-white/10">{label}</p>
-                          <div className="space-y-1.5">
-                            <p className="flex justify-between gap-4 text-emerald-400 font-bold">
-                              <span>Tingkat Kehadiran:</span>
-                              <span>{data.rate}% ({data.hadir} Siswa)</span>
-                            </p>
-                            <p className="flex justify-between gap-4 text-purple-300 font-medium">
-                              <span>Izin:</span>
-                              <span className="font-bold text-white">{data.izin} Siswa</span>
-                            </p>
-                            <p className="flex justify-between gap-4 text-blue-300 font-medium">
-                              <span>Sakit:</span>
-                              <span className="font-bold text-white">{data.sakit} Siswa</span>
-                            </p>
-                            <p className="flex justify-between gap-4 text-rose-300 font-medium">
-                              <span>Alpa / Tanpa Ket.:</span>
-                              <span className="font-bold text-white">{data.alpa} Siswa</span>
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="rate"
-                  name="Tingkat Kehadiran"
-                  stroke="#4F46E5"
-                  strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#attendanceGradient)"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="izin"
-                  name="Izin"
-                  stroke="#8B5CF6"
-                  strokeWidth={2.5}
-                  dot={{ r: 3, fill: "#8B5CF6" }}
-                  activeDot={{ r: 5 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="sakit"
-                  name="Sakit"
-                  stroke="#3B82F6"
-                  strokeWidth={2.5}
-                  dot={{ r: 3, fill: "#3B82F6" }}
-                  activeDot={{ r: 5 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="alpa"
-                  name="Alpa"
-                  stroke="#EF4444"
-                  strokeWidth={2}
-                  strokeDasharray="3 3"
-                  dot={{ r: 2.5, fill: "#EF4444" }}
-                  activeDot={{ r: 4 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
           </div>
 
           {/* Chart Footnote / Quick Legend */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-4 mt-2 border-t border-gray-100 text-[11px] text-gray-500">
-            <div className="flex flex-wrap items-center gap-3.5">
-              <span className="flex items-center gap-1.5 font-semibold text-gray-700">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#4F46E5]" />
-                Kehadiran (%)
-              </span>
-              <span className="flex items-center gap-1.5 font-semibold text-purple-700">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6]" />
-                Izin
-              </span>
-              <span className="flex items-center gap-1.5 font-semibold text-blue-700">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6]" />
-                Sakit
-              </span>
-              <span className="flex items-center gap-1.5 font-semibold text-rose-700">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />
-                Alpa
-              </span>
+            {selectedAttendanceMode === "siswa" ? (
+              <div className="flex flex-wrap items-center gap-3.5">
+                <span className="flex items-center gap-1.5 font-semibold text-gray-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#4F46E5]" />
+                  Kehadiran Siswa (%)
+                </span>
+                <span className="flex items-center gap-1.5 font-semibold text-purple-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6]" />
+                  Izin
+                </span>
+                <span className="flex items-center gap-1.5 font-semibold text-blue-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6]" />
+                  Sakit
+                </span>
+                <span className="flex items-center gap-1.5 font-semibold text-rose-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />
+                  Alpa
+                </span>
+              </div>
+            ) : selectedAttendanceMode === "guru" ? (
+              <div className="flex flex-wrap items-center gap-3.5">
+                <span className="flex items-center gap-1.5 font-semibold text-emerald-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
+                  Kehadiran Guru (%)
+                </span>
+                <span className="flex items-center gap-1.5 font-semibold text-emerald-900">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#059669]" />
+                  Tepat Waktu
+                </span>
+                <span className="flex items-center gap-1.5 font-semibold text-amber-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
+                  Terlambat
+                </span>
+                <span className="flex items-center gap-1.5 font-semibold text-purple-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6]" />
+                  Izin/Sakit/Cuti
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3.5">
+                <span className="flex items-center gap-1.5 font-bold text-indigo-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#4F46E5]" />
+                  Tingkat Hadir Siswa (%)
+                </span>
+                <span className="flex items-center gap-1.5 font-bold text-emerald-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
+                  Tingkat Hadir Guru (%)
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              <Link
+                href="/attendance"
+                className="font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+              >
+                Rekap Siswa <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
               <span className="text-gray-300">|</span>
-              <span className="text-gray-400">Target Min: <strong className="text-gray-800">85%</strong></span>
+              <Link
+                href="/teacher-attendance"
+                className="font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1"
+              >
+                Presensi Guru <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
-            <Link href="/attendance" className="font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
-              Buka Rekap Detail <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
           </div>
         </div>
 
-        {/* Right: Today's Status Breakdown Donut Chart (4 cols) */}
+        {/* Right: Date-Selective Status Breakdown Donut Chart (4 cols) */}
         <div className="lg:col-span-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h2 className="font-black text-base text-gray-900">Distribusi Hari Ini</h2>
-              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-                Real-Time
-              </span>
+              <div className="flex items-center gap-1.5">
+                <CalendarDays className="w-4 h-4 text-indigo-600" />
+                <h2 className="font-black text-base text-gray-900">Distribusi Presensi</h2>
+              </div>
+              <div className="inline-flex p-0.5 rounded-lg bg-gray-100 border border-gray-200 text-[11px] font-bold">
+                <button
+                  onClick={() => setSelectedDistributionMode("siswa")}
+                  className={cn(
+                    "px-2 py-0.5 rounded-md transition-all cursor-pointer",
+                    selectedDistributionMode === "siswa" ? "bg-white text-indigo-700 shadow-xs font-black" : "text-gray-500 hover:text-gray-800"
+                  )}
+                >
+                  Siswa
+                </button>
+                <button
+                  onClick={() => setSelectedDistributionMode("guru")}
+                  className={cn(
+                    "px-2 py-0.5 rounded-md transition-all cursor-pointer",
+                    selectedDistributionMode === "guru" ? "bg-white text-emerald-700 shadow-xs font-black" : "text-gray-500 hover:text-gray-800"
+                  )}
+                >
+                  Guru
+                </button>
+              </div>
             </div>
-            <p className="text-xs text-gray-500 mb-4">Rincian status seluruh siswa hari {currentDay}</p>
+
+            {/* Date Selector & Quick Filters */}
+            <div className="space-y-1.5 mb-3">
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  value={selectedAdminAttendanceDate}
+                  max={todayDateStr}
+                  onChange={(e) => setSelectedAdminAttendanceDate(e.target.value)}
+                  className="text-xs font-semibold px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 flex-1"
+                />
+                <button
+                  onClick={() => setSelectedAdminAttendanceDate(todayDateStr)}
+                  className={cn(
+                    "px-2 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer",
+                    selectedAdminAttendanceDate === todayDateStr
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  )}
+                >
+                  Hari Ini
+                </button>
+                <button
+                  onClick={() => {
+                    const y = new Date();
+                    y.setDate(y.getDate() - 1);
+                    setSelectedAdminAttendanceDate(y.toISOString().slice(0, 10));
+                  }}
+                  className={cn(
+                    "px-2 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer",
+                    selectedAdminAttendanceDate !== todayDateStr
+                      ? "bg-indigo-100 text-indigo-700 font-extrabold"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  )}
+                >
+                  Kemarin
+                </button>
+              </div>
+
+              {/* Operational Day Badge */}
+              <div className="flex items-center justify-between">
+                {operationalStatusForSelected.isOperational ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    Hari Aktif Sekolah
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                    Hari Libur ({operationalStatusForSelected.reason})
+                  </span>
+                )}
+                <span className="text-[10px] font-semibold text-gray-400">
+                  {selectedAdminAttendanceDate === todayDateStr ? "Live Database" : `Data ${selectedAdminAttendanceDate}`}
+                </span>
+              </div>
+            </div>
 
             {/* Donut Chart with Centered Metric */}
-            <div className="relative w-44 h-44 mx-auto my-1">
+            <div className="relative w-40 h-40 mx-auto my-1">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={attendanceDonutData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={58}
-                    outerRadius={78}
+                    innerRadius={52}
+                    outerRadius={72}
                     paddingAngle={3}
                     dataKey="value"
                     startAngle={90}
@@ -1301,59 +1955,256 @@ export function AdminDashboardView({
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
                 <span className="text-2xl font-black text-gray-900 leading-none">
-                  {attendanceToday.rate}%
+                  {selectedDistributionMode === "guru" ? teacherAttendanceToday.rate : attendanceToday.rate}%
                 </span>
                 <span className="text-[10px] font-semibold text-gray-400 mt-1 uppercase">
-                  Hadir
+                  {selectedDistributionMode === "guru" ? "Masuk" : "Hadir"}
                 </span>
               </div>
             </div>
           </div>
 
           {/* Interactive Legend with exact counts */}
-          <div className="space-y-2 pt-2 border-t border-gray-100">
-            <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span className="font-semibold text-gray-700">Hadir Tepat Waktu</span>
-              </div>
-              <span className="font-black text-gray-900">{attendanceToday.hadir} Siswa</span>
-            </div>
-
-            <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                <span className="font-semibold text-gray-700">Terlambat</span>
-              </div>
-              <span className="font-black text-gray-900">{attendanceToday.terlambat} Siswa</span>
-            </div>
-
-            <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
-                <span className="font-semibold text-gray-700">Izin</span>
-              </div>
-              <span className="font-black text-gray-900">{attendanceToday.izin} Siswa</span>
-            </div>
-
-            <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                <span className="font-semibold text-gray-700">Sakit</span>
-              </div>
-              <span className="font-black text-gray-900">{attendanceToday.sakit} Siswa</span>
-            </div>
-
-            <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                <span className="font-semibold text-gray-700">Alpa / Tanpa Keterangan</span>
-              </div>
-              <span className="font-black text-rose-600">{attendanceToday.alpa} Siswa</span>
-            </div>
+          <div className="space-y-1.5 pt-2 border-t border-gray-100">
+            {selectedDistributionMode === "siswa" ? (
+              <>
+                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <span className="font-semibold text-gray-700">Hadir Tepat Waktu</span>
+                  </div>
+                  <span className="font-black text-gray-900">{attendanceToday.hadir} Siswa</span>
+                </div>
+                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    <span className="font-semibold text-gray-700">Terlambat</span>
+                  </div>
+                  <span className="font-black text-gray-900">{attendanceToday.terlambat} Siswa</span>
+                </div>
+                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                    <span className="font-semibold text-gray-700">Izin</span>
+                  </div>
+                  <span className="font-black text-gray-900">{attendanceToday.izin} Siswa</span>
+                </div>
+                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                    <span className="font-semibold text-gray-700">Sakit</span>
+                  </div>
+                  <span className="font-black text-gray-900">{attendanceToday.sakit} Siswa</span>
+                </div>
+                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                    <span className="font-semibold text-gray-700">Alpa / Tanpa Keterangan</span>
+                  </div>
+                  <span className="font-black text-rose-600">{attendanceToday.alpa} Siswa</span>
+                </div>
+                {attendanceToday.belumAbsen > 0 && (
+                  <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-slate-50">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
+                      <span className="font-semibold text-slate-600">
+                        {operationalStatusForSelected.isOperational ? "Belum Diabsen" : "Hari Libur"}
+                      </span>
+                    </div>
+                    <span className="font-bold text-slate-500">{attendanceToday.belumAbsen} Siswa</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <span className="font-semibold text-gray-700">Hadir Tepat Waktu</span>
+                  </div>
+                  <span className="font-black text-gray-900">{teacherAttendanceToday.tepatWaktu} Guru</span>
+                </div>
+                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    <span className="font-semibold text-gray-700">Terlambat Masuk</span>
+                  </div>
+                  <span className="font-black text-amber-700">{teacherAttendanceToday.terlambat} Guru</span>
+                </div>
+                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                    <span className="font-semibold text-gray-700">Izin / Sakit / Cuti</span>
+                  </div>
+                  <span className="font-black text-purple-700">{teacherAttendanceToday.izinSakit} Guru</span>
+                </div>
+                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                    <span className="font-semibold text-gray-700">Alpa / Tanpa Keterangan</span>
+                  </div>
+                  <span className="font-black text-rose-600">{teacherAttendanceToday.alpa} Guru</span>
+                </div>
+                {teacherAttendanceToday.belumPresensi > 0 && (
+                  <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-slate-50">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
+                      <span className="font-semibold text-slate-600">
+                        {operationalStatusForSelected.isOperational ? "Belum Clock-In" : "Hari Libur"}
+                      </span>
+                    </div>
+                    <span className="font-bold text-slate-500">{teacherAttendanceToday.belumPresensi} Guru</span>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
 
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          DEDICATED SECTION: RIWAYAT & KEDISIPLINAN PRESENSI GURU & TENDIK
+      ═══════════════════════════════════════════════════════════════════ */}
+      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+              <UserCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-black text-base text-gray-900">Monitoring & Kedisiplinan Presensi Guru</h3>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  PostgreSQL Real-Time
+                </span>
+              </div>
+              <p className="text-xs text-gray-500">
+                Data presensi guru & tenaga kependidikan tersimpan permanen di database dan selalu sinkron
+              </p>
+            </div>
+          </div>
+
+          <Link
+            href="/teacher-attendance"
+            className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
+          >
+            <span>Buka Modul Presensi Guru Lengkap</span>
+            <ChevronRight className="w-4 h-4" />
+          </Link>
+        </div>
+
+        {/* 4 KPI Cards for Teachers */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-100">
+            <span className="text-[11px] font-bold text-emerald-800">Tingkat Kehadiran Guru</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-black text-emerald-950">{teacherAttendanceToday.rate}%</span>
+              <span className="text-xs font-semibold text-emerald-700">
+                ({teacherAttendanceToday.hadir}/{teacherAttendanceToday.total} Guru)
+              </span>
+            </div>
+            <p className="text-[10px] text-emerald-700 mt-1">
+              {teacherAttendanceToday.rate >= 90 ? "Tingkat kehadiran prima" : "Monitoring harian aktif"}
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-teal-50/60 border border-teal-100">
+            <span className="text-[11px] font-bold text-teal-800">Hadir Tepat Waktu</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-black text-teal-950">{teacherAttendanceToday.tepatWaktu}</span>
+              <span className="text-xs font-semibold text-teal-700">Guru</span>
+            </div>
+            <p className="text-[10px] text-teal-700 mt-1">Clock-in sebelum batas toleransi</p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-100">
+            <span className="text-[11px] font-bold text-amber-800">Terlambat Masuk</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-black text-amber-950">{teacherAttendanceToday.terlambat}</span>
+              <span className="text-xs font-semibold text-amber-700">Guru</span>
+            </div>
+            <p className="text-[10px] text-amber-700 mt-1">Tercatat jam & alasan dispensasi</p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100">
+            <span className="text-[11px] font-bold text-purple-800">Izin / Sakit / Cuti</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-black text-purple-950">{teacherAttendanceToday.izinSakit}</span>
+              <span className="text-xs font-semibold text-purple-700">Guru</span>
+            </div>
+            <p className="text-[10px] text-purple-700 mt-1">
+              {teacherAttendanceToday.alpa > 0 ? `${teacherAttendanceToday.alpa} Guru Alpa` : "Semua izin terverifikasi"}
+            </p>
+          </div>
+        </div>
+
+        {/* Quick Teacher Presence Preview (Last recorded entries for the date) */}
+        <div className="pt-2 border-t border-gray-100">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-xs font-bold text-gray-700">
+              Log Presensi Terakhir ({selectedAdminAttendanceDate}):
+            </span>
+            <span className="text-[11px] text-gray-500 font-medium">
+              Menampilkan {Math.min(5, (selectedDateTeacherRecords.length || teacherAttendance.length))} dari {teacherAttendanceToday.total} Guru
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {((selectedDateTeacherRecords.length > 0 ? selectedDateTeacherRecords : teacherAttendance)
+              .filter((r: any) => r.date === selectedAdminAttendanceDate || r.date?.startsWith(selectedAdminAttendanceDate))
+              .slice(0, 6)
+            ).map((rec: any, idx: number) => {
+              const st = (rec.status || "").toLowerCase();
+              const isHadir = st === "hadir" || (rec.clockIn && st !== "alpa");
+              const isLate = st === "terlambat" || rec.clockIn?.status === "Terlambat";
+              const isPermit = ["izin", "sakit", "cuti"].includes(st);
+
+              return (
+                <div key={rec.id || idx} className="p-2.5 rounded-xl bg-gray-50/80 border border-gray-100 flex items-center justify-between">
+                  <div className="min-w-0 flex-1 pr-2">
+                    <p className="text-xs font-bold text-gray-900 truncate">
+                      {rec.teacherName || rec.name || "Guru Pengajar"}
+                    </p>
+                    <p className="text-[10px] text-gray-500 truncate">
+                      NIP: {rec.nip || "-"} • {rec.clockIn?.time || rec.time || "07:00"}
+                    </p>
+                  </div>
+                  <div>
+                    {isLate ? (
+                      <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
+                        Terlambat
+                      </span>
+                    ) : isHadir ? (
+                      <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                        Hadir
+                      </span>
+                    ) : isPermit ? (
+                      <span className="text-[10px] font-extrabold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">
+                        {rec.status || "Izin"}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-extrabold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md">
+                        Alpa
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {((selectedDateTeacherRecords.length > 0 ? selectedDateTeacherRecords : teacherAttendance)
+              .filter((r: any) => r.date === selectedAdminAttendanceDate || r.date?.startsWith(selectedAdminAttendanceDate))
+              .length === 0
+            ) && (
+              <div className="col-span-full py-4 text-center text-xs text-gray-400">
+                {operationalStatusForSelected.isOperational
+                  ? `Belum ada guru yang melakukan clock-in untuk tanggal ${selectedAdminAttendanceDate}.`
+                  : `Tanggal ${selectedAdminAttendanceDate} adalah Hari Libur (${operationalStatusForSelected.reason}). Presensi dinas ditiadakan.`}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════

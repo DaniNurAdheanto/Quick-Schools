@@ -60,6 +60,7 @@ export interface TeacherAttendanceRecord {
   workDurationMinutes: number;
   workDurationFormatted: string; // e.g. "8j 15m"
   status: TeacherAttendanceStatus;
+  notes?: string;
   permitReason?: string;
   permitDocUrl?: string;
   verifiedBy?: string;
@@ -595,6 +596,24 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
       // Direct teacher_attendance collection may be restricted
     }
 
+    // Sync to PostgreSQL database permanently
+    try {
+      fetch("/api/teacher-attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId,
+          nip,
+          date: todayDate,
+          time: timeNow,
+          status: overallStatus,
+          notes: notes || "Presensi masuk harian",
+          latitude: location?.lat,
+          longitude: location?.lng,
+        }),
+      }).catch((e) => console.warn("Failed to sync clockIn to PostgreSQL:", e));
+    } catch (e) {}
+
     return newRecord;
   };
 
@@ -730,6 +749,24 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
       // Direct teacher_attendance collection may be restricted by cloud rules
     }
 
+    // Sync to PostgreSQL database permanently
+    try {
+      fetch("/api/teacher-attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId: existing.teacherId,
+          nip: existing.nip,
+          date: existing.date || todayDate,
+          time: timeNow,
+          status: finalStatus,
+          notes: notes || existing.notes || "Presensi pulang harian",
+          latitude: location?.lat,
+          longitude: location?.lng,
+        }),
+      }).catch((e) => console.warn("Failed to sync clockOut to PostgreSQL:", e));
+    } catch (e) {}
+
     return updatedRecord;
   };
 
@@ -828,6 +865,24 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
       }
     }
 
+    // Sync all permit records to PostgreSQL database
+    try {
+      fetch("/api/teacher-attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          batch: createdRecords.map((r) => ({
+            teacherId: r.teacherId,
+            nip: r.nip,
+            date: r.date,
+            time: "07:00",
+            status: r.status,
+            notes: r.permitReason || "Izin / Sakit / Cuti",
+          })),
+        }),
+      }).catch((e) => console.warn("Failed to sync permits to PostgreSQL:", e));
+    } catch (e) {}
+
     const createdIds = new Set(createdRecords.map((r) => r.id));
     const updated = [...createdRecords, ...records.filter((r) => !createdIds.has(r.id))];
     saveRecordsCache(updated);
@@ -869,6 +924,24 @@ export function useTeacherAttendance(currentTeacherId?: string, currentTeacherEm
     } catch (err) {
       // Direct teacher_attendance collection may be restricted
     }
+
+    // Sync to PostgreSQL database permanently
+    try {
+      fetch("/api/teacher-attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId: record.teacherId,
+          nip: record.nip,
+          date: record.date,
+          time: record.clockIn?.time || "07:00",
+          status: record.status,
+          notes: record.clockIn?.notes || record.permitReason || null,
+          latitude: record.clockIn?.location?.lat,
+          longitude: record.clockIn?.location?.lng,
+        }),
+      }).catch((e) => console.warn("Failed to sync adminSaveRecord to PostgreSQL:", e));
+    } catch (e) {}
   };
 
   // Admin Actions: Delete Record

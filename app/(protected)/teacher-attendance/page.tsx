@@ -76,6 +76,8 @@ import {
 } from "@/lib/teacher-attendance";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { getOperationalDayStatus } from "@/lib/operational-days";
 import dynamic from "next/dynamic";
 
 const FaceEnrolmentModal = dynamic(
@@ -629,6 +631,76 @@ export default function TeacherAttendancePage() {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("all");
   const [selectedAdminDate, setSelectedAdminDate] = useState(() => getTodayDateString());
 
+  const { profile: schoolProfile } = useSchoolProfile();
+  const operationalDays = schoolProfile?.operationalDays || "Senin - Jumat";
+
+  // PostgreSQL teacher attendance records for the selected admin date
+  const [pgRecords, setPgRecords] = useState<TeacherAttendanceRecord[]>([]);
+
+  // Fetch historical teacher attendance from PostgreSQL API
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchPgTeacherAttendance() {
+      try {
+        const res = await fetch(`/api/teacher-attendance?date=${selectedAdminDate}&operationalDays=${encodeURIComponent(operationalDays)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success && Array.isArray(data.records) && isMounted) {
+          const mapped: TeacherAttendanceRecord[] = data.records.map((r: any) => ({
+            id: r.id,
+            teacherId: r.teacherId,
+            teacherName: r.fullName || r.name,
+            nip: r.nip,
+            date: r.date,
+            status: r.status as TeacherAttendanceStatus,
+            notes: r.notes || "",
+            workDurationMinutes: 0,
+            workDurationFormatted: "-",
+            clockIn: r.status === "Hadir" || r.status === "Terlambat" ? {
+              time: r.time && r.time !== "-" ? r.time : "07:00",
+              status: r.status === "Terlambat" ? "Terlambat" : "Tepat Waktu",
+              lateMinutes: r.status === "Terlambat" ? 15 : 0,
+              location: {
+                lat: r.latitude || -6.2,
+                lng: r.longitude || 106.8,
+                distance: 5,
+                inRadius: true,
+              },
+            } : undefined,
+          }));
+          setPgRecords(mapped);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch teacher attendance from PostgreSQL:", err);
+      }
+    }
+    fetchPgTeacherAttendance();
+    return () => { isMounted = false; };
+  }, [selectedAdminDate, operationalDays]);
+
+  // Combined records from Firestore and PostgreSQL
+  const combinedTeacherRecords = useMemo(() => {
+    const map = new Map<string, TeacherAttendanceRecord>();
+    pgRecords.forEach((r) => {
+      const key = `${r.teacherId}_${r.date}`;
+      map.set(key, r);
+    });
+    records.forEach((r) => {
+      const key = `${r.teacherId || r.id}_${(r.date || "").slice(0, 10)}`;
+      map.set(key, r);
+    });
+    return Array.from(map.values());
+  }, [records, pgRecords]);
+
+  const operationalStatus = useMemo(
+    () => getOperationalDayStatus(selectedAdminDate, operationalDays),
+    [selectedAdminDate, operationalDays]
+  );
+  const todayOperationalStatus = useMemo(
+    () => getOperationalDayStatus(getTodayDateString(), operationalDays),
+    [operationalDays]
+  );
+
   // Filters for Monthly Recap
   const [monthlyMonth, setMonthlyMonth] = useState(() => {
     const d = new Date();
@@ -914,8 +986,8 @@ export default function TeacherAttendancePage() {
   // Compute Selected Date's Records for Admin Table & Metrics
   const todayRecords = useMemo(() => {
     const targetDate = selectedAdminDate || todayDateStr;
-    return records.filter((r) => (r.date || "").slice(0, 10) === targetDate);
-  }, [records, selectedAdminDate, todayDateStr]);
+    return combinedTeacherRecords.filter((r) => (r.date || "").slice(0, 10) === targetDate);
+  }, [combinedTeacherRecords, selectedAdminDate, todayDateStr]);
 
   // Effective Role (Role guru NEVER sees admin monitoring)
   const isEffectiveGuru = isUserGuru || previewRole === "guru";
@@ -928,18 +1000,22 @@ export default function TeacherAttendancePage() {
     const onTimeToday = todayRecords.filter((r) => r.clockIn?.status === "Tepat Waktu" || r.status === "Hadir");
     const lateToday = todayRecords.filter((r) => r.clockIn?.status === "Terlambat" || r.status === "Terlambat");
     const permitToday = todayRecords.filter((r) => r.status === "Izin" || r.status === "Sakit" || r.status === "Cuti");
-    const notClockedInCount = Math.max(0, totalTeachers - todayRecords.length);
+    const notClockedInCount = operationalStatus.isOperational ? Math.max(0, totalTeachers - todayRecords.length) : 0;
 
     return {
       totalTeachers,
       presentCount: presentToday.length,
-      presentPercent: Math.round((presentToday.length / totalTeachers) * 100),
+      presentPercent: operationalStatus.isOperational
+        ? Math.round((presentToday.length / totalTeachers) * 100)
+        : todayRecords.length > 0
+        ? Math.round((presentToday.length / totalTeachers) * 100)
+        : 100,
       onTimeCount: onTimeToday.length,
       lateCount: lateToday.length,
       permitCount: permitToday.length,
       notClockedInCount,
     };
-  }, [teachersList, todayRecords]);
+  }, [teachersList, todayRecords, operationalStatus.isOperational]);
 
   // Personal records of the logged in teacher
   const myPersonalRecords = useMemo(() => {
@@ -948,7 +1024,7 @@ export default function TeacherAttendancePage() {
     const activeName = (authUserData?.fullName || authUserData?.name || authUserName || currentUser?.displayName || currentTeacherInfo?.name || "").toLowerCase().trim();
     const activeNip = (authUserData?.nip || currentTeacherInfo?.nip || "").trim();
 
-    return records.filter((r) => {
+    return combinedTeacherRecords.filter((r) => {
       if (!matchesCurrentPeriod(r.academicYear, r.semester)) return false;
       if (activeUid && (r.teacherId === activeUid || (r as any).uid === activeUid || r.id.includes(activeUid))) return true;
       if (activeEmail && r.email && r.email.toLowerCase() === activeEmail) return true;
@@ -956,7 +1032,7 @@ export default function TeacherAttendancePage() {
       if (activeName && r.teacherName && r.teacherName.toLowerCase().trim() === activeName) return true;
       return false;
     });
-  }, [records, authUser, currentUser, authUserEmail, authUserData, authUserName, currentTeacherInfo, matchesCurrentPeriod]);
+  }, [combinedTeacherRecords, authUser, currentUser, authUserEmail, authUserData, authUserName, currentTeacherInfo, matchesCurrentPeriod]);
 
   // Current Teacher's Personal Monthly Stats - calculated directly from database records
   const myMonthlyStats = useMemo(() => {
@@ -1052,15 +1128,18 @@ export default function TeacherAttendancePage() {
 
       // Status Filter
       if (selectedStatusFilter !== "all") {
+        if (selectedStatusFilter === "Libur") {
+          return !record && !operationalStatus.isOperational;
+        }
         if (selectedStatusFilter === "not_yet") {
-          return !record || (!record.clockIn && record.status !== "Izin" && record.status !== "Sakit" && record.status !== "Cuti");
+          return operationalStatus.isOperational && (!record || (!record.clockIn && record.status !== "Izin" && record.status !== "Sakit" && record.status !== "Cuti"));
         }
         if (!record || record.status !== selectedStatusFilter) return false;
       }
 
       return true;
     });
-  }, [teachersList, todayRecords, selectedAdminDate, todayDateStr, searchQuery, selectedSubjectFilter, selectedStatusFilter]);
+  }, [teachersList, todayRecords, selectedAdminDate, todayDateStr, searchQuery, selectedSubjectFilter, selectedStatusFilter, operationalStatus.isOperational]);
 
   // Robust today teacher record resolver for Guru view
   const activeTodayRecord = useMemo(() => {
@@ -1477,6 +1556,23 @@ export default function TeacherAttendancePage() {
       {/* ========================================================================= */}
       {isEffectiveGuru && (
         <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Operational Day Holiday Notice for Guru */}
+          {!todayOperationalStatus.isOperational && (
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 flex items-start gap-3 shadow-xs">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-300 flex items-center justify-center shrink-0 mt-0.5">
+                <CalendarDays className="w-4 h-4" />
+              </div>
+              <div className="flex-1">
+                <h4 className="text-xs font-bold text-amber-100">
+                  Hari Libur / Non-Operasional Sekolah
+                </h4>
+                <p className="text-xs text-amber-200/90 mt-0.5 leading-relaxed">
+                  {todayOperationalStatus.reason} Anda tidak memiliki kewajiban Clock In pada hari libur operasional ini.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Main Clock In / Clock Out Card */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: Interactive Clock In / Out Console */}
@@ -1559,6 +1655,8 @@ export default function TeacherAttendancePage() {
                           ? `Sudah Masuk (${activeTodayRecord.clockIn.time} WIB)`
                           : activeTodayRecord?.status === "Izin" || activeTodayRecord?.status === "Sakit"
                           ? `Pengajuan ${activeTodayRecord.status} Disetujui`
+                          : !todayOperationalStatus.isOperational
+                          ? `Hari Libur (${todayOperationalStatus.reason})`
                           : "Belum Melakukan Clock In"}
                       </span>
                     </div>
@@ -2050,14 +2148,28 @@ export default function TeacherAttendancePage() {
 
                 <div className="flex flex-wrap items-center gap-2.5">
                   {/* Date Picker Selector */}
-                  <div className="flex items-center gap-1.5 bg-gray-50 px-2.5 py-1.5 rounded-xl border border-gray-200">
-                    <CalendarDays className="w-3.5 h-3.5 text-gray-500" />
-                    <input
-                      type="date"
-                      value={selectedAdminDate}
-                      onChange={(e) => setSelectedAdminDate(e.target.value)}
-                      className="text-xs font-bold text-gray-800 bg-transparent border-none focus:outline-hidden cursor-pointer"
-                    />
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 bg-gray-50 px-2.5 py-1.5 rounded-xl border border-gray-200">
+                      <CalendarDays className="w-3.5 h-3.5 text-gray-500" />
+                      <input
+                        type="date"
+                        value={selectedAdminDate}
+                        onChange={(e) => setSelectedAdminDate(e.target.value)}
+                        className="text-xs font-bold text-gray-800 bg-transparent border-none focus:outline-hidden cursor-pointer"
+                      />
+                    </div>
+                    <span
+                      className={cn(
+                        "text-[10px] font-bold px-2 py-1 rounded-lg inline-flex items-center gap-1 shrink-0",
+                        operationalStatus.isOperational
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : "bg-rose-50 text-rose-700 border border-rose-200"
+                      )}
+                      title={operationalStatus.reason}
+                    >
+                      <span className={cn("w-1.5 h-1.5 rounded-full", operationalStatus.isOperational ? "bg-emerald-500" : "bg-rose-500")} />
+                      {operationalStatus.isOperational ? "Hari Aktif" : "Hari Libur"}
+                    </span>
                   </div>
                   {selectedAdminDate !== todayDateStr && (
                     <button
@@ -2105,10 +2217,28 @@ export default function TeacherAttendancePage() {
                     <option value="Terlambat">Terlambat Masuk</option>
                     <option value="Pulang Awal">Pulang Awal</option>
                     <option value="Izin">Izin / Sakit / Cuti</option>
+                    <option value="Libur">Hari Libur (Non-Operasional)</option>
                     <option value="not_yet">Belum Clock In</option>
                   </select>
                 </div>
               </div>
+
+              {/* Operational Day Holiday Notice */}
+              {!operationalStatus.isOperational && (
+                <div className="p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 flex items-start gap-3 shadow-xs">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <CalendarDays className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-xs font-bold text-amber-900">
+                      Hari Libur / Non-Operasional Sekolah
+                    </h4>
+                    <p className="text-xs text-amber-700/90 mt-0.5 leading-relaxed">
+                      {operationalStatus.reason} Guru dan staf tendik tidak memiliki kewajiban Clock In pada hari libur operasional ini.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Table */}
               <div className="overflow-x-auto">
@@ -2211,6 +2341,10 @@ export default function TeacherAttendancePage() {
                               )}
                             >
                               {record.status}
+                            </span>
+                          ) : !operationalStatus.isOperational ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 inline-flex items-center gap-1">
+                              Libur
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-500">

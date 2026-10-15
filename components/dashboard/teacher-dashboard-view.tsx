@@ -280,7 +280,7 @@ export function TeacherDashboardView({
         ] = await Promise.allSettled([
           fetch("/api/schedules").then((r) => r.json()),
           fetch("/api/classes").then((r) => r.json()),
-          fetch("/api/attendance").then((r) => r.json()),
+          fetch("/api/attendance?range=30d").then((r) => r.json()),
           fetch("/api/grades").then((r) => r.json()),
           fetch("/api/announcements").then((r) => r.json()),
         ]);
@@ -293,8 +293,9 @@ export function TeacherDashboardView({
         if (classesRes.status === "fulfilled" && classesRes.value.classes) {
           setClasses(classesRes.value.classes);
         }
-        if (attendanceRes.status === "fulfilled" && attendanceRes.value.attendance) {
-          setAttendanceRecords(attendanceRes.value.attendance);
+        if (attendanceRes.status === "fulfilled") {
+          const recs = attendanceRes.value.records || attendanceRes.value.attendance || [];
+          setAttendanceRecords(recs);
         }
         if (gradesRes.status === "fulfilled" && gradesRes.value.grades) {
           setGrades(gradesRes.value.grades);

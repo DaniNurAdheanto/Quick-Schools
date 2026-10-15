@@ -65,6 +65,8 @@ import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { isSchoolOperationalDay, getOperationalDayStatus } from "@/lib/operational-days";
 import { subscribeLeaveRequests, LeaveRequest } from "@/lib/leave-requests-service";
 import { isStudentInClass, normalizeClassName } from "@/lib/class-relations";
 
@@ -251,6 +253,8 @@ const DEFAULT_CONFIG: AttendanceConfig = {
 export default function AttendancePage() {
   const toast = useToast();
   const { activeAcademicYear, activeSemester, isArchiveMode, matchesCurrentPeriod } = useAcademicYear();
+  const { profile: schoolProfile } = useSchoolProfile();
+  const operationalDays = schoolProfile.operationalDays || "Senin - Jumat";
 
   // Tab State: "daily" | "biometric" | "monthly"
   const [activeTab, setActiveTab] = useState<"daily" | "biometric" | "monthly">("daily");
@@ -327,6 +331,36 @@ export default function AttendancePage() {
 
   // Tab 1: Daily Class Attendance State
   const [selectedDate, setSelectedDate] = useState<string>(() => getTodayDateString());
+  const operationalStatus = useMemo(() => getOperationalDayStatus(selectedDate, operationalDays), [selectedDate, operationalDays]);
+
+  // Fetch historical attendance records from PostgreSQL when selectedDate changes
+  useEffect(() => {
+    let isMounted = true;
+    fetch(`/api/attendance?date=${selectedDate}&operationalDays=${encodeURIComponent(operationalDays)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!isMounted) return;
+        if (data.success && Array.isArray(data.records) && data.records.length > 0) {
+          const mapped: AttendanceRecord[] = data.records.map((r: any) => ({
+            id: r.id,
+            studentId: r.studentId,
+            studentName: r.name || r.fullName,
+            className: r.className,
+            date: r.date,
+            timestamp: r.time && r.time !== "-" ? r.time : "07:00",
+            time: r.time && r.time !== "-" ? r.time : "07:00",
+            status: r.status as AttendanceStatus,
+            notes: r.notes || "",
+            markedBy: "Database (PostgreSQL)",
+            createdAt: new Date().toISOString(),
+          }));
+          setAttendanceRecords((prev) => mergeAttendanceRecords(prev, mapped));
+        }
+      })
+      .catch((e) => console.warn("Failed to load historical attendance for date:", e));
+    return () => { isMounted = false; };
+  }, [selectedDate, operationalDays]);
+
   const [selectedClass, setSelectedClass] = useState<string>(userData?.className || userData?.kelas || "Semua Kelas");
   const [classAttendanceMap, setClassAttendanceMap] = useState<Record<string, StudentDailyAttendance>>({});
   const [dailySubFilter, setDailySubFilter] = useState<"all" | "sudah" | "belum" | "hadir" | "terlambat" | "izin_sakit" | "alpa">("all");
@@ -843,7 +877,8 @@ export default function AttendancePage() {
     const absentTotalMinutes = (isNaN(absentH) ? 8 : absentH) * 60 + (isNaN(absentM) ? 30 : absentM);
 
     const isTodayPastAbsentThreshold = isToday && currentMinutesTick >= absentTotalMinutes;
-    const shouldAutoMarkAlpa = isPastDate || isTodayPastAbsentThreshold;
+    const isOp = isSchoolOperationalDay(selectedDate, operationalDays);
+    const shouldAutoMarkAlpa = isOp && (isPastDate || isTodayPastAbsentThreshold);
 
     classStudents.forEach((student) => {
       // 1. Check if there is an active Leave Request (Izin / Sakit) for this student on selectedDate
@@ -941,7 +976,7 @@ export default function AttendancePage() {
           // Default to "Belum Absen" for clear monitoring
           map[student.id] = {
             status: "Belum Absen",
-            notes: "",
+            notes: isOp ? "" : `Hari Libur / Non-Operasional (${operationalDays})`,
             time: "-",
             isRecorded: false,
             source: "manual"
@@ -951,7 +986,7 @@ export default function AttendancePage() {
     });
 
     setClassAttendanceMap(map);
-  }, [selectedClass, selectedDate, classStudents, attendanceRecords, leaveRequestsList, config.absentThresholdTime, currentMinutesTick]);
+  }, [selectedClass, selectedDate, classStudents, attendanceRecords, leaveRequestsList, config.absentThresholdTime, currentMinutesTick, operationalDays]);
 
   // Class Level KPI & Monitoring Statistics
   const classStats = useMemo(() => {
@@ -1141,6 +1176,25 @@ export default function AttendancePage() {
           await setDoc(doc(db, "attendance", docId), payload, { merge: true });
         } catch (e) {}
 
+        // Sync to PostgreSQL database permanently
+        try {
+          fetch("/api/attendance", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              studentId: student.id,
+              nisn: student.nisn,
+              classId: student.classId,
+              date: selectedDate,
+              status: status,
+              time: defaultTime,
+              notes: payload.notes,
+              latitude: config.schoolCenterLat,
+              longitude: config.schoolCenterLng,
+            }),
+          }).catch((e) => console.warn("Failed to sync student attendance to PostgreSQL:", e));
+        } catch (e) {}
+
         // Save to localStorage
         try {
           const stored = localStorage.getItem("quick_schools_attendance_records");
@@ -1235,6 +1289,27 @@ export default function AttendancePage() {
         const mergedLocal = mergeAttendanceRecords(list, updatedList);
         localStorage.setItem("quick_schools_attendance_records", JSON.stringify(mergedLocal.slice(0, 200)));
       } catch (e) {}
+
+      // 3. Sync to PostgreSQL API for permanent historical storage
+      try {
+        await fetch("/api/attendance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            batch: updatedList.map((rec) => ({
+              studentId: rec.studentId,
+              date: rec.date,
+              status: rec.status,
+              notes: rec.notes,
+              time: rec.time,
+              latitude: rec.location?.lat,
+              longitude: rec.location?.lng,
+            })),
+          }),
+        });
+      } catch (apiErr) {
+        console.warn("Class attendance batch sync to PostgreSQL failed:", apiErr);
+      }
 
       // Update local state immediately
       setAttendanceRecords((prev) => mergeAttendanceRecords(prev, updatedList));
@@ -1929,9 +2004,23 @@ export default function AttendancePage() {
 
               {/* Date Selector */}
               <div>
-                <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">
-                  Tanggal Presensi
-                </label>
+                <div className="flex items-center justify-between mb-1 gap-2">
+                  <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">
+                    Tanggal Presensi
+                  </label>
+                  <span
+                    className={cn(
+                      "text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 shrink-0",
+                      operationalStatus.isOperational
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-rose-50 text-rose-700 border border-rose-200"
+                    )}
+                    title={operationalStatus.reason}
+                  >
+                    <span className={cn("w-1.5 h-1.5 rounded-full", operationalStatus.isOperational ? "bg-emerald-500" : "bg-rose-500")} />
+                    {operationalStatus.isOperational ? "Hari Aktif" : "Hari Libur"}
+                  </span>
+                </div>
                 <div className="flex items-center gap-1.5">
                   <input
                     type="date"
@@ -2333,6 +2422,23 @@ export default function AttendancePage() {
                 Menampilkan {displayedDailyStudents.length} dari {classStudents.length} siswa
               </span>
             </div>
+
+            {/* Operational Day Holiday Notice */}
+            {!operationalStatus.isOperational && (
+              <div className="mx-5 mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 flex items-start gap-3 shadow-xs">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-xs font-bold text-amber-900">
+                    Hari Libur / Non-Operasional Sekolah
+                  </h4>
+                  <p className="text-xs text-amber-700/90 mt-0.5 leading-relaxed">
+                    {operationalStatus.reason} Siswa tidak diwajibkan melakukan presensi dan sistem tidak membebankan status Alpa secara otomatis pada hari libur.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Students Table */}
             <div className="overflow-x-auto">

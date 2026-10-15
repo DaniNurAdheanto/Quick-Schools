@@ -25,7 +25,8 @@ import {
   Activity,
   BookUser,
   Clock3,
-  DollarSign
+  DollarSign,
+  CalendarDays
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -44,11 +45,15 @@ import {
   AreaChart,
   Area
 } from "recharts";
+import { cn } from "@/lib/utils";
 import { formatRupiah } from "@/lib/spp-payments";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
+import { isSchoolOperationalDay, getOperationalDayStatus } from "@/lib/operational-days";
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 
 interface PrincipalDashboardViewProps {
   userName: string;
@@ -143,16 +148,62 @@ export function PrincipalDashboardView({
     return `${y}-${m}-${d}`;
   }, []);
 
-  // ─── PostgreSQL Data Fetching (Live Data) ──────────────────────────────────
+  // ─── Attendance Date & Historical View States ─────────────────────────────
+  const [selectedAttendanceDate, setSelectedAttendanceDate] = useState<string>(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  });
+  const [selectedAttendanceRange, setSelectedAttendanceRange] = useState<"7d" | "14d" | "30d">("7d");
+  const [selectedDateStudentRecords, setSelectedDateStudentRecords] = useState<any[]>([]);
+  const [selectedDateTeacherRecords, setSelectedDateTeacherRecords] = useState<any[]>([]);
+  const [liveFirestoreAttendance, setLiveFirestoreAttendance] = useState<any[]>([]);
+  const [studentDailyTrends, setStudentDailyTrends] = useState<any[]>([]);
+  const [teacherDailyTrends, setTeacherDailyTrends] = useState<any[]>([]);
+
+  const operationalStatusForSelected = useMemo(
+    () => getOperationalDayStatus(selectedAttendanceDate, schoolProfile?.operationalDays || "Senin - Jumat"),
+    [selectedAttendanceDate, schoolProfile?.operationalDays]
+  );
+
+  // ─── 1. Live Firestore Listener (Instant Sync with Menu Absensi Siswa) ─────
+  useEffect(() => {
+    let isMounted = true;
+    const qRolesAtt = query(collection(db, "roles"), where("type", "==", "attendance_record"));
+    const unsubRoles = onSnapshot(
+      qRolesAtt,
+      (snap) => {
+        if (!isMounted) return;
+        const list: any[] = [];
+        snap.forEach((d) => {
+          list.push({ id: d.id, ...d.data() });
+        });
+        setLiveFirestoreAttendance(list);
+      },
+      (err) => console.warn("Firestore live attendance listener notice:", err)
+    );
+
+    return () => {
+      isMounted = false;
+      unsubRoles();
+    };
+  }, []);
+
+  // ─── 2. PostgreSQL Data Fetching (Live Data + Historical Date) ─────────────
   useEffect(() => {
     let isMounted = true;
 
     const loadData = async () => {
       try {
+        const opDays = schoolProfile?.operationalDays || "Senin - Jumat";
         const [
           classesRes,
-          attendanceRes,
-          teacherAttendanceRes,
+          attendanceRangeRes,
+          teacherAttendanceRangeRes,
+          dateAttendanceRes,
+          dateTeacherAttendanceRes,
           schedulesRes,
           announcementsRes,
           gradesRes,
@@ -161,8 +212,10 @@ export function PrincipalDashboardView({
           teachersRes
         ] = await Promise.allSettled([
           fetch("/api/classes").then((r) => r.json()),
-          fetch(`/api/attendance?date=${todayDateStr}`).then((r) => r.json()),
-          fetch(`/api/teacher-attendance?date=${todayDateStr}`).then((r) => r.json()),
+          fetch(`/api/attendance?range=${selectedAttendanceRange}&operationalDays=${encodeURIComponent(opDays)}`).then((r) => r.json()),
+          fetch(`/api/teacher-attendance?range=${selectedAttendanceRange}&operationalDays=${encodeURIComponent(opDays)}`).then((r) => r.json()),
+          fetch(`/api/attendance?date=${selectedAttendanceDate}&operationalDays=${encodeURIComponent(opDays)}`).then((r) => r.json()),
+          fetch(`/api/teacher-attendance?date=${selectedAttendanceDate}&operationalDays=${encodeURIComponent(opDays)}`).then((r) => r.json()),
           fetch("/api/schedules").then((r) => r.json()),
           fetch("/api/announcements").then((r) => r.json()),
           fetch("/api/grades").then((r) => r.json()),
@@ -176,13 +229,21 @@ export function PrincipalDashboardView({
         if (classesRes.status === "fulfilled" && classesRes.value.classes) {
           setClasses(classesRes.value.classes);
         }
-        if (attendanceRes.status === "fulfilled") {
-          const recs = attendanceRes.value.records || attendanceRes.value.attendance || [];
-          setAttendance(recs);
+        if (attendanceRangeRes.status === "fulfilled") {
+          const val = attendanceRangeRes.value;
+          setAttendance(val.records || val.attendance || []);
+          if (val.dailyTrends) setStudentDailyTrends(val.dailyTrends);
         }
-        if (teacherAttendanceRes.status === "fulfilled") {
-          const tRecs = teacherAttendanceRes.value.records || teacherAttendanceRes.value.attendance || [];
-          setTeacherAttendance(tRecs);
+        if (teacherAttendanceRangeRes.status === "fulfilled") {
+          const val = teacherAttendanceRangeRes.value;
+          setTeacherAttendance(val.records || val.attendance || []);
+          if (val.dailyTrends) setTeacherDailyTrends(val.dailyTrends);
+        }
+        if (dateAttendanceRes.status === "fulfilled" && dateAttendanceRes.value.success) {
+          setSelectedDateStudentRecords(dateAttendanceRes.value.records || []);
+        }
+        if (dateTeacherAttendanceRes.status === "fulfilled" && dateTeacherAttendanceRes.value.success) {
+          setSelectedDateTeacherRecords(dateTeacherAttendanceRes.value.records || []);
         }
         if (schedulesRes.status === "fulfilled" && schedulesRes.value.schedules) {
           setSchedules(schedulesRes.value.schedules);
@@ -215,7 +276,7 @@ export function PrincipalDashboardView({
       isMounted = false;
       clearInterval(interval);
     };
-  }, [todayDateStr]);
+  }, [selectedAttendanceDate, selectedAttendanceRange, schoolProfile?.operationalDays]);
 
   // ─── Distinct Filter Options Derived from Database ────────────────────────
   const availableAcademicYears = useMemo(() => {
@@ -267,24 +328,97 @@ export function PrincipalDashboardView({
 
   const teacherCount = teachers.length;
 
-  // ─── Student Attendance Stats (Real-Time Today) ───────────────────────────
+  // ─── Student Attendance Stats (Synchronized with Menu Absensi & Database) ───
   const attendanceToday = useMemo(() => {
-    let todayRecords = attendance.filter((a: any) => a.date === todayDateStr || a.date?.startsWith(todayDateStr));
+    const isTargetToday = selectedAttendanceDate === todayDateStr;
+    const targetDate = selectedAttendanceDate || todayDateStr;
+    const isOp = operationalStatusForSelected.isOperational;
+    const now = new Date();
+    const isPastDate = targetDate < todayDateStr;
+    const isPastCutoff = isPastDate || (isTargetToday && now.getHours() >= 12);
+
+    // Merge: liveFirestoreAttendance + selectedDateStudentRecords + attendance
+    const map = new Map<string, any>();
+    selectedDateStudentRecords.forEach((r) => {
+      const key = r.studentId || r.nisn || r.id;
+      map.set(key, r);
+    });
+    attendance.forEach((r) => {
+      if (r.date === targetDate || r.date?.startsWith(targetDate)) {
+        const key = r.studentId || r.nisn || r.id;
+        if (!map.has(key)) map.set(key, r);
+      }
+    });
+    liveFirestoreAttendance.forEach((r) => {
+      if (r.date === targetDate || r.date?.startsWith(targetDate)) {
+        const key = r.studentId || r.nisn || r.id;
+        map.set(key, r);
+      }
+    });
+
+    let targetStudents = students;
     if (filterClass !== "Semua Kelas") {
-      todayRecords = todayRecords.filter((a: any) => (a.className || a.classId) === filterClass);
+      targetStudents = students.filter((s) => {
+        const c = (s.className || s.classId || s.class?.name || "").toLowerCase().trim();
+        const f = filterClass.toLowerCase().trim();
+        return c === f || c.replace(/\s+/g, "") === f.replace(/\s+/g, "");
+      });
     }
 
-    const hadir = todayRecords.filter((a: any) => (a.status || "").toLowerCase() === "hadir").length;
-    const terlambat = todayRecords.filter((a: any) => (a.status || "").toLowerCase() === "terlambat").length;
-    const sakit = todayRecords.filter((a: any) => (a.status || "").toLowerCase() === "sakit").length;
-    const izin = todayRecords.filter((a: any) => (a.status || "").toLowerCase() === "izin").length;
-    const alpa = todayRecords.filter((a: any) => ["alpa", "ditolak", "alpha"].includes((a.status || "").toLowerCase())).length;
-    const totalMarked = todayRecords.filter((a: any) => (a.status || "").toLowerCase() !== "belum absen").length;
+    const totalStudents = targetStudents.length || 1;
+    let hadir = 0;
+    let terlambat = 0;
+    let sakit = 0;
+    let izin = 0;
+    let alpa = 0;
+    let belumAbsen = 0;
 
-    const baseCount = studentCount || todayRecords.length || 1;
-    const belumAbsen = Math.max(0, baseCount - totalMarked);
-    const rateNumber = baseCount > 0
-      ? Math.min(100, Math.round(((hadir + terlambat) / Math.max(1, baseCount)) * 1000) / 10)
+    targetStudents.forEach((st) => {
+      const sId = (st.id || "").toLowerCase().trim();
+      const sNisn = (st.nisn || "").toLowerCase().trim();
+      const sName = (st.name || st.fullName || "").toLowerCase().trim();
+
+      let rec: any = null;
+      for (const val of map.values()) {
+        const rId = (val.studentId || val.id || "").toLowerCase().trim();
+        const rNisn = (val.nisn || "").toLowerCase().trim();
+        const rName = (val.studentName || val.name || val.fullName || "").toLowerCase().trim();
+        if (
+          (sId && (rId === sId || rId.includes(sId) || sId.includes(rId))) ||
+          (sNisn && (rNisn === sNisn || rId === sNisn)) ||
+          (sName && rName && (sName === rName || sName.includes(rName) || rName.includes(sName)))
+        ) {
+          rec = val;
+          break;
+        }
+      }
+
+      if (rec) {
+        const stStr = (rec.status || "").toLowerCase().trim();
+        if (stStr === "hadir") hadir++;
+        else if (stStr === "terlambat") terlambat++;
+        else if (stStr === "sakit") sakit++;
+        else if (stStr === "izin") izin++;
+        else if (["alpa", "ditolak", "alpha"].includes(stStr)) alpa++;
+        else if (stStr === "belum absen" || stStr === "belum") {
+          if (!isOp) belumAbsen++;
+          else if (isPastCutoff) alpa++;
+          else belumAbsen++;
+        }
+      } else {
+        if (!isOp) {
+          belumAbsen++; // Hari Libur
+        } else if (isPastCutoff) {
+          alpa++;
+        } else {
+          belumAbsen++;
+        }
+      }
+    });
+
+    const totalMarked = hadir + terlambat + sakit + izin + alpa;
+    const rate = isOp && totalStudents > 0
+      ? Math.min(100, Math.round(((hadir + terlambat) / totalStudents) * 100))
       : 0;
 
     return {
@@ -294,22 +428,106 @@ export function PrincipalDashboardView({
       izin,
       alpa,
       belumAbsen,
-      rate: rateNumber,
+      rate,
       totalMarked,
-      totalExpected: baseCount
+      totalExpected: totalStudents,
+      isOperational: isOp,
+      targetDate,
+      isTargetToday,
     };
-  }, [attendance, todayDateStr, studentCount, filterClass]);
+  }, [
+    selectedAttendanceDate,
+    todayDateStr,
+    operationalStatusForSelected.isOperational,
+    selectedDateStudentRecords,
+    attendance,
+    liveFirestoreAttendance,
+    students,
+    filterClass,
+  ]);
 
-  // ─── Teacher Attendance Stats (Real-Time Today) ───────────────────────────
+  // ─── Teacher Attendance Stats (Synchronized with Database) ────────────────
   const teacherAttendanceToday = useMemo(() => {
-    const todayRecords = teacherAttendance.filter((r: any) => r.date === todayDateStr);
-    const hadir = todayRecords.filter((r: any) => (r.clockIn && r.status !== "Alpa") || r.status === "Hadir" || r.status === "Terlambat").length;
-    const tepatWaktu = todayRecords.filter((r: any) => r.clockIn?.status === "Tepat Waktu" || (!r.clockIn?.status && r.status === "Hadir")).length;
-    const terlambat = todayRecords.filter((r: any) => r.clockIn?.status === "Terlambat" || r.status === "Terlambat").length;
-    const izinSakit = todayRecords.filter((r: any) => ["Izin", "Sakit", "Cuti"].includes(r.status)).length;
-    const alpa = todayRecords.filter((r: any) => r.status === "Alpa").length;
-    const totalTeachers = teacherCount || todayRecords.length || 1;
-    const rate = Math.round((hadir / totalTeachers) * 100);
+    const isTargetToday = selectedAttendanceDate === todayDateStr;
+    const targetDate = selectedAttendanceDate || todayDateStr;
+    const isOp = operationalStatusForSelected.isOperational;
+    const now = new Date();
+    const isPastDate = targetDate < todayDateStr;
+    const isPastCutoff = isPastDate || (isTargetToday && now.getHours() >= 12);
+
+    const map = new Map<string, any>();
+    selectedDateTeacherRecords.forEach((r) => {
+      const key = r.teacherId || r.nip || r.id;
+      map.set(key, r);
+    });
+    teacherAttendance.forEach((r) => {
+      if (r.date === targetDate || r.date?.startsWith(targetDate)) {
+        const key = r.teacherId || r.nip || r.id;
+        if (!map.has(key)) map.set(key, r);
+      }
+    });
+
+    const totalTeachers = teachers.length || teacherCount || 1;
+    let hadir = 0;
+    let tepatWaktu = 0;
+    let terlambat = 0;
+    let izinSakit = 0;
+    let alpa = 0;
+    let belumPresensi = 0;
+
+    teachers.forEach((tc) => {
+      const tId = (tc.id || tc.uid || "").toLowerCase().trim();
+      const tNip = (tc.nip || "").toLowerCase().trim();
+      const tName = (tc.name || tc.fullName || "").toLowerCase().trim();
+
+      let rec: any = null;
+      for (const val of map.values()) {
+        const rId = (val.teacherId || val.id || "").toLowerCase().trim();
+        const rNip = (val.nip || "").toLowerCase().trim();
+        const rName = (val.teacherName || val.name || val.fullName || "").toLowerCase().trim();
+        if (
+          (tId && (rId === tId || rId.includes(tId) || tId.includes(rId))) ||
+          (tNip && tNip !== "-" && (rNip === tNip || rId === tNip)) ||
+          (tName && rName && (tName === rName || tName.includes(rName) || rName.includes(tName)))
+        ) {
+          rec = val;
+          break;
+        }
+      }
+
+      if (rec) {
+        const st = (rec.status || "").toLowerCase().trim();
+        if (st === "hadir" || (rec.clockIn && st !== "alpa")) {
+          hadir++;
+          if (rec.clockIn?.status === "Terlambat" || st === "terlambat") {
+            terlambat++;
+          } else {
+            tepatWaktu++;
+          }
+        } else if (st === "terlambat") {
+          hadir++;
+          terlambat++;
+        } else if (["izin", "sakit", "cuti"].includes(st)) {
+          izinSakit++;
+        } else if (st === "alpa") {
+          alpa++;
+        } else {
+          belumPresensi++;
+        }
+      } else {
+        if (!isOp) {
+          belumPresensi++;
+        } else if (isPastCutoff) {
+          alpa++;
+        } else {
+          belumPresensi++;
+        }
+      }
+    });
+
+    const rate = isOp && totalTeachers > 0
+      ? Math.min(100, Math.round((hadir / totalTeachers) * 100))
+      : 0;
 
     return {
       hadir,
@@ -317,10 +535,22 @@ export function PrincipalDashboardView({
       terlambat,
       izinSakit,
       alpa,
+      belumPresensi,
       total: totalTeachers,
-      rate: Math.min(100, rate)
+      rate,
+      isOperational: isOp,
+      targetDate,
+      isTargetToday,
     };
-  }, [teacherAttendance, todayDateStr, teacherCount]);
+  }, [
+    selectedAttendanceDate,
+    todayDateStr,
+    operationalStatusForSelected.isOperational,
+    selectedDateTeacherRecords,
+    teacherAttendance,
+    teachers,
+    teacherCount,
+  ]);
 
   // ─── Financial Stats (SPP Bills) ──────────────────────────────────────────
   const financialStats = useMemo(() => {
@@ -509,48 +739,84 @@ export function PrincipalDashboardView({
   // ─── Chart 2: Komposisi Kehadiran Siswa Hari Ini (Donut Chart) ────────────
   const attendanceDonutData = useMemo(() => {
     const { hadir, terlambat, sakit, izin, alpa, belumAbsen } = attendanceToday;
+    const isOp = operationalStatusForSelected.isOperational;
     return [
       { name: "Hadir Tepat Waktu", value: hadir, color: "#10B981" },
       { name: "Terlambat", value: terlambat, color: "#F59E0B" },
       { name: "Sakit", value: sakit, color: "#3B82F6" },
       { name: "Izin", value: izin, color: "#6366F1" },
       { name: "Alpa / Tanpa Ket.", value: alpa, color: "#EF4444" },
-      { name: "Belum Absen", value: belumAbsen, color: "#94A3B8" }
+      { name: isOp ? "Belum Absen" : "Libur", value: belumAbsen, color: isOp ? "#94A3B8" : "#FBBF24" }
     ].filter(item => item.value > 0);
-  }, [attendanceToday]);
+  }, [attendanceToday, operationalStatusForSelected.isOperational]);
 
-  // ─── Chart 3: Tren Kehadiran 7 Hari Siswa vs Guru (Line Chart) ────────────
+  // ─── Chart 3: Tren Kehadiran Multi-Hari Siswa vs Guru (Line Chart) ────────
   const attendanceTrendData = useMemo(() => {
-    const days: { date: string; siswaRate: number; guruRate: number }[] = [];
+    const daysCount = selectedAttendanceRange === "30d" ? 30 : selectedAttendanceRange === "14d" ? 14 : 7;
+    const days: {
+      date: string;
+      fullDate: string;
+      siswaRate: number;
+      guruRate: number;
+      siswaHadir: number;
+      guruHadir: number;
+    }[] = [];
     const now = new Date();
-    const countStudents = studentCount || 1;
-    const countTeachers = teacherCount || 1;
+    const countStudents = students.length || studentCount || 1;
+    const countTeachers = teachers.length || teacherCount || 1;
 
-    for (let i = 6; i >= 0; i--) {
+    for (let i = daysCount - 1; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const dStr = d.toISOString().slice(0, 10);
       const dayLabel = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+      const isOp = isSchoolOperationalDay(dStr, schoolProfile?.operationalDays || "Senin - Jumat");
 
-      // Student
-      const sRecords = attendance.filter((a: any) => a.date === dStr || a.date?.startsWith(dStr));
-      const sHadir = sRecords.filter((a: any) => ["hadir", "terlambat"].includes((a.status || "").toLowerCase())).length;
-      const sPct = sRecords.length > 0 ? Math.min(100, Math.round((sHadir / countStudents) * 100)) : 0;
+      const sTrend = studentDailyTrends.find((t: any) => t.fullDate === dStr);
+      const tTrend = teacherDailyTrends.find((t: any) => t.fullDate === dStr);
 
-      // Teacher
-      const tRecords = teacherAttendance.filter((r: any) => r.date === dStr);
-      const tHadir = tRecords.filter((r: any) => r.clockIn && r.status !== "Alpa").length;
-      const tPct = tRecords.length > 0 ? Math.min(100, Math.round((tHadir / countTeachers) * 100)) : 0;
+      let sPct = sTrend ? sTrend.rate : 0;
+      let sHadir = sTrend ? sTrend.hadir : 0;
+      if (!sTrend) {
+        const sRecords = attendance.filter((a: any) => a.date === dStr || a.date?.startsWith(dStr));
+        sHadir = sRecords.filter((a: any) => ["hadir", "terlambat"].includes((a.status || "").toLowerCase())).length;
+        sPct = isOp && countStudents > 0 ? Math.min(100, Math.round((sHadir / countStudents) * 100)) : 0;
+      }
+
+      let tPct = tTrend ? tTrend.rate : 0;
+      let tHadir = tTrend ? tTrend.hadir : 0;
+      if (!tTrend) {
+        const tRecords = teacherAttendance.filter((r: any) => r.date === dStr || r.date?.startsWith(dStr));
+        tHadir = tRecords.filter((r: any) =>
+          ["hadir", "terlambat"].includes((r.status || "").toLowerCase()) ||
+          (r.clockIn && r.status !== "Alpa")
+        ).length;
+        tPct = isOp && countTeachers > 0 ? Math.min(100, Math.round((tHadir / countTeachers) * 100)) : 0;
+      }
 
       days.push({
         date: dayLabel,
+        fullDate: dStr,
         siswaRate: sPct,
-        guruRate: tPct
+        guruRate: tPct,
+        siswaHadir: sHadir,
+        guruHadir: tHadir,
       });
     }
 
     return days;
-  }, [attendance, teacherAttendance, studentCount, teacherCount]);
+  }, [
+    selectedAttendanceRange,
+    studentDailyTrends,
+    teacherDailyTrends,
+    attendance,
+    teacherAttendance,
+    students.length,
+    teachers.length,
+    studentCount,
+    teacherCount,
+    schoolProfile?.operationalDays,
+  ]);
 
   // ─── Chart 4: Status Pembayaran SPP (Donut Chart) ─────────────────────────
   const paymentDonutData = useMemo(() => {
@@ -1105,17 +1371,87 @@ export function PrincipalDashboardView({
           </div>
         </div>
 
-        {/* Chart 1B: Komposisi Status Kehadiran Siswa Hari Ini (Donut Chart) - 1 Col */}
+        {/* Chart 1B: Komposisi Status Kehadiran Siswa (Donut Chart) - 1 Col */}
         <div className="bg-white rounded-2xl border border-gray-200/80 shadow-xs p-5 sm:p-6 flex flex-col justify-between">
           <div>
             <div className="border-b border-gray-100 pb-3">
-              <h2 className="text-sm sm:text-base font-black text-gray-900 flex items-center gap-2">
-                <CalendarCheck className="w-4 h-4 text-emerald-600" />
-                <span>Status Kehadiran Hari Ini</span>
-              </h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Rasio kehadiran siswa ({currentDate})
-              </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm sm:text-base font-black text-gray-900 flex items-center gap-2">
+                    <CalendarCheck className="w-4 h-4 text-emerald-600" />
+                    <span>
+                      {selectedAttendanceDate === todayDateStr
+                        ? "Status Kehadiran Hari Ini"
+                        : "Status Kehadiran Siswa"}
+                    </span>
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {new Date(`${selectedAttendanceDate}T12:00:00`).toLocaleDateString("id-ID", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric"
+                    })}
+                  </p>
+                </div>
+
+                {/* Operational Badge */}
+                <span
+                  className={cn(
+                    "text-[10px] font-bold px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 self-start sm:self-auto shrink-0",
+                    operationalStatusForSelected.isOperational
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : "bg-rose-50 text-rose-700 border border-rose-200"
+                  )}
+                  title={operationalStatusForSelected.reason}
+                >
+                  <span className={cn("w-1.5 h-1.5 rounded-full", operationalStatusForSelected.isOperational ? "bg-emerald-500" : "bg-rose-500")} />
+                  {operationalStatusForSelected.isOperational ? "Hari Aktif" : "Hari Libur"}
+                </span>
+              </div>
+
+              {/* Date Selector Row */}
+              <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t border-gray-100 flex-wrap">
+                <div className="flex items-center gap-1.5 bg-gray-50 hover:bg-gray-100 px-2.5 py-1.5 rounded-xl border border-gray-200 transition-colors">
+                  <CalendarDays className="w-3.5 h-3.5 text-gray-500" />
+                  <input
+                    type="date"
+                    value={selectedAttendanceDate}
+                    max={todayDateStr}
+                    onChange={(e) => setSelectedAttendanceDate(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-gray-800 border-none p-0 focus:outline-hidden cursor-pointer"
+                  />
+                </div>
+                {selectedAttendanceDate !== todayDateStr && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAttendanceDate(todayDateStr)}
+                    className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-colors cursor-pointer border border-emerald-200"
+                  >
+                    Hari Ini
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const y = new Date();
+                    y.setDate(y.getDate() - 1);
+                    setSelectedAttendanceDate(y.toISOString().slice(0, 10));
+                  }}
+                  className={cn(
+                    "px-2.5 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer border",
+                    (() => {
+                      const y = new Date();
+                      y.setDate(y.getDate() - 1);
+                      return selectedAttendanceDate === y.toISOString().slice(0, 10);
+                    })()
+                      ? "bg-emerald-600 text-white border-emerald-600"
+                      : "bg-gray-50 hover:bg-gray-100 text-gray-600 border-gray-200"
+                  )}
+                >
+                  Kemarin
+                </button>
+              </div>
             </div>
 
             <div className="mt-4 h-[210px] w-full relative flex items-center justify-center">
@@ -1145,12 +1481,21 @@ export function PrincipalDashboardView({
                   </ResponsiveContainer>
                   {/* Center Stat */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-2xl font-black text-gray-900">{attendanceToday.rate}%</span>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Hadir</span>
+                    {!operationalStatusForSelected.isOperational && attendanceToday.hadir === 0 ? (
+                      <>
+                        <span className="text-xl font-black text-amber-600">Libur</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Non-Operasional</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-2xl font-black text-gray-900">{attendanceToday.rate}%</span>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Hadir</span>
+                      </>
+                    )}
                   </div>
                 </>
               ) : (
-                <div className="text-xs text-gray-400 italic">Belum ada absensi hari ini</div>
+                <div className="text-xs text-gray-400 italic">Belum ada absensi pada tanggal ini</div>
               )}
             </div>
 
@@ -1177,16 +1522,19 @@ export function PrincipalDashboardView({
                 <span className="truncate">Alpa: <strong>{attendanceToday.alpa}</strong></span>
               </div>
               <div className="flex items-center gap-1.5 text-gray-700">
-                <span className="w-2.5 h-2.5 rounded-full bg-gray-400 shrink-0" />
-                <span className="truncate">Belum: <strong>{attendanceToday.belumAbsen}</strong></span>
+                <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", operationalStatusForSelected.isOperational ? "bg-gray-400" : "bg-amber-400")} />
+                <span className="truncate">
+                  {operationalStatusForSelected.isOperational ? "Belum:" : "Libur:"} <strong>{attendanceToday.belumAbsen}</strong>
+                </span>
               </div>
             </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-            <span className="text-gray-400">Total {studentCount} Siswa</span>
-            <Link href="/attendance" className="text-emerald-700 font-black hover:underline">
-              Buka Rekap →
+            <span className="text-gray-400">Total {attendanceToday.totalExpected} Siswa</span>
+            <Link href="/attendance" className="text-emerald-700 font-black hover:underline flex items-center gap-1">
+              <span>Buka Rekap Siswa</span>
+              <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
         </div>
@@ -1197,23 +1545,60 @@ export function PrincipalDashboardView({
         {/* Chart 2A: Tren Kehadiran Siswa vs Guru (Line Chart) */}
         <div className="bg-white rounded-2xl border border-gray-200/80 shadow-xs p-5 sm:p-6 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-100 pb-3 gap-2">
               <div>
                 <h2 className="text-sm sm:text-base font-black text-gray-900 flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-[#531FFF]" />
-                  <span>Tren Kehadiran (7 Hari Terakhir)</span>
+                  <span>Tren Riwayat Kehadiran Siswa vs Guru</span>
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Komparasi persentase kehadiran Siswa vs Tenaga Pendidik
+                  Komparasi tingkat kehadiran ({selectedAttendanceRange === "30d" ? "30 Hari" : selectedAttendanceRange === "14d" ? "14 Hari" : "7 Hari"} terakhir)
                 </p>
               </div>
-              <div className="flex items-center gap-3 text-xs">
-                <span className="inline-flex items-center gap-1 font-bold text-emerald-600">
-                  <span className="w-3 h-1 bg-emerald-500 rounded-full" /> Siswa
-                </span>
-                <span className="inline-flex items-center gap-1 font-bold text-[#531FFF]">
-                  <span className="w-3 h-1 bg-[#531FFF] rounded-full" /> Guru
-                </span>
+
+              <div className="flex items-center gap-3">
+                {/* Range Toggle Buttons */}
+                <div className="flex items-center bg-gray-100 p-0.5 rounded-xl text-xs font-bold text-gray-600">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAttendanceRange("7d")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg transition-all cursor-pointer",
+                      selectedAttendanceRange === "7d" ? "bg-white text-gray-900 shadow-xs" : "hover:text-gray-900"
+                    )}
+                  >
+                    7H
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAttendanceRange("14d")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg transition-all cursor-pointer",
+                      selectedAttendanceRange === "14d" ? "bg-white text-gray-900 shadow-xs" : "hover:text-gray-900"
+                    )}
+                  >
+                    14H
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAttendanceRange("30d")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg transition-all cursor-pointer",
+                      selectedAttendanceRange === "30d" ? "bg-white text-gray-900 shadow-xs" : "hover:text-gray-900"
+                    )}
+                  >
+                    30H
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="inline-flex items-center gap-1 font-bold text-emerald-600">
+                    <span className="w-2.5 h-1.5 bg-emerald-500 rounded-full" /> Siswa
+                  </span>
+                  <span className="inline-flex items-center gap-1 font-bold text-[#531FFF]">
+                    <span className="w-2.5 h-1.5 bg-[#531FFF] rounded-full" /> Guru
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -1254,10 +1639,19 @@ export function PrincipalDashboardView({
           </div>
 
           <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 font-medium">
-            <span>Rata-rata 7 hari: Siswa {attendanceToday.rate}% | Guru {teacherAttendanceToday.rate}%</span>
-            <Link href="/attendance" className="text-[#531FFF] font-extrabold hover:underline">
-              Detail Presensi Lengkap →
-            </Link>
+            <span>
+              Rata-rata {selectedAttendanceRange === "30d" ? "30 hari" : selectedAttendanceRange === "14d" ? "14 hari" : "7 hari"}: Siswa{" "}
+              {Math.round(attendanceTrendData.reduce((acc, d) => acc + d.siswaRate, 0) / Math.max(1, attendanceTrendData.filter(d => d.siswaRate > 0).length)) || 0}% | Guru{" "}
+              {Math.round(attendanceTrendData.reduce((acc, d) => acc + d.guruRate, 0) / Math.max(1, attendanceTrendData.filter(d => d.guruRate > 0).length)) || 0}%
+            </span>
+            <div className="flex items-center gap-3">
+              <Link href="/attendance" className="text-emerald-600 font-extrabold hover:underline">
+                Absensi Siswa →
+              </Link>
+              <Link href="/teacher-attendance" className="text-[#531FFF] font-extrabold hover:underline">
+                Absensi Guru →
+              </Link>
+            </div>
           </div>
         </div>
 
@@ -1333,6 +1727,90 @@ export function PrincipalDashboardView({
             <Link href="/report-cards" className="text-[#531FFF] font-extrabold hover:underline">
               Buka Rapor Digital →
             </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Dedicated Section: Riwayat Presensi Guru & Staf Tenaga Pendidik ─── */}
+      <div className="bg-white rounded-2xl border border-gray-200/80 shadow-xs p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-100 gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold shadow-2xs">
+              <UserCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-sm sm:text-base font-black text-gray-900">
+                Riwayat & Kedisiplinan Presensi Guru
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Monitoring kehadiran, ketepatan waktu, dan pengajuan izin tenaga pendidik terhubung langsung ke database
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Link
+              href="/teacher-attendance"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#531FFF] hover:bg-[#531FFF]/90 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+            >
+              <span>Buka Menu Absensi Guru</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+
+        {/* 4 Mini KPI Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mt-4">
+          <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-100/80">
+            <span className="text-[10px] font-bold uppercase text-emerald-800 tracking-wider block">
+              Tingkat Kehadiran Guru
+            </span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-black text-emerald-700">{teacherAttendanceToday.rate}%</span>
+              <span className="text-xs font-semibold text-emerald-600">({teacherAttendanceToday.hadir} Hadir)</span>
+            </div>
+            <span className="text-[11px] text-emerald-700/80 font-medium mt-0.5 block">
+              Dari total {teacherAttendanceToday.total} guru terdaftar
+            </span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-indigo-50/60 border border-indigo-100/80">
+            <span className="text-[10px] font-bold uppercase text-indigo-800 tracking-wider block">
+              Hadir Tepat Waktu
+            </span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-black text-indigo-700">{teacherAttendanceToday.tepatWaktu}</span>
+              <span className="text-xs font-semibold text-indigo-600">Guru</span>
+            </div>
+            <span className="text-[11px] text-indigo-700/80 font-medium mt-0.5 block">
+              Disiplin sebelum jam masuk
+            </span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-100/80">
+            <span className="text-[10px] font-bold uppercase text-amber-800 tracking-wider block">
+              Terlambat Masuk
+            </span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-black text-amber-700">{teacherAttendanceToday.terlambat}</span>
+              <span className="text-xs font-semibold text-amber-600">Guru</span>
+            </div>
+            <span className="text-[11px] text-amber-700/80 font-medium mt-0.5 block">
+              Clock In melewati batas waktu
+            </span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-purple-50/60 border border-purple-100/80">
+            <span className="text-[10px] font-bold uppercase text-purple-800 tracking-wider block">
+              Izin, Sakit & Cuti
+            </span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-black text-purple-700">{teacherAttendanceToday.izinSakit}</span>
+              <span className="text-xs font-semibold text-purple-600">Guru</span>
+            </div>
+            <span className="text-[11px] text-purple-700/80 font-medium mt-0.5 block">
+              Dengan permohonan resmi
+            </span>
           </div>
         </div>
       </div>

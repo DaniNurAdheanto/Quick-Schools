@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { AttendanceStatus } from "@prisma/client";
+import { isSchoolOperationalDay, getIndonesianDayName, OperationalDaysPattern } from "@/lib/operational-days";
 
 const statusMappingToEnum: Record<string, AttendanceStatus> = {
   "Hadir": AttendanceStatus.HADIR,
@@ -9,6 +10,7 @@ const statusMappingToEnum: Record<string, AttendanceStatus> = {
   "Sakit": AttendanceStatus.SAKIT,
   "Alpa": AttendanceStatus.ALPA,
   "Tidak Hadir": AttendanceStatus.ALPA,
+  "Ditolak": AttendanceStatus.ALPA,
 };
 
 const statusEnumToString: Record<AttendanceStatus, string> = {
@@ -19,19 +21,177 @@ const statusEnumToString: Record<AttendanceStatus, string> = {
   ALPA: "Alpa",
 };
 
-// GET /api/attendance - List attendance records, with optional date & classId filter
+function getDaysBetween(start: string, end: string): string[] {
+  const dates: string[] = [];
+  const curr = new Date(`${start}T12:00:00`);
+  const stop = new Date(`${end}T12:00:00`);
+  while (curr <= stop) {
+    dates.push(curr.toISOString().split("T")[0]);
+    curr.setDate(curr.getDate() + 1);
+  }
+  return dates;
+}
+
+// GET /api/attendance - List attendance records, historical range queries, and daily trends
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const date = searchParams.get("date") || new Date().toISOString().split("T")[0];
+    const today = new Date().toISOString().split("T")[0];
+    const operationalDays = (searchParams.get("operationalDays") || "Senin - Jumat") as OperationalDaysPattern;
     const classId = searchParams.get("classId");
+    const range = searchParams.get("range"); // "7d" | "14d" | "30d"
+    let startDate = searchParams.get("startDate");
+    let endDate = searchParams.get("endDate");
+    const singleDate = searchParams.get("date");
 
-    const whereClause: any = { date };
+    // 1. Fetch total active students for baseline rate calculations
+    const studentsWhere: any = { status: "Aktif" };
+    if (classId && classId !== "all") {
+      studentsWhere.classId = classId;
+    }
+    const allStudents = await prisma.student.findMany({
+      where: studentsWhere,
+      include: { class: true },
+    });
+    const totalStudents = allStudents.length;
+
+    // Handle range calculation
+    if (range && !startDate) {
+      const daysCount = range === "30d" ? 30 : range === "14d" ? 14 : 7;
+      const startD = new Date();
+      startD.setDate(startD.getDate() - (daysCount - 1));
+      startDate = startD.toISOString().split("T")[0];
+      endDate = today;
+    }
+
+    const isRangeQuery = Boolean(startDate && endDate);
+
+    // -------------------------------------------------------------
+    // Branch A: Range Query (Multi-day Historical Data & Trends)
+    // -------------------------------------------------------------
+    if (isRangeQuery && startDate && endDate) {
+      const whereClause: any = {
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      };
+      if (classId && classId !== "all") {
+        whereClause.classId = classId;
+      }
+
+      const attendances = await prisma.attendance.findMany({
+        where: whereClause,
+        include: {
+          student: {
+            include: {
+              class: true,
+            },
+          },
+        },
+        orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+      });
+
+      // Group records by date
+      const recordsByDate = new Map<string, typeof attendances>();
+      attendances.forEach((att) => {
+        const list = recordsByDate.get(att.date) || [];
+        list.push(att);
+        recordsByDate.set(att.date, list);
+      });
+
+      const allDatesInRange = getDaysBetween(startDate, endDate);
+      const now = new Date();
+      const currentHour = now.getHours();
+
+      const dailyTrends = allDatesInRange.map((dStr) => {
+        const isOp = isSchoolOperationalDay(dStr, operationalDays);
+        const dayLabel = getIndonesianDayName(dStr);
+        const dayRecords = recordsByDate.get(dStr) || [];
+
+        let hadir = 0;
+        let terlambat = 0;
+        let izin = 0;
+        let sakit = 0;
+        let alpa = 0;
+
+        dayRecords.forEach((att) => {
+          if (att.status === AttendanceStatus.HADIR) hadir++;
+          else if (att.status === AttendanceStatus.TERLAMBAT) { terlambat++; hadir++; }
+          else if (att.status === AttendanceStatus.IZIN) izin++;
+          else if (att.status === AttendanceStatus.SAKIT) sakit++;
+          else if (att.status === AttendanceStatus.ALPA) alpa++;
+        });
+
+        const isPastDate = dStr < today;
+        const isToday = dStr === today;
+        const isPastCutoff = isPastDate || (isToday && currentHour >= 12);
+
+        // Auto-alpa only on operational school days for unrecorded active students
+        if (isOp && isPastCutoff && totalStudents > dayRecords.length) {
+          alpa += (totalStudents - dayRecords.length);
+        }
+
+        const totalMarked = hadir + izin + sakit + alpa;
+        const rate = isOp && totalStudents > 0
+          ? Math.min(100, Math.round((hadir / totalStudents) * 100))
+          : 0;
+
+        return {
+          date: new Date(`${dStr}T12:00:00`).toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+          fullDate: dStr,
+          dayName: dayLabel,
+          isOperational: isOp,
+          hadir,
+          terlambat,
+          izin,
+          sakit,
+          alpa,
+          tidakHadir: izin + sakit + alpa,
+          total: totalMarked,
+          rate,
+          totalStudents,
+        };
+      });
+
+      return NextResponse.json({
+        success: true,
+        startDate,
+        endDate,
+        operationalDays,
+        totalStudents,
+        dailyTrends,
+        records: attendances.map((att) => ({
+          id: att.id,
+          studentId: att.studentId,
+          nisn: att.student.nisn,
+          name: att.student.fullName,
+          fullName: att.student.fullName,
+          className: att.student.class?.name || "10 MIPA 1",
+          classId: att.classId,
+          date: att.date,
+          time: att.time || "-",
+          status: statusEnumToString[att.status] || "Hadir",
+          notes: att.notes || null,
+          isFinal: att.isFinal,
+          latitude: att.latitude,
+          longitude: att.longitude,
+        })),
+      });
+    }
+
+    // -------------------------------------------------------------
+    // Branch B: Single Date Query (Default / Specific Date)
+    // -------------------------------------------------------------
+    const targetDate = singleDate || today;
+    const isOperational = isSchoolOperationalDay(targetDate, operationalDays);
+    const dayName = getIndonesianDayName(targetDate);
+
+    const whereClause: any = { date: targetDate };
     if (classId && classId !== "all") {
       whereClause.classId = classId;
     }
 
-    // 1. Fetch attendance records for this date
     const attendances = await prisma.attendance.findMany({
       where: whereClause,
       include: {
@@ -44,21 +204,12 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "asc" },
     });
 
-    // 2. Fetch all active students to calculate totals and auto-alpa
-    const studentsWhere: any = { status: "Aktif" };
-    if (classId && classId !== "all") {
-      studentsWhere.classId = classId;
-    }
-    const allStudents = await prisma.student.findMany({
-      where: studentsWhere,
-      include: { class: true },
-    });
-
     const attendanceMap = new Map(attendances.map((a) => [a.studentId, a]));
 
-    // 3. Current time check for 12:00 WIB cutoff
     const now = new Date();
-    const isPastCutoff = now.getHours() >= 12;
+    const isPastDate = targetDate < today;
+    const isToday = targetDate === today;
+    const isPastCutoff = isPastDate || (isToday && now.getHours() >= 12);
 
     let hadirCount = 0;
     let terlambatCount = 0;
@@ -72,12 +223,15 @@ export async function GET(req: NextRequest) {
 
       if (att) {
         statusStr = statusEnumToString[att.status] || "Hadir";
+      } else if (!isOperational) {
+        // Non-operational days (holiday) should NOT be counted as Alpa
+        statusStr = "Libur";
       } else if (isPastCutoff) {
         statusStr = "Alpa";
       }
 
       if (statusStr === "Hadir") hadirCount++;
-      else if (statusStr === "Terlambat") terlambatCount++;
+      else if (statusStr === "Terlambat") { terlambatCount++; hadirCount++; }
       else if (statusStr === "Izin") izinCount++;
       else if (statusStr === "Sakit") sakitCount++;
       else if (statusStr === "Alpa") alpaCount++;
@@ -88,9 +242,9 @@ export async function GET(req: NextRequest) {
         nisn: st.nisn,
         name: st.fullName,
         fullName: st.fullName,
-        className: st.class?.name || "10 IPA 1",
+        className: st.class?.name || "10 MIPA 1",
         classId: st.classId,
-        date,
+        date: targetDate,
         time: att?.time || (att ? att.createdAt.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"),
         status: statusStr,
         notes: att?.notes || null,
@@ -102,7 +256,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      date,
+      date: targetDate,
+      dayName,
+      isOperational,
+      operationalDays,
       stats: {
         totalStudents: allStudents.length,
         hadir: hadirCount,
@@ -110,7 +267,7 @@ export async function GET(req: NextRequest) {
         izin: izinCount,
         sakit: sakitCount,
         alpa: alpaCount,
-        rate: allStudents.length > 0 ? Math.round((hadirCount / allStudents.length) * 100) : 0,
+        rate: isOperational && allStudents.length > 0 ? Math.round((hadirCount / allStudents.length) * 100) : 0,
       },
       records: mergedList,
       attendance: mergedList,
@@ -121,77 +278,76 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/attendance - Log or update attendance record
+// POST /api/attendance - Log, update, or batch upsert attendance records permanently in PostgreSQL
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { studentId, nisn, date, status, notes, time, latitude, longitude } = body;
 
-    const targetDate = date || new Date().toISOString().split("T")[0];
+    // Check if this is a batch upsert
+    const isBatch = Array.isArray(body) || (body.batch && Array.isArray(body.batch));
+    const items = isBatch ? (Array.isArray(body) ? body : body.batch) : [body];
 
-    // Find student
-    const student = await prisma.student.findFirst({
-      where: {
-        OR: [{ id: studentId || "" }, { nisn: String(nisn || studentId || "").trim() }],
-      },
-    });
-
-    if (!student) {
-      return NextResponse.json({ error: "Siswa tidak ditemukan." }, { status: 404 });
+    if (items.length === 0) {
+      return NextResponse.json({ error: "Data presensi kosong." }, { status: 400 });
     }
 
+    const todayStr = new Date().toISOString().split("T")[0];
     const now = new Date();
-    const isPastCutoff = now.getHours() >= 12;
-    const targetStatus = statusMappingToEnum[String(status)] || AttendanceStatus.HADIR;
 
-    // Check if locked after 12:00
-    const existing = await prisma.attendance.findUnique({
-      where: {
-        studentId_date: {
-          studentId: student.id,
-          date: targetDate,
+    const upsertPromises = items.map(async (item: any) => {
+      const { studentId, nisn, date, status, notes, time, latitude, longitude, classId } = item;
+      const targetDate = date || todayStr;
+
+      // Find student
+      const student = await prisma.student.findFirst({
+        where: {
+          OR: [{ id: studentId || "" }, { nisn: String(nisn || studentId || "").trim() }],
         },
-      },
+      });
+
+      if (!student) return null;
+
+      const targetStatus = statusMappingToEnum[String(status)] || AttendanceStatus.HADIR;
+      const isPastCutoff = targetDate < todayStr || (targetDate === todayStr && now.getHours() >= 12);
+      const currentTimeStr = time || now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+
+      return prisma.attendance.upsert({
+        where: {
+          studentId_date: {
+            studentId: student.id,
+            date: targetDate,
+          },
+        },
+        update: {
+          status: targetStatus,
+          notes: notes !== undefined ? notes : undefined,
+          time: currentTimeStr,
+          isFinal: isPastCutoff,
+          latitude: latitude ? Number(latitude) : undefined,
+          longitude: longitude ? Number(longitude) : undefined,
+          classId: classId || student.classId,
+        },
+        create: {
+          studentId: student.id,
+          classId: classId || student.classId,
+          date: targetDate,
+          status: targetStatus,
+          time: currentTimeStr,
+          notes: notes || null,
+          isFinal: isPastCutoff,
+          latitude: latitude ? Number(latitude) : null,
+          longitude: longitude ? Number(longitude) : null,
+        },
+      });
     });
 
-    if (existing && existing.isFinal) {
-      return NextResponse.json({ error: "Presensi untuk tanggal ini sudah final dan tidak dapat diubah lagi." }, { status: 403 });
-    }
-
-    const currentTimeStr = time || now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
-
-    const attendanceRecord = await prisma.attendance.upsert({
-      where: {
-        studentId_date: {
-          studentId: student.id,
-          date: targetDate,
-        },
-      },
-      update: {
-        status: targetStatus,
-        notes: notes || null,
-        time: currentTimeStr,
-        isFinal: isPastCutoff,
-        latitude: latitude ? Number(latitude) : null,
-        longitude: longitude ? Number(longitude) : null,
-      },
-      create: {
-        studentId: student.id,
-        classId: student.classId,
-        date: targetDate,
-        status: targetStatus,
-        time: currentTimeStr,
-        notes: notes || null,
-        isFinal: isPastCutoff,
-        latitude: latitude ? Number(latitude) : null,
-        longitude: longitude ? Number(longitude) : null,
-      },
-    });
+    const results = (await Promise.all(upsertPromises)).filter(Boolean);
 
     return NextResponse.json({
       success: true,
-      message: `Presensi ${student.fullName} berhasil dicatat sebagai "${status || "Hadir"}".`,
-      attendance: attendanceRecord,
+      message: `Berhasil menyimpan ${results.length} data presensi siswa ke database secara permanen.`,
+      count: results.length,
+      records: results,
     });
   } catch (err: any) {
     console.error("POST /api/attendance error:", err);

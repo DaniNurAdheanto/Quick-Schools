@@ -13,7 +13,9 @@ import {
   STAGE_CONFIGS,
 } from "@/lib/school-level-config";
 
-export type { EducationalStage, VocationalProgram, StageConfig };
+import { OperationalDaysPattern } from "@/lib/operational-days";
+
+export type { EducationalStage, VocationalProgram, StageConfig, OperationalDaysPattern };
 
 export interface SchoolProfile {
   schoolName: string;
@@ -34,6 +36,7 @@ export interface SchoolProfile {
   principalName: string;
   principalNip: string;
   operatingHours: string;
+  operationalDays: OperationalDaysPattern;
   description: string;
   // Geolocation & Attendance Geofence
   latitude: number;
@@ -63,6 +66,7 @@ export const DEFAULT_SCHOOL_PROFILE: SchoolProfile = {
   principalName: "Dr. Danur Adhi, M.Pd",
   principalNip: "19750812 200003 1 002",
   operatingHours: "06:30 - 16:00 WIB",
+  operationalDays: "Senin - Jumat",
   description: "Pusat keunggulan pendidikan berbasis teknologi AI, biometrik, dan kepemimpinan berkarakter.",
   latitude: -6.200000,
   longitude: 106.816666,
