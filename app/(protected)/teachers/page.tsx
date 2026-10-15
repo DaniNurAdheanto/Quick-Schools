@@ -86,7 +86,7 @@ async function compressImageFileToBase64(file: File, maxWidth = 360, quality = 0
 export default function TeachersPage() {
   const toast = useToast();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const { teachers, setTeachers, loading } = useUnifiedTeachers();
+  const { teachers, setTeachers, loading, refreshTeachers } = useUnifiedTeachers();
   const [subjectsList, setSubjectsList] = useState<any[]>([]);
 
   const [classesList, setClassesList] = useState<any[]>([]);
@@ -304,6 +304,30 @@ export default function TeachersPage() {
             await assignHomeroomTeacher(db, createPayload, targetClass, classesList, teachers);
           }
         }
+
+        // Persist to PostgreSQL backend via /api/teachers
+        try {
+          await fetch("/api/teachers", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              nip: nipValue,
+              name: data.name || "",
+              fullName: data.name || "",
+              email: data.email || null,
+              phone: contactValue,
+              contact: contactValue,
+              gender: data.gender || "Laki-laki",
+              address: data.address || null,
+              subjectIds: subjectIds,
+              homeroomClass: data.homeroomClass || null,
+              status: data.status || "Aktif",
+            }),
+          });
+          refreshTeachers();
+        } catch (apiErr) {
+          console.warn("PostgreSQL teacher create error:", apiErr);
+        }
       } else if (crudState.mode === "edit") {
         const targetId = data._firestoreId || crudState.data?._firestoreId || data.uid || crudState.data?.uid || data.id;
         const targetUid = data.uid || crudState.data?.uid;
@@ -355,6 +379,32 @@ export default function TeachersPage() {
           await syncClassOnTeacherUpdate(db, updatePayload, classesList);
         }
 
+        // Persist to PostgreSQL backend via /api/teachers
+        try {
+          await fetch("/api/teachers", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: targetId,
+              _firestoreId: targetId,
+              nip: nipValue,
+              name: data.name || "",
+              fullName: data.name || "",
+              email: data.email || null,
+              phone: contactValue,
+              contact: contactValue,
+              gender: data.gender,
+              address: data.address,
+              subjectIds: subjectIds,
+              homeroomClass: data.homeroomClass !== undefined ? data.homeroomClass : undefined,
+              status: data.status,
+            }),
+          });
+          refreshTeachers();
+        } catch (apiErr) {
+          console.warn("PostgreSQL teacher edit error:", apiErr);
+        }
+
         setTeachers((prev) => {
           const updated = prev.map((t) =>
             (t._firestoreId === targetId || (targetUid && t.uid === targetUid) || (nipValue && t.nip && t.nip !== "-" && t.nip === nipValue) || (t.name && data.name && t.name.toLowerCase().trim() === data.name.toLowerCase().trim()))
@@ -381,6 +431,17 @@ export default function TeachersPage() {
           nip: data.nip,
           _allDocIds: data._allDocIds
         });
+
+        // Persist to PostgreSQL backend via /api/teachers
+        try {
+          const deleteId = data._firestoreId || data.id || data.nip;
+          await fetch(`/api/teachers?id=${encodeURIComponent(deleteId)}`, {
+            method: "DELETE",
+          });
+          refreshTeachers();
+        } catch (apiErr) {
+          console.warn("PostgreSQL teacher delete error:", apiErr);
+        }
 
         setTeachers((prev) =>
           prev.filter(

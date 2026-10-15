@@ -45,7 +45,18 @@ export async function POST(req: NextRequest) {
     };
 
     const targetRole = roleMapping[String(role).toLowerCase()] || UserRole.SISWA;
-    const targetStatus = status === "Nonaktif" ? AccountStatus.NONAKTIF : status === "Belum Onboarding" ? AccountStatus.BELUM_ONBOARDING : AccountStatus.AKTIF;
+    const isStudent = targetRole === UserRole.SISWA;
+    let targetStatus: AccountStatus;
+    if (status === "Nonaktif" || status === "NONAKTIF") {
+      targetStatus = AccountStatus.NONAKTIF;
+    } else if (status === "Aktif" || status === "AKTIF") {
+      targetStatus = AccountStatus.AKTIF;
+    } else if (status === "Belum Onboarding" || status === "BELUM_ONBOARDING") {
+      targetStatus = AccountStatus.BELUM_ONBOARDING;
+    } else {
+      // Siswa baru wajib onboarding terlebih dahulu, peran staff/admin langsung aktif
+      targetStatus = isStudent ? AccountStatus.BELUM_ONBOARDING : AccountStatus.AKTIF;
+    }
 
     // Create user in PostgreSQL
     const newUser = await prisma.user.create({

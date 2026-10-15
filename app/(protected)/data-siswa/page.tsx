@@ -103,7 +103,7 @@ export default function DataSiswaPage() {
   const toast = useToast();
   const { currentStage, gradeLevels, majorOptions } = useSchoolProfile();
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const { students, setStudents, loading, rawStudents, rawUsers } = useUnifiedStudents();
+  const { students, setStudents, loading, rawStudents, rawUsers, refreshStudents } = useUnifiedStudents();
   const [classes, setClasses] = useState<any[]>([]);
   const { teachers: unifiedTeachers } = useUnifiedTeachers();
   const [teachers, setTeachers] = useState<any[]>([]);
@@ -681,6 +681,41 @@ export default function DataSiswaPage() {
         } catch (e) {
           console.warn("Auto-link student with parent error:", e);
         }
+
+        // 3. Persist to PostgreSQL backend via /api/students
+        try {
+          await fetch("/api/students", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              nisn: data.nisn || data.id,
+              nis: data.id || data.nisn,
+              fullName: data.name,
+              name: data.name,
+              nickname: data.nickname,
+              email: data.email,
+              gender: data.gender,
+              birthPlace: data.birthPlace,
+              birthDate: data.birthDate,
+              religion: data.religion,
+              nik: data.nik,
+              address: data.address,
+              phone: data.phone,
+              classId: resolvedClassDocId || resolvedClassName,
+              className: resolvedClassName,
+              major: data.major,
+              entryYear: data.entryYear,
+              status: data.status,
+              fatherName: data.fatherName,
+              motherName: data.motherName,
+              guardianName: data.guardianName,
+              parentPhone: data.parentPhone,
+            }),
+          });
+          refreshStudents();
+        } catch (apiErr) {
+          console.warn("PostgreSQL student create error:", apiErr);
+        }
       } else if (crudState.mode === "edit") {
         const original = crudState.data || {};
         const mergedData = { ...original, ...data };
@@ -857,7 +892,44 @@ export default function DataSiswaPage() {
           console.warn("Auto-link edited student error:", e);
         }
 
-        // 4. Optimistically update local state immediately
+        // 4. Persist to PostgreSQL backend via /api/students
+        try {
+          await fetch("/api/students", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: original.id || original.nisn || original._firestoreId || targetId,
+              _firestoreId: original._firestoreId,
+              nisn: mergedData.nisn || mergedData.id,
+              nis: mergedData.nis || mergedData.id || mergedData.nisn,
+              fullName: studentName,
+              name: studentName,
+              nickname: mergedData.nickname,
+              email: mergedData.email,
+              gender: mergedData.gender,
+              birthPlace: mergedData.birthPlace,
+              birthDate: mergedData.birthDate,
+              religion: mergedData.religion,
+              nik: mergedData.nik,
+              address: mergedData.address,
+              phone: mergedData.phone,
+              classId: resolvedClassDocId || resolvedClassName,
+              className: resolvedClassName,
+              major: mergedData.major,
+              entryYear: mergedData.entryYear,
+              status: studentStatus,
+              fatherName: mergedData.fatherName,
+              motherName: mergedData.motherName,
+              guardianName: mergedData.guardianName,
+              parentPhone: mergedData.parentPhone,
+            }),
+          });
+          refreshStudents();
+        } catch (apiErr) {
+          console.warn("PostgreSQL student edit error:", apiErr);
+        }
+
+        // 5. Optimistically update local state immediately
         setStudents(prev => prev.map(s => {
           const isMatch = (
             (s._firestoreId && (targetStudentDocIds.has(s._firestoreId) || targetUserDocIds.has(s._firestoreId))) ||
@@ -927,6 +999,19 @@ export default function DataSiswaPage() {
           } catch (err) {
             console.warn("Could not delete from users collection:", docId, err);
           }
+        }
+
+        // Delete from PostgreSQL backend via /api/students
+        try {
+          const deleteKey = data._firestoreId || data.nisn || data.id || data.uid;
+          if (deleteKey) {
+            await fetch(`/api/students?id=${encodeURIComponent(deleteKey)}`, {
+              method: "DELETE",
+            });
+            refreshStudents();
+          }
+        } catch (apiErr) {
+          console.warn("PostgreSQL student delete error:", apiErr);
         }
 
         // Optimistically remove from local state immediately

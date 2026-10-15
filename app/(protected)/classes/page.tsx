@@ -30,9 +30,8 @@ import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { CrudSheet, CrudField } from "@/components/layouts/crud-sheet";
 import { db, auth } from "@/lib/firebase";
 import { 
-  collection, 
-  addDoc, 
   setDoc,
+  deleteDoc,
   doc 
 } from "firebase/firestore";
 import { useToast } from "@/context/ToastContext";
@@ -40,7 +39,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
-import { isStudentInClass, normalizeClassName } from "@/lib/class-relations";
+import { isStudentInClass, normalizeClassName, generateClassId } from "@/lib/class-relations";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
 
@@ -60,7 +59,7 @@ const STANDARD_CLASS_PRESETS = [
 
 export default function ClassesPage() {
   const [classes, setClasses] = useState<any[]>([]);
-  const { students, loading: studentsLoading } = useUnifiedStudents();
+  const { students, setStudents, loading: studentsLoading, refreshStudents } = useUnifiedStudents();
   const { teachers: unifiedTeachers } = useUnifiedTeachers();
   const [teachers, setTeachers] = useState<any[]>([]);
   const [classesLoading, setClassesLoading] = useState(true);
@@ -234,10 +233,11 @@ export default function ClassesPage() {
     }
 
     try {
+      const classId = data.id || data._firestoreId || generateClassId(data.name || "", data.level || gradeLevels[0] || "Kelas 10", data.major || majorOptions[0]?.value || "MIPA");
       const payload = {
-        id: data.id || data._firestoreId,
+        id: classId,
         name: (data.name || "").trim(),
-        level: data.level || gradeLevels[0] || "10",
+        level: data.level || gradeLevels[0] || "Kelas 10",
         major: data.major || majorOptions[0]?.value || "MIPA",
         homeroomTeacherId: data.homeroomTeacherId || data.homeroomId || null,
       };
@@ -249,12 +249,34 @@ export default function ClassesPage() {
           body: JSON.stringify(payload),
         });
         const resData = await res.json();
-        if (resData.success) {
-          toast.showSuccess(`Kelas ${payload.name} berhasil dibuat!`, "Kelas Ditambahkan");
-          await fetchClassesFromApi();
-        } else {
+        if (!res.ok || !resData.success) {
           toast.showError(resData.error || "Gagal membuat kelas.", "Gagal");
+          throw new Error(resData.error || "Gagal membuat kelas.");
         }
+
+        const createdClass = resData.class;
+        const docId = createdClass?.id || classId;
+        // Dual-write to Firestore for compatibility
+        try {
+          await setDoc(doc(db, "classes", docId), {
+            id: docId,
+            _firestoreId: docId,
+            name: createdClass?.name || payload.name,
+            level: createdClass?.level || payload.level,
+            major: createdClass?.major || payload.major,
+            homeroom: createdClass?.homeroom || "",
+            homeroomTeacherId: createdClass?.homeroomTeacherId || null,
+            maxCapacity: Number(data.maxCapacity) || 36,
+            status: data.status || "Aktif",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        } catch (fsErr) {
+          console.warn("Firestore sync warning on class create:", fsErr);
+        }
+
+        toast.showSuccess(`Kelas ${payload.name} (${docId}) berhasil dibuat!`, "Kelas Ditambahkan");
+        await fetchClassesFromApi();
       } else if (crudState.mode === "edit") {
         const targetId = data.id || data._firestoreId;
         const res = await fetch("/api/classes", {
@@ -263,28 +285,55 @@ export default function ClassesPage() {
           body: JSON.stringify({ ...payload, id: targetId }),
         });
         const resData = await res.json();
-        if (resData.success) {
-          toast.showSuccess(`Informasi kelas ${payload.name} berhasil diperbarui.`, "Kelas Diperbarui");
-          await fetchClassesFromApi();
-        } else {
+        if (!res.ok || !resData.success) {
           toast.showError(resData.error || "Gagal memperbarui kelas.", "Gagal");
+          throw new Error(resData.error || "Gagal memperbarui kelas.");
         }
+
+        // Dual-write to Firestore for compatibility
+        try {
+          if (targetId) {
+            await setDoc(doc(db, "classes", targetId), {
+              name: payload.name,
+              level: payload.level,
+              major: payload.major,
+              homeroomTeacherId: payload.homeroomTeacherId || null,
+              maxCapacity: Number(data.maxCapacity) || 36,
+              status: data.status || "Aktif",
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          }
+        } catch (fsErr) {
+          console.warn("Firestore sync warning on class edit:", fsErr);
+        }
+
+        toast.showSuccess(`Informasi kelas ${payload.name} berhasil diperbarui.`, "Kelas Diperbarui");
+        await fetchClassesFromApi();
       } else if (crudState.mode === "delete") {
         const targetId = data.id || data._firestoreId;
         const res = await fetch(`/api/classes?id=${encodeURIComponent(targetId)}`, {
           method: "DELETE",
         });
         const resData = await res.json();
-        if (resData.success) {
-          toast.showSuccess(`Kelas berhasil dihapus.`, "Kelas Dihapus");
-          await fetchClassesFromApi();
-        } else {
+        if (!res.ok || !resData.success) {
           toast.showError(resData.error || "Gagal menghapus kelas.", "Gagal");
+          throw new Error(resData.error || "Gagal menghapus kelas.");
         }
+
+        // Remove from Firestore
+        try {
+          if (targetId) {
+            await deleteDoc(doc(db, "classes", targetId));
+          }
+        } catch (fsErr) {
+          console.warn("Firestore delete warning:", fsErr);
+        }
+
+        toast.showSuccess(`Kelas berhasil dihapus.`, "Kelas Dihapus");
+        await fetchClassesFromApi();
       }
     } catch (error) {
       console.error("Error saving class data:", error);
-      toast.showError("Terjadi kesalahan saat memproses data kelas.", "Gagal");
       throw error;
     }
   };
@@ -293,29 +342,62 @@ export default function ClassesPage() {
   const handleApplyClassPreset = async (preset: typeof STANDARD_CLASS_PRESETS[0]) => {
     if (isReadOnly) return;
     try {
-      // Check if already exists
-      const exists = classes.some(c => c.name.toLowerCase() === preset.name.toLowerCase());
+      const generatedId = generateClassId(preset.name, preset.level, preset.major);
+      // Check if already exists in local list
+      const exists = classes.some(c => 
+        (c.id && c.id.toLowerCase() === generatedId) ||
+        (c.name && c.name.toLowerCase() === preset.name.toLowerCase())
+      );
       if (exists) {
         toast.showError(`Kelas ${preset.name} sudah ada di sistem.`, "Gagal");
         return;
       }
 
-      await addDoc(collection(db, "classes"), {
-        id: `C${Math.floor(100 + Math.random() * 900)}`,
-        name: preset.name,
-        level: preset.level,
-        major: preset.major,
-        homeroom: "",
-        maxCapacity: preset.maxCapacity,
-        status: "Aktif",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+      // 1. Create in PostgreSQL with template ID: class-(tingkatan)-(jurusan)-(nomer)
+      const res = await fetch("/api/classes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: generatedId,
+          name: preset.name,
+          level: preset.level,
+          major: preset.major,
+          homeroomTeacherId: null,
+        }),
       });
 
-      toast.showSuccess(`Kelas ${preset.name} berhasil dibuat!`, "Kelas Ditambahkan");
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || "Gagal menyimpan preset kelas ke database.");
+      }
+
+      const createdClass = resData.class;
+      const docId = createdClass?.id || generatedId;
+
+      // 2. Dual-write to Firestore
+      try {
+        await setDoc(doc(db, "classes", docId), {
+          id: docId,
+          _firestoreId: docId,
+          name: preset.name,
+          level: preset.level,
+          major: preset.major,
+          homeroom: "",
+          homeroomTeacherId: null,
+          maxCapacity: preset.maxCapacity,
+          status: "Aktif",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (fsErr) {
+        console.warn("Firestore sync warning on preset add:", fsErr);
+      }
+
+      toast.showSuccess(`Kelas ${preset.name} (${docId}) berhasil dibuat!`, "Kelas Ditambahkan");
+      await fetchClassesFromApi();
     } catch (err: any) {
       console.error("Preset add error:", err);
-      toast.showError("Gagal menambahkan preset kelas.", "Gagal");
+      toast.showError(err.message || "Gagal menambahkan preset kelas.", "Gagal");
     }
   };
 
@@ -328,16 +410,36 @@ export default function ClassesPage() {
       return;
     }
     const studentId = student?._firestoreId || student?.id || student?.uid;
-    if (!studentId) return;
+    if (!studentId || !managingClass?.name) return;
 
     try {
       setIsProcessingStudent(true);
       const studentName = (student.fullName || student.name || "Siswa").trim();
+      const studentNisn = student.nisn || student.nis || student.id;
+
+      // 1. Persist to PostgreSQL backend via /api/classes/assign
+      const res = await fetch("/api/classes/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId: managingClass._firestoreId || managingClass.id,
+          className: managingClass.name,
+          studentIds: [studentId, studentNisn, student.id, student._firestoreId, student.uid].filter(Boolean),
+          action: "unassign",
+        }),
+      });
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || "Gagal mengeluarkan siswa dari kelas di database.");
+      }
+
+      // 2. Dual-write to Firestore for real-time compatibility
       const studentStatus = student.status || "Aktif";
       const payload: any = {
         id: studentId,
         name: studentName.slice(0, 100),
         classId: "-",
+        className: "-",
         status: studentStatus,
       };
       const validImg = student.imageUrl && !student.imageUrl.startsWith("data:") && student.imageUrl.length <= 500 ? student.imageUrl : undefined;
@@ -360,10 +462,30 @@ export default function ClassesPage() {
         console.warn("Sync to users collection warning:", uErr);
       }
 
+      // 3. Optimistically update local state immediately
+      setStudents(prev => prev.map(s => {
+        const isMatch = s._firestoreId === student._firestoreId || s.id === student.id || s.nisn === student.nisn || s.uid === student.uid;
+        if (isMatch) {
+          return {
+            ...s,
+            classId: "",
+            className: "",
+            class: "",
+            kelas: "",
+            classDocId: "",
+          };
+        }
+        return s;
+      }));
+
+      // 4. Background refresh
+      refreshStudents();
+      fetchClassesFromApi();
+
       toast.showSuccess(`${student.fullName || student.name} berhasil dikeluarkan dari kelas ${managingClass.name}.`, "Siswa Dikeluarkan");
     } catch (err: any) {
       console.error("Remove student error:", err);
-      toast.showError("Gagal mengeluarkan siswa dari kelas.", "Gagal");
+      toast.showError("Gagal mengeluarkan siswa dari kelas: " + (err.message || ""), "Gagal");
     } finally {
       setIsProcessingStudent(false);
     }
@@ -383,11 +505,31 @@ export default function ClassesPage() {
       const targetClass = managingClass.name;
       const targetDocId = managingClass._firestoreId || managingClass.id || "";
       const studentName = (student.fullName || student.name || "Siswa").trim();
+      const studentNisn = student.nisn || student.nis || student.id;
+
+      // 1. Persist to PostgreSQL backend via /api/classes/assign
+      const res = await fetch("/api/classes/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId: targetDocId,
+          className: targetClass,
+          studentIds: [studentId, studentNisn, student.id, student._firestoreId, student.uid].filter(Boolean),
+          action: "assign",
+        }),
+      });
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || "Gagal memasukkan siswa ke kelas di database.");
+      }
+
+      // 2. Dual-write to Firestore for compatibility
       const studentStatus = student.status || "Aktif";
       const payload: any = {
         id: studentId,
         name: studentName.slice(0, 100),
         classId: targetClass.slice(0, 50),
+        className: targetClass,
         status: studentStatus,
       };
       const validImg = student.imageUrl && !student.imageUrl.startsWith("data:") && student.imageUrl.length <= 500 ? student.imageUrl : undefined;
@@ -410,10 +552,30 @@ export default function ClassesPage() {
         console.warn("Sync to users collection warning:", uErr);
       }
 
+      // 3. Optimistically update local state immediately
+      setStudents(prev => prev.map(s => {
+        const isMatch = s._firestoreId === student._firestoreId || s.id === student.id || s.nisn === student.nisn || s.uid === student.uid;
+        if (isMatch) {
+          return {
+            ...s,
+            classId: targetDocId || targetClass,
+            className: targetClass,
+            class: targetClass,
+            kelas: targetClass,
+            classDocId: targetDocId,
+          };
+        }
+        return s;
+      }));
+
+      // 4. Background refresh
+      refreshStudents();
+      fetchClassesFromApi();
+
       toast.showSuccess(`${student.fullName || student.name} berhasil dimasukkan ke kelas ${managingClass.name}!`, "Siswa Ditambahkan");
     } catch (err: any) {
       console.error("Add student error:", err);
-      toast.showError("Gagal menambahkan siswa ke kelas.", "Gagal");
+      toast.showError("Gagal menambahkan siswa ke kelas: " + (err.message || ""), "Gagal");
     } finally {
       setIsProcessingStudent(false);
     }
@@ -432,8 +594,38 @@ export default function ClassesPage() {
       const targetDocId = managingClass._firestoreId || managingClass.id || "";
       const targetClass = managingClass.name;
 
+      // 1. Resolve all student keys
+      const allResolvedIds = new Set<string>();
+      selectedStudentIdsToAdd.forEach(id => {
+        allResolvedIds.add(id);
+        const sObj = students.find(s => s._firestoreId === id || s.id === id || s.uid === id || s.nisn === id);
+        if (sObj) {
+          if (sObj.id) allResolvedIds.add(sObj.id);
+          if (sObj.nisn) allResolvedIds.add(sObj.nisn);
+          if (sObj.uid) allResolvedIds.add(sObj.uid);
+          if (sObj._firestoreId) allResolvedIds.add(sObj._firestoreId);
+        }
+      });
+
+      // 2. Persist to PostgreSQL backend via /api/classes/assign
+      const res = await fetch("/api/classes/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId: targetDocId,
+          className: targetClass,
+          studentIds: Array.from(allResolvedIds),
+          action: "assign",
+        }),
+      });
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || "Gagal memasukkan siswa ke kelas di database.");
+      }
+
+      // 3. Dual-write to Firestore for compatibility
       for (const docId of selectedStudentIdsToAdd) {
-        const studentObj = students.find(s => s._firestoreId === docId || s.id === docId || s.uid === docId);
+        const studentObj = students.find(s => s._firestoreId === docId || s.id === docId || s.uid === docId || s.nisn === docId);
         const studentId = studentObj?._firestoreId || docId;
         const studentName = (studentObj?.fullName || studentObj?.name || "Siswa").trim();
         const studentStatus = studentObj?.status || "Aktif";
@@ -443,6 +635,7 @@ export default function ClassesPage() {
           id: studentId,
           name: studentName.slice(0, 100),
           classId: targetClass.slice(0, 50),
+          className: targetClass,
           status: studentStatus,
         };
         if (validImg) payload.imageUrl = validImg;
@@ -462,12 +655,34 @@ export default function ClassesPage() {
         } catch (uErr) {}
       }
 
+      // 4. Optimistically update local state immediately
+      setStudents(prev => prev.map(s => {
+        const isMatch = selectedStudentIdsToAdd.some(selId =>
+          s._firestoreId === selId || s.id === selId || s.nisn === selId || s.uid === selId
+        );
+        if (isMatch) {
+          return {
+            ...s,
+            classId: targetDocId || targetClass,
+            className: targetClass,
+            class: targetClass,
+            kelas: targetClass,
+            classDocId: targetDocId,
+          };
+        }
+        return s;
+      }));
+
+      // 5. Background refresh
+      refreshStudents();
+      fetchClassesFromApi();
+
       toast.showSuccess(`Berhasil menambahkan ${selectedStudentIdsToAdd.length} siswa ke kelas ${managingClass.name}!`, "Siswa Ditambahkan");
       setSelectedStudentIdsToAdd([]);
       setManageTab("enrolled");
     } catch (err: any) {
       console.error("Bulk add students error:", err);
-      toast.showError("Gagal menambahkan siswa secara massal.", "Gagal");
+      toast.showError("Gagal menambahkan siswa secara massal: " + (err.message || ""), "Gagal");
     } finally {
       setIsProcessingStudent(false);
     }
@@ -495,15 +710,38 @@ export default function ClassesPage() {
         "1534528741775-53994a69daeb"
       ][Math.floor(Math.random() * 4)]}?q=80&w=250&auto=format&fit=crop`;
 
-      const newStudentUid = `siswa_${Date.now()}`;
       const studentNisn = newStudentForm.nisn.trim() || `SIS-${Date.now().toString().slice(-6)}`;
       const studentName = newStudentForm.name.trim();
 
-      // 1. Strictly structured for students collection
+      // 1. Create in PostgreSQL database via /api/students
+      const res = await fetch("/api/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullName: studentName,
+          name: studentName,
+          nisn: studentNisn,
+          nis: studentNisn,
+          gender: newStudentForm.gender,
+          classId: targetDocId || managingClass.name,
+          className: managingClass.name,
+          status: "Aktif",
+        }),
+      });
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || "Gagal mendaftarkan siswa baru di database.");
+      }
+
+      const createdDbStudent = resData.student;
+      const newStudentUid = createdDbStudent?.id || `siswa_${Date.now()}`;
+
+      // 2. Dual-write to Firestore for compatibility
       const payload: any = {
         id: newStudentUid,
         name: studentName.slice(0, 100),
         classId: managingClass.name.slice(0, 50),
+        className: managingClass.name,
         status: "Aktif",
       };
       if (randomAvatar && randomAvatar.length <= 500) {
@@ -511,7 +749,6 @@ export default function ClassesPage() {
       }
       await setDoc(doc(db, "students", newStudentUid), payload);
 
-      // 2. Full user profile for users collection
       await setDoc(doc(db, "users", newStudentUid), {
         uid: newStudentUid,
         id: newStudentUid,
@@ -534,12 +771,16 @@ export default function ClassesPage() {
         updatedAt: new Date().toISOString()
       });
 
+      // 3. Background refresh & reset form
+      await refreshStudents();
+      await fetchClassesFromApi();
+
       setNewStudentForm({ name: "", nisn: "", gender: "Laki-laki" });
       setManageTab("enrolled");
       toast.showSuccess(`Siswa baru berhasil didaftarkan dan masuk ke kelas ${managingClass.name}!`, "Siswa Terdaftar");
     } catch (err: any) {
       console.error("Quick create student error:", err);
-      toast.showError("Gagal mendaftarkan siswa baru.", "Gagal");
+      toast.showError("Gagal mendaftarkan siswa baru: " + (err.message || ""), "Gagal");
     } finally {
       setIsProcessingStudent(false);
     }
@@ -559,13 +800,32 @@ export default function ClassesPage() {
       const targetClassObj = classes.find(c => c.name === targetClassId || c._firestoreId === targetClassId || c.id === targetClassId);
       const resolvedTargetName = targetClassObj?.name || targetClassId;
       const targetDocId = targetClassObj?._firestoreId || targetClassObj?.id || "";
+      const studentNisn = transferringStudent.nisn || transferringStudent.nis || transferringStudent.id;
 
+      // 1. Persist to PostgreSQL backend via /api/classes/assign
+      const res = await fetch("/api/classes/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId: targetDocId,
+          className: resolvedTargetName,
+          studentIds: [studentId, studentNisn, transferringStudent.id, transferringStudent._firestoreId, transferringStudent.uid].filter(Boolean),
+          action: "transfer",
+        }),
+      });
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || "Gagal memindahkan siswa ke kelas baru di database.");
+      }
+
+      // 2. Dual-write to Firestore
       const studentName = (transferringStudent.fullName || transferringStudent.name || "Siswa").trim();
       const studentStatus = transferringStudent.status || "Aktif";
       const payload: any = {
         id: studentId,
         name: studentName.slice(0, 100),
         classId: resolvedTargetName.slice(0, 50),
+        className: resolvedTargetName,
         status: studentStatus,
       };
       const validImg = transferringStudent.imageUrl && !transferringStudent.imageUrl.startsWith("data:") && transferringStudent.imageUrl.length <= 500 ? transferringStudent.imageUrl : undefined;
@@ -588,6 +848,26 @@ export default function ClassesPage() {
         console.warn("Sync to users collection warning:", uErr);
       }
 
+      // 3. Optimistically update local state immediately
+      setStudents(prev => prev.map(s => {
+        const isMatch = s._firestoreId === transferringStudent._firestoreId || s.id === transferringStudent.id || s.nisn === transferringStudent.nisn || s.uid === transferringStudent.uid;
+        if (isMatch) {
+          return {
+            ...s,
+            classId: targetDocId || resolvedTargetName,
+            className: resolvedTargetName,
+            class: resolvedTargetName,
+            kelas: resolvedTargetName,
+            classDocId: targetDocId,
+          };
+        }
+        return s;
+      }));
+
+      // 4. Background refresh
+      refreshStudents();
+      fetchClassesFromApi();
+
       toast.showSuccess(
         `${transferringStudent.fullName || transferringStudent.name} berhasil dipindahkan ke kelas ${resolvedTargetName}!`,
         "Siswa Dipindahkan"
@@ -596,23 +876,41 @@ export default function ClassesPage() {
       setTargetClassId("");
     } catch (err: any) {
       console.error("Transfer error:", err);
-      toast.showError("Gagal memindahkan siswa.", "Gagal");
+      toast.showError("Gagal memindahkan siswa: " + (err.message || ""), "Gagal");
     } finally {
       setIsProcessingStudent(false);
     }
   };
 
-  // Filtered classes list
+  // Filtered classes list (normalized and fault-tolerant)
   const filteredClasses = useMemo(() => {
     return classes.filter(item => {
+      const q = searchQuery.toLowerCase().trim();
       const matchSearch = 
-        !searchQuery.trim() ||
-        (item.name || "").toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-        (item.homeroom || "").toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-        (item.major || "").toLowerCase().includes(searchQuery.toLowerCase().trim());
+        !q ||
+        (item.name || "").toLowerCase().includes(q) ||
+        (item.homeroom || "").toLowerCase().includes(q) ||
+        (item.major || "").toLowerCase().includes(q);
 
-      const matchLevel = selectedLevel === "All" || item.level === selectedLevel;
-      const matchMajor = selectedMajor === "All" || item.major === selectedMajor;
+      // Level normalization: "10" matches "Kelas 10", "11" matches "Kelas 11", etc.
+      const normLvl = (lvl: string) => String(lvl || "").toLowerCase().replace(/^kelas\s*/i, "").trim();
+      const matchLevel = selectedLevel === "All" || normLvl(item.level) === normLvl(selectedLevel);
+
+      // Major normalization: "IPA" matches "MIPA" & "IPA", "IPS" matches "IPS"
+      const normM = (m: string) => String(m || "").toLowerCase().trim();
+      const isIpa = (m: string) => normM(m) === "ipa" || normM(m) === "mipa";
+      const isIps = (m: string) => normM(m) === "ips";
+
+      let matchMajor = selectedMajor === "All";
+      if (!matchMajor) {
+        if (isIpa(selectedMajor)) {
+          matchMajor = isIpa(item.major);
+        } else if (isIps(selectedMajor)) {
+          matchMajor = isIps(item.major);
+        } else {
+          matchMajor = normM(item.major) === normM(selectedMajor);
+        }
+      }
 
       return matchSearch && matchLevel && matchMajor;
     });
@@ -1551,8 +1849,8 @@ export default function ClassesPage() {
                       <h3 className="text-xl font-black text-gray-900 group-hover:text-[#531FFF] transition-colors truncate">
                         {item.name}
                       </h3>
-                      <p className="text-xs text-gray-400 font-semibold truncate">
-                        ID: {item.id || item._firestoreId.slice(0, 6)}
+                      <p className="text-xs text-purple-600/80 font-mono font-semibold truncate">
+                        ID: {item.id || item._firestoreId}
                       </p>
                     </div>
                   </div>
@@ -1730,7 +2028,7 @@ export default function ClassesPage() {
                             <div className="font-extrabold text-sm text-gray-900 group-hover:text-[#531FFF] transition-colors">
                               {item.name}
                             </div>
-                            <div className="text-xs text-gray-400 font-medium">ID: {item.id || item._firestoreId.slice(0, 6)}</div>
+                            <div className="text-xs text-purple-600/80 font-mono font-medium">ID: {item.id || item._firestoreId}</div>
                           </div>
                         </div>
                       </td>

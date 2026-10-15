@@ -423,18 +423,50 @@ export default function StudentOnboardingPage() {
   // Step 4: Data Kontak Darurat
   const [darurat, setDarurat] = useState({ ...DEFAULT_DARURAT });
 
-  // Auth User check & Cloud Draft Restoration
+  // Auth User check & Cloud Draft Restoration (Supports both PostgreSQL session & Firebase Auth)
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setCurrentUser(user);
-        try {
-          let uData: any = null;
-          const userSnap = await getDoc(doc(db, "users", user.uid));
-          if (userSnap.exists()) {
-            uData = { id: userSnap.id, ...userSnap.data() };
+    let isMounted = true;
+
+    const verifySessionAndUser = async () => {
+      let activeUser: any = null;
+      let uData: any = null;
+
+      // 1. Check PostgreSQL authenticated session via /api/auth/me
+      try {
+        const meRes = await fetch("/api/auth/me");
+        if (meRes.ok) {
+          const meJson = await meRes.json();
+          if (meJson.authenticated && meJson.user) {
+            uData = meJson.user;
+            activeUser = {
+              uid: meJson.user.id,
+              id: meJson.user.id,
+              email: meJson.user.email,
+              displayName: meJson.user.name,
+            };
           }
-          const cleanEmail = (user.email || "").toLowerCase().trim();
+        }
+      } catch (err) {
+        console.warn("PostgreSQL session check in onboarding warning:", err);
+      }
+
+      // 2. Fallback to Firebase auth if PostgreSQL session check returned unauthenticated
+      if (!activeUser && auth.currentUser) {
+        activeUser = auth.currentUser;
+      }
+
+      if (activeUser) {
+        if (!isMounted) return;
+        setCurrentUser(activeUser);
+
+        try {
+          if (!uData) {
+            const userSnap = await getDoc(doc(db, "users", activeUser.uid));
+            if (userSnap.exists()) {
+              uData = { id: userSnap.id, ...userSnap.data() };
+            }
+          }
+          const cleanEmail = (activeUser.email || "").toLowerCase().trim();
           if ((!uData || uData.status !== "Aktif") && cleanEmail) {
             try {
               const qS = query(collection(db, "students"), where("email", "==", cleanEmail));
@@ -453,9 +485,8 @@ export default function StudentOnboardingPage() {
               return;
             }
 
-            // Immediate check: If user account is already active or completed, bypass onboarding directly!
-            const isExplicitActive = uData.status === "Aktif" || uData.status === "Active" || uData.isActive === true;
-            if (isExplicitActive || uData.onboardingCompleted === true || isUserOnboardingComplete(uData)) {
+            // Only redirect to dashboard if the user has ALREADY finished onboarding!
+            if (isUserOnboardingComplete(uData)) {
               router.replace("/dashboard");
               return;
             }
@@ -465,7 +496,7 @@ export default function StudentOnboardingPage() {
             // Cloud Draft check & sync
             if (uData.onboardingDraft && typeof uData.onboardingDraft === "object") {
               const cloudDraft = uData.onboardingDraft;
-              const localKey = getDraftStorageKey(user.uid);
+              const localKey = getDraftStorageKey(activeUser.uid);
               const localRaw = typeof window !== "undefined" ? localStorage.getItem(localKey) : null;
               let shouldHydrateCloud = true;
 
@@ -517,8 +548,8 @@ export default function StudentOnboardingPage() {
                 const guestRaw = localStorage.getItem(getDraftStorageKey());
                 if (guestRaw) {
                   const parsedGuest = JSON.parse(guestRaw);
-                  localStorage.setItem(getDraftStorageKey(user.uid), guestRaw);
-                  await setDoc(doc(db, "users", user.uid), {
+                  localStorage.setItem(getDraftStorageKey(activeUser.uid), guestRaw);
+                  await setDoc(doc(db, "users", activeUser.uid), {
                     onboardingDraft: cleanFirestoreData({
                       ...parsedGuest,
                       photoPreview: undefined
@@ -532,25 +563,33 @@ export default function StudentOnboardingPage() {
             setPribadi(prev => ({
               ...prev,
               fullName: prev.fullName || uData.fullName || uData.name || "",
-              email: prev.email || uData.email || user.email || ""
+              email: prev.email || uData.email || activeUser.email || ""
             }));
-
-            if (isUserOnboardingComplete(uData)) {
-              router.replace("/dashboard");
-              return;
-            }
           }
         } catch (e) {
           console.warn("User fetch error:", e);
         }
-        setLoading(false);
+        if (isMounted) setLoading(false);
       } else {
-        setLoading(false);
-        router.replace("/login?redirect=/onboarding");
+        // Wait for Firebase onAuthStateChanged if /api/auth/me was unauthenticated
+        const unsub = onAuthStateChanged(auth, async (fbUser) => {
+          if (!isMounted) return;
+          if (fbUser) {
+            verifySessionAndUser();
+          } else {
+            setLoading(false);
+            router.replace("/login?redirect=/onboarding");
+          }
+        });
+        return () => unsub();
       }
-    });
+    };
 
-    return () => unsub();
+    verifySessionAndUser();
+
+    return () => {
+      isMounted = false;
+    };
   }, [router]);
 
   // 2. Debounced Auto-Save Effect (triggers on field changes or step changes)
@@ -1127,7 +1166,53 @@ export default function StudentOnboardingPage() {
         }
       }
 
-      // 7. Save to LocalStorage immediately for instant local hydration and clear drafts
+      // 8. Persist to PostgreSQL Database via /api/onboarding
+      try {
+        await fetch("/api/onboarding", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: activeUser?.uid,
+            email: studentEmail,
+            fullName: finalFullName,
+            nickname: pribadi.nickname,
+            gender: pribadi.gender,
+            birthPlace: pribadi.birthPlace,
+            birthDate: pribadi.birthDate,
+            religion: pribadi.religion,
+            nik: pribadi.nik,
+            address: pribadi.address,
+            phone: pribadi.phone,
+            photoUrl: finalPhotoUrl,
+            nisn: nisnClean,
+            nis: nisnClean,
+            className: resolvedClass,
+            classId: resolvedClass,
+            major: resolvedMajor,
+            entryYear: activeAcademicYear || akademik.entryYear || "2025/2026",
+            level: currentStage || akademik.level || "SMA",
+            studentStatus: akademik.studentStatus || "Siswa Baru",
+            previousSchool: akademik.previousSchool,
+            fatherName: orangTua.fatherName,
+            motherName: orangTua.motherName,
+            guardianName: orangTua.guardianName,
+            relation: orangTua.relation,
+            parentPhone: orangTua.parentPhone,
+            parentEmail: parentEmailInput,
+            parentAddress: orangTua.parentAddress,
+            parentJob: orangTua.parentJob,
+            parentIncome: orangTua.parentIncome,
+            emergencyName: darurat.contactName,
+            emergencyRelation: darurat.relation,
+            emergencyPhone: darurat.contactPhone,
+            emergencyAddress: darurat.contactAddress,
+          }),
+        });
+      } catch (pgErr) {
+        console.warn("Error calling /api/onboarding:", pgErr);
+      }
+
+      // 9. Save to LocalStorage immediately for instant local hydration and clear drafts
       try {
         localStorage.setItem("quick_schools_student_profile", JSON.stringify(unifiedStudentPayload));
         localStorage.setItem("onboarding_completed", "true");

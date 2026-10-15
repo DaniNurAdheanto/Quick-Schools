@@ -30,75 +30,45 @@ export function isUserOnboardingComplete(userData: any): boolean {
     return true;
   }
 
-  // 2. Explicit completion flag
+  // 2. Explicit incomplete check:
+  // If explicitly marked as not completed or pending onboarding, it is NOT complete!
+  if (
+    userData.onboardingCompleted === false ||
+    userData.status === "Belum Onboarding" ||
+    userData.status === "BELUM_ONBOARDING"
+  ) {
+    return false;
+  }
+
+  // 3. Explicit completion flag
   if (userData.onboardingCompleted === true) {
     return true;
   }
 
-  // 3. Any account with explicit Active status is considered complete
+  // 4. Any account with explicit Active status and complete data
   const isExplicitActive =
     userData.status === "Aktif" ||
     userData.status === "Active" ||
+    userData.status === "AKTIF" ||
     userData.isActive === true;
 
-  // 4. Check for data completeness
   const hasBasicIdentity = Boolean((userData.name || userData.fullName || "").trim());
+  const hasStudentIdentifier = Boolean(
+    (userData.nisn && userData.nisn !== "-" && !userData.nisn.startsWith("TEMP-")) ||
+    (userData.nis && userData.nis !== "-" && !userData.nis.startsWith("TEMP-"))
+  );
   const hasClassAssignment = Boolean(
     (userData.className && userData.className !== "-") ||
     (userData.classId && userData.classId !== "-") ||
     (userData.class && userData.class !== "-") ||
     (userData.kelas && userData.kelas !== "-")
   );
-  const hasStudentIdentifier = Boolean(
-    (userData.nisn && userData.nisn !== "-") ||
-    (userData.nis && userData.nis !== "-") ||
-    (userData.id && userData.id !== "-" && !userData.id.startsWith("TEMP-"))
-  );
-  const hasBioDetails = Boolean(
-    (userData.phone && userData.phone !== "-") ||
-    (userData.address && userData.address !== "-") ||
-    userData.parentPhone ||
-    userData.fatherName ||
-    userData.motherName ||
-    userData.guardianName
-  );
 
-  const hasStudentData = hasClassAssignment || hasStudentIdentifier || hasBioDetails;
-  const hasTeacherData = Boolean(
-    (userData.nip && userData.nip !== "-") ||
-    userData.subject ||
-    (userData.subjects && userData.subjects.length > 0)
-  );
-  const hasParentData = Boolean(
-    (userData.studentIds && userData.studentIds.length > 0) ||
-    (userData.linkedStudentIds && userData.linkedStudentIds.length > 0) ||
-    (userData.studentId && userData.studentId !== "-") ||
-    userData.studentName
-  );
-
-  const isDataComplete =
-    hasBasicIdentity &&
-    (role === "guru" || role === "teacher"
-      ? hasTeacherData
-      : role === "orang-tua" || role === "parent"
-      ? hasParentData
-      : hasStudentData);
-
-  // If the account is explicitly active OR its profile data is complete, it is COMPLETE!
-  if (isExplicitActive || isDataComplete) {
-    // Only block if explicitly set to "Belum Onboarding" AND data is completely empty
-    if (userData.status === "Belum Onboarding" && !isDataComplete) {
-      return false;
-    }
+  if (isExplicitActive && hasBasicIdentity && hasStudentIdentifier && hasClassAssignment) {
     return true;
   }
 
-  // 5. Incomplete if explicitly marked "Belum Onboarding" or onboardingCompleted is false with missing data
-  if (userData.status === "Belum Onboarding" || userData.onboardingCompleted === false) {
-    return false;
-  }
-
-  return true;
+  return false;
 }
 
 /**
@@ -135,22 +105,8 @@ export function getPostLoginRedirect(userData: any, targetRedirect?: string | nu
     return cleanTarget;
   }
 
-  // 2. Active accounts or accounts that completed onboarding ALWAYS go to dashboard
-  const isExplicitActive =
-    userData.status === "Aktif" ||
-    userData.status === "Active" ||
-    userData.isActive === true;
-  if (isExplicitActive || userData.onboardingCompleted === true) {
-    return cleanTarget;
-  }
-
-  // 3. If their profile data is complete, go directly to dashboard
-  if (isUserOnboardingComplete(userData)) {
-    return cleanTarget;
-  }
-
-  // 4. ONLY explicitly pending new students go to onboarding
-  if (userData.status === "Belum Onboarding" && userData.onboardingCompleted === false) {
+  // 2. Students who have not completed onboarding MUST go to /onboarding
+  if (!isUserOnboardingComplete(userData)) {
     return "/onboarding";
   }
 

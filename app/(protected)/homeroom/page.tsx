@@ -29,9 +29,12 @@ import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
 import { useUnifiedTeachers } from "@/hooks/use-unified-teachers";
+import { db } from "@/lib/firebase";
 import {
   findAssignedClassForTeacher,
   findAssignedTeacherForClass,
+  assignHomeroomTeacher,
+  unassignHomeroomTeacher,
 } from "@/lib/homeroom-sync-service";
 
 export default function HomeroomPage() {
@@ -232,6 +235,17 @@ export default function HomeroomPage() {
         throw new Error(resData.error || "Gagal memperbarui wali kelas di database");
       }
 
+      // Dual-write to Firestore for compatibility
+      try {
+        if (selectedTeacher) {
+          await assignHomeroomTeacher(db, selectedTeacher, targetClass, classes, teachers);
+        } else {
+          await unassignHomeroomTeacher(db, targetClass, teachers);
+        }
+      } catch (fsErr) {
+        console.warn("Firestore homeroom sync warning:", fsErr);
+      }
+
       if (selectedTeacher) {
         toast.showSuccess(
           `${selectedTeacher.name || selectedTeacher.fullName} berhasil ditetapkan sebagai wali kelas ${targetClass.name}. Data tersimpan di PostgreSQL.`,
@@ -279,6 +293,13 @@ export default function HomeroomPage() {
       const resData = await res.json();
       if (!res.ok || !resData.success) {
         throw new Error(resData.error || "Gagal melepas wali kelas di database");
+      }
+
+      // Dual-write to Firestore
+      try {
+        await unassignHomeroomTeacher(db, targetClass, teachers);
+      } catch (fsErr) {
+        console.warn("Firestore homeroom unassign warning:", fsErr);
       }
 
       toast.showEdit(

@@ -45,6 +45,64 @@ export function normalizeClassName(val: string | null | undefined): string {
 }
 
 /**
+ * Generates standard class ID template: "class-(tingkatan kelas)-(jurusan)-(nomer kelas )"
+ * Examples:
+ * - "10 MIPA 1" -> "class-10-mipa-1"
+ * - "10 IPS 2"  -> "class-10-ips-2"
+ * - "11 MIPA 1" -> "class-11-mipa-1"
+ * - "10 RPL 3"  -> "class-10-rpl-3"
+ */
+export function generateClassId(name: string, level?: string | null, major?: string | null): string {
+  const cleanName = (name || "").trim();
+
+  // 1. Extract tingkatan (level number / string)
+  let tingkatan = "";
+  if (level) {
+    const matchLevelNum = level.match(/\d+/);
+    if (matchLevelNum) {
+      tingkatan = matchLevelNum[0];
+    } else {
+      tingkatan = level.replace(/^kelas\s*/i, "").trim().toLowerCase();
+    }
+  }
+  if (!tingkatan) {
+    const matchNameNum = cleanName.match(/^\s*(?:kelas\s*)?(\d+|[A-Z]+)\b/i);
+    if (matchNameNum) tingkatan = matchNameNum[1].toLowerCase();
+  }
+  if (!tingkatan) tingkatan = "10";
+
+  // 2. Extract jurusan (major)
+  let jurusan = "";
+  const knownMajors = ["mipa", "ipa", "ips", "rpl", "tkj", "dkv", "akl", "mplb", "tkro", "bahasa", "umum"];
+  const nameLower = cleanName.toLowerCase();
+  for (const km of knownMajors) {
+    const regex = new RegExp(`\\b${km}\\b`, "i");
+    if (regex.test(nameLower)) {
+      jurusan = km;
+      break;
+    }
+  }
+
+  if (!jurusan && major) {
+    jurusan = major
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .trim();
+  }
+  if (!jurusan) jurusan = "umum";
+
+  // 3. Extract nomer kelas (class number / section)
+  let nomer = "";
+  const matchNumber = cleanName.match(/(\d+|[a-zA-Z])\s*$/);
+  if (matchNumber) {
+    nomer = matchNumber[1].toLowerCase();
+  }
+  if (!nomer) nomer = "1";
+
+  return `class-${tingkatan}-${jurusan}-${nomer}`.toLowerCase();
+}
+
+/**
  * Checks whether a student is enrolled in a specific class, using multiple fallbacks:
  * 1. Permanent Class Doc ID (classDocId === class._firestoreId or class.id)
  * 2. Class Unique ID (classId === class._firestoreId or class.id)

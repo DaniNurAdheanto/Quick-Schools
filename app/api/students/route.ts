@@ -110,12 +110,18 @@ export async function POST(req: NextRequest) {
     let targetClassId: string | null = null;
     const targetClassQuery = classId || className;
     if (targetClassQuery) {
-      const foundClass = await prisma.class.findFirst({
-        where: {
-          OR: [{ id: String(targetClassQuery) }, { name: String(targetClassQuery) }],
-        },
-      });
-      if (foundClass) targetClassId = foundClass.id;
+      const qStr = String(targetClassQuery).trim();
+      if (qStr && qStr !== "-" && qStr !== "null" && qStr.toLowerCase() !== "tanpa kelas") {
+        const foundClass = await prisma.class.findFirst({
+          where: {
+            OR: [
+              { id: qStr },
+              { name: { equals: qStr, mode: "insensitive" } },
+            ],
+          },
+        });
+        if (foundClass) targetClassId = foundClass.id;
+      }
     }
 
     // Create user account if email provided
@@ -213,7 +219,11 @@ export async function PUT(req: NextRequest) {
 
     const student = await prisma.student.findFirst({
       where: {
-        OR: [{ id: studentIdentifier }, { nisn: String(nisn || studentIdentifier).trim() }],
+        OR: [
+          { id: studentIdentifier },
+          { nisn: String(nisn || studentIdentifier).trim() },
+          { userId: studentIdentifier },
+        ],
       },
     });
 
@@ -225,14 +235,22 @@ export async function PUT(req: NextRequest) {
 
     // Resolve class if updated
     let targetClassId = student.classId;
-    const targetClassQuery = classId || className;
-    if (targetClassQuery) {
-      const foundClass = await prisma.class.findFirst({
-        where: {
-          OR: [{ id: String(targetClassQuery) }, { name: String(targetClassQuery) }],
-        },
-      });
-      if (foundClass) targetClassId = foundClass.id;
+    const targetClassQuery = classId !== undefined ? classId : className;
+    if (targetClassQuery !== undefined) {
+      const qStr = String(targetClassQuery || "").trim();
+      if (!qStr || qStr === "-" || qStr === "null" || qStr.toLowerCase() === "tanpa kelas") {
+        targetClassId = null;
+      } else {
+        const foundClass = await prisma.class.findFirst({
+          where: {
+            OR: [
+              { id: qStr },
+              { name: { equals: qStr, mode: "insensitive" } },
+            ],
+          },
+        });
+        if (foundClass) targetClassId = foundClass.id;
+      }
     }
 
     const updated = await prisma.student.update({

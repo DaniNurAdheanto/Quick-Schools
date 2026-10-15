@@ -28,13 +28,10 @@ function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthLoading, user, isLoggingOut, pathname, router]);
 
-  // Check onboarding completion - ONLY for strictly unboarded pending students
+  // Check onboarding completion - ONLY for unboarded students
   const isStrictStudentPendingOnboarding = Boolean(
     userData &&
     ((userData.role || "").toLowerCase().trim() === "siswa" || (userData.role || "").toLowerCase().trim() === "student" || !(userData.role)) &&
-    userData.status === "Belum Onboarding" &&
-    userData.onboardingCompleted === false &&
-    !userData.isActive &&
     !isUserOnboardingComplete(userData)
   );
 
@@ -187,6 +184,14 @@ function getPageTitleFromPath(pathname: string | null): string {
           </div>
           <div className="w-36 h-1.5 bg-gray-200/80 rounded-full overflow-hidden">
             <div className="h-full bg-gradient-to-r from-[#531FFF] to-indigo-500 rounded-full animate-indeterminate" />
+          </div>
+          <div className="pt-2">
+            <Link
+              href="/onboarding"
+              className="text-xs font-bold text-[#531FFF] hover:underline"
+            >
+              Klik di sini jika tidak otomatis dialihkan
+            </Link>
           </div>
         </div>
       </div>

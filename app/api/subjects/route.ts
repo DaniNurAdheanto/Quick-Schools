@@ -35,39 +35,73 @@ export async function GET() {
   }
 }
 
-// POST /api/subjects - Create new subject
+// POST /api/subjects - Create new subject or update if exists
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { code, name, category, level, creditHours } = body;
+    const { code, name, category, level, creditHours, teacherIds } = body;
 
     if (!code || !name) {
       return NextResponse.json({ error: "Kode dan nama mata pelajaran wajib diisi." }, { status: 400 });
     }
 
     const cleanCode = String(code).trim().toUpperCase();
+    const cleanName = String(name).trim();
 
-    const existing = await prisma.subject.findUnique({
-      where: { code: cleanCode },
-    });
-    if (existing) {
-      return NextResponse.json({ error: "Mata pelajaran dengan kode ini sudah ada." }, { status: 409 });
-    }
-
-    const newSubject = await prisma.subject.create({
-      data: {
-        code: cleanCode,
-        name: String(name).trim(),
-        category: category ? String(category).trim() : "Wajib",
-        level: level ? String(level).trim() : "SMA",
-        creditHours: creditHours ? Number(creditHours) : 2,
+    const existing = await prisma.subject.findFirst({
+      where: {
+        OR: [
+          { code: cleanCode },
+          { name: { equals: cleanName, mode: "insensitive" } },
+        ],
       },
     });
 
+    let subject;
+    if (existing) {
+      subject = await prisma.subject.update({
+        where: { id: existing.id },
+        data: {
+          code: cleanCode,
+          name: cleanName,
+          category: category ? String(category).trim() : existing.category,
+          level: level ? String(level).trim() : existing.level,
+          creditHours: creditHours !== undefined ? Number(creditHours) : existing.creditHours,
+        },
+      });
+    } else {
+      subject = await prisma.subject.create({
+        data: {
+          code: cleanCode,
+          name: cleanName,
+          category: category ? String(category).trim() : "Wajib",
+          level: level ? String(level).trim() : "SMA",
+          creditHours: creditHours ? Number(creditHours) : 2,
+        },
+      });
+    }
+
+    // Link teachers if provided
+    if (Array.isArray(teacherIds) && teacherIds.length > 0) {
+      for (const tId of teacherIds) {
+        const cleanTid = String(tId).trim();
+        const teacher = await prisma.teacher.findFirst({
+          where: { OR: [{ id: cleanTid }, { nip: cleanTid }] },
+        });
+        if (teacher) {
+          try {
+            await prisma.teacherSubject.create({
+              data: { teacherId: teacher.id, subjectId: subject.id },
+            });
+          } catch (e) {}
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      message: `Mata pelajaran ${newSubject.name} berhasil ditambahkan.`,
-      subject: newSubject,
+      message: `Mata pelajaran ${subject.name} berhasil disimpan.`,
+      subject,
     });
   } catch (err: any) {
     console.error("POST /api/subjects error:", err);
@@ -79,22 +113,56 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, code, name, category, level, creditHours } = body;
+    const { id, code, name, category, level, creditHours, teacherIds } = body;
 
-    if (!id) {
-      return NextResponse.json({ error: "ID mata pelajaran wajib disertakan." }, { status: 400 });
+    if (!id && !code) {
+      return NextResponse.json({ error: "ID atau kode mata pelajaran wajib disertakan." }, { status: 400 });
+    }
+
+    const cleanId = id ? String(id).trim() : "";
+    const cleanCode = code ? String(code).trim().toUpperCase() : "";
+
+    const existing = await prisma.subject.findFirst({
+      where: {
+        OR: [
+          ...(cleanId ? [{ id: cleanId }] : []),
+          ...(cleanCode ? [{ code: cleanCode }] : []),
+        ],
+      },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Mata pelajaran tidak ditemukan." }, { status: 404 });
     }
 
     const updated = await prisma.subject.update({
-      where: { id },
+      where: { id: existing.id },
       data: {
-        ...(code ? { code: String(code).trim().toUpperCase() } : {}),
+        ...(cleanCode ? { code: cleanCode } : {}),
         ...(name ? { name: String(name).trim() } : {}),
         ...(category ? { category: String(category).trim() } : {}),
         ...(level ? { level: String(level).trim() } : {}),
         ...(creditHours !== undefined ? { creditHours: Number(creditHours) } : {}),
       },
     });
+
+    // Update teacher assignments
+    if (Array.isArray(teacherIds)) {
+      await prisma.teacherSubject.deleteMany({ where: { subjectId: updated.id } });
+      for (const tId of teacherIds) {
+        const cleanTid = String(tId).trim();
+        const teacher = await prisma.teacher.findFirst({
+          where: { OR: [{ id: cleanTid }, { nip: cleanTid }] },
+        });
+        if (teacher) {
+          try {
+            await prisma.teacherSubject.create({
+              data: { teacherId: teacher.id, subjectId: updated.id },
+            });
+          } catch (e) {}
+        }
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -117,8 +185,24 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "ID mata pelajaran wajib disertakan." }, { status: 400 });
     }
 
+    const cleanId = String(id).trim();
+    const existing = await prisma.subject.findFirst({
+      where: {
+        OR: [
+          { id: cleanId },
+          { code: cleanId.toUpperCase() },
+        ],
+      },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: "Mata pelajaran tidak ditemukan." }, { status: 404 });
+    }
+
+    // Clean relations
+    await prisma.teacherSubject.deleteMany({ where: { subjectId: existing.id } });
     const deleted = await prisma.subject.delete({
-      where: { id },
+      where: { id: existing.id },
     });
 
     return NextResponse.json({

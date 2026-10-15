@@ -297,6 +297,26 @@ export default function SubjectsPage() {
         successMsg += ` (${result.schedulesUpdated} jadwal & ${result.gradesUpdated} penilaian disinkronkan)`;
       }
 
+      // Persist to PostgreSQL backend via /api/subjects
+      try {
+        await fetch("/api/subjects", {
+          method: isEdit ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: subjectDocId,
+            code: (formData.code || "").trim().toUpperCase(),
+            name: (formData.name || "").trim(),
+            category: formData.category || "Wajib",
+            level: formData.level || "SMA",
+            creditHours: Number(formData.creditHours?.toString().replace(/\D/g, "")) || 2,
+            teacherIds: formData.teacherIds,
+          }),
+        });
+        await fetchSubjectsFromApi();
+      } catch (apiErr) {
+        console.warn("PostgreSQL subject sync error:", apiErr);
+      }
+
       toast.showSuccess(successMsg, "Tersimpan");
       setSubjectModalState(s => ({ ...s, isOpen: false }));
     } catch (error: any) {
@@ -325,6 +345,17 @@ export default function SubjectsPage() {
         allTeachers: teachers,
         allSubjectGroups: subjectGroups,
       });
+
+      // Persist to PostgreSQL backend via /api/subjects
+      try {
+        const deleteKey = subjectToDelete.code || subjectDocId;
+        await fetch(`/api/subjects?id=${encodeURIComponent(deleteKey)}`, {
+          method: "DELETE",
+        });
+        await fetchSubjectsFromApi();
+      } catch (apiErr) {
+        console.warn("PostgreSQL subject delete error:", apiErr);
+      }
 
       let msg = `Mata pelajaran "${subjectToDelete.name || subjectToDelete.code}" berhasil dihapus dari database.`;
       if (res.groupsCleaned > 0 || res.schedulesCleaned > 0) {

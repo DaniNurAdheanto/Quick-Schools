@@ -110,7 +110,17 @@ export async function POST(req: NextRequest) {
 
     const passwordHash = password ? await bcrypt.hash(password, 10) : await bcrypt.hash("asdasdasd", 10);
     const targetRole = roleMappingToEnum[String(role).toLowerCase()] || UserRole.SISWA;
-    const targetStatus = status === "Nonaktif" ? AccountStatus.NONAKTIF : status === "Belum Onboarding" ? AccountStatus.BELUM_ONBOARDING : AccountStatus.AKTIF;
+    const isStudent = targetRole === UserRole.SISWA;
+    let targetStatus: AccountStatus;
+    if (status === "Nonaktif" || status === "NONAKTIF") {
+      targetStatus = AccountStatus.NONAKTIF;
+    } else if (status === "Aktif" || status === "AKTIF") {
+      targetStatus = AccountStatus.AKTIF;
+    } else if (status === "Belum Onboarding" || status === "BELUM_ONBOARDING") {
+      targetStatus = AccountStatus.BELUM_ONBOARDING;
+    } else {
+      targetStatus = isStudent ? AccountStatus.BELUM_ONBOARDING : AccountStatus.AKTIF;
+    }
 
     const newUser = await prisma.user.create({
       data: {
