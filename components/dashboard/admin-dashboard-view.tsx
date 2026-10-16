@@ -30,7 +30,11 @@ import {
   Award,
   ChevronDown,
   Activity,
-  CalendarDays
+  CalendarDays,
+  AlertCircle,
+  ArrowUpRight,
+  ArrowDownRight,
+  Target
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -42,13 +46,11 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip as RechartsTooltip,
-  PieChart,
-  Pie,
   Cell,
   Line,
-  LineChart
+  LineChart,
+  ReferenceLine
 } from "recharts";
-import { formatRupiah } from "@/lib/spp-payments";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { isSchoolOperationalDay, getOperationalDayStatus } from "@/lib/operational-days";
 import { useUnifiedStudents } from "@/hooks/use-unified-students";
@@ -119,6 +121,8 @@ export function AdminDashboardView({
   const [activities] = useState<any[]>([]);
   const [teacherAttendance, setTeacherAttendance] = useState<any[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [parents, setParents] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
 
   // ─── UI & Interactive Filter States ───────────────────────────────────────
   const [selectedTimeRange, setSelectedTimeRange] = useState<"7d" | "14d" | "30d">("7d");
@@ -129,6 +133,7 @@ export function AdminDashboardView({
   const [selectedAttendanceMode, setSelectedAttendanceMode] = useState<"siswa" | "guru" | "komparasi">("siswa");
   const [selectedAdminAttendanceDate, setSelectedAdminAttendanceDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [selectedDistributionMode, setSelectedDistributionMode] = useState<"siswa" | "guru">("siswa");
+  const [showDailyTable, setShowDailyTable] = useState<boolean>(false);
   const [selectedDateStudentRecords, setSelectedDateStudentRecords] = useState<any[]>([]);
   const [selectedDateTeacherRecords, setSelectedDateTeacherRecords] = useState<any[]>([]);
   const [studentDailyTrends, setStudentDailyTrends] = useState<any[]>([]);
@@ -163,7 +168,9 @@ export function AdminDashboardView({
           announcementsRes,
           paymentsRes,
           schedulesRes,
-          gradesRes
+          gradesRes,
+          parentsRes,
+          accountsRes
         ] = await Promise.allSettled([
           fetch("/api/classes").then((r) => r.json()),
           fetch(`/api/attendance?range=30d&operationalDays=${encodeURIComponent(opDays)}`).then((r) => r.json()),
@@ -174,6 +181,8 @@ export function AdminDashboardView({
           fetch("/api/payments").then((r) => r.json()),
           fetch("/api/schedules").then((r) => r.json()),
           fetch("/api/grades").then((r) => r.json()),
+          fetch("/api/parents").then((r) => r.json()),
+          fetch("/api/accounts").then((r) => r.json()),
         ]);
 
         if (!isMounted) return;
@@ -210,6 +219,12 @@ export function AdminDashboardView({
         }
         if (gradesRes.status === "fulfilled" && gradesRes.value.grades) {
           setGrades(gradesRes.value.grades);
+        }
+        if (parentsRes.status === "fulfilled" && parentsRes.value.parents) {
+          setParents(parentsRes.value.parents);
+        }
+        if (accountsRes.status === "fulfilled" && accountsRes.value.users) {
+          setAccounts(accountsRes.value.users);
         }
       } catch (e) {
         console.warn("Error loading admin dashboard data from PostgreSQL:", e);
@@ -255,6 +270,33 @@ export function AdminDashboardView({
     });
     return { male, female };
   }, [filteredStudents]);
+
+  // Parents summary from database
+  const parentStats = useMemo(() => {
+    const totalParents = parents.length;
+    const activeParents = parents.filter((p: any) => p.status === "Aktif").length;
+    const linkedStudentsCount = parents.reduce(
+      (acc: number, p: any) => acc + (p.students?.length || (p.studentName && p.studentName !== "-" ? 1 : 0)),
+      0
+    );
+    return {
+      total: totalParents,
+      active: activeParents,
+      linkedStudentsCount
+    };
+  }, [parents]);
+
+  // System Accounts summary from database
+  const accountStats = useMemo(() => {
+    const totalAccounts = accounts.length;
+    const activeAccounts = accounts.filter((a: any) => a.status === "Aktif").length;
+    const pendingOnboarding = accounts.filter((a: any) => a.onboardingCompleted === false).length;
+    return {
+      total: totalAccounts,
+      active: activeAccounts,
+      pendingOnboarding
+    };
+  }, [accounts]);
 
   // Synthesize complete attendance records (Firestore attendance + roles attendance_record + leave_requests)
   const effectiveAttendance = useMemo(() => {
@@ -818,38 +860,6 @@ export function AdminDashboardView({
     });
   }, [attendanceTrendData, teacherAttendanceTrendData]);
 
-  // Selected Date's Status Donut Chart Data (supports Siswa vs Guru toggle)
-  const attendanceDonutData = useMemo(() => {
-    if (selectedDistributionMode === "guru") {
-      if (teacherAttendanceToday.total === 0 || (teacherAttendanceToday.hadir + teacherAttendanceToday.izinSakit + teacherAttendanceToday.alpa) === 0) {
-        return [
-          { name: "Belum Ada Data", value: 1, color: "#E2E8F0" }
-        ];
-      }
-      return [
-        { name: "Hadir Tepat Waktu", value: teacherAttendanceToday.tepatWaktu, color: "#10B981" },
-        { name: "Terlambat", value: teacherAttendanceToday.terlambat, color: "#F59E0B" },
-        { name: "Izin / Sakit / Cuti", value: teacherAttendanceToday.izinSakit, color: "#8B5CF6" },
-        { name: "Alpa / Tanpa Keterangan", value: teacherAttendanceToday.alpa, color: "#EF4444" },
-        { name: "Belum Presensi", value: teacherAttendanceToday.belumPresensi, color: "#94A3B8" }
-      ].filter((item) => item.value > 0);
-    }
-
-    if (attendanceToday.totalMarked === 0 && attendanceToday.belumAbsen === 0) {
-      return [
-        { name: "Belum Ada Data", value: 1, color: "#E2E8F0" }
-      ];
-    }
-    return [
-      { name: "Hadir Tepat Waktu", value: attendanceToday.hadir, color: "#10B981" },
-      { name: "Terlambat", value: attendanceToday.terlambat, color: "#F59E0B" },
-      { name: "Sakit", value: attendanceToday.sakit, color: "#3B82F6" },
-      { name: "Izin", value: attendanceToday.izin, color: "#8B5CF6" },
-      { name: "Alpa", value: attendanceToday.alpa, color: "#EF4444" },
-      { name: "Belum Absen", value: attendanceToday.belumAbsen, color: "#94A3B8" }
-    ].filter((item) => item.value > 0);
-  }, [selectedDistributionMode, attendanceToday, teacherAttendanceToday]);
-
   // Class by Class Comparison (Bar Chart)
   const classComparisonData = useMemo(() => {
     const classList = classes.length > 0 ? classes : [
@@ -1187,17 +1197,17 @@ export function AdminDashboardView({
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          5 EXECUTIVE KEY METRICS (High Density & Quick Scannability)
+          6 PILAR UTAMA EKOSISTEM SEKOLAH (Super Admin Master Overview)
       ═══════════════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4">
         
         {/* 1. Total Siswa */}
         <Link
           href="/data-siswa"
-          className="group bg-white p-5 rounded-2xl border border-gray-100 hover:border-purple-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden"
+          className="group bg-white p-4.5 rounded-2xl border border-gray-150/90 hover:border-purple-300 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden"
         >
           <div className="flex items-start justify-between">
-            <div className="w-11 h-11 rounded-xl bg-purple-50 group-hover:bg-[#531FFF] group-hover:text-white flex items-center justify-center text-[#531FFF] transition-colors shadow-xs">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 group-hover:bg-[#531FFF] group-hover:text-white flex items-center justify-center text-[#531FFF] transition-colors shadow-2xs">
               <GraduationCap className="w-5 h-5" />
             </div>
             <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md flex items-center gap-1">
@@ -1205,14 +1215,14 @@ export function AdminDashboardView({
             </span>
           </div>
           <div className="mt-3">
-            <p className="text-xs font-semibold text-gray-500">Total Siswa Aktif</p>
-            <div className="flex items-baseline gap-2 mt-0.5">
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total Siswa Aktif</p>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
               <span className="text-2xl font-black text-gray-900 tracking-tight">
                 {students.length.toLocaleString("id-ID") || "0"}
               </span>
-              <span className="text-[11px] font-medium text-gray-400">Siswa</span>
+              <span className="text-[11px] font-semibold text-gray-400">Siswa</span>
             </div>
-            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-50 text-[10px] text-gray-500">
+            <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-500">
               <span className="font-semibold text-blue-600">♂ {studentDemographics.male} L</span>
               <span>•</span>
               <span className="font-semibold text-pink-600">♀ {studentDemographics.female} P</span>
@@ -1220,13 +1230,13 @@ export function AdminDashboardView({
           </div>
         </Link>
 
-        {/* 2. Total Guru & Staf */}
+        {/* 2. Total Guru & Pendidik */}
         <Link
-          href="/teacher-attendance"
-          className="group bg-white p-5 rounded-2xl border border-gray-100 hover:border-blue-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden"
+          href="/data-guru"
+          className="group bg-white p-4.5 rounded-2xl border border-gray-150/90 hover:border-blue-300 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden"
         >
           <div className="flex items-start justify-between">
-            <div className="w-11 h-11 rounded-xl bg-blue-50 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center text-blue-600 transition-colors shadow-xs">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center text-blue-600 transition-colors shadow-2xs">
               <Users className="w-5 h-5" />
             </div>
             <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md flex items-center gap-1">
@@ -1234,104 +1244,111 @@ export function AdminDashboardView({
             </span>
           </div>
           <div className="mt-3">
-            <p className="text-xs font-semibold text-gray-500">Pendidik & Tendik</p>
-            <div className="flex items-baseline gap-2 mt-0.5">
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Pendidik & Tendik</p>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
               <span className="text-2xl font-black text-gray-900 tracking-tight">
                 {teachers.length.toLocaleString("id-ID") || "0"}
               </span>
-              <span className="text-[11px] font-medium text-gray-400">Guru</span>
+              <span className="text-[11px] font-semibold text-gray-400">Guru</span>
             </div>
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50 text-[10px] text-gray-500">
-              <span>Hari ini: <strong className="text-emerald-600">{teacherAttendanceToday.hadir} Hadir</strong></span>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-500">
+              <span>Hadir: <strong className="text-emerald-600">{teacherAttendanceToday.hadir}</strong></span>
               <span>{teacherAttendanceToday.total - teacherAttendanceToday.hadir} Belum</span>
             </div>
           </div>
         </Link>
 
-        {/* 3. Presensi Siswa Hari Ini */}
+        {/* 3. Total Orang Tua / Wali */}
         <Link
-          href="/attendance"
-          className="group bg-white p-5 rounded-2xl border border-gray-100 hover:border-emerald-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden"
+          href="/data-orang-tua"
+          className="group bg-white p-4.5 rounded-2xl border border-gray-150/90 hover:border-emerald-300 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden"
         >
           <div className="flex items-start justify-between">
-            <div className="w-11 h-11 rounded-xl bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white flex items-center justify-center text-emerald-600 transition-colors shadow-xs">
-              <CalendarCheck className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white flex items-center justify-center text-emerald-600 transition-colors shadow-2xs">
+              <UserCheck className="w-5 h-5" />
             </div>
-            <span className={cn(
-              "text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1",
-              attendanceToday.rate >= 80 ? "text-emerald-700 bg-emerald-50" : "text-amber-700 bg-amber-50"
-            )}>
-              {attendanceToday.rate >= 80 ? "Optimal" : "Perlu Pantau"}
+            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md flex items-center gap-1">
+              {parentStats.active} Aktif
             </span>
           </div>
           <div className="mt-3">
-            <p className="text-xs font-semibold text-gray-500">Presensi Siswa Hari Ini</p>
-            <div className="flex items-baseline gap-2 mt-0.5">
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Orang Tua / Wali</p>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
               <span className="text-2xl font-black text-gray-900 tracking-tight">
-                {attendanceToday.rate}%
+                {parentStats.total.toLocaleString("id-ID")}
               </span>
-              <span className="text-[11px] font-medium text-gray-400">
-                ({attendanceToday.hadir}/{attendanceToday.baseStudents})
-              </span>
+              <span className="text-[11px] font-semibold text-gray-400">Wali Murid</span>
             </div>
-            {/* Visual mini bar */}
-            <div className="w-full h-1.5 bg-gray-100 rounded-full mt-2.5 overflow-hidden flex">
-              <div style={{ width: `${attendanceToday.rate}%` }} className="bg-emerald-500 h-full rounded-full transition-all" />
-            </div>
-            <div className="flex items-center justify-between mt-1.5 text-[9px] text-gray-400 font-medium">
-              <span>{attendanceToday.terlambat} Terlambat</span>
-              <span>{attendanceToday.tidakHadir} Izin/Sakit/Alpa</span>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-500">
+              <span>Terhubung Siswa:</span>
+              <strong className="text-emerald-700">{parentStats.linkedStudentsCount}</strong>
             </div>
           </div>
         </Link>
 
-        {/* 4. Permohonan Izin & Sakit (Baru!) */}
+        {/* 4. Rombongan Belajar / Kelas */}
         <Link
-          href="/leave-requests"
-          className={cn(
-            "group bg-white p-5 rounded-2xl border transition-all flex flex-col justify-between relative overflow-hidden shadow-sm hover:shadow-md",
-            leaveStats.pendingCount > 0 ? "border-amber-200 bg-amber-50/20" : "border-gray-100 hover:border-amber-200"
-          )}
+          href="/classes"
+          className="group bg-white p-4.5 rounded-2xl border border-gray-150/90 hover:border-indigo-300 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden"
         >
           <div className="flex items-start justify-between">
-            <div className={cn(
-              "w-11 h-11 rounded-xl flex items-center justify-center transition-colors shadow-xs",
-              leaveStats.pendingCount > 0 ? "bg-amber-100 text-amber-800" : "bg-purple-50 text-[#531FFF]"
-            )}>
-              <ClipboardCheck className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center text-indigo-600 transition-colors shadow-2xs">
+              <School className="w-5 h-5" />
             </div>
-            {leaveStats.pendingCount > 0 ? (
-              <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full animate-pulse">
-                {leaveStats.pendingCount} Menunggu
-              </span>
-            ) : (
-              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
-                Terkendali
-              </span>
-            )}
+            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md flex items-center gap-1">
+              Daya Tampung OK
+            </span>
           </div>
           <div className="mt-3">
-            <p className="text-xs font-semibold text-gray-500">Izin & Sakit Siswa</p>
-            <div className="flex items-baseline gap-2 mt-0.5">
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Rombel & Kelas</p>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
               <span className="text-2xl font-black text-gray-900 tracking-tight">
-                {leaveStats.total}
+                {classes.length.toLocaleString("id-ID")}
               </span>
-              <span className="text-[11px] font-medium text-gray-400">Pengajuan</span>
+              <span className="text-[11px] font-semibold text-gray-400">Kelas</span>
             </div>
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50 text-[10px]">
-              <span className="text-emerald-600 font-semibold">{leaveStats.approvedCount} Disetujui</span>
-              <span className="text-amber-600 font-semibold">{leaveStats.pendingCount} Review</span>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-500">
+              <span>Rata-rata:</span>
+              <strong className="text-indigo-700">{classes.length > 0 ? Math.round(students.length / classes.length) : 0} Siswa/Kelas</strong>
             </div>
           </div>
         </Link>
 
-        {/* 5. Keuangan SPP */}
+        {/* 5. Akun Pengguna Sistem */}
         <Link
-          href="/financial-reports"
-          className="group bg-white p-5 rounded-2xl border border-gray-100 hover:border-rose-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden"
+          href="/data-guru"
+          className="group bg-white p-4.5 rounded-2xl border border-gray-150/90 hover:border-teal-300 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden"
         >
           <div className="flex items-start justify-between">
-            <div className="w-11 h-11 rounded-xl bg-rose-50 group-hover:bg-rose-600 group-hover:text-white flex items-center justify-center text-rose-600 transition-colors shadow-xs">
+            <div className="w-10 h-10 rounded-xl bg-teal-50 group-hover:bg-teal-600 group-hover:text-white flex items-center justify-center text-teal-600 transition-colors shadow-2xs">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-md flex items-center gap-1">
+              Multi-Role
+            </span>
+          </div>
+          <div className="mt-3">
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Akun Sistem</p>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-2xl font-black text-gray-900 tracking-tight">
+                {(accountStats.total > 0 ? accountStats.total : (students.length + teachers.length + parentStats.total)).toLocaleString("id-ID")}
+              </span>
+              <span className="text-[11px] font-semibold text-gray-400">Pengguna</span>
+            </div>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-500">
+              <span>Aktif: <strong className="text-teal-700">{accountStats.active || students.length}</strong></span>
+              <span>Onboarding: <strong className="text-amber-600">{accountStats.pendingOnboarding}</strong></span>
+            </div>
+          </div>
+        </Link>
+
+        {/* 6. Keuangan & Realisasi SPP */}
+        <Link
+          href="/financial-reports"
+          className="group bg-white p-4.5 rounded-2xl border border-gray-150/90 hover:border-rose-300 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden"
+        >
+          <div className="flex items-start justify-between">
+            <div className="w-10 h-10 rounded-xl bg-rose-50 group-hover:bg-rose-600 group-hover:text-white flex items-center justify-center text-rose-600 transition-colors shadow-2xs">
               <Wallet className="w-5 h-5" />
             </div>
             <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
@@ -1339,15 +1356,15 @@ export function AdminDashboardView({
             </span>
           </div>
           <div className="mt-3">
-            <p className="text-xs font-semibold text-gray-500">Pemasukan SPP</p>
-            <div className="flex items-baseline gap-2 mt-0.5">
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Pemasukan SPP</p>
+            <div className="flex items-baseline gap-1 mt-0.5">
               <span className="text-xl font-black text-gray-900 tracking-tight">
                 {formatRupiahShort(financialStats.totalPemasukan)}
               </span>
             </div>
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50 text-[10px] text-gray-500 truncate">
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-500 truncate">
               <span>Tertunggak:</span>
-              <strong className="text-rose-600">{formatRupiah(financialStats.totalTertunggak)}</strong>
+              <strong className="text-rose-600">{formatRupiahShort(financialStats.totalTertunggak)}</strong>
             </div>
           </div>
         </Link>
@@ -1355,713 +1372,1241 @@ export function AdminDashboardView({
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          INTERACTIVE FILTER BAR (Fast Data Exploration)
+          PULSE OPERASIONAL HARI INI (Live Daily Pulse Strip)
       ═══════════════════════════════════════════════════════════════════ */}
-      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-2 text-xs font-bold text-gray-700">
-          <Filter className="w-4 h-4 text-indigo-600" />
-          <span>Filter Tinjauan Data Sekolah:</span>
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-150/90 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+            <Activity className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-black text-sm text-gray-900">Live Pulse Operasional Hari Ini</h3>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Sync DB
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 font-medium">
+              Ringkasan real-time kehadiran sivitas sekolah hari {currentDay}, {currentDate || "Hari Ini"}.
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Class Filter Dropdown */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 font-medium">Rombel:</span>
-            <select
-              value={selectedClassFilter}
-              onChange={(e) => setSelectedClassFilter(e.target.value)}
-              className="text-xs font-bold bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800 cursor-pointer"
-            >
-              <option value="ALL">Semua Kelas ({students.length} Siswa)</option>
-              {classes.map((c: any) => (
-                <option key={c.id || c.name} value={c.name || c.className}>
-                  {c.name || c.className}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 shrink-0">
+          {/* Siswa Live Pill */}
+          <Link
+            href="/attendance"
+            className="flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl bg-gray-50 hover:bg-emerald-50/60 border border-gray-200/70 hover:border-emerald-200 transition-colors"
+          >
+            <div>
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Presensi Siswa</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-base font-black text-gray-900">{attendanceToday.rate}%</span>
+                <span className="text-[11px] text-gray-500">({attendanceToday.hadir}/{attendanceToday.baseStudents})</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded block">
+                {attendanceToday.terlambat} Telat
+              </span>
+            </div>
+          </Link>
 
-          {/* Time Range Selector */}
-          <div className="inline-flex p-0.5 rounded-lg bg-gray-100 border border-gray-200 text-xs font-bold">
-            <button
-              onClick={() => setSelectedTimeRange("7d")}
-              className={cn(
-                "px-3 py-1 rounded-md transition-all cursor-pointer",
-                selectedTimeRange === "7d" ? "bg-white text-indigo-600 shadow-xs" : "text-gray-600 hover:text-gray-900"
-              )}
-            >
-              7 Hari
-            </button>
-            <button
-              onClick={() => setSelectedTimeRange("14d")}
-              className={cn(
-                "px-3 py-1 rounded-md transition-all cursor-pointer",
-                selectedTimeRange === "14d" ? "bg-white text-indigo-600 shadow-xs" : "text-gray-600 hover:text-gray-900"
-              )}
-            >
-              14 Hari
-            </button>
-            <button
-              onClick={() => setSelectedTimeRange("30d")}
-              className={cn(
-                "px-3 py-1 rounded-md transition-all cursor-pointer",
-                selectedTimeRange === "30d" ? "bg-white text-indigo-600 shadow-xs" : "text-gray-600 hover:text-gray-900"
-              )}
-            >
-              30 Hari
-            </button>
-          </div>
+          {/* Guru Live Pill */}
+          <Link
+            href="/teacher-attendance"
+            className="flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl bg-gray-50 hover:bg-blue-50/60 border border-gray-200/70 hover:border-blue-200 transition-colors"
+          >
+            <div>
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Presensi Guru</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-base font-black text-gray-900">{teacherAttendanceToday.rate}%</span>
+                <span className="text-[11px] text-gray-500">({teacherAttendanceToday.hadir}/{teacherAttendanceToday.total})</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded block">
+                {teacherAttendanceToday.tepatWaktu} Tepat
+              </span>
+            </div>
+          </Link>
 
-          {selectedClassFilter !== "ALL" && (
-            <button
-              onClick={() => setSelectedClassFilter("ALL")}
-              className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-bold px-2 py-1 rounded bg-indigo-50 cursor-pointer"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Reset Filter
-            </button>
-          )}
+          {/* Izin Pending Live Pill */}
+          <Link
+            href="/leave-requests"
+            className={cn(
+              "flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl border transition-colors",
+              leaveStats.pendingCount > 0
+                ? "bg-amber-50/70 border-amber-200 hover:bg-amber-100/60"
+                : "bg-gray-50 border-gray-200/70 hover:bg-gray-100"
+            )}
+          >
+            <div>
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Izin & Sakit</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className={cn("text-base font-black", leaveStats.pendingCount > 0 ? "text-amber-800" : "text-gray-900")}>
+                  {leaveStats.pendingCount}
+                </span>
+                <span className="text-[11px] text-gray-500">Menunggu</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className={cn(
+                "text-[10px] font-extrabold px-1.5 py-0.5 rounded block",
+                leaveStats.pendingCount > 0 ? "bg-amber-200 text-amber-900 animate-pulse" : "bg-emerald-100 text-emerald-800"
+              )}>
+                {leaveStats.pendingCount > 0 ? "Review" : "Nihil"}
+              </span>
+            </div>
+          </Link>
         </div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════
-          CHART SECTION 1: RIWAYAT & TREN PRESENSI SISWA & GURU
+          PUSAT MONITORING & ANALISIS PRESENSI SEKOLAH (UNIFIED WIDGET)
+          Menggabungkan tren riwayat presensi & distribusi harian ke 1 kartu terpadu
       ═══════════════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {(() => {
+        const isGuruCohort = selectedAttendanceMode === "guru" || (selectedAttendanceMode === "komparasi" && selectedDistributionMode === "guru");
+        const activeCohortTotal = isGuruCohort
+          ? Math.max(1, teacherAttendanceToday.total)
+          : Math.max(1, filteredStudents.length);
         
-        {/* Left: Multi-Day Attendance Trend Chart (8 cols) */}
-        <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <div className={cn(
-                    "w-8 h-8 rounded-lg flex items-center justify-center font-bold transition-colors",
-                    selectedAttendanceMode === "siswa" ? "bg-indigo-50 text-indigo-600" :
-                    selectedAttendanceMode === "guru" ? "bg-emerald-50 text-emerald-600" : "bg-purple-50 text-purple-600"
-                  )}>
-                    <TrendingUp className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="font-black text-base text-gray-900">
-                      {selectedAttendanceMode === "siswa" && "Tren Riwayat Presensi Siswa"}
-                      {selectedAttendanceMode === "guru" && "Tren Riwayat Presensi Guru & Tendik"}
-                      {selectedAttendanceMode === "komparasi" && "Komparasi Tren Kehadiran: Siswa vs Guru"}
+        const activeHadir = isGuruCohort ? teacherAttendanceToday.tepatWaktu : attendanceToday.hadir;
+        const activeTerlambat = isGuruCohort ? teacherAttendanceToday.terlambat : attendanceToday.terlambat;
+        const activeIzin = isGuruCohort ? teacherAttendanceToday.izinSakit : attendanceToday.izin;
+        const activeSakit = isGuruCohort ? 0 : attendanceToday.sakit;
+        const activeAlpa = isGuruCohort ? teacherAttendanceToday.alpa : attendanceToday.alpa;
+        const activeTotalMasuk = isGuruCohort
+          ? (teacherAttendanceToday.tepatWaktu + teacherAttendanceToday.terlambat)
+          : (attendanceToday.hadir + attendanceToday.terlambat);
+        const activeRate = isGuruCohort ? teacherAttendanceToday.rate : attendanceToday.rate;
+
+        // Average calculation for trend badge
+        const avgSiswa = Math.round(attendanceTrendData.reduce((acc, d) => acc + d.rate, 0) / Math.max(1, attendanceTrendData.filter(d => d.rate > 0).length)) || 0;
+        const avgGuru = Math.round(teacherAttendanceTrendData.reduce((acc, d) => acc + d.rate, 0) / Math.max(1, teacherAttendanceTrendData.filter(d => d.rate > 0).length)) || 0;
+
+        // Active trend dataset & analytical intelligence
+        const activeTrend = selectedAttendanceMode === "guru" ? teacherAttendanceTrendData : attendanceTrendData;
+        const activeAvgRate = selectedAttendanceMode === "guru" ? avgGuru : avgSiswa;
+        const maxRateItem = activeTrend.reduce(
+          (max, cur) => (cur.rate > max.rate ? cur : max),
+          activeTrend[0] || { rate: 0, date: "-", fullDate: "" }
+        );
+        const validRatesWithData = activeTrend.filter((d) => d.rate > 0);
+        const minRateItem = validRatesWithData.length > 0
+          ? validRatesWithData.reduce((min, cur) => (cur.rate < min.rate ? cur : min), validRatesWithData[0])
+          : activeTrend[0] || { rate: 0, date: "-", fullDate: "" };
+
+        // Formatted date string
+        let formattedDateLabel = selectedAdminAttendanceDate;
+        try {
+          const d = new Date(selectedAdminAttendanceDate + "T00:00:00");
+          formattedDateLabel = d.toLocaleDateString("id-ID", {
+            weekday: "long",
+            day: "numeric",
+            month: "short",
+            year: "numeric"
+          });
+        } catch {
+          formattedDateLabel = selectedAdminAttendanceDate;
+        }
+
+        const isToday = selectedAdminAttendanceDate === todayDateStr;
+
+        return (
+          <div className="bg-white p-5 sm:p-7 rounded-3xl border border-gray-150/80 shadow-xs space-y-6 relative overflow-hidden">
+            {/* Subtle ambient lighting */}
+            <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-indigo-50/50 via-purple-50/20 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+            {/* 1. Header Bar: Title, Subtitle, Master Switchers */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+              <div className="flex items-start sm:items-center gap-3">
+                <div
+                  className={cn(
+                    "w-11 h-11 rounded-2xl flex items-center justify-center font-bold shrink-0 transition-colors shadow-2xs",
+                    selectedAttendanceMode === "siswa"
+                      ? "bg-indigo-50 text-indigo-600 border border-indigo-100"
+                      : selectedAttendanceMode === "guru"
+                      ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                      : "bg-purple-50 text-purple-600 border border-purple-100"
+                  )}
+                >
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="font-black text-lg text-gray-900 tracking-tight">
+                      {selectedAttendanceMode === "siswa" && "Pusat Analisis & Presensi Siswa"}
+                      {selectedAttendanceMode === "guru" && "Pusat Analisis & Presensi Guru & Tendik"}
+                      {selectedAttendanceMode === "komparasi" && "Pusat Komparasi Presensi Sekolah"}
                     </h2>
-                    <p className="text-xs text-gray-500">
-                      Dinamika tingkat kehadiran harian ({selectedTimeRange === "30d" ? "30 hari" : selectedTimeRange === "14d" ? "14 hari" : "7 hari"} terakhir) terhubung ke database
-                    </p>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                      Terpadu
+                    </span>
                   </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Monitoring kehadiran terpusat & analisis tren historis ({selectedTimeRange === "30d" ? "30 hari" : selectedTimeRange === "14d" ? "14 hari" : "7 hari"} terakhir) terhubung ke PostgreSQL
+                  </p>
                 </div>
               </div>
 
-              {/* Mode Toggle & Average Badges */}
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex p-0.5 rounded-lg bg-gray-100 border border-gray-200 text-xs font-bold">
+              {/* Master Switches: Role & Period */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Master Role Segment */}
+                <div className="inline-flex p-1 rounded-xl bg-gray-100/90 border border-gray-200/70 text-xs font-bold shadow-2xs">
                   <button
-                    onClick={() => setSelectedAttendanceMode("siswa")}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAttendanceMode("siswa");
+                      setSelectedDistributionMode("siswa");
+                    }}
                     className={cn(
-                      "px-2.5 py-1 rounded-md transition-all cursor-pointer",
-                      selectedAttendanceMode === "siswa" ? "bg-indigo-600 text-white shadow-xs" : "text-gray-600 hover:text-gray-900"
+                      "px-3 py-1.5 rounded-lg transition-all cursor-pointer font-bold",
+                      selectedAttendanceMode === "siswa"
+                        ? "bg-indigo-600 text-white shadow-2xs"
+                        : "text-gray-600 hover:text-gray-900"
                     )}
                   >
                     Siswa
                   </button>
                   <button
-                    onClick={() => setSelectedAttendanceMode("guru")}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAttendanceMode("guru");
+                      setSelectedDistributionMode("guru");
+                    }}
                     className={cn(
-                      "px-2.5 py-1 rounded-md transition-all cursor-pointer",
-                      selectedAttendanceMode === "guru" ? "bg-emerald-600 text-white shadow-xs" : "text-gray-600 hover:text-gray-900"
+                      "px-3 py-1.5 rounded-lg transition-all cursor-pointer font-bold",
+                      selectedAttendanceMode === "guru"
+                        ? "bg-emerald-600 text-white shadow-2xs"
+                        : "text-gray-600 hover:text-gray-900"
                     )}
                   >
                     Guru & Tendik
                   </button>
                   <button
+                    type="button"
                     onClick={() => setSelectedAttendanceMode("komparasi")}
                     className={cn(
-                      "px-2.5 py-1 rounded-md transition-all cursor-pointer",
-                      selectedAttendanceMode === "komparasi" ? "bg-purple-600 text-white shadow-xs" : "text-gray-600 hover:text-gray-900"
+                      "px-3 py-1.5 rounded-lg transition-all cursor-pointer font-bold",
+                      selectedAttendanceMode === "komparasi"
+                        ? "bg-purple-600 text-white shadow-2xs"
+                        : "text-gray-600 hover:text-gray-900"
                     )}
                   >
                     Komparasi
                   </button>
                 </div>
 
-                {selectedAttendanceMode === "siswa" && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-100">
-                    <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                    Rata-rata: {Math.round(attendanceTrendData.reduce((acc, d) => acc + d.rate, 0) / Math.max(1, attendanceTrendData.filter(d => d.rate > 0).length)) || 0}%
-                  </span>
-                )}
-                {selectedAttendanceMode === "guru" && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    Rata-rata: {Math.round(teacherAttendanceTrendData.reduce((acc, d) => acc + d.rate, 0) / Math.max(1, teacherAttendanceTrendData.filter(d => d.rate > 0).length)) || 0}%
-                  </span>
-                )}
-                {selectedAttendanceMode === "komparasi" && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-bold border border-purple-100">
-                    Siswa: {Math.round(attendanceTrendData.reduce((acc, d) => acc + d.rate, 0) / Math.max(1, attendanceTrendData.filter(d => d.rate > 0).length)) || 0}% | Guru: {Math.round(teacherAttendanceTrendData.reduce((acc, d) => acc + d.rate, 0) / Math.max(1, teacherAttendanceTrendData.filter(d => d.rate > 0).length)) || 0}%
-                  </span>
-                )}
+                {/* Period Selector (7d, 14d, 30d) */}
+                <div className="inline-flex p-1 rounded-xl bg-gray-100/90 border border-gray-200/70 text-xs font-bold shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTimeRange("7d")}
+                    className={cn(
+                      "px-2.5 py-1.5 rounded-lg transition-all cursor-pointer font-bold",
+                      selectedTimeRange === "7d" ? "bg-white text-gray-900 shadow-2xs" : "text-gray-500 hover:text-gray-900"
+                    )}
+                  >
+                    7 Hari
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTimeRange("14d")}
+                    className={cn(
+                      "px-2.5 py-1.5 rounded-lg transition-all cursor-pointer font-bold",
+                      selectedTimeRange === "14d" ? "bg-white text-gray-900 shadow-2xs" : "text-gray-500 hover:text-gray-900"
+                    )}
+                  >
+                    14 Hari
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTimeRange("30d")}
+                    className={cn(
+                      "px-2.5 py-1.5 rounded-lg transition-all cursor-pointer font-bold",
+                      selectedTimeRange === "30d" ? "bg-white text-gray-900 shadow-2xs" : "text-gray-500 hover:text-gray-900"
+                    )}
+                  >
+                    30 Hari
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Dynamic Charts: Student / Teacher / Comparison */}
-            <div className="h-[280px] w-full pt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                {selectedAttendanceMode === "siswa" ? (
-                  <AreaChart data={attendanceTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="attendanceGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#4F46E5" stopOpacity={0.0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-                    <XAxis
-                      dataKey="date"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 600 }}
-                      dy={10}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 500 }}
-                      domain={[0, 100]}
-                      tickFormatter={(val) => `${val}%`}
-                    />
-                    <RechartsTooltip
-                      cursor={{ stroke: "#4F46E5", strokeWidth: 1.5, strokeDasharray: "4 4" }}
-                      content={({ active, payload, label }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          return (
-                            <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-xl shadow-xl text-xs space-y-2 border border-white/10 min-w-[200px]">
-                              <p className="font-extrabold text-indigo-300 pb-1 border-b border-white/10">{label}</p>
-                              <div className="space-y-1.5">
-                                <p className="flex justify-between gap-4 text-emerald-400 font-bold">
-                                  <span>Tingkat Hadir Siswa:</span>
-                                  <span>{data.rate}% ({data.hadir} Siswa)</span>
-                                </p>
-                                <p className="flex justify-between gap-4 text-purple-300 font-medium">
-                                  <span>Izin:</span>
-                                  <span className="font-bold text-white">{data.izin} Siswa</span>
-                                </p>
-                                <p className="flex justify-between gap-4 text-blue-300 font-medium">
-                                  <span>Sakit:</span>
-                                  <span className="font-bold text-white">{data.sakit} Siswa</span>
-                                </p>
-                                <p className="flex justify-between gap-4 text-rose-300 font-medium">
-                                  <span>Alpa / Tanpa Ket.:</span>
-                                  <span className="font-bold text-white">{data.alpa} Siswa</span>
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="rate"
-                      name="Tingkat Hadir Siswa"
-                      stroke="#4F46E5"
-                      strokeWidth={3}
-                      fillOpacity={1}
-                      fill="url(#attendanceGradient)"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="izin"
-                      name="Izin"
-                      stroke="#8B5CF6"
-                      strokeWidth={2.5}
-                      dot={{ r: 3, fill: "#8B5CF6" }}
-                      activeDot={{ r: 5 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="sakit"
-                      name="Sakit"
-                      stroke="#3B82F6"
-                      strokeWidth={2.5}
-                      dot={{ r: 3, fill: "#3B82F6" }}
-                      activeDot={{ r: 5 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="alpa"
-                      name="Alpa"
-                      stroke="#EF4444"
-                      strokeWidth={2}
-                      strokeDasharray="3 3"
-                      dot={{ r: 2.5, fill: "#EF4444" }}
-                      activeDot={{ r: 4 }}
-                    />
-                  </AreaChart>
-                ) : selectedAttendanceMode === "guru" ? (
-                  <AreaChart data={teacherAttendanceTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="teacherAttendanceGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#10B981" stopOpacity={0.0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-                    <XAxis
-                      dataKey="date"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 600 }}
-                      dy={10}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 500 }}
-                      domain={[0, 100]}
-                      tickFormatter={(val) => `${val}%`}
-                    />
-                    <RechartsTooltip
-                      cursor={{ stroke: "#10B981", strokeWidth: 1.5, strokeDasharray: "4 4" }}
-                      content={({ active, payload, label }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          return (
-                            <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-xl shadow-xl text-xs space-y-2 border border-white/10 min-w-[210px]">
-                              <p className="font-extrabold text-emerald-300 pb-1 border-b border-white/10">{label}</p>
-                              <div className="space-y-1.5">
-                                <p className="flex justify-between gap-4 text-emerald-400 font-bold">
-                                  <span>Tingkat Hadir Guru:</span>
-                                  <span>{data.rate}% ({data.hadir} Guru)</span>
-                                </p>
-                                <p className="flex justify-between gap-4 text-emerald-300 font-medium">
-                                  <span>Tepat Waktu:</span>
-                                  <span className="font-bold text-white">{data.tepatWaktu} Guru</span>
-                                </p>
-                                <p className="flex justify-between gap-4 text-amber-300 font-medium">
-                                  <span>Terlambat:</span>
-                                  <span className="font-bold text-white">{data.terlambat} Guru</span>
-                                </p>
-                                <p className="flex justify-between gap-4 text-purple-300 font-medium">
-                                  <span>Izin / Sakit / Cuti:</span>
-                                  <span className="font-bold text-white">{data.izinSakit} Guru</span>
-                                </p>
-                                <p className="flex justify-between gap-4 text-rose-300 font-medium">
-                                  <span>Alpa / Belum Presensi:</span>
-                                  <span className="font-bold text-white">{data.alpa} Guru</span>
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="rate"
-                      name="Tingkat Hadir Guru"
-                      stroke="#10B981"
-                      strokeWidth={3}
-                      fillOpacity={1}
-                      fill="url(#teacherAttendanceGradient)"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="tepatWaktu"
-                      name="Tepat Waktu"
-                      stroke="#059669"
-                      strokeWidth={2}
-                      dot={{ r: 2.5, fill: "#059669" }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="terlambat"
-                      name="Terlambat"
-                      stroke="#F59E0B"
-                      strokeWidth={2}
-                      dot={{ r: 2.5, fill: "#F59E0B" }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="izinSakit"
-                      name="Izin/Sakit/Cuti"
-                      stroke="#8B5CF6"
-                      strokeWidth={2}
-                      dot={{ r: 2.5, fill: "#8B5CF6" }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="alpa"
-                      name="Alpa"
-                      stroke="#EF4444"
-                      strokeWidth={2}
-                      strokeDasharray="3 3"
-                      dot={{ r: 2.5, fill: "#EF4444" }}
-                    />
-                  </AreaChart>
-                ) : (
-                  <LineChart data={comparativeAttendanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-                    <XAxis
-                      dataKey="date"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 600 }}
-                      dy={10}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 500 }}
-                      domain={[0, 100]}
-                      tickFormatter={(val) => `${val}%`}
-                    />
-                    <RechartsTooltip
-                      content={({ active, payload, label }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          return (
-                            <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-xl shadow-xl text-xs space-y-2 border border-white/10 min-w-[210px]">
-                              <p className="font-extrabold text-purple-300 pb-1 border-b border-white/10">{label}</p>
-                              <div className="space-y-1.5">
-                                <p className="flex justify-between gap-4 text-indigo-400 font-bold">
-                                  <span>Kehadiran Siswa:</span>
-                                  <span>{data.siswaRate}% ({data.siswaHadir} Siswa)</span>
-                                </p>
-                                <p className="flex justify-between gap-4 text-emerald-400 font-bold">
-                                  <span>Kehadiran Guru:</span>
-                                  <span>{data.guruRate}% ({data.guruHadir} Guru)</span>
-                                </p>
-                                <p className="flex justify-between gap-4 text-gray-300 text-[10px]">
-                                  <span>Guru Tepat Waktu:</span>
-                                  <span>{data.guruTepatWaktu} • Terlambat: {data.guruTerlambat}</span>
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="siswaRate"
-                      name="Kehadiran Siswa (%)"
-                      stroke="#4F46E5"
-                      strokeWidth={3}
-                      dot={{ r: 3.5, fill: "#4F46E5" }}
-                      activeDot={{ r: 6 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="guruRate"
-                      name="Kehadiran Guru (%)"
-                      stroke="#10B981"
-                      strokeWidth={3}
-                      dot={{ r: 3.5, fill: "#10B981" }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                )}
-              </ResponsiveContainer>
-            </div>
-          </div>
+            {/* 2. Secondary Smart Toolbar: Date, Quick Buttons, Operational Status, and Class Filter */}
+            <div className="bg-gray-50/80 p-3 sm:p-3.5 rounded-2xl border border-gray-200/70 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                {/* Date Input */}
+                <div className="relative">
+                  <Calendar className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="date"
+                    value={selectedAdminAttendanceDate}
+                    max={todayDateStr}
+                    onChange={(e) => setSelectedAdminAttendanceDate(e.target.value)}
+                    className="text-xs font-bold pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+                  />
+                </div>
 
-          {/* Chart Footnote / Quick Legend */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-4 mt-2 border-t border-gray-100 text-[11px] text-gray-500">
-            {selectedAttendanceMode === "siswa" ? (
-              <div className="flex flex-wrap items-center gap-3.5">
-                <span className="flex items-center gap-1.5 font-semibold text-gray-700">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#4F46E5]" />
-                  Kehadiran Siswa (%)
-                </span>
-                <span className="flex items-center gap-1.5 font-semibold text-purple-700">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6]" />
-                  Izin
-                </span>
-                <span className="flex items-center gap-1.5 font-semibold text-blue-700">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6]" />
-                  Sakit
-                </span>
-                <span className="flex items-center gap-1.5 font-semibold text-rose-700">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />
-                  Alpa
-                </span>
-              </div>
-            ) : selectedAttendanceMode === "guru" ? (
-              <div className="flex flex-wrap items-center gap-3.5">
-                <span className="flex items-center gap-1.5 font-semibold text-emerald-700">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
-                  Kehadiran Guru (%)
-                </span>
-                <span className="flex items-center gap-1.5 font-semibold text-emerald-900">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#059669]" />
-                  Tepat Waktu
-                </span>
-                <span className="flex items-center gap-1.5 font-semibold text-amber-700">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
-                  Terlambat
-                </span>
-                <span className="flex items-center gap-1.5 font-semibold text-purple-700">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6]" />
-                  Izin/Sakit/Cuti
-                </span>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center gap-3.5">
-                <span className="flex items-center gap-1.5 font-bold text-indigo-700">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#4F46E5]" />
-                  Tingkat Hadir Siswa (%)
-                </span>
-                <span className="flex items-center gap-1.5 font-bold text-emerald-700">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
-                  Tingkat Hadir Guru (%)
-                </span>
-              </div>
-            )}
+                {/* Quick Date Pills */}
+                <div className="inline-flex items-center gap-1 bg-white p-0.5 rounded-xl border border-gray-200/80 shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAdminAttendanceDate(todayDateStr)}
+                    className={cn(
+                      "px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                      isToday
+                        ? "bg-indigo-600 text-white shadow-2xs"
+                        : "text-gray-600 hover:text-gray-900"
+                    )}
+                  >
+                    Hari Ini
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const y = new Date();
+                      y.setDate(y.getDate() - 1);
+                      setSelectedAdminAttendanceDate(y.toISOString().slice(0, 10));
+                    }}
+                    className={cn(
+                      "px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                      !isToday
+                        ? "bg-indigo-600 text-white shadow-2xs"
+                        : "text-gray-600 hover:text-gray-900"
+                    )}
+                  >
+                    Kemarin
+                  </button>
+                </div>
 
-            <div className="flex items-center gap-3">
-              <Link
-                href="/attendance"
-                className="font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-              >
-                Rekap Siswa <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
-              <span className="text-gray-300">|</span>
-              <Link
-                href="/teacher-attendance"
-                className="font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1"
-              >
-                Presensi Guru <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Date-Selective Status Breakdown Donut Chart (4 cols) */}
-        <div className="lg:col-span-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <CalendarDays className="w-4 h-4 text-indigo-600" />
-                <h2 className="font-black text-base text-gray-900">Distribusi Presensi</h2>
-              </div>
-              <div className="inline-flex p-0.5 rounded-lg bg-gray-100 border border-gray-200 text-[11px] font-bold">
-                <button
-                  onClick={() => setSelectedDistributionMode("siswa")}
-                  className={cn(
-                    "px-2 py-0.5 rounded-md transition-all cursor-pointer",
-                    selectedDistributionMode === "siswa" ? "bg-white text-indigo-700 shadow-xs font-black" : "text-gray-500 hover:text-gray-800"
-                  )}
-                >
-                  Siswa
-                </button>
-                <button
-                  onClick={() => setSelectedDistributionMode("guru")}
-                  className={cn(
-                    "px-2 py-0.5 rounded-md transition-all cursor-pointer",
-                    selectedDistributionMode === "guru" ? "bg-white text-emerald-700 shadow-xs font-black" : "text-gray-500 hover:text-gray-800"
-                  )}
-                >
-                  Guru
-                </button>
-              </div>
-            </div>
-
-            {/* Date Selector & Quick Filters */}
-            <div className="space-y-1.5 mb-3">
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="date"
-                  value={selectedAdminAttendanceDate}
-                  max={todayDateStr}
-                  onChange={(e) => setSelectedAdminAttendanceDate(e.target.value)}
-                  className="text-xs font-semibold px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-gray-800 focus:outline-none focus:ring-1 focus:ring-indigo-500 flex-1"
-                />
-                <button
-                  onClick={() => setSelectedAdminAttendanceDate(todayDateStr)}
-                  className={cn(
-                    "px-2 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer",
-                    selectedAdminAttendanceDate === todayDateStr
-                      ? "bg-indigo-600 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  )}
-                >
-                  Hari Ini
-                </button>
-                <button
-                  onClick={() => {
-                    const y = new Date();
-                    y.setDate(y.getDate() - 1);
-                    setSelectedAdminAttendanceDate(y.toISOString().slice(0, 10));
-                  }}
-                  className={cn(
-                    "px-2 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer",
-                    selectedAdminAttendanceDate !== todayDateStr
-                      ? "bg-indigo-100 text-indigo-700 font-extrabold"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  )}
-                >
-                  Kemarin
-                </button>
-              </div>
-
-              {/* Operational Day Badge */}
-              <div className="flex items-center justify-between">
+                {/* Operational Status Pill */}
                 {operationalStatusForSelected.isOperational ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span className="inline-flex items-center gap-1.5 text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     Hari Aktif Sekolah
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                    Hari Libur ({operationalStatusForSelected.reason})
+                  <span className="inline-flex items-center gap-1.5 text-rose-700 font-bold bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200/80 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-rose-500" />
+                    Hari Libur ({operationalStatusForSelected.reason || "Diliburkan"})
                   </span>
                 )}
-                <span className="text-[10px] font-semibold text-gray-400">
-                  {selectedAdminAttendanceDate === todayDateStr ? "Live Database" : `Data ${selectedAdminAttendanceDate}`}
+
+                {/* Sync Status */}
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 bg-white px-2.5 py-1 rounded-full border border-gray-200/60 shadow-2xs">
+                  <span className={cn("w-1.5 h-1.5 rounded-full", isToday ? "bg-emerald-500 animate-ping" : "bg-gray-400")} />
+                  {isToday ? "Live Sync Real-Time" : "Data Historis"}
                 </span>
+              </div>
+
+              {/* Right: Class Filter or Komparasi Donut Sub-toggle */}
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedAttendanceMode === "siswa" && (
+                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-gray-200/80 shadow-2xs">
+                    <Filter className="w-3.5 h-3.5 text-indigo-600" />
+                    <span className="text-xs text-gray-500 font-semibold">Rombel:</span>
+                    <select
+                      value={selectedClassFilter}
+                      onChange={(e) => setSelectedClassFilter(e.target.value)}
+                      className="text-xs font-bold bg-transparent text-gray-800 focus:outline-none cursor-pointer"
+                    >
+                      <option value="ALL">Semua Kelas ({students.length} Siswa)</option>
+                      {classes.map((c: any) => (
+                        <option key={c.id || c.name} value={c.name || c.className}>
+                          {c.name || c.className}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedClassFilter !== "ALL" && (
+                      <button
+                        onClick={() => setSelectedClassFilter("ALL")}
+                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-1.5 py-0.5 rounded cursor-pointer flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" />
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {selectedAttendanceMode === "komparasi" && (
+                  <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-gray-200/80 shadow-2xs">
+                    <span className="text-[11px] text-gray-500 font-bold">Fokus Data:</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDistributionMode("siswa")}
+                      className={cn(
+                        "px-2 py-0.5 text-xs font-bold rounded-md transition-all cursor-pointer",
+                        selectedDistributionMode === "siswa"
+                          ? "bg-indigo-600 text-white"
+                          : "text-gray-600 hover:text-gray-900"
+                      )}
+                    >
+                      Siswa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDistributionMode("guru")}
+                      className={cn(
+                        "px-2 py-0.5 text-xs font-bold rounded-md transition-all cursor-pointer",
+                        selectedDistributionMode === "guru"
+                          ? "bg-emerald-600 text-white"
+                          : "text-gray-600 hover:text-gray-900"
+                      )}
+                    >
+                      Guru
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Donut Chart with Centered Metric */}
-            <div className="relative w-40 h-40 mx-auto my-1">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={attendanceDonutData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={52}
-                    outerRadius={72}
-                    paddingAngle={3}
-                    dataKey="value"
-                    startAngle={90}
-                    endAngle={-270}
-                    cornerRadius={5}
+            {/* 3. 5 Top KPI Metric Cards (Menyajikan seluruh status presensi secara instan & mudah dibaca) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {/* Card 1: Tingkat Kehadiran */}
+              <div className="p-3.5 sm:p-4 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/60 via-white to-white shadow-2xs flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Tingkat Hadir</span>
+                  <span
+                    className={cn(
+                      "text-[10px] font-extrabold px-2 py-0.5 rounded-full border",
+                      activeRate >= 90
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : activeRate >= 75
+                        ? "bg-blue-50 text-blue-700 border-blue-200"
+                        : "bg-rose-50 text-rose-700 border-rose-200"
+                    )}
                   >
-                    {attendanceDonutData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
-                <span className="text-2xl font-black text-gray-900 leading-none">
-                  {selectedDistributionMode === "guru" ? teacherAttendanceToday.rate : attendanceToday.rate}%
-                </span>
-                <span className="text-[10px] font-semibold text-gray-400 mt-1 uppercase">
-                  {selectedDistributionMode === "guru" ? "Masuk" : "Hadir"}
-                </span>
+                    {activeRate >= 90 ? "Sangat Baik" : activeRate >= 75 ? "Cukup" : "Rendah"}
+                  </span>
+                </div>
+                <div className="mt-2.5">
+                  <div className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">
+                    {activeRate}%
+                  </div>
+                  <p className="text-[11px] font-semibold text-gray-500 mt-1 truncate">
+                    {activeTotalMasuk} dari {activeCohortTotal} {isGuruCohort ? "Guru" : "Siswa"} Masuk
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 2: Hadir Tepat Waktu */}
+              <div className="p-3.5 sm:p-4 rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/60 via-white to-white shadow-2xs flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Tepat Waktu</span>
+                  <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-3 h-3" />
+                  </div>
+                </div>
+                <div className="mt-2.5">
+                  <div className="text-2xl sm:text-3xl font-black text-emerald-600 tracking-tight">
+                    {activeHadir}
+                    <span className="text-xs font-bold text-gray-500 ml-1">{isGuruCohort ? "Guru" : "Siswa"}</span>
+                  </div>
+                  <p className="text-[11px] font-semibold text-gray-500 mt-1">
+                    {Math.round((activeHadir / activeCohortTotal) * 100)}% dari total kohort
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 3: Terlambat Masuk */}
+              <div className="p-3.5 sm:p-4 rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50/60 via-white to-white shadow-2xs flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Terlambat</span>
+                  <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                    <Clock3 className="w-3 h-3" />
+                  </div>
+                </div>
+                <div className="mt-2.5">
+                  <div className="text-2xl sm:text-3xl font-black text-amber-600 tracking-tight">
+                    {activeTerlambat}
+                    <span className="text-xs font-bold text-gray-500 ml-1">{isGuruCohort ? "Guru" : "Siswa"}</span>
+                  </div>
+                  <p className="text-[11px] font-semibold text-gray-500 mt-1">
+                    {Math.round((activeTerlambat / activeCohortTotal) * 100)}% lewat jam masuk
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 4: Izin & Sakit */}
+              <div className="p-3.5 sm:p-4 rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-50/60 via-white to-white shadow-2xs flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Izin & Sakit</span>
+                  <div className="w-5 h-5 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+                    <FileText className="w-3 h-3" />
+                  </div>
+                </div>
+                <div className="mt-2.5">
+                  <div className="text-2xl sm:text-3xl font-black text-sky-600 tracking-tight">
+                    {isGuruCohort ? activeIzin : (activeIzin + activeSakit)}
+                    <span className="text-xs font-bold text-gray-500 ml-1">{isGuruCohort ? "Guru" : "Siswa"}</span>
+                  </div>
+                  <p className="text-[11px] font-semibold text-gray-500 mt-1 truncate">
+                    {isGuruCohort ? "Cuti, Dinas & Sakit" : `Izin: ${attendanceToday.izin} • Sakit: ${attendanceToday.sakit}`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 5: Alpa / Tanpa Keterangan */}
+              <div className="p-3.5 sm:p-4 rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50/60 via-white to-white shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Alpa / Tanpa Ket.</span>
+                  <div className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                    <AlertCircle className="w-3 h-3" />
+                  </div>
+                </div>
+                <div className="mt-2.5">
+                  <div className="text-2xl sm:text-3xl font-black text-rose-600 tracking-tight">
+                    {activeAlpa}
+                    <span className="text-xs font-bold text-gray-500 ml-1">{isGuruCohort ? "Guru" : "Siswa"}</span>
+                  </div>
+                  <p className="text-[11px] font-semibold text-gray-500 mt-1">
+                    {Math.round((activeAlpa / activeCohortTotal) * 100)}% tanpa laporan
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Line Chart Widget Lengkap (Full-Width, Benchmark Target, & Rekapitulasi Presensi) */}
+            <div className="w-full rounded-2xl border border-gray-150/80 p-5 sm:p-6 bg-white shadow-xs space-y-6">
+              
+              {/* Header & Period Telemetry Intelligence Strip */}
+              <div className="flex flex-col gap-4 pb-4 border-b border-gray-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                      <h3 className="font-extrabold text-base text-gray-900 tracking-tight">
+                        Analisis Tren & Fluktuasi Presensi ({selectedTimeRange === "30d" ? "30 Hari" : selectedTimeRange === "14d" ? "14 Hari" : "7 Hari Terakhir"})
+                      </h3>
+                    </div>
+                    <p className="text-xs text-gray-500 font-medium mt-0.5">
+                      Memvisualisasikan dinamika kehadiran harian lengkap dengan garis target standar sekolah (90%) dan rata-rata periode.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gray-50 text-gray-700 text-xs font-bold border border-gray-200">
+                      <CalendarDays className="w-3.5 h-3.5 text-gray-500" />
+                      Tanggal Terpilih: {formattedDateLabel}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 4 Analytical KPI Metric Chips */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                  {/* Puncak Kehadiran */}
+                  <div className="p-2.5 rounded-xl bg-emerald-50/50 border border-emerald-100 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Puncak Kehadiran</span>
+                      <span className="text-lg font-black text-emerald-700">{maxRateItem.rate}%</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-semibold text-emerald-600 block">{maxRateItem.date}</span>
+                      <ArrowUpRight className="w-4 h-4 text-emerald-600 ml-auto" />
+                    </div>
+                  </div>
+
+                  {/* Titik Terendah */}
+                  <div className="p-2.5 rounded-xl bg-amber-50/50 border border-amber-100 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Titik Terendah</span>
+                      <span className="text-lg font-black text-amber-700">{minRateItem.rate}%</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-semibold text-amber-600 block">{minRateItem.date}</span>
+                      <ArrowDownRight className="w-4 h-4 text-amber-600 ml-auto" />
+                    </div>
+                  </div>
+
+                  {/* Rata-Rata Periode */}
+                  <div className="p-2.5 rounded-xl bg-indigo-50/50 border border-indigo-100 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider block">Rata-Rata Periode</span>
+                      <span className="text-lg font-black text-indigo-700">{activeAvgRate}%</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-semibold text-indigo-600 block">
+                        {activeAvgRate >= 90 ? "Target Aman" : "Perlu Evaluasi"}
+                      </span>
+                      <Activity className="w-4 h-4 text-indigo-600 ml-auto" />
+                    </div>
+                  </div>
+
+                  {/* Standar Minimal Sekolah */}
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">Target Standar</span>
+                      <span className="text-lg font-black text-slate-800">90%</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-semibold text-slate-500 block">Batas Kepatuhan</span>
+                      <Target className="w-4 h-4 text-slate-600 ml-auto" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Chart Visualizer (Full Width with Reference Lines) */}
+              <div className="h-[340px] sm:h-[360px] w-full pt-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  {selectedAttendanceMode === "siswa" ? (
+                    <AreaChart data={attendanceTrendData} margin={{ top: 15, right: 15, left: -15, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="attendanceGradientFull" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#4F46E5" stopOpacity={0.0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                      <XAxis
+                        dataKey="date"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#6B7280", fontSize: 11, fontWeight: 600 }}
+                        dy={8}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 500 }}
+                        domain={[0, 100]}
+                        tickFormatter={(val) => `${val}%`}
+                      />
+                      {/* Target Sekolah Reference Line */}
+                      <ReferenceLine
+                        y={90}
+                        stroke="#10B981"
+                        strokeDasharray="5 5"
+                        strokeWidth={1.5}
+                        label={{
+                          value: "Target 90%",
+                          position: "insideTopRight",
+                          fill: "#059669",
+                          fontSize: 10,
+                          fontWeight: 700
+                        }}
+                      />
+                      {/* Rata-Rata Periode Reference Line */}
+                      {avgSiswa > 0 && (
+                        <ReferenceLine
+                          y={avgSiswa}
+                          stroke="#6366F1"
+                          strokeDasharray="3 3"
+                          strokeWidth={1.2}
+                          label={{
+                            value: `Rata-rata (${avgSiswa}%)`,
+                            position: "insideBottomRight",
+                            fill: "#4F46E5",
+                            fontSize: 10,
+                            fontWeight: 600
+                          }}
+                        />
+                      )}
+                      <RechartsTooltip
+                        cursor={{ stroke: "#4F46E5", strokeWidth: 1.5, strokeDasharray: "4 4" }}
+                        content={({ active, payload, label }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            const isMet = (data.rate || 0) >= 90;
+                            return (
+                              <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-xl shadow-xl text-xs space-y-2 border border-white/10 min-w-[220px]">
+                                <div className="flex items-center justify-between pb-1.5 border-b border-white/10">
+                                  <p className="font-extrabold text-indigo-300">{label}</p>
+                                  <span
+                                    className={cn(
+                                      "text-[10px] font-extrabold px-1.5 py-0.5 rounded",
+                                      isMet ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"
+                                    )}
+                                  >
+                                    {isMet ? "Memenuhi Target" : "Di Bawah Target"}
+                                  </span>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <p className="flex justify-between gap-4 text-emerald-400 font-bold">
+                                    <span>Tingkat Hadir Siswa:</span>
+                                    <span>{data.rate}% ({data.hadir} Siswa)</span>
+                                  </p>
+                                  <p className="flex justify-between gap-4 text-emerald-300 font-medium">
+                                    <span>Hadir Tepat Waktu:</span>
+                                    <span className="font-bold text-white">{Math.max(0, data.hadir - (data.terlambat || 0))} Siswa</span>
+                                  </p>
+                                  <p className="flex justify-between gap-4 text-amber-300 font-medium">
+                                    <span>Terlambat:</span>
+                                    <span className="font-bold text-white">{data.terlambat || 0} Siswa</span>
+                                  </p>
+                                  <p className="flex justify-between gap-4 text-purple-300 font-medium">
+                                    <span>Izin:</span>
+                                    <span className="font-bold text-white">{data.izin} Siswa</span>
+                                  </p>
+                                  <p className="flex justify-between gap-4 text-blue-300 font-medium">
+                                    <span>Sakit:</span>
+                                    <span className="font-bold text-white">{data.sakit} Siswa</span>
+                                  </p>
+                                  <p className="flex justify-between gap-4 text-rose-300 font-medium">
+                                    <span>Alpa / Tanpa Ket.:</span>
+                                    <span className="font-bold text-white">{data.alpa} Siswa</span>
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="rate"
+                        name="Tingkat Hadir (%)"
+                        stroke="#4F46E5"
+                        strokeWidth={3}
+                        fillOpacity={1}
+                        fill="url(#attendanceGradientFull)"
+                        dot={{ r: 3.5, fill: "#4F46E5" }}
+                        activeDot={{ r: 6 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="terlambat"
+                        name="Terlambat"
+                        stroke="#F59E0B"
+                        strokeWidth={2}
+                        dot={{ r: 2.5, fill: "#F59E0B" }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="izin"
+                        name="Izin"
+                        stroke="#8B5CF6"
+                        strokeWidth={2}
+                        dot={{ r: 2.5, fill: "#8B5CF6" }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="sakit"
+                        name="Sakit"
+                        stroke="#0284C7"
+                        strokeWidth={2}
+                        dot={{ r: 2.5, fill: "#0284C7" }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="alpa"
+                        name="Alpa"
+                        stroke="#EF4444"
+                        strokeWidth={2}
+                        strokeDasharray="3 3"
+                        dot={{ r: 2.5, fill: "#EF4444" }}
+                      />
+                    </AreaChart>
+                  ) : selectedAttendanceMode === "guru" ? (
+                    <AreaChart data={teacherAttendanceTrendData} margin={{ top: 15, right: 15, left: -15, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="teacherAttendanceGradientFull" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#10B981" stopOpacity={0.0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                      <XAxis
+                        dataKey="date"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#6B7280", fontSize: 11, fontWeight: 600 }}
+                        dy={8}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 500 }}
+                        domain={[0, 100]}
+                        tickFormatter={(val) => `${val}%`}
+                      />
+                      {/* Target Standar Guru */}
+                      <ReferenceLine
+                        y={90}
+                        stroke="#10B981"
+                        strokeDasharray="5 5"
+                        strokeWidth={1.5}
+                        label={{
+                          value: "Target 90%",
+                          position: "insideTopRight",
+                          fill: "#059669",
+                          fontSize: 10,
+                          fontWeight: 700
+                        }}
+                      />
+                      {avgGuru > 0 && (
+                        <ReferenceLine
+                          y={avgGuru}
+                          stroke="#059669"
+                          strokeDasharray="3 3"
+                          strokeWidth={1.2}
+                          label={{
+                            value: `Rata-rata (${avgGuru}%)`,
+                            position: "insideBottomRight",
+                            fill: "#059669",
+                            fontSize: 10,
+                            fontWeight: 600
+                          }}
+                        />
+                      )}
+                      <RechartsTooltip
+                        cursor={{ stroke: "#10B981", strokeWidth: 1.5, strokeDasharray: "4 4" }}
+                        content={({ active, payload, label }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            const isMet = (data.rate || 0) >= 90;
+                            return (
+                              <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-xl shadow-xl text-xs space-y-2 border border-white/10 min-w-[220px]">
+                                <div className="flex items-center justify-between pb-1.5 border-b border-white/10">
+                                  <p className="font-extrabold text-emerald-300">{label}</p>
+                                  <span
+                                    className={cn(
+                                      "text-[10px] font-extrabold px-1.5 py-0.5 rounded",
+                                      isMet ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"
+                                    )}
+                                  >
+                                    {isMet ? "Memenuhi Target" : "Di Bawah Target"}
+                                  </span>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <p className="flex justify-between gap-4 text-emerald-400 font-bold">
+                                    <span>Tingkat Hadir Guru:</span>
+                                    <span>{data.rate}% ({data.hadir} Guru)</span>
+                                  </p>
+                                  <p className="flex justify-between gap-4 text-emerald-300 font-medium">
+                                    <span>Tepat Waktu:</span>
+                                    <span className="font-bold text-white">{data.tepatWaktu} Guru</span>
+                                  </p>
+                                  <p className="flex justify-between gap-4 text-amber-300 font-medium">
+                                    <span>Terlambat:</span>
+                                    <span className="font-bold text-white">{data.terlambat} Guru</span>
+                                  </p>
+                                  <p className="flex justify-between gap-4 text-purple-300 font-medium">
+                                    <span>Izin / Sakit / Cuti:</span>
+                                    <span className="font-bold text-white">{data.izinSakit} Guru</span>
+                                  </p>
+                                  <p className="flex justify-between gap-4 text-rose-300 font-medium">
+                                    <span>Alpa / Belum Presensi:</span>
+                                    <span className="font-bold text-white">{data.alpa} Guru</span>
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="rate"
+                        name="Tingkat Hadir Guru (%)"
+                        stroke="#10B981"
+                        strokeWidth={3}
+                        fillOpacity={1}
+                        fill="url(#teacherAttendanceGradientFull)"
+                        dot={{ r: 3.5, fill: "#10B981" }}
+                        activeDot={{ r: 6 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="tepatWaktu"
+                        name="Tepat Waktu"
+                        stroke="#059669"
+                        strokeWidth={2}
+                        dot={{ r: 2.5, fill: "#059669" }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="terlambat"
+                        name="Terlambat"
+                        stroke="#F59E0B"
+                        strokeWidth={2}
+                        dot={{ r: 2.5, fill: "#F59E0B" }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="izinSakit"
+                        name="Izin/Sakit/Cuti"
+                        stroke="#8B5CF6"
+                        strokeWidth={2}
+                        dot={{ r: 2.5, fill: "#8B5CF6" }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="alpa"
+                        name="Alpa"
+                        stroke="#EF4444"
+                        strokeWidth={2}
+                        strokeDasharray="3 3"
+                        dot={{ r: 2.5, fill: "#EF4444" }}
+                      />
+                    </AreaChart>
+                  ) : (
+                    <LineChart data={comparativeAttendanceData} margin={{ top: 15, right: 15, left: -15, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                      <XAxis
+                        dataKey="date"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#6B7280", fontSize: 11, fontWeight: 600 }}
+                        dy={8}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#9CA3AF", fontSize: 11, fontWeight: 500 }}
+                        domain={[0, 100]}
+                        tickFormatter={(val) => `${val}%`}
+                      />
+                      <ReferenceLine
+                        y={90}
+                        stroke="#10B981"
+                        strokeDasharray="5 5"
+                        strokeWidth={1.5}
+                        label={{
+                          value: "Target 90%",
+                          position: "insideTopRight",
+                          fill: "#059669",
+                          fontSize: 10,
+                          fontWeight: 700
+                        }}
+                      />
+                      <RechartsTooltip
+                        content={({ active, payload, label }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="bg-gray-900/95 backdrop-blur-md text-white p-3.5 rounded-xl shadow-xl text-xs space-y-2 border border-white/10 min-w-[220px]">
+                                <p className="font-extrabold text-purple-300 pb-1.5 border-b border-white/10">{label}</p>
+                                <div className="space-y-1.5">
+                                  <p className="flex justify-between gap-4 text-indigo-400 font-bold">
+                                    <span>Kehadiran Siswa:</span>
+                                    <span>{data.siswaRate}% ({data.siswaHadir} Siswa)</span>
+                                  </p>
+                                  <p className="flex justify-between gap-4 text-emerald-400 font-bold">
+                                    <span>Kehadiran Guru:</span>
+                                    <span>{data.guruRate}% ({data.guruHadir} Guru)</span>
+                                  </p>
+                                  <p className="flex justify-between gap-4 text-gray-300 text-[10px]">
+                                    <span>Guru Tepat Waktu:</span>
+                                    <span>{data.guruTepatWaktu} • Terlambat: {data.guruTerlambat}</span>
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="siswaRate"
+                        name="Kehadiran Siswa (%)"
+                        stroke="#4F46E5"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: "#4F46E5" }}
+                        activeDot={{ r: 6 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="guruRate"
+                        name="Kehadiran Guru (%)"
+                        stroke="#10B981"
+                        strokeWidth={3}
+                        dot={{ r: 4, fill: "#10B981" }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </LineChart>
+                  )}
+                </ResponsiveContainer>
+              </div>
+
+              {/* Chart Legend Strip */}
+              <div className="pt-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-600">
+                {selectedAttendanceMode === "siswa" ? (
+                  <div className="flex flex-wrap items-center gap-4">
+                    <span className="flex items-center gap-1.5 font-bold text-gray-900">
+                      <span className="w-3 h-1.5 rounded-full bg-[#4F46E5]" />
+                      Tingkat Hadir (%)
+                    </span>
+                    <span className="flex items-center gap-1.5 font-semibold text-amber-700">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
+                      Terlambat
+                    </span>
+                    <span className="flex items-center gap-1.5 font-semibold text-purple-700">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6]" />
+                      Izin
+                    </span>
+                    <span className="flex items-center gap-1.5 font-semibold text-sky-700">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#0284C7]" />
+                      Sakit
+                    </span>
+                    <span className="flex items-center gap-1.5 font-semibold text-rose-700">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />
+                      Alpa
+                    </span>
+                  </div>
+                ) : selectedAttendanceMode === "guru" ? (
+                  <div className="flex flex-wrap items-center gap-4">
+                    <span className="flex items-center gap-1.5 font-bold text-emerald-900">
+                      <span className="w-3 h-1.5 rounded-full bg-[#10B981]" />
+                      Tingkat Hadir (%)
+                    </span>
+                    <span className="flex items-center gap-1.5 font-semibold text-emerald-700">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#059669]" />
+                      Tepat Waktu
+                    </span>
+                    <span className="flex items-center gap-1.5 font-semibold text-amber-700">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
+                      Terlambat
+                    </span>
+                    <span className="flex items-center gap-1.5 font-semibold text-purple-700">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6]" />
+                      Izin/Sakit/Cuti
+                    </span>
+                    <span className="flex items-center gap-1.5 font-semibold text-rose-700">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />
+                      Alpa
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-4">
+                    <span className="flex items-center gap-1.5 font-bold text-indigo-700">
+                      <span className="w-3 h-1.5 rounded-full bg-[#4F46E5]" />
+                      Tingkat Hadir Siswa (%)
+                    </span>
+                    <span className="flex items-center gap-1.5 font-bold text-emerald-700">
+                      <span className="w-3 h-1.5 rounded-full bg-[#10B981]" />
+                      Tingkat Hadir Guru (%)
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3 text-[11px] text-gray-500 font-semibold">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-3 border-t-2 border-dashed border-emerald-500" />
+                    Target Sekolah 90%
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-3 border-t-2 border-dotted border-indigo-500" />
+                    Rata-Rata Periode
+                  </span>
+                </div>
+              </div>
+
+              {/* 5. Tabel Rekapitulasi Presensi Harian (Interaktif & Lengkap) - Hidden by default */}
+              <div className="pt-4 border-t border-gray-150">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <BarChart2 className="w-4 h-4 text-indigo-600" />
+                    <h4 className="font-bold text-sm text-gray-900">
+                      Tabel Rekapitulasi Presensi Harian ({isGuruCohort ? "Guru & Tendik" : "Siswa"})
+                    </h4>
+                    <span className="text-[11px] text-gray-400 font-medium">({activeTrend.length} hari dalam periode)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDailyTable(!showDailyTable)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-50 hover:bg-indigo-50 hover:text-indigo-700 text-gray-700 border border-gray-200 transition-all cursor-pointer self-start sm:self-auto shadow-2xs"
+                  >
+                    <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-200", showDailyTable && "rotate-180")} />
+                    <span>{showDailyTable ? "Sembunyikan Tabel Rekapitulasi" : `Buka Tabel Rekapitulasi (${activeTrend.length} Hari)`}</span>
+                  </button>
+                </div>
+
+                {showDailyTable && (
+                  <div className="mt-3 space-y-3 pt-2">
+                    <p className="text-xs text-gray-500">
+                      💡 Klik pada baris tanggal untuk melihat detail absensi hari tersebut di bawah.
+                    </p>
+
+                    <div className="overflow-x-auto rounded-xl border border-gray-200/80">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-gray-50/80 border-b border-gray-200 text-gray-600 font-bold">
+                            <th className="py-2.5 px-3.5">Tanggal</th>
+                            <th className="py-2.5 px-3.5">Tingkat Hadir</th>
+                            <th className="py-2.5 px-3.5">Tepat Waktu</th>
+                            <th className="py-2.5 px-3.5">Terlambat</th>
+                            <th className="py-2.5 px-3.5">Izin & Sakit</th>
+                            <th className="py-2.5 px-3.5">Alpa / Tanpa Ket.</th>
+                            <th className="py-2.5 px-3.5">Status Target</th>
+                            <th className="py-2.5 px-3.5 text-right">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {activeTrend.map((row: any) => {
+                            const isSelected = row.fullDate === selectedAdminAttendanceDate;
+                            const isRowToday = row.fullDate === todayDateStr;
+                            const rate = row.rate || 0;
+                            const tepatWaktuCount = isGuruCohort
+                              ? (row.tepatWaktu ?? Math.max(0, (row.hadir || 0) - (row.terlambat || 0)))
+                              : Math.max(0, (row.hadir || 0) - (row.terlambat || 0));
+                            const terlambatCount = row.terlambat || 0;
+                            const izinSakitCount = isGuruCohort
+                              ? (row.izinSakit || 0)
+                              : ((row.izin || 0) + (row.sakit || 0));
+                            const alpaCount = row.alpa || 0;
+
+                            return (
+                              <tr
+                                key={row.fullDate}
+                                onClick={() => setSelectedAdminAttendanceDate(row.fullDate)}
+                                className={cn(
+                                  "transition-colors cursor-pointer group",
+                                  isSelected
+                                    ? "bg-indigo-50/70 font-semibold text-gray-900"
+                                    : "hover:bg-gray-50/70 text-gray-700"
+                                )}
+                              >
+                                <td className="py-2.5 px-3.5">
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className={cn(
+                                        "w-2 h-2 rounded-full",
+                                        isSelected
+                                          ? "bg-indigo-600 ring-2 ring-indigo-200"
+                                          : isRowToday
+                                          ? "bg-emerald-500"
+                                          : "bg-gray-300 group-hover:bg-indigo-400"
+                                      )}
+                                    />
+                                    <span className={cn("font-bold", isSelected ? "text-indigo-950" : "text-gray-900")}>
+                                      {row.date}
+                                    </span>
+                                    {isRowToday && (
+                                      <span className="text-[10px] font-black uppercase px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
+                                        Hari Ini
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                <td className="py-2.5 px-3.5">
+                                  <div className="flex items-center gap-2 min-w-[120px]">
+                                    <div className="w-16 bg-gray-150 rounded-full h-1.5 overflow-hidden">
+                                      <div
+                                        className={cn(
+                                          "h-full rounded-full",
+                                          rate >= 90
+                                            ? "bg-emerald-500"
+                                            : rate >= 75
+                                            ? "bg-indigo-500"
+                                            : rate > 0
+                                            ? "bg-amber-500"
+                                            : "bg-gray-300"
+                                        )}
+                                        style={{ width: `${Math.min(100, Math.max(0, rate))}%` }}
+                                      />
+                                    </div>
+                                    <span className="font-extrabold">{rate}%</span>
+                                  </div>
+                                </td>
+
+                                <td className="py-2.5 px-3.5">
+                                  <span className="text-emerald-700 font-bold">{tepatWaktuCount}</span>
+                                </td>
+
+                                <td className="py-2.5 px-3.5">
+                                  <span className={cn(terlambatCount > 0 ? "text-amber-700 font-bold" : "text-gray-400")}>
+                                    {terlambatCount}
+                                  </span>
+                                </td>
+
+                                <td className="py-2.5 px-3.5">
+                                  <span className={cn(izinSakitCount > 0 ? "text-sky-700 font-bold" : "text-gray-400")}>
+                                    {izinSakitCount}
+                                  </span>
+                                </td>
+
+                                <td className="py-2.5 px-3.5">
+                                  <span className={cn(alpaCount > 0 ? "text-rose-700 font-black" : "text-gray-400")}>
+                                    {alpaCount}
+                                  </span>
+                                </td>
+
+                                <td className="py-2.5 px-3.5">
+                                  {rate >= 90 ? (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                      <CheckCircle2 className="w-3 h-3" />
+                                      Memenuhi Target
+                                    </span>
+                                  ) : rate > 0 ? (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                                      <AlertCircle className="w-3 h-3" />
+                                      Di Bawah Target
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md">
+                                      Libur / Nihil
+                                    </span>
+                                  )}
+                                </td>
+
+                                <td className="py-2.5 px-3.5 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedAdminAttendanceDate(row.fullDate);
+                                    }}
+                                    className={cn(
+                                      "px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                                      isSelected
+                                        ? "bg-indigo-600 text-white shadow-2xs"
+                                        : "bg-gray-100 text-gray-600 hover:bg-indigo-50 hover:text-indigo-700"
+                                    )}
+                                  >
+                                    {isSelected ? "Aktif" : "Pilih"}
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 5. Card Bottom Action Strip */}
+            <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 text-gray-500 font-semibold text-xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span>Terintegrasi Database Presensi Real-Time & Riwayat Multi-Hari</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/attendance"
+                  className="font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-indigo-50/70 transition-all cursor-pointer"
+                >
+                  <BookUser className="w-3.5 h-3.5" />
+                  <span>Buku Rekap Siswa</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+                <span className="text-gray-300">|</span>
+                <Link
+                  href="/teacher-attendance"
+                  className="font-bold text-emerald-600 hover:text-emerald-800 flex items-center gap-1.5 px-3 py-1.5 rounded-xl hover:bg-emerald-50/70 transition-all cursor-pointer"
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>Presensi Guru & Tendik</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
               </div>
             </div>
           </div>
-
-          {/* Interactive Legend with exact counts */}
-          <div className="space-y-1.5 pt-2 border-t border-gray-100">
-            {selectedDistributionMode === "siswa" ? (
-              <>
-                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <span className="font-semibold text-gray-700">Hadir Tepat Waktu</span>
-                  </div>
-                  <span className="font-black text-gray-900">{attendanceToday.hadir} Siswa</span>
-                </div>
-                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                    <span className="font-semibold text-gray-700">Terlambat</span>
-                  </div>
-                  <span className="font-black text-gray-900">{attendanceToday.terlambat} Siswa</span>
-                </div>
-                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
-                    <span className="font-semibold text-gray-700">Izin</span>
-                  </div>
-                  <span className="font-black text-gray-900">{attendanceToday.izin} Siswa</span>
-                </div>
-                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                    <span className="font-semibold text-gray-700">Sakit</span>
-                  </div>
-                  <span className="font-black text-gray-900">{attendanceToday.sakit} Siswa</span>
-                </div>
-                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                    <span className="font-semibold text-gray-700">Alpa / Tanpa Keterangan</span>
-                  </div>
-                  <span className="font-black text-rose-600">{attendanceToday.alpa} Siswa</span>
-                </div>
-                {attendanceToday.belumAbsen > 0 && (
-                  <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-slate-50">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
-                      <span className="font-semibold text-slate-600">
-                        {operationalStatusForSelected.isOperational ? "Belum Diabsen" : "Hari Libur"}
-                      </span>
-                    </div>
-                    <span className="font-bold text-slate-500">{attendanceToday.belumAbsen} Siswa</span>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <span className="font-semibold text-gray-700">Hadir Tepat Waktu</span>
-                  </div>
-                  <span className="font-black text-gray-900">{teacherAttendanceToday.tepatWaktu} Guru</span>
-                </div>
-                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                    <span className="font-semibold text-gray-700">Terlambat Masuk</span>
-                  </div>
-                  <span className="font-black text-amber-700">{teacherAttendanceToday.terlambat} Guru</span>
-                </div>
-                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
-                    <span className="font-semibold text-gray-700">Izin / Sakit / Cuti</span>
-                  </div>
-                  <span className="font-black text-purple-700">{teacherAttendanceToday.izinSakit} Guru</span>
-                </div>
-                <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50/70">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                    <span className="font-semibold text-gray-700">Alpa / Tanpa Keterangan</span>
-                  </div>
-                  <span className="font-black text-rose-600">{teacherAttendanceToday.alpa} Guru</span>
-                </div>
-                {teacherAttendanceToday.belumPresensi > 0 && (
-                  <div className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-slate-50">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
-                      <span className="font-semibold text-slate-600">
-                        {operationalStatusForSelected.isOperational ? "Belum Clock-In" : "Hari Libur"}
-                      </span>
-                    </div>
-                    <span className="font-bold text-slate-500">{teacherAttendanceToday.belumPresensi} Guru</span>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-      </div>
+        );
+      })()}
 
       {/* ═══════════════════════════════════════════════════════════════════
           DEDICATED SECTION: RIWAYAT & KEDISIPLINAN PRESENSI GURU & TENDIK
@@ -2562,17 +3107,17 @@ export function AdminDashboardView({
             <p className="text-xs text-gray-500">Akses cepat seluruh modul operasional dan pengaturan sistem sekolah</p>
           </div>
           <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-            8 Modul Utama
+            10 Modul Utama
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2.5">
           
           <Link
             href="/data-siswa"
-            className="group flex flex-col items-center p-3 rounded-xl hover:bg-purple-50/70 border border-transparent hover:border-purple-200 transition-all text-center"
+            className="group flex flex-col items-center p-2.5 rounded-xl hover:bg-purple-50/70 border border-transparent hover:border-purple-200 transition-all text-center"
           >
-            <div className="w-11 h-11 rounded-xl bg-purple-50 group-hover:bg-[#531FFF] group-hover:text-white flex items-center justify-center text-[#531FFF] transition-colors shadow-xs mb-2">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 group-hover:bg-[#531FFF] group-hover:text-white flex items-center justify-center text-[#531FFF] transition-colors shadow-2xs mb-2">
               <GraduationCap className="w-5 h-5" />
             </div>
             <span className="text-xs font-bold text-gray-800 group-hover:text-[#531FFF]">Data Siswa</span>
@@ -2581,9 +3126,9 @@ export function AdminDashboardView({
 
           <Link
             href="/data-guru"
-            className="group flex flex-col items-center p-3 rounded-xl hover:bg-blue-50/70 border border-transparent hover:border-blue-200 transition-all text-center"
+            className="group flex flex-col items-center p-2.5 rounded-xl hover:bg-blue-50/70 border border-transparent hover:border-blue-200 transition-all text-center"
           >
-            <div className="w-11 h-11 rounded-xl bg-blue-50 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center text-blue-600 transition-colors shadow-xs mb-2">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center text-blue-600 transition-colors shadow-2xs mb-2">
               <Users className="w-5 h-5" />
             </div>
             <span className="text-xs font-bold text-gray-800 group-hover:text-blue-600">Data Guru</span>
@@ -2591,21 +3136,54 @@ export function AdminDashboardView({
           </Link>
 
           <Link
-            href="/attendance"
-            className="group flex flex-col items-center p-3 rounded-xl hover:bg-emerald-50/70 border border-transparent hover:border-emerald-200 transition-all text-center"
+            href="/data-orang-tua"
+            className="group flex flex-col items-center p-2.5 rounded-xl hover:bg-emerald-50/70 border border-transparent hover:border-emerald-200 transition-all text-center"
           >
-            <div className="w-11 h-11 rounded-xl bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white flex items-center justify-center text-emerald-600 transition-colors shadow-xs mb-2">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white flex items-center justify-center text-emerald-600 transition-colors shadow-2xs mb-2">
+              <UserCheck className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-bold text-gray-800 group-hover:text-emerald-600">Orang Tua</span>
+            <span className="text-[10px] text-gray-400 mt-0.5">{parentStats.total} Wali</span>
+          </Link>
+
+          <Link
+            href="/classes"
+            className="group flex flex-col items-center p-2.5 rounded-xl hover:bg-indigo-50/70 border border-transparent hover:border-indigo-200 transition-all text-center"
+          >
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center text-indigo-600 transition-colors shadow-2xs mb-2">
+              <School className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-bold text-gray-800 group-hover:text-indigo-600">Rombel/Kelas</span>
+            <span className="text-[10px] text-gray-400 mt-0.5">{classes.length} Rombel</span>
+          </Link>
+
+          <Link
+            href="/attendance"
+            className="group flex flex-col items-center p-2.5 rounded-xl hover:bg-teal-50/70 border border-transparent hover:border-teal-200 transition-all text-center"
+          >
+            <div className="w-10 h-10 rounded-xl bg-teal-50 group-hover:bg-teal-600 group-hover:text-white flex items-center justify-center text-teal-600 transition-colors shadow-2xs mb-2">
               <CalendarCheck className="w-5 h-5" />
             </div>
-            <span className="text-xs font-bold text-gray-800 group-hover:text-emerald-600">Presensi Siswa</span>
+            <span className="text-xs font-bold text-gray-800 group-hover:text-teal-600">Presensi Siswa</span>
             <span className="text-[10px] text-gray-400 mt-0.5">Face ID & QR</span>
           </Link>
 
           <Link
-            href="/leave-requests"
-            className="group flex flex-col items-center p-3 rounded-xl hover:bg-indigo-50/70 border border-transparent hover:border-indigo-200 transition-all text-center relative"
+            href="/teacher-attendance"
+            className="group flex flex-col items-center p-2.5 rounded-xl hover:bg-cyan-50/70 border border-transparent hover:border-cyan-200 transition-all text-center"
           >
-            <div className="w-11 h-11 rounded-xl bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white flex items-center justify-center text-indigo-600 transition-colors shadow-xs mb-2 relative">
+            <div className="w-10 h-10 rounded-xl bg-cyan-50 group-hover:bg-cyan-600 group-hover:text-white flex items-center justify-center text-cyan-600 transition-colors shadow-2xs mb-2">
+              <ScanFace className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-bold text-gray-800 group-hover:text-cyan-600">Absensi Guru</span>
+            <span className="text-[10px] text-gray-400 mt-0.5">Clock In/Out</span>
+          </Link>
+
+          <Link
+            href="/leave-requests"
+            className="group flex flex-col items-center p-2.5 rounded-xl hover:bg-amber-50/70 border border-transparent hover:border-amber-200 transition-all text-center relative"
+          >
+            <div className="w-10 h-10 rounded-xl bg-amber-50 group-hover:bg-amber-600 group-hover:text-white flex items-center justify-center text-amber-600 transition-colors shadow-2xs mb-2 relative">
               <ClipboardCheck className="w-5 h-5" />
               {leaveStats.pendingCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center">
@@ -2613,28 +3191,17 @@ export function AdminDashboardView({
                 </span>
               )}
             </div>
-            <span className="text-xs font-bold text-gray-800 group-hover:text-indigo-600">Izin & Sakit</span>
+            <span className="text-xs font-bold text-gray-800 group-hover:text-amber-600">Izin & Sakit</span>
             <span className="text-[10px] text-amber-600 font-semibold mt-0.5">
               {leaveStats.pendingCount > 0 ? `${leaveStats.pendingCount} Review` : "Terkendali"}
             </span>
           </Link>
 
           <Link
-            href="/teacher-attendance"
-            className="group flex flex-col items-center p-3 rounded-xl hover:bg-teal-50/70 border border-transparent hover:border-teal-200 transition-all text-center"
-          >
-            <div className="w-11 h-11 rounded-xl bg-teal-50 group-hover:bg-teal-600 group-hover:text-white flex items-center justify-center text-teal-600 transition-colors shadow-xs mb-2">
-              <ScanFace className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-bold text-gray-800 group-hover:text-teal-600">Absensi Guru</span>
-            <span className="text-[10px] text-gray-400 mt-0.5">Clock In/Out</span>
-          </Link>
-
-          <Link
             href="/grades"
-            className="group flex flex-col items-center p-3 rounded-xl hover:bg-amber-50/70 border border-transparent hover:border-amber-200 transition-all text-center"
+            className="group flex flex-col items-center p-2.5 rounded-xl hover:bg-yellow-50/70 border border-transparent hover:border-yellow-200 transition-all text-center"
           >
-            <div className="w-11 h-11 rounded-xl bg-amber-50 group-hover:bg-amber-600 group-hover:text-white flex items-center justify-center text-amber-600 transition-colors shadow-xs mb-2">
+            <div className="w-10 h-10 rounded-xl bg-yellow-50 group-hover:bg-amber-500 group-hover:text-white flex items-center justify-center text-amber-700 transition-colors shadow-2xs mb-2">
               <FileText className="w-5 h-5" />
             </div>
             <span className="text-xs font-bold text-gray-800 group-hover:text-amber-600">Rapor & Nilai</span>
@@ -2643,9 +3210,9 @@ export function AdminDashboardView({
 
           <Link
             href="/financial-reports"
-            className="group flex flex-col items-center p-3 rounded-xl hover:bg-rose-50/70 border border-transparent hover:border-rose-200 transition-all text-center"
+            className="group flex flex-col items-center p-2.5 rounded-xl hover:bg-rose-50/70 border border-transparent hover:border-rose-200 transition-all text-center"
           >
-            <div className="w-11 h-11 rounded-xl bg-rose-50 group-hover:bg-rose-600 group-hover:text-white flex items-center justify-center text-rose-600 transition-colors shadow-xs mb-2">
+            <div className="w-10 h-10 rounded-xl bg-rose-50 group-hover:bg-rose-600 group-hover:text-white flex items-center justify-center text-rose-600 transition-colors shadow-2xs mb-2">
               <Wallet className="w-5 h-5" />
             </div>
             <span className="text-xs font-bold text-gray-800 group-hover:text-rose-600">Keuangan SPP</span>
@@ -2654,9 +3221,9 @@ export function AdminDashboardView({
 
           <Link
             href="/announcements"
-            className="group flex flex-col items-center p-3 rounded-xl hover:bg-orange-50/70 border border-transparent hover:border-orange-200 transition-all text-center"
+            className="group flex flex-col items-center p-2.5 rounded-xl hover:bg-orange-50/70 border border-transparent hover:border-orange-200 transition-all text-center"
           >
-            <div className="w-11 h-11 rounded-xl bg-orange-50 group-hover:bg-orange-600 group-hover:text-white flex items-center justify-center text-orange-600 transition-colors shadow-xs mb-2">
+            <div className="w-10 h-10 rounded-xl bg-orange-50 group-hover:bg-orange-600 group-hover:text-white flex items-center justify-center text-orange-600 transition-colors shadow-2xs mb-2">
               <Megaphone className="w-5 h-5" />
             </div>
             <span className="text-xs font-bold text-gray-800 group-hover:text-orange-600">Pengumuman</span>
