@@ -531,6 +531,7 @@ export default function SubjectsPage() {
       setIsBatchAdding(true);
       const batch = writeBatch(db);
       let count = 0;
+      const subjectsToSync: any[] = [];
 
       selectedBatchPresets.forEach(code => {
         const preset = activePresets.find(p => p.code === code);
@@ -549,11 +550,38 @@ export default function SubjectsPage() {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           });
+
+          subjectsToSync.push({
+            code: preset.code,
+            name: preset.name,
+            category: preset.category === "Kejuruan / Produktif" ? "Peminatan" : preset.category,
+            creditHours: Number(preset.creditHours?.toString().replace(/\D/g, "")) || 2,
+            level: preset.level || "SMA",
+            description: preset.description,
+            teacherIds: []
+          });
+
           count++;
         }
       });
 
+      // 1. Commit to Firestore
       await batch.commit();
+
+      // 2. Persist to PostgreSQL backend via /api/subjects
+      try {
+        await fetch("/api/subjects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subjects: subjectsToSync })
+        });
+      } catch (pgErr) {
+        console.warn("PostgreSQL batch sync error:", pgErr);
+      }
+
+      // 3. Immediately refetch subjects from PostgreSQL to render on table
+      await fetchSubjectsFromApi();
+
       setShowBatchModal(false);
       setSelectedBatchPresets([]);
       toast.showSuccess(`Berhasil menambahkan ${count} mata pelajaran standar nasional!`, "Paket Berhasil Ditambahkan");

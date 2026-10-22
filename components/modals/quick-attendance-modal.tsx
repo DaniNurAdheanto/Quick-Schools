@@ -82,7 +82,7 @@ interface AttendanceConfig {
 const DEFAULT_CONFIG: AttendanceConfig = {
   schoolStartTime: "07:00",
   lateToleranceMinutes: 15,
-  absentThresholdTime: "08:30",
+  absentThresholdTime: "09:00",
   schoolCenterLat: -6.200000,
   schoolCenterLng: 106.816666,
   geofenceRadiusMeters: 100,
@@ -808,11 +808,11 @@ export function QuickAttendanceModal({
     const now = new Date();
     const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
 
-    // Aturan Kunci Otomatis Pukul 12:00 WIB (12 Siang - Data Final)
-    if (currentTotalMinutes >= 12 * 60) {
+    // Aturan Kunci Otomatis Pukul 10:00 WIB (Data Final Terkunci)
+    if (currentTotalMinutes >= 10 * 60) {
       if (showError) {
         showError(
-          "Waktu absensi siswa telah melewati batas pukul 12:00 WIB. Data absensi pada hari ini sudah FINAL dan tidak dapat dilakukan presensi/pengeditan lagi.",
+          "Waktu absensi siswa telah melewati batas pukul 10:00 WIB. Data absensi pada hari ini sudah FINAL dan tidak dapat dilakukan presensi/pengeditan lagi.",
           "Absensi Ditutup (Data Final)"
         );
       }
@@ -836,9 +836,9 @@ export function QuickAttendanceModal({
     const startTotalMinutes = (startH || 7) * 60 + (startM || 0) + config.lateToleranceMinutes;
     const isLate = currentTotalMinutes > startTotalMinutes;
 
-    // Batas Maksimal Dihitung Alpa
-    const [absentH, absentM] = (config.absentThresholdTime || "08:30").split(":").map(Number);
-    const absentTotalMinutes = (isNaN(absentH) ? 8 : absentH) * 60 + (isNaN(absentM) ? 30 : absentM);
+    // Batas Maksimal Dihitung Alpa (09:00 WIB)
+    const [absentH, absentM] = (config.absentThresholdTime || "09:00").split(":").map(Number);
+    const absentTotalMinutes = (isNaN(absentH) ? 9 : absentH) * 60 + (isNaN(absentM) ? 0 : absentM);
     const isAlpa = currentTotalMinutes >= absentTotalMinutes;
 
     const resolvedStatus: "Hadir" | "Terlambat" | "Alpa" = isAlpa
@@ -848,7 +848,7 @@ export function QuickAttendanceModal({
       : "Hadir";
 
     const resolvedNotes = isAlpa
-      ? `Otomatis Alpa (Melewati Batas Maksimal ${config.absentThresholdTime || "08:30"} WIB)`
+      ? `Otomatis Alpa (Melewati Batas Maksimal ${config.absentThresholdTime || "09:00"} WIB)`
       : isLate
       ? "Terlambat Hadir"
       : "Hadir Tepat Waktu";
@@ -976,7 +976,7 @@ export function QuickAttendanceModal({
       if (showSuccess) {
         if (isAlpa) {
           showSuccess(
-            `Presensi berhasil dicatat! Status: ALPA karena telah melewati batas maksimal waktu presensi (${config.absentThresholdTime || "08:30"} WIB). Jarak GPS: ${locationData.distance}m.`,
+            `Presensi berhasil dicatat! Status: ALPA karena telah melewati batas maksimal waktu presensi (${config.absentThresholdTime || "09:00"} WIB). Jarak GPS: ${locationData.distance}m.`,
             "Status: Alpa"
           );
         } else {
@@ -999,7 +999,7 @@ export function QuickAttendanceModal({
         if (showSuccess) {
           if (isAlpa) {
             showSuccess(
-              `Presensi dicatat secara lokal dengan status: ALPA (Melewati Batas Maksimal: ${config.absentThresholdTime || "08:30"} WIB).`,
+              `Presensi dicatat secara lokal dengan status: ALPA (Melewati Batas Maksimal: ${config.absentThresholdTime || "09:00"} WIB).`,
               "Presensi Tersimpan: Alpa"
             );
           } else {
@@ -1717,7 +1717,7 @@ export function QuickAttendanceModal({
                 </h4>
                 <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
                   {recordedStatus === "Alpa"
-                    ? `Waktu presensi telah melewati Batas Maksimal Dihitung Alpa (${config.absentThresholdTime || "08:30"} WIB). Status kehadiran otomatis ditetapkan sebagai Alpa.`
+                    ? `Waktu presensi telah melewati Batas Maksimal Dihitung Alpa (${config.absentThresholdTime || "09:00"} WIB). Status kehadiran otomatis ditetapkan sebagai Alpa.`
                     : "Foto dan lokasi Anda telah terekam secara real-time dan terverifikasi di dalam wilayah sekolah."}
                 </p>
               </div>

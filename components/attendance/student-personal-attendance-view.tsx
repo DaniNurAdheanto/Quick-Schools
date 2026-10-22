@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   Calendar,
@@ -22,7 +22,7 @@ import {
   ClipboardCheck
 } from "lucide-react";
 import { cn, getTodayDateString } from "@/lib/utils";
-import type { AttendanceRecord, AttendanceConfig } from "@/app/(protected)/attendance/page";
+import type { AttendanceRecord, AttendanceConfig, AttendanceStatus } from "@/app/(protected)/attendance/page";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 
 interface StudentInfo {
@@ -60,9 +60,61 @@ export default function StudentPersonalAttendanceView({
   readOnly = false,
   isParent = false,
 }: StudentPersonalAttendanceViewProps) {
+  const currentMonthStr = useMemo(() => getTodayDateString().slice(0, 7), []);
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => getTodayDateString().slice(0, 7));
   const [statusFilter, setStatusFilter] = useState<string>("Semua");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProofRecord, setSelectedProofRecord] = useState<AttendanceRecord | null>(null);
+  const [extraMonthlyRecords, setExtraMonthlyRecords] = useState<AttendanceRecord[]>([]);
+
+  // Fetch data if user picks a specific month not yet loaded
+  useEffect(() => {
+    if (!selectedMonth || selectedMonth === "all") return;
+    let isMounted = true;
+    fetch(`/api/attendance?month=${selectedMonth}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!isMounted) return;
+        const recs = data.records || data.attendance;
+        if (data.success && Array.isArray(recs) && recs.length > 0) {
+          const mapped: AttendanceRecord[] = recs.map((r: any) => ({
+            id: r.id,
+            studentId: r.studentId,
+            studentName: r.name || r.fullName,
+            className: r.className,
+            date: r.date,
+            timestamp: r.time && r.time !== "-" ? r.time : "07:00",
+            time: r.time && r.time !== "-" ? r.time : "07:00",
+            status: r.status as AttendanceStatus,
+            notes: r.notes || "",
+            markedBy: "Database (PostgreSQL)",
+            createdAt: new Date().toISOString(),
+          }));
+          setExtraMonthlyRecords((prev) => {
+            const map: Record<string, AttendanceRecord> = {};
+            prev.forEach((r) => { map[`${r.studentId}_${r.date}`] = r; });
+            mapped.forEach((r) => { map[`${r.studentId}_${r.date}`] = r; });
+            return Object.values(map);
+          });
+        }
+      })
+      .catch((e) => console.warn("Failed to load month attendance in student view:", e));
+    return () => { isMounted = false; };
+  }, [selectedMonth]);
+
+  // Combine parent attendanceRecords with extraMonthlyRecords
+  const combinedAllRecords = useMemo(() => {
+    const map: Record<string, AttendanceRecord> = {};
+    attendanceRecords.forEach((r) => {
+      const key = r.studentId && r.date ? `${r.studentId}_${r.date}` : r.id;
+      map[key] = r;
+    });
+    extraMonthlyRecords.forEach((r) => {
+      const key = r.studentId && r.date ? `${r.studentId}_${r.date}` : r.id;
+      map[key] = r;
+    });
+    return Object.values(map);
+  }, [attendanceRecords, extraMonthlyRecords]);
 
   // 1. Filter records strictly for this student (Personal Isolation)
   const studentRecords = useMemo(() => {
@@ -70,7 +122,7 @@ export default function StudentPersonalAttendanceView({
     const studentId = student.id || "";
     const studentEmail = (student.email || "").toLowerCase().trim();
 
-    return attendanceRecords.filter((rec) => {
+    return combinedAllRecords.filter((rec) => {
       // Direct ID match
       if (rec.studentId && (rec.studentId === studentId || rec.studentId === student.nisn)) {
         return true;
@@ -85,7 +137,27 @@ export default function StudentPersonalAttendanceView({
       }
       return false;
     });
-  }, [attendanceRecords, student]);
+  }, [combinedAllRecords, student]);
+
+  // Extract all available months from this student's records
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    set.add(currentMonthStr);
+    studentRecords.forEach((r) => {
+      if (r.date && r.date.length >= 7) {
+        set.add(r.date.slice(0, 7));
+      }
+    });
+    return Array.from(set).sort().reverse();
+  }, [studentRecords, currentMonthStr]);
+
+  // 2. Filter records by selectedMonth
+  const monthFilteredRecords = useMemo(() => {
+    if (!selectedMonth || selectedMonth === "all") {
+      return studentRecords;
+    }
+    return studentRecords.filter((r) => r.date && r.date.startsWith(selectedMonth));
+  }, [studentRecords, selectedMonth]);
 
   // Today string YYYY-MM-DD
   const todayStr = useMemo(() => getTodayDateString(), []);
@@ -97,12 +169,9 @@ export default function StudentPersonalAttendanceView({
 
   const effectiveTodayAttendance = todayAttendance;
 
-  // Combined student records
-  const effectiveStudentRecords = studentRecords;
-
-  // 2. Filter by status & search
+  // 3. Filter by status & search
   const finalDisplayRecords = useMemo(() => {
-    return effectiveStudentRecords.filter((rec) => {
+    return monthFilteredRecords.filter((rec) => {
       if (statusFilter !== "Semua") {
         if (statusFilter === "Hadir" && rec.status !== "Hadir") return false;
         if (statusFilter === "Terlambat" && rec.status !== "Terlambat") return false;
@@ -119,9 +188,9 @@ export default function StudentPersonalAttendanceView({
       }
       return true;
     });
-  }, [effectiveStudentRecords, statusFilter, searchQuery]);
+  }, [monthFilteredRecords, statusFilter, searchQuery]);
 
-  // 3. Overall Personal Metrics
+  // 4. Overall Personal Metrics for Selected Month
   const stats = useMemo(() => {
     let hadir = 0;
     let terlambat = 0;
@@ -129,7 +198,7 @@ export default function StudentPersonalAttendanceView({
     let sakit = 0;
     let alpa = 0;
 
-    effectiveStudentRecords.forEach((r) => {
+    monthFilteredRecords.forEach((r) => {
       if (r.status === "Hadir") hadir++;
       else if (r.status === "Terlambat") terlambat++;
       else if (r.status === "Izin") izin++;
@@ -137,7 +206,7 @@ export default function StudentPersonalAttendanceView({
       else if (r.status === "Alpa" || r.status === "Ditolak") alpa++;
     });
 
-    const totalDays = effectiveStudentRecords.length;
+    const totalDays = monthFilteredRecords.length;
     const effectivePresent = hadir + terlambat;
     const percentage = totalDays > 0 ? Math.round((effectivePresent / totalDays) * 100) : 100;
 
@@ -151,7 +220,7 @@ export default function StudentPersonalAttendanceView({
       effectivePresent,
       percentage,
     };
-  }, [effectiveStudentRecords]);
+  }, [monthFilteredRecords]);
 
   // Helper date formatter in Indonesian locale
   const formatDateID = (dateStr: string) => {
@@ -165,6 +234,18 @@ export default function StudentPersonalAttendanceView({
       });
     } catch {
       return dateStr;
+    }
+  };
+
+  // Helper month name formatter
+  const formatMonthNameID = (ymStr: string) => {
+    if (!ymStr || ymStr === "all") return "Semua Bulan";
+    try {
+      const [y, m] = ymStr.split("-");
+      const d = new Date(parseInt(y), parseInt(m) - 1, 1);
+      return d.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+    } catch {
+      return ymStr;
     }
   };
 
@@ -283,7 +364,7 @@ export default function StudentPersonalAttendanceView({
                     Belum Presensi Hari Ini
                   </div>
                   <div className="text-[11px] font-bold text-white">
-                    Masuk: {config.schoolStartTime} WIB (Batas: {config.absentThresholdTime || "08:30"} WIB)
+                    Masuk: {config.schoolStartTime} WIB (Batas: {config.absentThresholdTime || "09:00"} WIB)
                   </div>
                 </div>
               </div>
@@ -337,6 +418,48 @@ export default function StudentPersonalAttendanceView({
       {/* ----------------------------------------------------------------- */}
       {/* 2. RINGKASAN METRIK KEHADIRAN (HADIR, TERLAMBAT, IZIN, SAKIT, ALPA) */}
       {/* ----------------------------------------------------------------- */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 px-0.5">
+        <div>
+          <h2 className="text-xs sm:text-sm font-black text-gray-900 flex items-center gap-2">
+            <span>Ringkasan Kehadiran Siswa</span>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-100 text-[#531FFF] border border-purple-200">
+              Periode: {formatMonthNameID(selectedMonth)}
+            </span>
+          </h2>
+          <p className="text-[11px] text-gray-500 font-medium">
+            Akumulasi kehadiran siswa selama {selectedMonth === "all" ? "seluruh periode" : `bulan ${formatMonthNameID(selectedMonth)}`} ({stats.totalDays} hari terdata).
+          </p>
+        </div>
+
+        {/* Quick Month Filter Pills */}
+        <div className="flex items-center gap-1.5 self-start sm:self-auto shrink-0">
+          <button
+            type="button"
+            onClick={() => setSelectedMonth(currentMonthStr)}
+            className={cn(
+              "px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all cursor-pointer",
+              selectedMonth === currentMonthStr
+                ? "bg-[#531FFF] text-white border-[#531FFF] shadow-xs"
+                : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+            )}
+          >
+            Bulan Ini
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedMonth("all")}
+            className={cn(
+              "px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all cursor-pointer",
+              selectedMonth === "all"
+                ? "bg-[#531FFF] text-white border-[#531FFF] shadow-xs"
+                : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+            )}
+          >
+            Semua Bulan
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
         {/* Hadir */}
         <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-emerald-200 transition-all flex flex-col justify-between">
@@ -463,10 +586,10 @@ export default function StudentPersonalAttendanceView({
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* 3. MODERN CONTROLS BAR: SEARCH & STATUS DROPDOWN */}
+      {/* 3. MODERN CONTROLS BAR: SEARCH, FILTER PER BULAN & STATUS */}
       {/* ----------------------------------------------------------------- */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-xs p-3 sm:p-3.5">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5">
           
           {/* Search Box */}
           <div className="relative flex-1">
@@ -475,14 +598,52 @@ export default function StudentPersonalAttendanceView({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari tanggal, status, atau catatan presensi..."
+              placeholder="Cari tanggal (YYYY-MM-DD), status, atau catatan..."
               className="w-full bg-gray-50/80 border border-gray-200 text-gray-900 text-xs font-bold pl-8.5 pr-3 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all placeholder:text-gray-400"
             />
           </div>
 
-          {/* Modern Status Dropdown */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="relative min-w-[180px]">
+          {/* Month & Status Filters */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {/* Filter Bulan Dropdown */}
+            <div className="relative min-w-[170px]">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+                <Calendar className="w-3.5 h-3.5 text-[#531FFF]" />
+              </div>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="w-full appearance-none bg-gray-50/80 hover:bg-white border border-gray-200 text-gray-900 text-xs font-extrabold pl-8 pr-8 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all cursor-pointer shadow-2xs"
+                title="Pilih Bulan Presensi"
+              >
+                <option value="all">📅 Semua Bulan (Semua)</option>
+                {availableMonths.map((m) => (
+                  <option key={m} value={m}>
+                    📅 {formatMonthNameID(m)} {m === currentMonthStr ? "(Bulan Ini)" : ""}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                <ChevronDown className="w-3.5 h-3.5" />
+              </div>
+            </div>
+
+            {/* Custom Month Picker */}
+            <div className="relative" title="Pilih Bulan Spesifik (YYYY-MM)">
+              <input
+                type="month"
+                value={selectedMonth === "all" ? "" : selectedMonth}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setSelectedMonth(e.target.value);
+                  }
+                }}
+                className="bg-gray-50/80 hover:bg-white border border-gray-200 text-gray-900 text-xs font-extrabold px-2.5 py-2 rounded-lg focus:bg-white focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all cursor-pointer shadow-2xs"
+              />
+            </div>
+
+            {/* Modern Status Dropdown */}
+            <div className="relative min-w-[155px]">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
                 <Filter className="w-3.5 h-3.5 text-gray-400" />
               </div>
@@ -503,17 +664,19 @@ export default function StudentPersonalAttendanceView({
             </div>
 
             {/* Reset Button (shown if filtered) */}
-            {(statusFilter !== "Semua" || searchQuery.trim() !== "") && (
+            {(selectedMonth !== currentMonthStr || statusFilter !== "Semua" || searchQuery.trim() !== "") && (
               <button
                 type="button"
                 onClick={() => {
+                  setSelectedMonth(currentMonthStr);
                   setStatusFilter("Semua");
                   setSearchQuery("");
                 }}
-                className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                title="Reset Filter & Pencarian"
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                title="Reset Filter ke Bulan Ini"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <RotateCcw className="w-3.5 h-3.5 text-gray-500" />
+                <span className="hidden sm:inline">Reset</span>
               </button>
             )}
           </div>
@@ -524,10 +687,10 @@ export default function StudentPersonalAttendanceView({
       {/* 4. RIWAYAT PRESENSI PERSONAL SISWA */}
       {/* ----------------------------------------------------------------- */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-xs overflow-hidden">
-        <div className="px-4 sm:px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+        <div className="px-4 sm:px-5 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-gray-50/50">
           <div>
             <h3 className="text-xs sm:text-sm font-black text-gray-900 flex items-center gap-2">
-              <span>Riwayat Presensi Personal</span>
+              <span>Riwayat Presensi: {formatMonthNameID(selectedMonth)}</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] bg-purple-100 text-[#531FFF] font-extrabold">
                 {finalDisplayRecords.length} Catatan
               </span>
@@ -537,9 +700,15 @@ export default function StudentPersonalAttendanceView({
             </p>
           </div>
 
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-400">
-            <span>Filter:</span>
-            <span className="text-[#531FFF] font-black">{statusFilter}</span>
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-400 flex-wrap">
+            <span>Filter Aktif:</span>
+            <span className="px-2 py-0.5 rounded-md bg-purple-50 text-[#531FFF] font-extrabold border border-purple-200">
+              {formatMonthNameID(selectedMonth)}
+            </span>
+            <span>•</span>
+            <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 font-bold border border-gray-200">
+              {statusFilter}
+            </span>
           </div>
         </div>
 
@@ -552,19 +721,34 @@ export default function StudentPersonalAttendanceView({
               Tidak Ada Catatan Absensi
             </h4>
             <p className="text-xs text-gray-500 max-w-sm mx-auto">
-              Tidak ada data absensi yang sesuai dengan status atau pencarian yang Anda pilih.
+              Tidak ada data absensi untuk periode {formatMonthNameID(selectedMonth)} yang sesuai dengan status atau pencarian yang Anda pilih.
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                setStatusFilter("Semua");
-                setSearchQuery("");
-              }}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#531FFF] hover:underline cursor-pointer pt-1"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset Filter & Tampilkan Semua</span>
-            </button>
+            <div className="flex items-center justify-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMonth(currentMonthStr);
+                  setStatusFilter("Semua");
+                  setSearchQuery("");
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-[#531FFF] hover:underline cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset ke Bulan Ini</span>
+              </button>
+              <span className="text-gray-300">•</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMonth("all");
+                  setStatusFilter("Semua");
+                  setSearchQuery("");
+                }}
+                className="text-xs font-bold text-gray-600 hover:text-gray-900 cursor-pointer"
+              >
+                Lihat Semua Bulan
+              </button>
+            </div>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">

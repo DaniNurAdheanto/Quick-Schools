@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
         class: true,
         subject: true,
         teacher: true,
+        academicYear: true,
       },
       orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
     });
@@ -42,6 +43,8 @@ export async function GET(request: NextRequest) {
       teacher: s.teacher?.fullName || "Guru Pengajar",
       teacherName: s.teacher?.fullName || "Guru Pengajar",
       academicYearId: s.academicYearId,
+      academicYear: s.academicYear?.name || "2025/2026",
+      semester: s.academicYear?.semester || "Ganjil",
       createdAt: s.createdAt.toISOString(),
       updatedAt: s.updatedAt.toISOString(),
     }));
@@ -73,6 +76,7 @@ export async function POST(request: NextRequest) {
         class: true,
         subject: true,
         teacher: true,
+        academicYear: true,
       },
     });
 
@@ -91,6 +95,9 @@ export async function POST(request: NextRequest) {
       teacherId: schedule.teacherId,
       teacher: schedule.teacher?.fullName || "-",
       teacherName: schedule.teacher?.fullName || "-",
+      academicYearId: schedule.academicYearId,
+      academicYear: schedule.academicYear?.name || "2025/2026",
+      semester: schedule.academicYear?.semester || "Ganjil",
     };
 
     return NextResponse.json({ success: true, schedule: formatted }, { status: 201 });
@@ -125,6 +132,7 @@ export async function PUT(request: NextRequest) {
         class: true,
         subject: true,
         teacher: true,
+        academicYear: true,
       },
     });
 
@@ -143,6 +151,9 @@ export async function PUT(request: NextRequest) {
       teacherId: updated.teacherId,
       teacher: updated.teacher?.fullName || "-",
       teacherName: updated.teacher?.fullName || "-",
+      academicYearId: updated.academicYearId,
+      academicYear: updated.academicYear?.name || "2025/2026",
+      semester: updated.academicYear?.semester || "Ganjil",
     };
 
     return NextResponse.json({ success: true, schedule: formatted });

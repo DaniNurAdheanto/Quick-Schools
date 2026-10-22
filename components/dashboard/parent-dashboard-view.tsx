@@ -183,7 +183,7 @@ export function ParentDashboardView({
           announcementsRes,
           classesRes
         ] = await Promise.allSettled([
-          fetch("/api/attendance").then((r) => r.json()),
+          fetch("/api/attendance?range=30d").then((r) => r.json()),
           fetch("/api/grades").then((r) => r.json()),
           fetch("/api/schedules").then((r) => r.json()),
           fetch("/api/payments").then((r) => r.json()),
@@ -193,8 +193,11 @@ export function ParentDashboardView({
 
         if (!isMounted) return;
 
-        if (attendanceRes.status === "fulfilled" && attendanceRes.value.attendance) {
-          setAttendanceRecords(attendanceRes.value.attendance);
+        if (attendanceRes.status === "fulfilled") {
+          const recs = attendanceRes.value.records || attendanceRes.value.attendance;
+          if (Array.isArray(recs)) {
+            setAttendanceRecords(recs);
+          }
         }
         if (gradesRes.status === "fulfilled" && gradesRes.value.grades) {
           setGradesRecords(gradesRes.value.grades);
@@ -563,14 +566,19 @@ export function ParentDashboardView({
     }
 
     const todayStr = getTodayDateString();
-    const todayRecord = uniqueRecords.find(r => r.date === todayStr);
+    const todayRecord = uniqueRecords.find(
+      (r) => r.date === todayStr && r.status !== "Belum Absen" && r.status !== "Libur" && !String(r.id || "").startsWith("sim_")
+    ) || null;
 
-    const total = filteredRecords.length;
-    const hadir = filteredRecords.filter(r => (r.status || "") === "Hadir").length;
-    const terlambat = filteredRecords.filter(r => (r.status || "") === "Terlambat").length;
-    const sakit = filteredRecords.filter(r => (r.status || "") === "Sakit").length;
-    const izin = filteredRecords.filter(r => (r.status || "") === "Izin").length;
-    const alpa = filteredRecords.filter(r => ["Alpa", "Ditolak", "Alpha"].includes(r.status || "")).length;
+    const validFilteredRecords = filteredRecords.filter(
+      (r) => r.status !== "Belum Absen" && r.status !== "Libur" && !String(r.id || "").startsWith("sim_")
+    );
+    const total = validFilteredRecords.length;
+    const hadir = validFilteredRecords.filter(r => (r.status || "") === "Hadir").length;
+    const terlambat = validFilteredRecords.filter(r => (r.status || "") === "Terlambat").length;
+    const sakit = validFilteredRecords.filter(r => (r.status || "") === "Sakit").length;
+    const izin = validFilteredRecords.filter(r => (r.status || "") === "Izin").length;
+    const alpa = validFilteredRecords.filter(r => ["Alpa", "Ditolak", "Alpha"].includes(r.status || "")).length;
 
     let percentage = "0.0";
     if (total > 0) {
@@ -1121,11 +1129,25 @@ export function ParentDashboardView({
           <div className="text-xl font-black text-gray-900 tracking-tight mb-1 flex items-center gap-1.5">
             {childAttendance.todayRecord ? (
               <>
-                <span className="text-emerald-600 font-extrabold">Hadir</span>
-                <span className="text-xs font-semibold text-gray-400">({childAttendance.todayRecord.timestamp || "07:15 WIB"})</span>
+                <span className={cn(
+                  childAttendance.todayRecord.status === "Terlambat" ? "text-amber-600" :
+                  childAttendance.todayRecord.status === "Izin" ? "text-amber-600" :
+                  childAttendance.todayRecord.status === "Sakit" ? "text-blue-600" :
+                  childAttendance.todayRecord.status === "Alpa" ? "text-rose-600" :
+                  "text-emerald-600",
+                  "font-extrabold"
+                )}>
+                  {childAttendance.todayRecord.status}
+                </span>
+                <span className="text-xs font-semibold text-gray-400">
+                  {(() => {
+                    const t = String(childAttendance.todayRecord.timestamp || childAttendance.todayRecord.time || "").replace(/\s*WIB/gi, "").trim();
+                    return t && t !== "-" ? `(${t} WIB)` : "";
+                  })()}
+                </span>
               </>
             ) : (
-              <span className="text-blue-600">Terjadwal Hari Ini</span>
+              <span className="text-amber-600 font-extrabold">Belum Presensi</span>
             )}
           </div>
           <div className="text-xs text-gray-500 font-medium">

@@ -43,7 +43,7 @@ import {
 } from "lucide-react";
 import { cn, getTodayDateString } from "@/lib/utils";
 
-const ATTENDANCE_LOCK_HOUR_MINUTES = 12 * 60; // 12:00 WIB (720 menit - Data Final)
+const ATTENDANCE_LOCK_HOUR_MINUTES = 10 * 60; // 10:00 WIB (600 menit - Data Final & Masuk Database)
 import { db, auth } from "@/lib/firebase";
 import {
   collection,
@@ -199,8 +199,14 @@ function extractValidTimeHM(rawTime: any, rawCreatedAt?: any): string {
 
 const mergeAttendanceRecords = (base: AttendanceRecord[], incoming: AttendanceRecord[]): AttendanceRecord[] => {
   const map: Record<string, AttendanceRecord> = {};
-  base.forEach((r) => { map[r.id] = r; });
-  incoming.forEach((r) => { map[r.id] = r; });
+  base.forEach((r) => {
+    const key = r.studentId && r.date ? `${r.studentId}_${r.date}` : r.id;
+    map[key] = r;
+  });
+  incoming.forEach((r) => {
+    const key = r.studentId && r.date ? `${r.studentId}_${r.date}` : r.id;
+    map[key] = r;
+  });
   const merged = Object.values(map);
   merged.sort((a, b) => {
     if (a.date !== b.date) return b.date.localeCompare(a.date);
@@ -231,7 +237,7 @@ export interface AttendanceConfig {
 const DEFAULT_CONFIG: AttendanceConfig = {
   schoolStartTime: "07:00",
   lateToleranceMinutes: 15,
-  absentThresholdTime: "08:30",
+  absentThresholdTime: "09:00",
   schoolEndTime: "15:30",
   activeDays: ["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
   geofenceRadiusMeters: 100,
@@ -333,15 +339,45 @@ export default function AttendancePage() {
   const [selectedDate, setSelectedDate] = useState<string>(() => getTodayDateString());
   const operationalStatus = useMemo(() => getOperationalDayStatus(selectedDate, operationalDays), [selectedDate, operationalDays]);
 
-  // Fetch historical attendance records from PostgreSQL when selectedDate changes
+  // 1. Fetch comprehensive 30-day historical attendance records from PostgreSQL on mount & config changes
+  useEffect(() => {
+    let isMounted = true;
+    fetch(`/api/attendance?range=30d&operationalDays=${encodeURIComponent(operationalDays)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!isMounted) return;
+        const recs = data.records || data.attendance;
+        if (data.success && Array.isArray(recs) && recs.length > 0) {
+          const mapped: AttendanceRecord[] = recs.map((r: any) => ({
+            id: r.id,
+            studentId: r.studentId,
+            studentName: r.name || r.fullName,
+            className: r.className,
+            date: r.date,
+            timestamp: r.time && r.time !== "-" ? r.time : "07:00",
+            time: r.time && r.time !== "-" ? r.time : "07:00",
+            status: r.status as AttendanceStatus,
+            notes: r.notes || "",
+            markedBy: "Database (PostgreSQL)",
+            createdAt: new Date().toISOString(),
+          }));
+          setAttendanceRecords((prev) => mergeAttendanceRecords(prev, mapped));
+        }
+      })
+      .catch((e) => console.warn("Failed to load historical 30d attendance:", e));
+    return () => { isMounted = false; };
+  }, [operationalDays]);
+
+  // 2. Fetch specific attendance records from PostgreSQL when selectedDate changes (Tab 1 Harian)
   useEffect(() => {
     let isMounted = true;
     fetch(`/api/attendance?date=${selectedDate}&operationalDays=${encodeURIComponent(operationalDays)}`)
       .then((r) => r.json())
       .then((data) => {
         if (!isMounted) return;
-        if (data.success && Array.isArray(data.records) && data.records.length > 0) {
-          const mapped: AttendanceRecord[] = data.records.map((r: any) => ({
+        const recs = data.records || data.attendance;
+        if (data.success && Array.isArray(recs) && recs.length > 0) {
+          const mapped: AttendanceRecord[] = recs.map((r: any) => ({
             id: r.id,
             studentId: r.studentId,
             studentName: r.name || r.fullName,
@@ -395,11 +431,42 @@ export default function AttendancePage() {
   const [biometricSearch, setBiometricSearch] = useState("");
   const [biometricStatusFilter, setBiometricStatusFilter] = useState("Semua");
   const [biometricClassFilter, setBiometricClassFilter] = useState("Semua Kelas");
+  const [biometricMonthFilter, setBiometricMonthFilter] = useState<string>(() => getTodayDateString().slice(0, 7));
   const [biometricViewMode, setBiometricViewMode] = useState<"table" | "grid" | "map">("table");
 
   // Tab 3: Monthly Summary State
-  const [monthlyMonth, setMonthlyMonth] = useState<string>("2026-09");
+  const [monthlyMonth, setMonthlyMonth] = useState<string>(() => getTodayDateString().slice(0, 7));
   const [monthlyClassFilter, setMonthlyClassFilter] = useState<string>("Semua");
+
+  // Fetch monthly attendance records from PostgreSQL when monthlyMonth changes (Tab 3 Rekap Bulanan)
+  useEffect(() => {
+    if (!monthlyMonth) return;
+    let isMounted = true;
+    fetch(`/api/attendance?month=${monthlyMonth}&operationalDays=${encodeURIComponent(operationalDays)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!isMounted) return;
+        const recs = data.records || data.attendance;
+        if (data.success && Array.isArray(recs) && recs.length > 0) {
+          const mapped: AttendanceRecord[] = recs.map((r: any) => ({
+            id: r.id,
+            studentId: r.studentId,
+            studentName: r.name || r.fullName,
+            className: r.className,
+            date: r.date,
+            timestamp: r.time && r.time !== "-" ? r.time : "07:00",
+            time: r.time && r.time !== "-" ? r.time : "07:00",
+            status: r.status as AttendanceStatus,
+            notes: r.notes || "",
+            markedBy: "Database (PostgreSQL)",
+            createdAt: new Date().toISOString(),
+          }));
+          setAttendanceRecords((prev) => mergeAttendanceRecords(prev, mapped));
+        }
+      })
+      .catch((e) => console.warn("Failed to load monthly attendance:", e));
+    return () => { isMounted = false; };
+  }, [monthlyMonth, operationalDays]);
 
   // -------------------------------------------------------------
   // 1. Initial Listeners (Classes, Students, Attendance, Config)
@@ -564,7 +631,7 @@ export default function AttendancePage() {
         setConfig((prev) => ({
           ...prev,
           ...d,
-          absentThresholdTime: d.absentThresholdTime || d.autoAbsentTime || prev.absentThresholdTime || "08:30"
+          absentThresholdTime: d.absentThresholdTime || d.autoAbsentTime || prev.absentThresholdTime || "09:00"
         }));
       }
     } catch (e) {}
@@ -575,7 +642,7 @@ export default function AttendancePage() {
         setConfig((prev) => ({
           ...prev,
           ...data,
-          absentThresholdTime: data.absentThresholdTime || data.autoAbsentTime || prev.absentThresholdTime || "08:30"
+          absentThresholdTime: data.absentThresholdTime || data.autoAbsentTime || prev.absentThresholdTime || "09:00"
         }));
         try {
           localStorage.setItem("quick_schools_attendance_config", JSON.stringify(data));
@@ -872,9 +939,9 @@ export default function AttendancePage() {
     const isPastDate = selectedDate < todayStr;
     const isToday = selectedDate === todayStr;
 
-    const thresholdStr = config.absentThresholdTime || (config as any).autoAbsentTime || "08:30";
+    const thresholdStr = config.absentThresholdTime || (config as any).autoAbsentTime || "09:00";
     const [absentH, absentM] = thresholdStr.split(":").map(Number);
-    const absentTotalMinutes = (isNaN(absentH) ? 8 : absentH) * 60 + (isNaN(absentM) ? 30 : absentM);
+    const absentTotalMinutes = (isNaN(absentH) ? 9 : absentH) * 60 + (isNaN(absentM) ? 0 : absentM);
 
     const isTodayPastAbsentThreshold = isToday && currentMinutesTick >= absentTotalMinutes;
     const isOp = isSchoolOperationalDay(selectedDate, operationalDays);
@@ -1052,7 +1119,7 @@ export default function AttendancePage() {
   // Quick action: Mark all as Hadir
   const handleMarkAllHadir = () => {
     if (isAttendanceLocked) {
-      toast.showError("Waktu absensi siswa telah melewati pukul 12:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat diedit).", "Absensi Terkunci (Final)");
+      toast.showError("Waktu absensi siswa telah melewati pukul 10:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat diedit).", "Absensi Terkunci (Final)");
       return;
     }
     if (!canMutateAttendance) {
@@ -1081,7 +1148,7 @@ export default function AttendancePage() {
   // Quick action: Mark all unrecorded as Alpa
   const handleMarkRemainingAlpa = () => {
     if (isAttendanceLocked) {
-      toast.showError("Waktu absensi siswa telah melewati pukul 12:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat diedit).", "Absensi Terkunci (Final)");
+      toast.showError("Waktu absensi siswa telah melewati pukul 10:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat diedit).", "Absensi Terkunci (Final)");
       return;
     }
     if (!canMutateAttendance) {
@@ -1114,7 +1181,7 @@ export default function AttendancePage() {
   // Quick single change
   const handleStudentStatusChange = async (studentId: string, status: AttendanceStatus | "Belum Absen") => {
     if (isAttendanceLocked) {
-      toast.showError("Waktu absensi siswa telah melewati pukul 12:00 WIB. Data absensi pada hari ini sudah FINAL dan tidak dapat dilakukan pengeditan.", "Absensi Terkunci (Final)");
+      toast.showError("Waktu absensi siswa telah melewati pukul 10:00 WIB. Data absensi pada hari ini sudah FINAL dan tidak dapat dilakukan pengeditan.", "Absensi Terkunci (Final)");
       return;
     }
     if (!canMutateAttendance) {
@@ -1224,7 +1291,7 @@ export default function AttendancePage() {
   // Save Batch Class Attendance to Firestore (using allowed roles collection + local cache)
   const handleSaveClassAttendance = async () => {
     if (isAttendanceLocked) {
-      toast.showError("Waktu absensi siswa telah melewati pukul 12:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat disimpan ulang).", "Absensi Terkunci (Final)");
+      toast.showError("Waktu absensi siswa telah melewati pukul 10:00 WIB. Data absensi yang tersimpan di database telah dikunci otomatis dan berstatus FINAL (tidak dapat disimpan ulang).", "Absensi Terkunci (Final)");
       return;
     }
     if (!canMutateAttendance) {
@@ -1399,9 +1466,13 @@ export default function AttendancePage() {
           normalizeClassName(item.className) === normalizeClassName(biometricClassFilter)
         ));
 
-      return matchSearch && matchStatus && matchClass;
+      const matchMonth =
+        biometricMonthFilter === "all" ||
+        (item.date && item.date.startsWith(biometricMonthFilter));
+
+      return matchSearch && matchStatus && matchClass && matchMonth;
     });
-  }, [scopedAttendanceRecords, biometricSearch, biometricStatusFilter, biometricClassFilter, isGuru]);
+  }, [scopedAttendanceRecords, biometricSearch, biometricStatusFilter, biometricClassFilter, biometricMonthFilter, isGuru]);
 
   // Leaflet map marker formatting for Tab 2
   const mapAttendanceMarkers = useMemo(() => {
@@ -2037,6 +2108,19 @@ export default function AttendancePage() {
                       Hari Ini
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ym = selectedDate ? selectedDate.slice(0, 7) : getTodayDateString().slice(0, 7);
+                      setMonthlyMonth(ym);
+                      setActiveTab("monthly");
+                    }}
+                    className="px-2.5 py-2 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200/80 text-[#531FFF] rounded-lg text-[11px] font-extrabold hover:bg-purple-100 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                    title="Buka Rekapitulasi Presensi per Bulan"
+                  >
+                    <CalendarDays className="w-3.5 h-3.5" />
+                    <span>Lihat Rekap Bulan</span>
+                  </button>
                 </div>
               </div>
 
@@ -2072,7 +2156,7 @@ export default function AttendancePage() {
               <div className="flex flex-wrap items-center gap-2 justify-end">
                 <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs font-extrabold text-amber-900 shadow-xs">
                   <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Data Terkunci (Final): Melewati 12:00 WIB</span>
+                  <span>Data Terkunci (Final): Melewati 10:00 WIB</span>
                 </div>
               </div>
             ) : canMutateAttendance ? (
@@ -2295,13 +2379,13 @@ export default function AttendancePage() {
                   <p className="text-[11px] sm:text-xs text-amber-900 font-medium mt-0.5 leading-relaxed">
                     {isPastDate
                       ? `Data absensi untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} sudah melewati batas waktu dan berstatus data final.`
-                      : "Sesuai aturan sekolah, waktu presensi hari ini telah mencapai batas pukul 12:00 WIB. Data absensi yang telah tersimpan di database otomatis berstatus FINAL dan tidak dapat diubah atau diedit lagi."}
+                      : "Sesuai aturan sekolah, waktu presensi hari ini telah mencapai batas pukul 10:00 WIB. Data absensi yang telah tersimpan di database otomatis berstatus FINAL dan tidak dapat diubah atau diedit lagi."}
                   </p>
                 </div>
               </div>
               <div className="shrink-0 hidden md:flex items-center gap-1.5 text-[11px] font-bold text-amber-800 bg-white/90 border border-amber-200 px-3 py-1.5 rounded-lg shadow-2xs">
                 <Clock className="w-3.5 h-3.5 text-amber-600" />
-                <span>Batas Edit: 12:00 WIB</span>
+                <span>Batas Edit: 10:00 WIB</span>
               </div>
             </div>
           ) : isToday ? (
@@ -2312,7 +2396,7 @@ export default function AttendancePage() {
                 </div>
                 <div className="text-xs text-emerald-900 font-medium">
                   <span className="font-extrabold text-emerald-950">Pengeditan Presensi Aktif: </span>
-                  Data absensi siswa dapat diinput & disunting hingga pukul <strong className="font-black text-emerald-950">12:00 WIB</strong> hari ini.
+                  Data absensi siswa dapat diinput & disunting hingga pukul <strong className="font-black text-emerald-950">10:00 WIB</strong> hari ini.
                 </div>
               </div>
               <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-md hidden sm:inline-block">
@@ -2827,7 +2911,7 @@ export default function AttendancePage() {
               </div>
             </div>
 
-            {/* Class & Status Filter */}
+            {/* Class, Month & Status Filter */}
             <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
               <div className="relative">
                 <select
@@ -2843,6 +2927,27 @@ export default function AttendancePage() {
                   ))}
                 </select>
                 <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+
+              {/* Month Selector in Tab 2 */}
+              <div className="relative flex items-center gap-1.5">
+                <input
+                  type="month"
+                  value={biometricMonthFilter === "all" ? "" : biometricMonthFilter}
+                  onChange={(e) => setBiometricMonthFilter(e.target.value || "all")}
+                  className="bg-white border border-gray-200 text-gray-700 font-bold px-3 py-2 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-xs cursor-pointer"
+                  title="Filter Log Biometrik per Bulan (YYYY-MM)"
+                />
+                {biometricMonthFilter !== "all" && (
+                  <button
+                    type="button"
+                    onClick={() => setBiometricMonthFilter("all")}
+                    className="px-2 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                    title="Tampilkan Semua Bulan"
+                  >
+                    Semua
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">

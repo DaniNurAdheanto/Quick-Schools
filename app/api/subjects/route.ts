@@ -35,72 +35,131 @@ export async function GET() {
   }
 }
 
-// POST /api/subjects - Create new subject or update if exists
+// Helper function to upsert a subject safely
+async function upsertSubjectItem(item: any) {
+  const { code, name, category, level, creditHours, teacherIds } = item;
+  if (!code || !name) return null;
+
+  const cleanCode = String(code).trim().toUpperCase();
+  const cleanName = String(name).trim();
+
+  // Find existing by code or name
+  const existing = await prisma.subject.findFirst({
+    where: {
+      OR: [
+        { code: cleanCode },
+        { name: { equals: cleanName, mode: "insensitive" } },
+      ],
+    },
+  });
+
+  let subject;
+  if (existing) {
+    let finalCode = existing.code;
+    if (existing.code !== cleanCode) {
+      const conflict = await prisma.subject.findUnique({ where: { code: cleanCode } });
+      if (!conflict) {
+        finalCode = cleanCode;
+      }
+    }
+
+    subject = await prisma.subject.update({
+      where: { id: existing.id },
+      data: {
+        code: finalCode,
+        name: cleanName,
+        category: category ? String(category).trim() : existing.category,
+        level: level ? String(level).trim() : existing.level,
+        creditHours: creditHours !== undefined ? (Number(String(creditHours).replace(/\D/g, "")) || existing.creditHours) : existing.creditHours,
+      },
+    });
+  } else {
+    let finalCode = cleanCode;
+    const conflict = await prisma.subject.findUnique({ where: { code: finalCode } });
+    if (conflict) {
+      finalCode = `${cleanCode}-${Date.now().toString().slice(-4)}`;
+    }
+
+    subject = await prisma.subject.create({
+      data: {
+        code: finalCode,
+        name: cleanName,
+        category: category ? String(category).trim() : "Wajib",
+        level: level ? String(level).trim() : "SMA",
+        creditHours: creditHours !== undefined ? (Number(String(creditHours).replace(/\D/g, "")) || 2) : 2,
+      },
+    });
+  }
+
+  // Link teachers if provided
+  if (Array.isArray(teacherIds) && teacherIds.length > 0) {
+    for (const tId of teacherIds) {
+      const cleanTid = String(tId).trim();
+      const teacher = await prisma.teacher.findFirst({
+        where: { OR: [{ id: cleanTid }, { nip: cleanTid }] },
+      });
+      if (teacher) {
+        try {
+          await prisma.teacherSubject.upsert({
+            where: {
+              teacherId_subjectId: {
+                teacherId: teacher.id,
+                subjectId: subject.id,
+              },
+            },
+            create: { teacherId: teacher.id, subjectId: subject.id },
+            update: {},
+          });
+        } catch (e) {}
+      }
+    }
+  }
+
+  return subject;
+}
+
+// POST /api/subjects - Create new subject or batch create if array/subjects provided
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { code, name, category, level, creditHours, teacherIds } = body;
 
+    // Check if batch creation
+    const rawList = Array.isArray(body)
+      ? body
+      : Array.isArray(body?.subjects)
+      ? body.subjects
+      : null;
+
+    if (rawList) {
+      if (rawList.length === 0) {
+        return NextResponse.json({ success: true, count: 0, subjects: [] });
+      }
+
+      const results = [];
+      for (const item of rawList) {
+        const res = await upsertSubjectItem(item);
+        if (res) results.push(res);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `${results.length} mata pelajaran berhasil disimpan ke database.`,
+        count: results.length,
+        subjects: results,
+      });
+    }
+
+    // Single subject creation
+    const { code, name } = body;
     if (!code || !name) {
       return NextResponse.json({ error: "Kode dan nama mata pelajaran wajib diisi." }, { status: 400 });
     }
 
-    const cleanCode = String(code).trim().toUpperCase();
-    const cleanName = String(name).trim();
-
-    const existing = await prisma.subject.findFirst({
-      where: {
-        OR: [
-          { code: cleanCode },
-          { name: { equals: cleanName, mode: "insensitive" } },
-        ],
-      },
-    });
-
-    let subject;
-    if (existing) {
-      subject = await prisma.subject.update({
-        where: { id: existing.id },
-        data: {
-          code: cleanCode,
-          name: cleanName,
-          category: category ? String(category).trim() : existing.category,
-          level: level ? String(level).trim() : existing.level,
-          creditHours: creditHours !== undefined ? Number(creditHours) : existing.creditHours,
-        },
-      });
-    } else {
-      subject = await prisma.subject.create({
-        data: {
-          code: cleanCode,
-          name: cleanName,
-          category: category ? String(category).trim() : "Wajib",
-          level: level ? String(level).trim() : "SMA",
-          creditHours: creditHours ? Number(creditHours) : 2,
-        },
-      });
-    }
-
-    // Link teachers if provided
-    if (Array.isArray(teacherIds) && teacherIds.length > 0) {
-      for (const tId of teacherIds) {
-        const cleanTid = String(tId).trim();
-        const teacher = await prisma.teacher.findFirst({
-          where: { OR: [{ id: cleanTid }, { nip: cleanTid }] },
-        });
-        if (teacher) {
-          try {
-            await prisma.teacherSubject.create({
-              data: { teacherId: teacher.id, subjectId: subject.id },
-            });
-          } catch (e) {}
-        }
-      }
-    }
+    const subject = await upsertSubjectItem(body);
 
     return NextResponse.json({
       success: true,
-      message: `Mata pelajaran ${subject.name} berhasil disimpan.`,
+      message: `Mata pelajaran ${subject?.name || name} berhasil disimpan.`,
       subject,
     });
   } catch (err: any) {

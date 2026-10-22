@@ -382,7 +382,7 @@ export default function SchedulePage() {
     const targetClass = (studentMyClass?.name || studentClassId).toLowerCase().trim();
     const classDocId = studentMyClass?._firestoreId || studentMyClass?.id || "";
     return schedules.filter(s => {
-      if (!matchesCurrentPeriod(s.academicYear, s.semester)) return false;
+      if ((s.academicYear || s.academicYearId) && !matchesCurrentPeriod(s.academicYear || s.academicYearId, s.semester)) return false;
       if (classDocId && s.classDocId && s.classDocId === classDocId) return true;
       const sc = (s.class || s.classId || s.className || "").toLowerCase().trim();
       if (sc === targetClass || sc.replace(/\s+/g, "") === targetClass.replace(/\s+/g, "")) return true;
@@ -981,7 +981,7 @@ export default function SchedulePage() {
 
   // Filtered schedule items (FOR ADMIN, GURU & SUPER-ADMIN)
   const filteredSchedules = schedules.filter(s => {
-    if (!matchesCurrentPeriod(s.academicYear, s.semester)) return false;
+    if ((s.academicYear || s.academicYearId) && !matchesCurrentPeriod(s.academicYear || s.academicYearId, s.semester)) return false;
     const matchesClass = selectedClassFilter === "All" || s.class === selectedClassFilter;
     const matchesQuery = !searchQuery || 
       (s.subject && s.subject.toLowerCase().includes(searchQuery.toLowerCase())) ||

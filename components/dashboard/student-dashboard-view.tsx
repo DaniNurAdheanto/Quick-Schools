@@ -145,7 +145,7 @@ export function StudentDashboardView({
       const stored = localStorage.getItem("quick_schools_attendance_config");
       if (stored) return JSON.parse(stored);
     } catch (e) {}
-    return { absentThresholdTime: "08:30", schoolStartTime: "07:00", lateToleranceMinutes: 15 };
+    return { absentThresholdTime: "09:00", schoolStartTime: "07:00", lateToleranceMinutes: 15 };
   });
 
   useEffect(() => {
@@ -155,7 +155,7 @@ export function StudentDashboardView({
         setAttendanceConfig((prev: any) => ({
           ...prev,
           ...d,
-          absentThresholdTime: d.absentThresholdTime || d.autoAbsentTime || prev?.absentThresholdTime || "08:30"
+          absentThresholdTime: d.absentThresholdTime || d.autoAbsentTime || prev?.absentThresholdTime || "09:00"
         }));
         try {
           localStorage.setItem("quick_schools_attendance_config", JSON.stringify(d));
@@ -184,6 +184,8 @@ export function StudentDashboardView({
               r.id === `att_${nisn}_${today}` ||
               (uid && r.id === `att_${uid}_${today}`);
             if (!isToday) return false;
+            // Ignore unrecorded dummy entries or Belum Absen / Libur
+            if (r.status === "Belum Absen" || r.status === "Libur" || String(r.id || "").startsWith("sim_")) return false;
             if (uid && (r.studentUid === uid || r.uid === uid || r.studentId === uid)) return true;
             if (nisn && (r.nisn === nisn || r.studentId === nisn)) return true;
             return false;
@@ -313,7 +315,7 @@ export function StudentDashboardView({
           classesRes,
           leaveRes
         ] = await Promise.allSettled([
-          fetch("/api/attendance").then((r) => r.json()),
+          fetch("/api/attendance?range=30d").then((r) => r.json()),
           fetch("/api/grades").then((r) => r.json()),
           fetch("/api/schedules").then((r) => r.json()),
           fetch("/api/payments").then((r) => r.json()),
@@ -324,8 +326,11 @@ export function StudentDashboardView({
 
         if (!isMounted) return;
 
-        if (attendanceRes.status === "fulfilled" && attendanceRes.value.attendance) {
-          setAttendanceRecords(attendanceRes.value.attendance);
+        if (attendanceRes.status === "fulfilled") {
+          const recs = attendanceRes.value.records || attendanceRes.value.attendance;
+          if (Array.isArray(recs)) {
+            setAttendanceRecords(recs);
+          }
         }
         if (gradesRes.status === "fulfilled" && gradesRes.value.grades) {
           setGradesRecords(gradesRes.value.grades);
@@ -393,10 +398,12 @@ export function StudentDashboardView({
     const myName = (studentDoc?.fullName || studentDoc?.name || userName || "").trim().toLowerCase();
     const isGenericName = !myName || myName === "siswa" || myName === "student";
 
-    const normalizeStatus = (r: any): "Hadir" | "Terlambat" | "Izin" | "Sakit" | "Alpa" => {
+    const normalizeStatus = (r: any): "Hadir" | "Terlambat" | "Izin" | "Sakit" | "Alpa" | "Belum Absen" | "Libur" => {
       const raw = String(r.status || r.type || "").trim();
       const rawLower = raw.toLowerCase();
 
+      if (rawLower === "belum absen" || rawLower === "belum_absen" || rawLower === "unrecorded") return "Belum Absen";
+      if (rawLower === "libur" || rawLower === "holiday") return "Libur";
       if (rawLower === "hadir" || rawLower === "present") return "Hadir";
       if (rawLower === "terlambat" || rawLower === "late") return "Terlambat";
       if (rawLower === "sakit" || rawLower === "sick" || r.leaveType === "Sakit" || r.type === "Sakit") return "Sakit";
@@ -405,6 +412,11 @@ export function StudentDashboardView({
 
       if (r.source === "permit" || r.typeMarker === "leave_request" || r.type === "leave_request") {
         return r.type === "Sakit" || r.leaveType === "Sakit" ? "Sakit" : "Izin";
+      }
+
+      // If simulated or has no valid time, student has not yet recorded attendance!
+      if (String(r.id || "").startsWith("sim_") || r.time === "-" || !r.time) {
+        return "Belum Absen";
       }
 
       return "Hadir";
@@ -504,7 +516,7 @@ export function StudentDashboardView({
 
     const myRawRecords = combinedRecords.filter(isRecordForMe);
 
-    // 5. Deduplicate by date (keep highest precedence: Hadir/Terlambat > Izin/Sakit > Alpa)
+    // 5. Deduplicate by date (keep highest precedence: Hadir/Terlambat > Izin/Sakit > Alpa > Belum Absen)
     const recordByDate = new Map<string, any>();
     myRawRecords.forEach((r) => {
       const dateKey = r.date;
@@ -517,7 +529,9 @@ export function StudentDashboardView({
         const existing = recordByDate.get(dateKey);
         if (r.id === liveAttendedRecord?.id || r.source === "biometric" || r.capturedImage) {
           recordByDate.set(dateKey, normalized);
-        } else if (existing.status === "Alpa" && normalized.status !== "Alpa") {
+        } else if (existing.status === "Belum Absen" && normalized.status !== "Belum Absen") {
+          recordByDate.set(dateKey, normalized);
+        } else if (existing.status === "Alpa" && (normalized.status === "Hadir" || normalized.status === "Terlambat" || normalized.status === "Izin" || normalized.status === "Sakit")) {
           recordByDate.set(dateKey, normalized);
         }
       }
@@ -526,36 +540,68 @@ export function StudentDashboardView({
     const myRecords = Array.from(recordByDate.values());
     const todayDate = currentLocalDate;
 
-    let todayRecord = myRecords.find((r) => r.date === todayDate) || null;
+    let candidateToday = myRecords.find((r) => r.date === todayDate) || null;
 
-    if (!todayRecord && liveAttendedRecord) {
+    if (!candidateToday && liveAttendedRecord) {
       const isToday =
         liveAttendedRecord.date === todayDate ||
         liveAttendedRecord.id === `att_${myNisn}_${todayDate}` ||
         (myUid && liveAttendedRecord.id === `att_${myUid}_${todayDate}`);
       if (isToday) {
-        todayRecord = { ...liveAttendedRecord, status: normalizeStatus(liveAttendedRecord) };
+        const liveStatus = normalizeStatus(liveAttendedRecord);
+        if (liveStatus !== "Belum Absen" && liveStatus !== "Libur") {
+          candidateToday = { ...liveAttendedRecord, status: liveStatus };
+        }
       }
     }
 
-    // Check if current time has passed Batas Maksimal Dihitung Alpa
-    const absentThresholdStr = attendanceConfig?.absentThresholdTime || attendanceConfig?.autoAbsentTime || "08:30";
+    // Check if current time has passed Batas Maksimal Dihitung Alpa (09:00 WIB)
+    const absentThresholdStr = attendanceConfig?.absentThresholdTime || attendanceConfig?.autoAbsentTime || "09:00";
     const [absH, absM] = absentThresholdStr.split(":").map(Number);
-    const absentTotalMinutes = (isNaN(absH) ? 8 : absH) * 60 + (isNaN(absM) ? 30 : absM);
+    const absentTotalMinutes = (isNaN(absH) ? 9 : absH) * 60 + (isNaN(absM) ? 0 : absM);
 
     const nowD = new Date();
     const currentTotalMinutes = nowD.getHours() * 60 + nowD.getMinutes();
-    const isPastAbsentThreshold = currentTotalMinutes >= absentTotalMinutes;
-    // Aturan penguncian otomatis setelah pukul 12:00 WIB (720 menit - Data Final)
-    const isAttendanceLocked = currentTotalMinutes >= 12 * 60;
+    const isPastAbsentThreshold = currentTotalMinutes >= absentTotalMinutes; // Selewat 09:00 WIB -> Alpa
+    // Aturan penguncian otomatis setelah pukul 10:00 WIB (600 menit - Data Final & Terkunci di Database)
+    const isAttendanceLocked = currentTotalMinutes >= 10 * 60;
 
-    const total = myRecords.length;
-    const hadirTepatWaktu = myRecords.filter((r) => r.status === "Hadir").length;
-    const terlambat = myRecords.filter((r) => r.status === "Terlambat").length;
+    // A valid todayRecord exists if student has recorded attendance (Hadir, Terlambat, Izin, Sakit, Alpa)
+    // Selewat jam 09:00 WIB, jika siswa belum absen otomatis berstatus Alpa
+    let todayRecord: any = null;
+    if (
+      candidateToday &&
+      candidateToday.status !== "Belum Absen" &&
+      candidateToday.status !== "Libur" &&
+      !String(candidateToday.id || "").startsWith("sim_")
+    ) {
+      todayRecord = candidateToday;
+    } else if (isPastAbsentThreshold) {
+      todayRecord = {
+        id: candidateToday?.id || `auto_alpa_${myNisn || myUid}_${todayDate}`,
+        studentId: myNisn || myUid,
+        studentName: studentFullName,
+        className: studentDisplayClass,
+        date: todayDate,
+        time: "-",
+        status: "Alpa",
+        notes: `Otomatis Alpa (Melewati Batas Presensi ${absentThresholdStr} WIB)`,
+        isFinal: isAttendanceLocked,
+      };
+    }
+
+    // Filter out unrecorded / simulated entries from historical attendance metrics
+    const validPastRecords = myRecords.filter(
+      (r) => r.status !== "Belum Absen" && r.status !== "Libur" && !String(r.id || "").startsWith("sim_")
+    );
+
+    const total = validPastRecords.length;
+    const hadirTepatWaktu = validPastRecords.filter((r) => r.status === "Hadir").length;
+    const terlambat = validPastRecords.filter((r) => r.status === "Terlambat").length;
     const hadir = hadirTepatWaktu + terlambat; // Total Kehadiran
-    const sakit = myRecords.filter((r) => r.status === "Sakit").length;
-    const izin = myRecords.filter((r) => r.status === "Izin").length;
-    const alpa = myRecords.filter((r) => r.status === "Alpa" || r.status === "Ditolak").length;
+    const sakit = validPastRecords.filter((r) => r.status === "Sakit").length;
+    const izin = validPastRecords.filter((r) => r.status === "Izin").length;
+    const alpa = validPastRecords.filter((r) => r.status === "Alpa" || r.status === "Ditolak").length;
 
     let percentage = "0.0";
     if (total > 0) {
@@ -570,7 +616,7 @@ export function StudentDashboardView({
       { name: "Alpa", value: alpa, color: "#EF4444" },
     ].filter((item) => item.value > 0);
 
-    const recentLogs = [...myRecords]
+    const recentLogs = [...validPastRecords]
       .sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime())
       .slice(0, 5);
 
@@ -911,7 +957,7 @@ export function StudentDashboardView({
     if (attendanceData.isAttendanceLocked) {
       if (showError) {
         showError(
-          "Waktu absensi telah melewati pukul 12:00 WIB. Data absensi hari ini telah dikunci otomatis dan berstatus FINAL. Presensi tidak dapat dicatat atau diubah lagi.",
+          "Waktu absensi telah melewati pukul 10:00 WIB. Data absensi hari ini telah dikunci otomatis dan berstatus FINAL. Presensi tidak dapat dicatat atau diubah lagi.",
           "Data Absensi Terkunci (Final)"
         );
       }
@@ -997,13 +1043,17 @@ export function StudentDashboardView({
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 )}
                 <span>
-                  Presensi: {attendanceData.todayRecord.status} ({(attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "Tercatat").replace(/\s*WIB/gi, "").trim()} WIB)
+                  Presensi: {attendanceData.todayRecord.status}
+                  {(() => {
+                    const rawTime = (attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "").replace(/\s*WIB/gi, "").trim();
+                    return rawTime && rawTime !== "-" ? ` (${rawTime} WIB)` : "";
+                  })()}
                 </span>
               </>
             ) : attendanceData.isAttendanceLocked ? (
               <>
                 <Lock className="w-4 h-4 text-amber-600" />
-                <span>Presensi Terkunci (Pukul 12:00 WIB)</span>
+                <span>Presensi Terkunci (Pukul 10:00 WIB)</span>
               </>
             ) : (
               <>
@@ -1162,7 +1212,7 @@ export function StudentDashboardView({
             {attendanceData.isAttendanceLocked ? (
               <div className="px-3.5 py-2 bg-rose-500/20 text-rose-100 rounded-xl text-xs font-bold border border-rose-400/30 flex items-center gap-1.5 shrink-0 self-start sm:self-auto shadow-xs">
                 <Lock className="w-3.5 h-3.5 text-rose-300" />
-                <span>Data Final Terkunci (Pukul 12:00 WIB)</span>
+                <span>Data Final Terkunci (Pukul 10:00 WIB)</span>
               </div>
             ) : null}
           </div>
@@ -1185,15 +1235,16 @@ export function StudentDashboardView({
                   {attendanceData.isAttendanceLocked && (
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
                       <Lock className="w-3 h-3 text-amber-700" />
-                      Data Final (Terkunci 12:00 WIB)
+                      Data Final (Terkunci 10:00 WIB)
                     </span>
                   )}
                 </div>
                 <p className="text-xs md:text-sm font-bold text-amber-950 mt-0.5">
-                  Kehadiran Anda telah tercatat pada pukul{" "}
-                  <strong className="text-amber-900 font-extrabold">
-                    {(attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "waktu presensi").replace(/\s*WIB/gi, "").trim()} WIB
-                  </strong>{" "}
+                  Kehadiran Anda telah tercatat
+                  {(() => {
+                    const rawTime = (attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "").replace(/\s*WIB/gi, "").trim();
+                    return rawTime && rawTime !== "-" ? ` pada pukul ${rawTime} WIB` : "";
+                  })()}{" "}
                   ({currentDate}). Tetap dihitung hadir.
                 </p>
               </div>
@@ -1226,15 +1277,16 @@ export function StudentDashboardView({
                   {attendanceData.isAttendanceLocked && (
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
                       <Lock className="w-3 h-3 text-amber-700" />
-                      Data Final (Terkunci 12:00 WIB)
+                      Data Final (Terkunci 10:00 WIB)
                     </span>
                   )}
                 </div>
                 <p className="text-xs md:text-sm font-bold text-emerald-950 mt-0.5">
-                  Kehadiran Anda telah tercatat pada pukul{" "}
-                  <strong className="text-emerald-900 font-extrabold">
-                    {(attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "waktu presensi").replace(/\s*WIB/gi, "").trim()} WIB
-                  </strong>{" "}
+                  Kehadiran Anda telah tercatat
+                  {(() => {
+                    const rawTime = (attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "").replace(/\s*WIB/gi, "").trim();
+                    return rawTime && rawTime !== "-" ? ` pada pukul ${rawTime} WIB` : "";
+                  })()}{" "}
                   ({currentDate}).
                 </p>
               </div>
@@ -1399,7 +1451,12 @@ export function StudentDashboardView({
                 )}>
                   {attendanceData.todayRecord.status}
                 </span>
-                <span className="text-xs font-semibold text-gray-400">({(attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "Tercatat").replace(/\s*WIB/gi, "").trim()} WIB)</span>
+                <span className="text-xs font-semibold text-gray-400">
+                  {(() => {
+                    const rawTime = (attendanceData.todayRecord.timestamp || attendanceData.todayRecord.time || "").replace(/\s*WIB/gi, "").trim();
+                    return rawTime && rawTime !== "-" ? ` (${rawTime} WIB)` : "";
+                  })()}
+                </span>
               </>
             ) : (
               <span className="text-amber-600 font-extrabold">Belum Presensi</span>
@@ -1412,7 +1469,7 @@ export function StudentDashboardView({
           {attendanceData.isAttendanceLocked && !attendanceData.todayRecord ? (
             <div className="mt-3 w-full py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 bg-gray-100 text-gray-500 border border-gray-200">
               <Lock className="w-3.5 h-3.5 text-gray-400" />
-              <span>Data Final (Terkunci 12:00 WIB)</span>
+              <span>Data Final (Terkunci 10:00 WIB)</span>
             </div>
           ) : !attendanceData.todayRecord ? (
             <button
@@ -1755,7 +1812,7 @@ export function StudentDashboardView({
               {attendanceData.isAttendanceLocked && !attendanceData.todayRecord ? (
                 <div className="w-full py-2.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 text-xs font-bold flex items-center justify-center gap-2 shadow-2xs">
                   <Lock className="w-4 h-4 text-amber-600" />
-                  <span>Data Presensi Telah Dikunci (Final Pukul 12:00 WIB)</span>
+                  <span>Data Presensi Telah Dikunci (Final Pukul 10:00 WIB)</span>
                 </div>
               ) : !attendanceData.todayRecord ? (
                 <button

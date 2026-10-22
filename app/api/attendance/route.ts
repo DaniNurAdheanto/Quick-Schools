@@ -55,8 +55,20 @@ export async function GET(req: NextRequest) {
     });
     const totalStudents = allStudents.length;
 
-    // Handle range calculation
-    if (range && !startDate) {
+    const month = searchParams.get("month"); // e.g. "2026-10"
+    const studentId = searchParams.get("studentId");
+
+    // Handle month / range calculation
+    if (month && !startDate) {
+      const [yStr, mStr] = month.split("-");
+      const year = parseInt(yStr, 10);
+      const m = parseInt(mStr, 10);
+      if (!isNaN(year) && !isNaN(m)) {
+        const lastDay = new Date(year, m, 0).getDate();
+        startDate = `${month}-01`;
+        endDate = `${month}-${String(lastDay).padStart(2, "0")}`;
+      }
+    } else if (range && !startDate) {
       const daysCount = range === "30d" ? 30 : range === "14d" ? 14 : 7;
       const startD = new Date();
       startD.setDate(startD.getDate() - (daysCount - 1));
@@ -78,6 +90,9 @@ export async function GET(req: NextRequest) {
       };
       if (classId && classId !== "all") {
         whereClause.classId = classId;
+      }
+      if (studentId) {
+        whereClause.studentId = studentId;
       }
 
       const attendances = await prisma.attendance.findMany({
@@ -102,7 +117,6 @@ export async function GET(req: NextRequest) {
 
       const allDatesInRange = getDaysBetween(startDate, endDate);
       const now = new Date();
-      const currentHour = now.getHours();
 
       const dailyTrends = allDatesInRange.map((dStr) => {
         const isOp = isSchoolOperationalDay(dStr, operationalDays);
@@ -125,10 +139,11 @@ export async function GET(req: NextRequest) {
 
         const isPastDate = dStr < today;
         const isToday = dStr === today;
-        const isPastCutoff = isPastDate || (isToday && currentHour >= 12);
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-        // Auto-alpa only on operational school days for unrecorded active students
-        if (isOp && isPastCutoff && totalStudents > dayRecords.length) {
+        // Auto-alpa only on operational school days for unrecorded active students (after 09:00 WIB threshold / 10:00 WIB lock)
+        const isPastAbsentTime = isPastDate || (isToday && currentMinutes >= 9 * 60);
+        if (isOp && isPastAbsentTime && totalStudents > dayRecords.length) {
           alpa += (totalStudents - dayRecords.length);
         }
 
@@ -154,6 +169,23 @@ export async function GET(req: NextRequest) {
         };
       });
 
+      const mappedRecords = attendances.map((att) => ({
+        id: att.id,
+        studentId: att.studentId,
+        nisn: att.student.nisn,
+        name: att.student.fullName,
+        fullName: att.student.fullName,
+        className: att.student.class?.name || "10 MIPA 1",
+        classId: att.classId,
+        date: att.date,
+        time: att.time || "-",
+        status: statusEnumToString[att.status] || "Hadir",
+        notes: att.notes || null,
+        isFinal: att.isFinal,
+        latitude: att.latitude,
+        longitude: att.longitude,
+      }));
+
       return NextResponse.json({
         success: true,
         startDate,
@@ -161,22 +193,8 @@ export async function GET(req: NextRequest) {
         operationalDays,
         totalStudents,
         dailyTrends,
-        records: attendances.map((att) => ({
-          id: att.id,
-          studentId: att.studentId,
-          nisn: att.student.nisn,
-          name: att.student.fullName,
-          fullName: att.student.fullName,
-          className: att.student.class?.name || "10 MIPA 1",
-          classId: att.classId,
-          date: att.date,
-          time: att.time || "-",
-          status: statusEnumToString[att.status] || "Hadir",
-          notes: att.notes || null,
-          isFinal: att.isFinal,
-          latitude: att.latitude,
-          longitude: att.longitude,
-        })),
+        records: mappedRecords,
+        attendance: mappedRecords,
       });
     }
 
@@ -207,9 +225,58 @@ export async function GET(req: NextRequest) {
     const attendanceMap = new Map(attendances.map((a) => [a.studentId, a]));
 
     const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
     const isPastDate = targetDate < today;
     const isToday = targetDate === today;
-    const isPastCutoff = isPastDate || (isToday && now.getHours() >= 12);
+    const isPastAbsentThreshold = isPastDate || (isToday && currentMinutes >= 9 * 60); // Selewat 09:00 WIB -> Alpa
+    const isPastCutoff = isPastDate || (isToday && currentMinutes >= 10 * 60); // 10:00 WIB -> Final Lock
+
+    // Otomatis simpan siswa yang belum absen ke database PostgreSQL saat sudah melewati 10:00 WIB (Data Final Terkunci)
+    if (isOperational && isPastCutoff) {
+      const missingStudents = allStudents.filter((st) => !attendanceMap.has(st.id));
+      if (missingStudents.length > 0) {
+        await prisma.attendance.createMany({
+          data: missingStudents.map((st) => ({
+            studentId: st.id,
+            classId: st.classId,
+            date: targetDate,
+            status: AttendanceStatus.ALPA,
+            time: "-",
+            notes: "Otomatis Alpa (Melewati Batas Presensi 09:00 WIB & Terkunci Final 10:00 WIB)",
+            isFinal: true,
+          })),
+          skipDuplicates: true,
+        });
+
+        // Refresh database records
+        const refreshedAttendances = await prisma.attendance.findMany({
+          where: whereClause,
+          include: {
+            student: {
+              include: {
+                class: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        });
+        attendances.length = 0;
+        attendances.push(...refreshedAttendances);
+        attendanceMap.clear();
+        refreshedAttendances.forEach((a) => attendanceMap.set(a.studentId, a));
+      }
+
+      // Kunci semua presensi hari ini berstatus isFinal = true
+      await prisma.attendance.updateMany({
+        where: {
+          date: targetDate,
+          isFinal: false,
+        },
+        data: {
+          isFinal: true,
+        },
+      });
+    }
 
     let hadirCount = 0;
     let terlambatCount = 0;
@@ -226,7 +293,8 @@ export async function GET(req: NextRequest) {
       } else if (!isOperational) {
         // Non-operational days (holiday) should NOT be counted as Alpa
         statusStr = "Libur";
-      } else if (isPastCutoff) {
+      } else if (isPastAbsentThreshold || isPastCutoff) {
+        // Selewat jam 09:00 WIB otomatis menjadi Alpa
         statusStr = "Alpa";
       }
 
@@ -249,6 +317,7 @@ export async function GET(req: NextRequest) {
         status: statusStr,
         notes: att?.notes || null,
         isFinal: isPastCutoff || att?.isFinal || false,
+        isRecorded: Boolean(att),
         latitude: att?.latitude || null,
         longitude: att?.longitude || null,
       };
@@ -308,8 +377,24 @@ export async function POST(req: NextRequest) {
       if (!student) return null;
 
       const targetStatus = statusMappingToEnum[String(status)] || AttendanceStatus.HADIR;
-      const isPastCutoff = targetDate < todayStr || (targetDate === todayStr && now.getHours() >= 12);
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const isPastCutoff = targetDate < todayStr || (targetDate === todayStr && currentMinutes >= 10 * 60);
       const currentTimeStr = time || now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+
+      // Cek apakah data sudah dikunci (isFinal) di database atau sudah lewat pukul 10:00 WIB
+      const existing = await prisma.attendance.findUnique({
+        where: {
+          studentId_date: {
+            studentId: student.id,
+            date: targetDate,
+          },
+        },
+      });
+
+      if (existing?.isFinal || (existing && isPastCutoff)) {
+        // Data sudah berstatus FINAL dan dikunci (tidak dapat diubah kembali)
+        return existing;
+      }
 
       return prisma.attendance.upsert({
         where: {
