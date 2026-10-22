@@ -23,6 +23,7 @@ import {
   ExternalLink,
   Sparkles,
   Printer,
+  School,
   FileText,
   Save,
   Check,
@@ -302,6 +303,7 @@ export default function AttendancePage() {
   const [loading, setLoading] = useState(true);
   const [showScanModal, setShowScanModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   // Firestore Real-Time Data State
   const [classesList, setClassesList] = useState<any[]>([]);
@@ -1645,8 +1647,44 @@ export default function AttendancePage() {
   // Export & Print Handlers
   // -------------------------------------------------------------
   const handleExportCSV = () => {
+    if (activeTab === "monthly") {
+      if (monthlySummaryList.length === 0) {
+        toast.showWarning("Tidak ada data rekap bulanan untuk diekspor.");
+        return;
+      }
+      const headers = ["No", "NISN / ID", "Nama Siswa", "Kelas", "Hadir (H)", "Terlambat (T)", "Sakit (S)", "Izin (I)", "Alpa (A)", "% Kehadiran", "Status Evaluasi"];
+      const rows = monthlySummaryList.map((item, idx) => [
+        String(idx + 1),
+        `"${item.id || ""}"`,
+        `"${(item.name || "").replace(/"/g, '""')}"`,
+        `"${item.className || ""}"`,
+        String(item.hadir),
+        String(item.terlambat),
+        String(item.sakit),
+        String(item.izin),
+        String(item.alpa),
+        `"${item.rate}%"`,
+        `"${item.isCritical ? "Perhatian Khusus" : "Disiplin Baik"}"`
+      ]);
+      const BOM = "\uFEFF";
+      const csvContent = BOM + [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const classSafe = monthlyClassFilter.replace(/\s+/g, "_");
+      link.download = `Rekap_Presensi_Bulanan_${classSafe}_${monthlyMonth}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.showInfo("Rekap presensi bulanan berhasil diekspor ke CSV.", "Ekspor Selesai");
+      return;
+    }
+
     const headers = [
-      "ID Siswa",
+      "No",
+      "ID Siswa / NISN",
       "Nama Siswa",
       "Kelas",
       "Tanggal",
@@ -1657,38 +1695,41 @@ export default function AttendancePage() {
     ];
 
     const dataToExport = activeTab === "daily"
-      ? classStudents.map((st) => {
+      ? classStudents.map((st, idx) => {
           const val = classAttendanceMap[st.id] || { status: "Belum Absen", notes: "", time: "-" };
           const stClass = st.className || st.class || st.kelas || st.classId || (selectedClass !== "Semua Kelas" ? selectedClass : "Umum");
-          return [st.id, `"${st.name}"`, `"${stClass}"`, selectedDate, val.time, val.status, "Manual/Kelas", `"${val.notes}"`];
+          return [String(idx + 1), `"${st.id}"`, `"${(st.name || "").replace(/"/g, '""')}"`, `"${stClass}"`, selectedDate, val.time, val.status, "Manual/Kelas", `"${(val.notes || "").replace(/"/g, '""')}"`];
         })
-      : filteredBiometricData.map((r) => [
-          r.studentId,
-          `"${r.studentName}"`,
+      : filteredBiometricData.map((r, idx) => [
+          String(idx + 1),
+          `"${r.studentId}"`,
+          `"${(r.studentName || "").replace(/"/g, '""')}"`,
           `"${r.className}"`,
           r.date,
           r.timestamp,
           r.status,
           r.source || "Biometric",
-          `"${r.notes || ''}"`
+          `"${(r.notes || '').replace(/"/g, '""')}"`
         ]);
 
-    const csvContent = [headers.join(","), ...dataToExport.map((row) => row.join(","))].join("\n");
+    const BOM = "\uFEFF";
+    const csvContent = BOM + [headers.join(","), ...dataToExport.map((row) => row.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", url);
+    link.href = url;
     const filenameSafe = selectedClass === "Semua Kelas" ? "Semua_Kelas" : selectedClass.replace(/\s+/g, "_");
-    link.setAttribute("download", `Laporan_Presensi_${filenameSafe}_${selectedDate}.csv`);
+    link.download = `Laporan_Presensi_${filenameSafe}_${selectedDate}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 
     toast.showInfo("Laporan absensi berhasil diekspor ke file CSV.", "Ekspor Selesai");
   };
 
   const handlePrint = () => {
-    window.print();
+    setIsPrintModalOpen(true);
   };
 
   if (isAuthLoading || !isRoleReady || loading) {
@@ -3582,6 +3623,180 @@ export default function AttendancePage() {
           </div>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* OFFICIAL ATTENDANCE PRINT-READY MODAL                                     */}
+      {/* ========================================================================= */}
+      {isPrintModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white rounded-lg shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar p-8 text-gray-900 font-sans attendance-print-area">
+            
+            {/* Controls */}
+            <div className="flex justify-between items-center pb-6 border-b border-gray-200 no-print">
+              <div className="flex items-center gap-2">
+                <School className="w-5 h-5 text-[#531FFF]" />
+                <h3 className="font-extrabold text-base">
+                  Pratinjau Cetak {activeTab === "monthly" ? "Rekapitulasi Bulanan" : "Daftar Hadir Harian"}
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="flex items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" /> Cetak / Download PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPrintModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-lg cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+
+            {/* Document Content */}
+            <div className="pt-6 space-y-6">
+              
+              {/* KOP RESMI */}
+              <div className="text-center border-b-2 border-gray-900 pb-4">
+                <h2 className="text-2xl font-extrabold tracking-widest text-gray-900 uppercase">SMA KEREN PARAH INDONESIA</h2>
+                <p className="text-xs font-medium text-gray-600 mt-1">
+                  Jl. Pendidikan Utama No. 45, Jakarta Selatan · Telp: (021) 7890123 · NSS: 301016001001 · Akreditasi A
+                </p>
+                <p className="text-xs font-extrabold text-gray-900 uppercase mt-2 tracking-wider">
+                  {activeTab === "monthly"
+                    ? `REKAPITULASI PRESENSI BULANAN SISWA · BULAN ${monthlyMonth}`
+                    : `DAFTAR PRESENSI HARIAN SISWA · TANGGAL ${selectedDate}`}
+                </p>
+                <div className="flex justify-center gap-6 text-[11px] font-semibold text-gray-700 mt-1">
+                  <span>Kelas: <strong>{activeTab === "monthly" ? (monthlyClassFilter === "Semua" ? "Semua Kelas" : monthlyClassFilter) : selectedClass}</strong></span>
+                  <span>Tahun Ajaran: <strong>{activeAcademicYear || "2025/2026"} ({activeSemester || "Ganjil"})</strong></span>
+                  {teacherHomeroomClasses.length > 0 && (
+                    <span>Wali Kelas: <strong>{teacherHomeroomClasses.join(", ")}</strong></span>
+                  )}
+                </div>
+              </div>
+
+              {/* Table */}
+              <div>
+                {activeTab === "monthly" ? (
+                  <table className="w-full border-collapse border border-gray-300 text-xs text-left">
+                    <thead>
+                      <tr className="bg-gray-100 font-bold text-gray-800">
+                        <th className="border border-gray-300 p-2 text-center w-8">No</th>
+                        <th className="border border-gray-300 p-2">Nama Siswa</th>
+                        <th className="border border-gray-300 p-2 text-center w-24">NISN / ID</th>
+                        <th className="border border-gray-300 p-2 text-center w-20">Kelas</th>
+                        <th className="border border-gray-300 p-2 text-center w-12">Hadir</th>
+                        <th className="border border-gray-300 p-2 text-center w-14">Terlambat</th>
+                        <th className="border border-gray-300 p-2 text-center w-12">Sakit</th>
+                        <th className="border border-gray-300 p-2 text-center w-12">Izin</th>
+                        <th className="border border-gray-300 p-2 text-center w-12">Alpa</th>
+                        <th className="border border-gray-300 p-2 text-center w-16">% Hadir</th>
+                        <th className="border border-gray-300 p-2 text-center w-24">Evaluasi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {monthlySummaryList.map((item, i) => (
+                        <tr key={item.id} className="border-b border-gray-200">
+                          <td className="border border-gray-300 p-2 text-center font-medium">{i + 1}</td>
+                          <td className="border border-gray-300 p-2 font-bold text-gray-900">{item.name}</td>
+                          <td className="border border-gray-300 p-2 text-center font-mono">{item.id.slice(0, 10)}</td>
+                          <td className="border border-gray-300 p-2 text-center">{item.className}</td>
+                          <td className="border border-gray-300 p-2 text-center font-bold text-emerald-700">{item.hadir}</td>
+                          <td className="border border-gray-300 p-2 text-center font-bold text-amber-700">{item.terlambat}</td>
+                          <td className="border border-gray-300 p-2 text-center font-bold text-blue-700">{item.sakit}</td>
+                          <td className="border border-gray-300 p-2 text-center font-bold text-indigo-700">{item.izin}</td>
+                          <td className="border border-gray-300 p-2 text-center font-bold text-rose-700">{item.alpa}</td>
+                          <td className="border border-gray-300 p-2 text-center font-bold">{item.rate}%</td>
+                          <td className="border border-gray-300 p-2 text-center font-semibold">
+                            {item.isCritical ? "Perhatian" : "Baik"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <table className="w-full border-collapse border border-gray-300 text-xs text-left">
+                    <thead>
+                      <tr className="bg-gray-100 font-bold text-gray-800">
+                        <th className="border border-gray-300 p-2 text-center w-8">No</th>
+                        <th className="border border-gray-300 p-2">Nama Siswa</th>
+                        <th className="border border-gray-300 p-2 text-center w-28">NISN / ID</th>
+                        <th className="border border-gray-300 p-2 text-center w-24">Kelas</th>
+                        <th className="border border-gray-300 p-2 text-center w-20">Jam Masuk</th>
+                        <th className="border border-gray-300 p-2 text-center w-24">Status</th>
+                        <th className="border border-gray-300 p-2">Keterangan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {classStudents.map((st, i) => {
+                        const att = classAttendanceMap[st.id] || { status: "Belum Absen", notes: "", time: "-" };
+                        return (
+                          <tr key={st.id} className="border-b border-gray-200">
+                            <td className="border border-gray-300 p-2 text-center font-medium">{i + 1}</td>
+                            <td className="border border-gray-300 p-2 font-bold text-gray-900">{st.name}</td>
+                            <td className="border border-gray-300 p-2 text-center font-mono">{st.id.slice(0, 10)}</td>
+                            <td className="border border-gray-300 p-2 text-center">{st.className || selectedClass}</td>
+                            <td className="border border-gray-300 p-2 text-center font-mono">{att.time || "-"}</td>
+                            <td className="border border-gray-300 p-2 text-center font-bold">{att.status}</td>
+                            <td className="border border-gray-300 p-2 text-gray-600">{att.notes || "-"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {/* Signatures */}
+              <div className="grid grid-cols-2 text-center text-xs pt-10 border-t border-gray-300">
+                <div>
+                  <p>Mengetahui,</p>
+                  <p className="font-semibold text-gray-700">Wali Kelas</p>
+                  <div className="h-14" />
+                  <p className="font-bold border-b border-gray-400 inline-block px-4">Budi Santoso, M.Pd.</p>
+                  <p className="text-[10px] text-gray-500 font-mono mt-0.5">NIP: 198501012010011001</p>
+                </div>
+                <div>
+                  <p>Menyetujui,</p>
+                  <p className="font-semibold text-gray-700">Kepala Sekolah</p>
+                  <div className="h-14" />
+                  <p className="font-bold border-b border-gray-400 inline-block px-4">Dr. H. Rahmat Wijaya, M.Si.</p>
+                  <p className="text-[10px] text-gray-500 font-mono mt-0.5">NIP: 197503151998031002</p>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Print CSS for Attendance */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          .attendance-print-area, .attendance-print-area * {
+            visibility: visible;
+          }
+          .attendance-print-area {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            padding: 0;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}} />
         </>
       )}
     </div>

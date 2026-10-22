@@ -336,9 +336,12 @@ export default function HomeroomPage() {
 
   // CSV Export Handler
   const handleExportCSV = () => {
-    if (filteredClasses.length === 0) return;
-    const headers = ["Nama Kelas", "Tingkat", "Jurusan", "Total Siswa", "Nama Wali Kelas", "NIP Wali", "Kontak Wali", "Status"];
-    const rows = filteredClasses.map(c => {
+    if (filteredClasses.length === 0) {
+      toast.showWarning("Tidak ada data wali kelas untuk diekspor.");
+      return;
+    }
+    const headers = ["No", "Nama Kelas", "Tingkat", "Jurusan", "Total Siswa", "Nama Wali Kelas", "NIP Wali", "Kontak Wali", "Status"];
+    const rows = filteredClasses.map((c, idx) => {
       const isFilled = Boolean(c.homeroom && String(c.homeroom).trim() !== "");
       const teacherMatch = findAssignedTeacherForClass(c, teachers) || teachers.find(
         t => String(t.name).trim().toLowerCase() === String(c.homeroom).trim().toLowerCase()
@@ -347,24 +350,29 @@ export default function HomeroomPage() {
       const contact = c.homeroomContact || teacherMatch?.contact || "-";
 
       return [
+        String(idx + 1),
         `"${c.name || ""}"`,
         `"${c.level || ""}"`,
         `"${c.major || ""}"`,
         `"${c.students || 0}"`,
-        `"${c.homeroom || "Belum Ditetapkan"}"`,
+        `"${(c.homeroom || "Belum Ditetapkan").replace(/"/g, '""')}"`,
         `"${nip}"`,
         `"${contact}"`,
         `"${isFilled ? "Terisi" : "Belum Diisi"}"`
       ];
     });
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    const BOM = "\uFEFF";
+    const csvContent = BOM + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `data_wali_kelas_${new Date().toISOString().split("T")[0]}.csv`);
+    link.href = url;
+    link.download = `data_wali_kelas_${new Date().toISOString().split("T")[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.showInfo("Data rekap wali kelas berhasil diekspor ke CSV.", "Ekspor Berhasil");
   };
 
   const isFiltered = searchQuery !== "" || selectedLevel !== "All" || selectedStatus !== "All";

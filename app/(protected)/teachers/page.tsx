@@ -518,23 +518,32 @@ export default function TeachersPage() {
 
   // CSV Export Handler
   const handleExportCSV = () => {
-    if (filteredTeachers.length === 0) return;
-    const headers = ["NIP", "Nama Lengkap", "Mata Pelajaran", "Kontak", "Status"];
-    const rows = filteredTeachers.map(t => [
-      `"${t.id || ""}"`,
-      `"${t.name || ""}"`,
-      `"${t.role || ""}"`,
-      `"${t.contact || ""}"`,
+    if (filteredTeachers.length === 0) {
+      toast.showWarning("Tidak ada data guru untuk diekspor.");
+      return;
+    }
+    const headers = ["No", "NIP", "Nama Lengkap", "Mata Pelajaran", "Email", "Kontak / Telepon", "Status"];
+    const rows = filteredTeachers.map((t: any, idx: number) => [
+      String(idx + 1),
+      `"${t.nip || t.id || ""}"`,
+      `"${(t.name || t.fullName || "").replace(/"/g, '""')}"`,
+      `"${t.role || t.subject || "Guru Pengajar"}"`,
+      `"${t.email || "-"}"`,
+      `"${t.phone || t.contact || "-"}"`,
       `"${t.status || "Aktif"}"`
     ]);
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    const BOM = "\uFEFF";
+    const csvContent = BOM + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `data_guru_${new Date().toISOString().split("T")[0]}.csv`);
+    link.href = url;
+    link.download = `data_guru_${new Date().toISOString().split("T")[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.showInfo("Data guru berhasil diekspor ke CSV.", "Ekspor Berhasil");
   };
 
   const isFiltered = searchQuery !== "" || selectedSubject !== "All" || selectedStatus !== "All";

@@ -62,6 +62,8 @@ import {
 import { useAcademicYear } from "@/context/AcademicYearContext";
 import { useSchoolIncomes } from "@/lib/school-incomes";
 import { DanaMasukTab } from "@/components/finance/dana-masuk-tab";
+import Image from "next/image";
+import { useSchoolProfile } from "@/context/SchoolProfileContext";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -155,6 +157,8 @@ export default function FinancialReportsPage() {
     return bills.filter(b => !b.academicYear || b.academicYear === activeAcademicYear);
   }, [bills, activeAcademicYear]);
 
+  const { profile: schoolProfile } = useSchoolProfile();
+
   // UI State
   const [mainTab, setMainTab] = useState<MainTab>("ringkasan");
   const [searchQuery, setSearchQuery] = useState("");
@@ -169,6 +173,7 @@ export default function FinancialReportsPage() {
   const [rowsPerPage, setRowsPerPage] = useState(15);
   const [drawerBill, setDrawerBill] = useState<SPPBill | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -391,29 +396,53 @@ export default function FinancialReportsPage() {
   // ─── Export Handlers ─────────────────────────────────────────────────────
 
   const handleExportCSV = useCallback(() => {
-    const source = mainTab === "transaksi" ? "transaksi" : mainTab === "tunggakan" ? "tunggakan" : "tagihan";
-
-    if (source === "transaksi") {
-      const headers = ["No", "No. Kuitansi", "Invoice", "Nama Siswa", "Kelas", "Periode", "Nominal", "Metode", "Tanggal Bayar", "Kasir"];
+    const timestamp = new Date().toISOString().slice(0, 10);
+    if (mainTab === "transaksi") {
+      const headers = ["No", "No. Kuitansi", "Invoice", "Nama Siswa", "Kelas", "Periode", "Nominal (Rp)", "Metode Bayar", "Tanggal Bayar", "Kasir"];
       const rows = filteredTransactions.map((t, i) => [
         String(i + 1), t.receiptNo, t.bill.invoiceNo, t.bill.studentName, t.bill.classId,
         t.bill.periodMonth, String(t.amount), t.paymentMethod, t.paymentDate, t.cashierName
       ]);
-      downloadCSV(`Laporan_Transaksi_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
-    } else {
-      const data = source === "tunggakan" ? arrearsBills : filteredBills;
-      const headers = ["No", "Invoice", "Nama Siswa", "NISN", "Kelas", "Periode", "Tagihan", "Dibayar", "Sisa", "Status", "Jatuh Tempo"];
-      const rows = data.map((b, i) => [
+      downloadCSV(`Laporan_Transaksi_Kas_${timestamp}.csv`, headers, rows);
+    } else if (mainTab === "tunggakan") {
+      const headers = ["No", "Invoice", "Nama Siswa", "NISN", "Kelas", "Periode", "Tagihan (Rp)", "Dibayar (Rp)", "Sisa Tunggakan (Rp)", "Status", "Jatuh Tempo"];
+      const rows = arrearsBills.map((b, i) => [
         String(i + 1), b.invoiceNo, b.studentName, b.nisn || "-", b.classId,
         b.periodMonth, String(b.amount), String(b.paidAmount), String(b.remainingAmount),
         STATUS_CONFIG[b.status]?.label || b.status, b.dueDate
       ]);
-      downloadCSV(`Laporan_${source === "tunggakan" ? "Tunggakan" : "Tagihan"}_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+      downloadCSV(`Laporan_Tunggakan_Siswa_${timestamp}.csv`, headers, rows);
+    } else if (mainTab === "kelas") {
+      const headers = ["No", "Kelas", "Jumlah Siswa", "Target Tagihan (Rp)", "Realisasi Penerimaan (Rp)", "Sisa Tunggakan (Rp)", "Persentase Pelunasan (%)"];
+      const rows = classBreakdown.map((c, i) => {
+        const pct = c.totalTagihan > 0 ? Math.round((c.totalDibayar / c.totalTagihan) * 100) : 0;
+        return [
+          String(i + 1), c.kelas, String(c.jumlahSiswa), String(c.totalTagihan), String(c.totalDibayar),
+          String(c.totalSisa), `${pct}%`
+        ];
+      });
+      downloadCSV(`Laporan_Rekap_Per_Kelas_${timestamp}.csv`, headers, rows);
+    } else if (mainTab === "dana_masuk") {
+      const headers = ["No", "ID Transaksi", "Judul", "Kategori Kas", "Keterangan", "Sumber Dana", "Nominal (Rp)", "Tanggal Diterima", "Metode", "Pencatat"];
+      const rows = incomes.map((inc, i) => [
+        String(i + 1), inc.id || "-", inc.title || "-", inc.category || "-", inc.description || "-", inc.sourceName || "-",
+        String(inc.amount || 0), inc.receivedDate || "-", inc.paymentMethod || "-", inc.recordedBy || "-"
+      ]);
+      downloadCSV(`Laporan_Dana_Masuk_Non_SPP_${timestamp}.csv`, headers, rows);
+    } else {
+      // Default / Tagihan / Ringkasan
+      const headers = ["No", "Invoice", "Nama Siswa", "NISN", "Kelas", "Periode", "Tagihan (Rp)", "Dibayar (Rp)", "Sisa (Rp)", "Status", "Jatuh Tempo"];
+      const rows = filteredBills.map((b, i) => [
+        String(i + 1), b.invoiceNo, b.studentName, b.nisn || "-", b.classId,
+        b.periodMonth, String(b.amount), String(b.paidAmount), String(b.remainingAmount),
+        STATUS_CONFIG[b.status]?.label || b.status, b.dueDate
+      ]);
+      downloadCSV(`Laporan_Rekap_Tagihan_SPP_${timestamp}.csv`, headers, rows);
     }
-  }, [mainTab, filteredTransactions, filteredBills, arrearsBills]);
+  }, [mainTab, filteredTransactions, filteredBills, arrearsBills, classBreakdown, incomes]);
 
   const handlePrintPDF = useCallback(() => {
-    window.print();
+    setIsPrintModalOpen(true);
   }, []);
 
   const handleResetFilters = useCallback(() => {
@@ -1628,19 +1657,405 @@ export default function FinancialReportsPage() {
         </>
       )}
 
+      {/* ═══════════════════════ MODAL PRATINJAU CETAK RESMI (PDF) ═══════════════════════ */}
+      {isPrintModalOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Toolbar */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 no-print">
+              <div className="flex items-center gap-2">
+                <Printer className="w-5 h-5 text-[#531FFF]" />
+                <h3 className="text-sm font-bold text-gray-900">
+                  Pratinjau Cetak Laporan Keuangan Resmi (PDF)
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-[#531FFF] hover:bg-[#4216d6] text-white rounded-xl text-xs font-bold shadow-xs inline-flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Cetak / Download PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPrintModalOpen(false)}
+                  className="px-3 py-2 text-xs font-bold text-gray-500 hover:text-gray-800 hover:bg-gray-200 rounded-xl transition-all cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Area */}
+            <div className="p-8 overflow-y-auto print-area space-y-6 text-gray-900 font-sans">
+              {/* Kop Surat Resmi */}
+              <div className="flex items-center justify-between border-b-2 border-gray-900 pb-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-xl bg-gray-900 text-white flex items-center justify-center font-black text-2xl overflow-hidden relative p-1 border border-gray-200 shrink-0">
+                    {schoolProfile?.logoUrl ? (
+                      <Image 
+                        src={schoolProfile.logoUrl} 
+                        alt="Logo" 
+                        fill 
+                        className="object-contain p-1" 
+                        unoptimized 
+                      />
+                    ) : (
+                      <span>QS</span>
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black tracking-tight text-gray-900 uppercase">
+                      {schoolProfile?.schoolName || "SMART SCHOOL OS"}
+                    </h2>
+                    <p className="text-xs text-gray-600 font-medium">
+                      {schoolProfile?.address ? `${schoolProfile.address}, ${schoolProfile.city || ""}` : "SMA NEGERI INDONESIA UNGGUL • JL. PENDIDIKAN NO. 45"}
+                    </p>
+                    <p className="text-[11px] text-gray-500">
+                      NPSN: 20108922 • Telp: {schoolProfile?.phone || "(021) 789-0123"} • Email: {schoolProfile?.email || "finance@smartschool.sch.id"}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="inline-block px-3 py-1 bg-purple-100 text-[#531FFF] font-black text-xs rounded border border-purple-200 uppercase">
+                    LAPORAN RESMI KEUANGAN
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1 font-mono">
+                    Dicetak: {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Title & Document Meta */}
+              <div className="text-center pt-1">
+                <h3 className="text-base font-black text-gray-900 uppercase tracking-wider">
+                  {mainTab === "transaksi"
+                    ? "BUKU JURNAL PENERIMAAN KAS & TRANSAKSI PEMBAYARAN"
+                    : mainTab === "tunggakan"
+                    ? "DAFTAR REKAPITULASI PIUTANG & TUNGGAKAN SISWA"
+                    : mainTab === "kelas"
+                    ? "REKAPITULASI REALISASI PEMBAYARAN SPP PER KELAS"
+                    : mainTab === "dana_masuk"
+                    ? "BUKU KAS PENERIMAAN DANA MASUK OPERASIONAL (NON-SPP)"
+                    : "LAPORAN KEUANGAN DAN REKAPITULASI TAGIHAN SPP SEKOLAH"}
+                </h3>
+                <p className="text-xs text-gray-600 mt-1">
+                  Tahun Ajaran: <span className="font-bold text-gray-900">{activeAcademicYear || "2026/2027"} ({activeSemester || "Ganjil"})</span> | Periode Bulan: <span className="font-bold text-gray-900">{selectedMonth}</span> | Kelas: <span className="font-bold text-gray-900">{selectedClass}</span>
+                </p>
+              </div>
+
+              {/* Summary Cards */}
+              <div className="grid grid-cols-4 gap-3 bg-gray-50 p-4 rounded-xl border border-gray-200 text-xs">
+                <div>
+                  <p className="text-gray-500 font-medium">Total Target Tagihan</p>
+                  <p className="text-sm font-black text-gray-900 mt-0.5">
+                    {formatRupiah(summaryStats.totalTagihan)}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{summaryStats.totalBills} Tagihan Terbit</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Total Realisasi Penerimaan</p>
+                  <p className="text-sm font-black text-emerald-700 mt-0.5">
+                    {formatRupiah(summaryStats.totalPaid)}
+                  </p>
+                  <p className="text-[10px] text-emerald-600 mt-0.5">
+                    {summaryStats.paidBills} Tagihan Lunas
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Total Sisa Tunggakan</p>
+                  <p className="text-sm font-black text-rose-700 mt-0.5">
+                    {formatRupiah(summaryStats.totalRemaining)}
+                  </p>
+                  <p className="text-[10px] text-rose-600 mt-0.5">
+                    {summaryStats.overdueBills + summaryStats.unpaidBills} Belum Lunas
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Tingkat Kolektibilitas</p>
+                  <p className="text-sm font-black text-[#531FFF] mt-0.5">
+                    {summaryStats.collectRate}%
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Efektivitas Penerimaan</p>
+                </div>
+              </div>
+
+              {/* Dynamic Table based on Tab */}
+              <div className="overflow-x-auto">
+                {mainTab === "transaksi" ? (
+                  <table className="w-full border-collapse border border-gray-300 text-[11px] text-left">
+                    <thead>
+                      <tr className="bg-gray-100 font-bold text-gray-800">
+                        <th className="border border-gray-300 p-2 text-center w-8">No</th>
+                        <th className="border border-gray-300 p-2">No. Kuitansi</th>
+                        <th className="border border-gray-300 p-2">Invoice</th>
+                        <th className="border border-gray-300 p-2">Nama Siswa</th>
+                        <th className="border border-gray-300 p-2 text-center">Kelas</th>
+                        <th className="border border-gray-300 p-2 text-center">Periode</th>
+                        <th className="border border-gray-300 p-2 text-right">Nominal</th>
+                        <th className="border border-gray-300 p-2 text-center">Metode</th>
+                        <th className="border border-gray-300 p-2 text-center">Tanggal</th>
+                        <th className="border border-gray-300 p-2">Kasir</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTransactions.map((t, idx) => (
+                        <tr key={t.id || idx} className="border-b border-gray-200">
+                          <td className="border border-gray-300 p-2 text-center font-medium">{idx + 1}</td>
+                          <td className="border border-gray-300 p-2 font-mono font-bold text-purple-700">{t.receiptNo}</td>
+                          <td className="border border-gray-300 p-2 font-mono text-gray-600">{t.bill.invoiceNo}</td>
+                          <td className="border border-gray-300 p-2 font-bold text-gray-900">{t.bill.studentName}</td>
+                          <td className="border border-gray-300 p-2 text-center">{t.bill.classId}</td>
+                          <td className="border border-gray-300 p-2 text-center">{t.bill.periodMonth}</td>
+                          <td className="border border-gray-300 p-2 text-right font-bold text-emerald-700">{formatRupiah(t.amount)}</td>
+                          <td className="border border-gray-300 p-2 text-center">{t.paymentMethod}</td>
+                          <td className="border border-gray-300 p-2 text-center font-mono">{t.paymentDate}</td>
+                          <td className="border border-gray-300 p-2">{t.cashierName || "Kasir"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-100 font-bold text-gray-900 border-t-2 border-gray-400">
+                        <td colSpan={6} className="border border-gray-300 p-2 text-right uppercase">Total Penerimaan:</td>
+                        <td className="border border-gray-300 p-2 text-right text-emerald-700 font-black">
+                          {formatRupiah(filteredTransactions.reduce((acc, t) => acc + (t.amount || 0), 0))}
+                        </td>
+                        <td colSpan={3} className="border border-gray-300 p-2 text-center text-xs">
+                          {filteredTransactions.length} Transaksi
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                ) : mainTab === "tunggakan" ? (
+                  <table className="w-full border-collapse border border-gray-300 text-[11px] text-left">
+                    <thead>
+                      <tr className="bg-gray-100 font-bold text-gray-800">
+                        <th className="border border-gray-300 p-2 text-center w-8">No</th>
+                        <th className="border border-gray-300 p-2">Invoice</th>
+                        <th className="border border-gray-300 p-2">Nama Siswa</th>
+                        <th className="border border-gray-300 p-2 text-center">Kelas</th>
+                        <th className="border border-gray-300 p-2 text-center">Periode</th>
+                        <th className="border border-gray-300 p-2 text-right">Tagihan</th>
+                        <th className="border border-gray-300 p-2 text-right">Dibayar</th>
+                        <th className="border border-gray-300 p-2 text-right">Sisa Tunggakan</th>
+                        <th className="border border-gray-300 p-2 text-center">Jatuh Tempo</th>
+                        <th className="border border-gray-300 p-2 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {arrearsBills.map((b, idx) => (
+                        <tr key={b.id || idx} className="border-b border-gray-200">
+                          <td className="border border-gray-300 p-2 text-center font-medium">{idx + 1}</td>
+                          <td className="border border-gray-300 p-2 font-mono text-gray-600">{b.invoiceNo}</td>
+                          <td className="border border-gray-300 p-2 font-bold text-gray-900">
+                            {b.studentName}
+                            {b.nisn && <span className="block text-[10px] text-gray-400 font-normal">NISN: {b.nisn}</span>}
+                          </td>
+                          <td className="border border-gray-300 p-2 text-center">{b.classId}</td>
+                          <td className="border border-gray-300 p-2 text-center">{b.periodMonth}</td>
+                          <td className="border border-gray-300 p-2 text-right">{formatRupiah(b.amount)}</td>
+                          <td className="border border-gray-300 p-2 text-right text-emerald-700">{formatRupiah(b.paidAmount)}</td>
+                          <td className="border border-gray-300 p-2 text-right font-bold text-rose-700">{formatRupiah(b.remainingAmount)}</td>
+                          <td className="border border-gray-300 p-2 text-center font-mono">{b.dueDate}</td>
+                          <td className="border border-gray-300 p-2 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">
+                              {b.status === "Overdue" ? "Terlambat" : b.status === "Partial" ? "Sebagian" : "Belum Bayar"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-100 font-bold text-gray-900 border-t-2 border-gray-400">
+                        <td colSpan={7} className="border border-gray-300 p-2 text-right uppercase">Total Tunggakan:</td>
+                        <td className="border border-gray-300 p-2 text-right text-rose-700 font-black">
+                          {formatRupiah(arrearsBills.reduce((acc, b) => acc + (b.remainingAmount || 0), 0))}
+                        </td>
+                        <td colSpan={2} className="border border-gray-300 p-2 text-center text-xs">
+                          {arrearsBills.length} Tagihan Menunggak
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                ) : mainTab === "kelas" ? (
+                  <table className="w-full border-collapse border border-gray-300 text-[11px] text-left">
+                    <thead>
+                      <tr className="bg-gray-100 font-bold text-gray-800">
+                        <th className="border border-gray-300 p-2 text-center w-8">No</th>
+                        <th className="border border-gray-300 p-2">Tingkat / Nama Kelas</th>
+                        <th className="border border-gray-300 p-2 text-center">Jumlah Siswa</th>
+                        <th className="border border-gray-300 p-2 text-right">Target Tagihan</th>
+                        <th className="border border-gray-300 p-2 text-right">Realisasi Penerimaan</th>
+                        <th className="border border-gray-300 p-2 text-right">Sisa Tunggakan</th>
+                        <th className="border border-gray-300 p-2 text-center">Kolektibilitas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {classBreakdown.map((c, idx) => {
+                        const pct = c.totalTagihan > 0 ? Math.round((c.totalDibayar / c.totalTagihan) * 100) : 0;
+                        return (
+                          <tr key={idx} className="border-b border-gray-200">
+                            <td className="border border-gray-300 p-2 text-center font-medium">{idx + 1}</td>
+                            <td className="border border-gray-300 p-2 font-bold text-gray-900">{c.kelas}</td>
+                            <td className="border border-gray-300 p-2 text-center">{c.jumlahSiswa} Siswa</td>
+                            <td className="border border-gray-300 p-2 text-right">{formatRupiah(c.totalTagihan)}</td>
+                            <td className="border border-gray-300 p-2 text-right font-bold text-emerald-700">{formatRupiah(c.totalDibayar)}</td>
+                            <td className="border border-gray-300 p-2 text-right font-bold text-rose-700">{formatRupiah(c.totalSisa)}</td>
+                            <td className="border border-gray-300 p-2 text-center font-bold text-purple-700">{pct}%</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-100 font-bold text-gray-900 border-t-2 border-gray-400">
+                        <td colSpan={3} className="border border-gray-300 p-2 text-right uppercase">Total Akumulasi:</td>
+                        <td className="border border-gray-300 p-2 text-right font-bold">{formatRupiah(classBreakdown.reduce((acc, c) => acc + c.totalTagihan, 0))}</td>
+                        <td className="border border-gray-300 p-2 text-right font-bold text-emerald-700">{formatRupiah(classBreakdown.reduce((acc, c) => acc + c.totalDibayar, 0))}</td>
+                        <td className="border border-gray-300 p-2 text-right font-bold text-rose-700">{formatRupiah(classBreakdown.reduce((acc, c) => acc + c.totalSisa, 0))}</td>
+                        <td className="border border-gray-300 p-2 text-center font-black text-purple-700">
+                          {(() => {
+                            const totT = classBreakdown.reduce((acc, c) => acc + c.totalTagihan, 0);
+                            const totD = classBreakdown.reduce((acc, c) => acc + c.totalDibayar, 0);
+                            return totT > 0 ? `${Math.round((totD / totT) * 100)}%` : "0%";
+                          })()}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                ) : mainTab === "dana_masuk" ? (
+                  <table className="w-full border-collapse border border-gray-300 text-[11px] text-left">
+                    <thead>
+                      <tr className="bg-gray-100 font-bold text-gray-800">
+                        <th className="border border-gray-300 p-2 text-center w-8">No</th>
+                        <th className="border border-gray-300 p-2">Kategori Kas</th>
+                        <th className="border border-gray-300 p-2">Judul / Keterangan</th>
+                        <th className="border border-gray-300 p-2">Sumber Dana</th>
+                        <th className="border border-gray-300 p-2 text-center">Tanggal Diterima</th>
+                        <th className="border border-gray-300 p-2 text-right">Nominal</th>
+                        <th className="border border-gray-300 p-2">Pencatat</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {incomes.map((inc, idx) => (
+                        <tr key={inc.id || idx} className="border-b border-gray-200">
+                          <td className="border border-gray-300 p-2 text-center font-medium">{idx + 1}</td>
+                          <td className="border border-gray-300 p-2 font-bold text-purple-800">{inc.category}</td>
+                          <td className="border border-gray-300 p-2">{inc.title || inc.description || "-"}</td>
+                          <td className="border border-gray-300 p-2 text-gray-700">{inc.sourceName || "-"}</td>
+                          <td className="border border-gray-300 p-2 text-center font-mono">{inc.receivedDate || "-"}</td>
+                          <td className="border border-gray-300 p-2 text-right font-bold text-emerald-700">{formatRupiah(inc.amount)}</td>
+                          <td className="border border-gray-300 p-2">{inc.recordedBy || "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-100 font-bold text-gray-900 border-t-2 border-gray-400">
+                        <td colSpan={5} className="border border-gray-300 p-2 text-right uppercase">Total Kas Masuk Non-SPP:</td>
+                        <td className="border border-gray-300 p-2 text-right font-black text-emerald-700">
+                          {formatRupiah(incomes.reduce((acc, inc) => acc + (inc.amount || 0), 0))}
+                        </td>
+                        <td className="border border-gray-300 p-2 text-center text-xs">{incomes.length} Catatan Kas</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                ) : (
+                  <table className="w-full border-collapse border border-gray-300 text-[11px] text-left">
+                    <thead>
+                      <tr className="bg-gray-100 font-bold text-gray-800">
+                        <th className="border border-gray-300 p-2 text-center w-8">No</th>
+                        <th className="border border-gray-300 p-2">No. Invoice</th>
+                        <th className="border border-gray-300 p-2">Nama Siswa</th>
+                        <th className="border border-gray-300 p-2 text-center">Kelas</th>
+                        <th className="border border-gray-300 p-2 text-center">Periode</th>
+                        <th className="border border-gray-300 p-2 text-right">Tagihan</th>
+                        <th className="border border-gray-300 p-2 text-right">Dibayar</th>
+                        <th className="border border-gray-300 p-2 text-right">Sisa</th>
+                        <th className="border border-gray-300 p-2 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredBills.map((b, idx) => (
+                        <tr key={b.id || idx} className="border-b border-gray-200">
+                          <td className="border border-gray-300 p-2 text-center font-medium">{idx + 1}</td>
+                          <td className="border border-gray-300 p-2 font-mono text-gray-700">{b.invoiceNo}</td>
+                          <td className="border border-gray-300 p-2 font-bold text-gray-900">
+                            {b.studentName}
+                            {b.nisn && <span className="block text-[10px] text-gray-400 font-normal">NISN: {b.nisn}</span>}
+                          </td>
+                          <td className="border border-gray-300 p-2 text-center">{b.classId}</td>
+                          <td className="border border-gray-300 p-2 text-center">{b.periodMonth}</td>
+                          <td className="border border-gray-300 p-2 text-right">{formatRupiah(b.amount)}</td>
+                          <td className="border border-gray-300 p-2 text-right font-bold text-emerald-700">{formatRupiah(b.paidAmount)}</td>
+                          <td className="border border-gray-300 p-2 text-right font-bold text-rose-700">{formatRupiah(b.remainingAmount)}</td>
+                          <td className="border border-gray-300 p-2 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                              b.status === "Paid" ? "bg-emerald-100 text-emerald-800" :
+                              b.status === "Partial" ? "bg-amber-100 text-amber-800" :
+                              b.status === "Overdue" ? "bg-rose-100 text-rose-800" :
+                              "bg-gray-100 text-gray-700"
+                            }`}>
+                              {STATUS_CONFIG[b.status]?.label || b.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-100 font-bold text-gray-900 border-t-2 border-gray-400">
+                        <td colSpan={5} className="border border-gray-300 p-2 text-right uppercase">Total:</td>
+                        <td className="border border-gray-300 p-2 text-right">{formatRupiah(filteredBills.reduce((acc, b) => acc + (b.amount || 0), 0))}</td>
+                        <td className="border border-gray-300 p-2 text-right text-emerald-700">{formatRupiah(filteredBills.reduce((acc, b) => acc + (b.paidAmount || 0), 0))}</td>
+                        <td className="border border-gray-300 p-2 text-right text-rose-700">{formatRupiah(filteredBills.reduce((acc, b) => acc + (b.remainingAmount || 0), 0))}</td>
+                        <td className="border border-gray-300 p-2 text-center text-xs">{filteredBills.length} Tagihan</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )}
+              </div>
+
+              {/* Tanda Tangan */}
+              <div className="grid grid-cols-2 text-center text-xs pt-8 border-t border-gray-300">
+                <div>
+                  <p className="text-gray-500 font-medium">Petugas Keuangan / Bendahara</p>
+                  <div className="h-16" />
+                  <p className="font-bold text-gray-900 border-b border-gray-400 inline-block px-6">
+                    {userData?.name || "Dra. Hj. Siti Rahmawati, S.E., M.Ak."}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">NIP: 19800512 200501 2 003</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Mengetahui, Kepala Sekolah</p>
+                  <div className="h-16" />
+                  <p className="font-bold text-gray-900 border-b border-gray-400 inline-block px-6">
+                    Dr. H. Rahmat Wijaya, M.Si.
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">NIP: 19740315 199903 1 002</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ═══════════════════════ PRINT STYLES ═══════════════════════ */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
         @media print {
           body * { visibility: hidden; }
-          .print\\:hidden { display: none !important; }
+          .print-area, .print-area * { visibility: visible; }
+          .print-area {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            padding: 0;
+          }
+          .no-print, .print\\:hidden { display: none !important; }
           [class*="sidebar"], [class*="Sidebar"], nav, header { display: none !important; }
-          div[class*="max-w-\\[1600px\\]"], div[class*="max-w-\\[1600px\\]"] * { visibility: visible; }
-          div[class*="max-w-\\[1600px\\]"] { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
-          @page { size: A4 landscape; margin: 12mm; }
-          table { font-size: 10px !important; }
-          .shadow-xs, .shadow-sm, .shadow-md, .shadow-lg, .shadow-2xl { box-shadow: none !important; }
+          @page { size: A4 landscape; margin: 10mm; }
         }
       `,
         }}

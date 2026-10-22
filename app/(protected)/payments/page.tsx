@@ -163,6 +163,7 @@ export default function PaymentsPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isRatesModalOpen, setIsRatesModalOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [isPrintReportModalOpen, setIsPrintReportModalOpen] = useState(false);
 
   // Active Selected Item State
   const [activeBill, setActiveBill] = useState<SPPBill | null>(null);
@@ -1072,21 +1073,23 @@ export default function PaymentsPage() {
   // Export to CSV
   const handleExportCSV = () => {
     const headers = [
+      "No",
       "No. Invoice",
       "Nama Siswa",
       "NISN",
       "Kelas",
       "Periode",
-      "Tagihan",
-      "Dibayar",
-      "Sisa Tagihan",
+      "Tagihan (Rp)",
+      "Dibayar (Rp)",
+      "Sisa Tagihan (Rp)",
       "Jatuh Tempo",
       "Status",
       "Tgl Bayar Terakhir",
       "Metode",
     ];
 
-    const rows = filteredAndSortedBills.map((b) => [
+    const rows = filteredAndSortedBills.map((b, idx) => [
+      idx + 1,
       `"${b.invoiceNo}"`,
       `"${b.studentName}"`,
       `"${b.nisn || "-"}"`,
@@ -1101,10 +1104,11 @@ export default function PaymentsPage() {
       `"${b.paymentMethod || "-"}"`,
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.href = url;
     const filePrefix = isGuru 
       ? `Rekap_SPP_Kelas_${(teacherHomeroomClasses[0] || "Binaan").replace(/\s+/g, "_")}`
       : isStudent
@@ -1114,6 +1118,7 @@ export default function PaymentsPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
     showInfo?.(
       isGuru
         ? `Rekapitulasi SPP siswa kelas ${teacherHomeroomClasses[0] || "binaan"} berhasil diekspor!`
@@ -1268,7 +1273,7 @@ export default function PaymentsPage() {
 
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={() => setIsPrintReportModalOpen(true)}
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl shadow-2xs transition-all cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5 text-gray-500" />
@@ -1300,7 +1305,7 @@ export default function PaymentsPage() {
 
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={() => setIsPrintReportModalOpen(true)}
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl shadow-2xs transition-all cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5 text-gray-500" />
@@ -1312,7 +1317,7 @@ export default function PaymentsPage() {
             {isStudent && (
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() => setIsPrintReportModalOpen(true)}
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl shadow-2xs transition-all cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5 text-gray-500" />
@@ -4676,6 +4681,212 @@ export default function PaymentsPage() {
                   {deleteModalState.loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   <span>Ya, Hapus Tagihan</span>
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 10. MODAL CETAK REKAPITULASI PEMBAYARAN SPP RESMI                          */}
+      {/* ========================================================================= */}
+      {isPrintReportModalOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Toolbar */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 no-print">
+              <div className="flex items-center gap-2">
+                <Printer className="w-5 h-5 text-[#531FFF]" />
+                <h3 className="text-sm font-bold text-gray-900">
+                  Pratinjau Cetak Rekapitulasi Pembayaran SPP Siswa
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-[#531FFF] hover:bg-[#4216d6] text-white rounded-xl text-xs font-bold shadow-xs inline-flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Cetak / Download PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPrintReportModalOpen(false)}
+                  className="px-3 py-2 text-xs font-bold text-gray-500 hover:text-gray-800 hover:bg-gray-200 rounded-xl transition-all cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Area */}
+            <div className="p-8 overflow-y-auto print-area space-y-6 text-gray-900 font-sans">
+              {/* Kop Surat Resmi */}
+              <div className="flex items-center justify-between border-b-2 border-gray-900 pb-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-xl bg-gray-900 text-white flex items-center justify-center font-black text-2xl overflow-hidden relative p-1 border border-gray-200 shrink-0">
+                    {schoolProfile?.logoUrl ? (
+                      <Image 
+                        src={schoolProfile.logoUrl} 
+                        alt="Logo" 
+                        fill 
+                        className="object-contain p-1" 
+                        unoptimized 
+                      />
+                    ) : (
+                      <span>QS</span>
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black tracking-tight text-gray-900 uppercase">
+                      {schoolProfile?.schoolName || "SMART SCHOOL OS"}
+                    </h2>
+                    <p className="text-xs text-gray-600 font-medium">
+                      {schoolProfile?.address ? `${schoolProfile.address}, ${schoolProfile.city || ""}` : "SMA NEGERI INDONESIA UNGGUL • JL. PENDIDIKAN NO. 45"}
+                    </p>
+                    <p className="text-[11px] text-gray-500">
+                      NPSN: 20108922 • Telp: {schoolProfile?.phone || "(021) 789-0123"} • Email: {schoolProfile?.email || "finance@smartschool.sch.id"}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="inline-block px-3 py-1 bg-purple-100 text-[#531FFF] font-black text-xs rounded border border-purple-200 uppercase">
+                    DOKUMEN RESMI KEUANGAN
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1 font-mono">
+                    Dicetak: {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Title & Document Meta */}
+              <div className="text-center pt-1">
+                <h3 className="text-base font-black text-gray-900 uppercase tracking-wider">
+                  {isGuru 
+                    ? `REKAPITULASI PEMBAYARAN SPP SISWA KELAS ${teacherHomeroomClasses[0] || "BINAAN"}`
+                    : isStudent
+                    ? `KARTU KENDALI & RIWAYAT PEMBAYARAN SPP SISWA`
+                    : `REKAPITULASI LAPORAN PEMBAYARAN SPP SEKOLAH`}
+                </h3>
+                <p className="text-xs text-gray-600 mt-1">
+                  Periode Bulan: <span className="font-bold text-gray-900">{selectedMonth}</span> | Tahun Ajaran: <span className="font-bold text-gray-900">{selectedAcademicYear || "2026/2027"}</span> | Kelas: <span className="font-bold text-gray-900">{selectedClass}</span>
+                </p>
+              </div>
+
+              {/* Summary Cards */}
+              <div className="grid grid-cols-4 gap-3 bg-gray-50 p-4 rounded-xl border border-gray-200 text-xs">
+                <div>
+                  <p className="text-gray-500 font-medium">Total Tagihan</p>
+                  <p className="text-sm font-black text-gray-900 mt-0.5">
+                    {formatRupiah(filteredAndSortedBills.reduce((acc, b) => acc + (b.amount || 0), 0))}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{filteredAndSortedBills.length} Tagihan Terbit</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Total Penerimaan (Lunas)</p>
+                  <p className="text-sm font-black text-emerald-700 mt-0.5">
+                    {formatRupiah(filteredAndSortedBills.reduce((acc, b) => acc + (b.paidAmount || 0), 0))}
+                  </p>
+                  <p className="text-[10px] text-emerald-600 mt-0.5">
+                    {filteredAndSortedBills.filter(b => b.status === "Paid").length} Tagihan Lunas
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Sisa Tunggakan</p>
+                  <p className="text-sm font-black text-rose-700 mt-0.5">
+                    {formatRupiah(filteredAndSortedBills.reduce((acc, b) => acc + (b.remainingAmount || 0), 0))}
+                  </p>
+                  <p className="text-[10px] text-rose-600 mt-0.5">
+                    {filteredAndSortedBills.filter(b => b.status === "Overdue" || b.status === "Unpaid").length} Belum Lunas
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Rasio Pelunasan</p>
+                  <p className="text-sm font-black text-[#531FFF] mt-0.5">
+                    {(() => {
+                      const total = filteredAndSortedBills.reduce((acc, b) => acc + (b.amount || 0), 0);
+                      const paid = filteredAndSortedBills.reduce((acc, b) => acc + (b.paidAmount || 0), 0);
+                      return total > 0 ? `${Math.round((paid / total) * 100)}%` : "0%";
+                    })()}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Target Kolektibilitas</p>
+                </div>
+              </div>
+
+              {/* Table Data */}
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-300 text-[11px] text-left">
+                  <thead>
+                    <tr className="bg-gray-100 font-bold text-gray-800">
+                      <th className="border border-gray-300 p-2 text-center w-8">No</th>
+                      <th className="border border-gray-300 p-2">No. Invoice</th>
+                      <th className="border border-gray-300 p-2">Nama Siswa</th>
+                      <th className="border border-gray-300 p-2 text-center">Kelas</th>
+                      <th className="border border-gray-300 p-2 text-center">Bulan</th>
+                      <th className="border border-gray-300 p-2 text-right">Tagihan</th>
+                      <th className="border border-gray-300 p-2 text-right">Dibayar</th>
+                      <th className="border border-gray-300 p-2 text-right">Sisa</th>
+                      <th className="border border-gray-300 p-2 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAndSortedBills.map((b, idx) => (
+                      <tr key={b.id || idx} className="border-b border-gray-200">
+                        <td className="border border-gray-300 p-2 text-center font-medium">{idx + 1}</td>
+                        <td className="border border-gray-300 p-2 font-mono font-bold text-gray-700">{b.invoiceNo}</td>
+                        <td className="border border-gray-300 p-2 font-bold text-gray-900">
+                          {b.studentName}
+                          {b.nisn && <span className="block text-[10px] text-gray-400 font-normal">NISN: {b.nisn}</span>}
+                        </td>
+                        <td className="border border-gray-300 p-2 text-center">{b.classId}</td>
+                        <td className="border border-gray-300 p-2 text-center">{b.periodMonth}</td>
+                        <td className="border border-gray-300 p-2 text-right font-medium">{formatRupiah(b.amount)}</td>
+                        <td className="border border-gray-300 p-2 text-right font-bold text-emerald-700">{formatRupiah(b.paidAmount)}</td>
+                        <td className="border border-gray-300 p-2 text-right font-bold text-rose-700">{formatRupiah(b.remainingAmount)}</td>
+                        <td className="border border-gray-300 p-2 text-center">
+                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                            b.status === "Paid" ? "bg-emerald-100 text-emerald-800" :
+                            b.status === "Partial" ? "bg-amber-100 text-amber-800" :
+                            b.status === "Overdue" ? "bg-rose-100 text-rose-800" :
+                            "bg-gray-100 text-gray-700"
+                          }`}>
+                            {b.status === "Paid" ? "Lunas" : b.status === "Partial" ? "Sebagian" : b.status === "Overdue" ? "Tunggakan" : "Belum Bayar"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gray-100 font-bold text-gray-900 border-t-2 border-gray-400">
+                      <td colSpan={5} className="border border-gray-300 p-2 text-right uppercase">Total Akumulasi:</td>
+                      <td className="border border-gray-300 p-2 text-right">{formatRupiah(filteredAndSortedBills.reduce((acc, b) => acc + (b.amount || 0), 0))}</td>
+                      <td className="border border-gray-300 p-2 text-right text-emerald-700">{formatRupiah(filteredAndSortedBills.reduce((acc, b) => acc + (b.paidAmount || 0), 0))}</td>
+                      <td className="border border-gray-300 p-2 text-right text-rose-700">{formatRupiah(filteredAndSortedBills.reduce((acc, b) => acc + (b.remainingAmount || 0), 0))}</td>
+                      <td className="border border-gray-300 p-2 text-center text-xs">{filteredAndSortedBills.length} Tagihan</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* Tanda Tangan */}
+              <div className="grid grid-cols-2 text-center text-xs pt-8 border-t border-gray-300">
+                <div>
+                  <p className="text-gray-500 font-medium">Petugas Keuangan / Bendahara</p>
+                  <div className="h-16" />
+                  <p className="font-bold text-gray-900 border-b border-gray-400 inline-block px-6">
+                    {userData?.name || "Dra. Hj. Siti Rahmawati, S.E."}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">NIP: 19800512 200501 2 003</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 font-medium">Mengetahui, Kepala Sekolah</p>
+                  <div className="h-16" />
+                  <p className="font-bold text-gray-900 border-b border-gray-400 inline-block px-6">
+                    Dr. H. Rahmat Wijaya, M.Si.
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">NIP: 19740315 199903 1 002</p>
+                </div>
               </div>
             </div>
           </div>

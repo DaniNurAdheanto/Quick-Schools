@@ -1098,22 +1098,34 @@ export default function DataSiswaPage() {
 
   // CSV Export Handler
   const handleExportCSV = () => {
-    if (filteredStudents.length === 0) return;
-    const headers = ["NIS/NISN", "Nama Lengkap", "Kelas", "Status"];
-    const rows = filteredStudents.map(s => [
-      `"${s.id || ""}"`,
-      `"${s.name || ""}"`,
-      `"${s.classId || ""}"`,
+    if (filteredStudents.length === 0) {
+      toast.showWarning("Tidak ada data siswa untuk diekspor.");
+      return;
+    }
+    const headers = ["No", "NISN", "NIS", "Nama Lengkap", "Kelas", "Jurusan", "Jenis Kelamin", "Email", "Status"];
+    const rows = filteredStudents.map((s: any, idx: number) => [
+      String(idx + 1),
+      `"${s.nisn || s.id || ""}"`,
+      `"${s.nis || "-"}"`,
+      `"${(s.fullName || s.name || "").replace(/"/g, '""')}"`,
+      `"${s.className || s.class || s.classId || "-"}"`,
+      `"${s.major || "MIPA"}"`,
+      `"${s.gender || "-"}"`,
+      `"${s.email || "-"}"`,
       `"${s.status || "Aktif"}"`
     ]);
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    const BOM = "\uFEFF";
+    const csvContent = BOM + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `data_siswa_${new Date().toISOString().split("T")[0]}.csv`);
+    link.href = url;
+    link.download = `data_siswa_${new Date().toISOString().split("T")[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.showInfo("Data siswa berhasil diekspor ke CSV.", "Ekspor Berhasil");
   };
 
   const isFiltered = searchQuery !== "" || 
