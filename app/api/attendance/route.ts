@@ -184,6 +184,8 @@ export async function GET(req: NextRequest) {
         isFinal: att.isFinal,
         latitude: att.latitude,
         longitude: att.longitude,
+        academicYear: "2025/2026",
+        semester: "Ganjil",
       }));
 
       return NextResponse.json({
@@ -320,6 +322,8 @@ export async function GET(req: NextRequest) {
         isRecorded: Boolean(att),
         latitude: att?.latitude || null,
         longitude: att?.longitude || null,
+        academicYear: "2025/2026",
+        semester: "Ganjil",
       };
     });
 

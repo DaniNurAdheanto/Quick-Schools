@@ -199,13 +199,15 @@ function extractValidTimeHM(rawTime: any, rawCreatedAt?: any): string {
 
 const mergeAttendanceRecords = (base: AttendanceRecord[], incoming: AttendanceRecord[]): AttendanceRecord[] => {
   const map: Record<string, AttendanceRecord> = {};
+  const getKey = (r: AttendanceRecord) => {
+    const sKey = r.nisn || r.studentId;
+    return sKey && r.date ? `${sKey}_${r.date}` : r.id;
+  };
   base.forEach((r) => {
-    const key = r.studentId && r.date ? `${r.studentId}_${r.date}` : r.id;
-    map[key] = r;
+    map[getKey(r)] = r;
   });
   incoming.forEach((r) => {
-    const key = r.studentId && r.date ? `${r.studentId}_${r.date}` : r.id;
-    map[key] = r;
+    map[getKey(r)] = r;
   });
   const merged = Object.values(map);
   merged.sort((a, b) => {
@@ -353,6 +355,9 @@ export default function AttendancePage() {
             studentId: r.studentId,
             studentName: r.name || r.fullName,
             className: r.className,
+            academicYear: r.academicYear || "2025/2026",
+            semester: r.semester || "Ganjil",
+            nisn: r.nisn,
             date: r.date,
             timestamp: r.time && r.time !== "-" ? r.time : "07:00",
             time: r.time && r.time !== "-" ? r.time : "07:00",
@@ -382,6 +387,9 @@ export default function AttendancePage() {
             studentId: r.studentId,
             studentName: r.name || r.fullName,
             className: r.className,
+            academicYear: r.academicYear || "2025/2026",
+            semester: r.semester || "Ganjil",
+            nisn: r.nisn,
             date: r.date,
             timestamp: r.time && r.time !== "-" ? r.time : "07:00",
             time: r.time && r.time !== "-" ? r.time : "07:00",
@@ -453,6 +461,9 @@ export default function AttendancePage() {
             studentId: r.studentId,
             studentName: r.name || r.fullName,
             className: r.className,
+            academicYear: r.academicYear || "2025/2026",
+            semester: r.semester || "Ganjil",
+            nisn: r.nisn,
             date: r.date,
             timestamp: r.time && r.time !== "-" ? r.time : "07:00",
             time: r.time && r.time !== "-" ? r.time : "07:00",
@@ -851,7 +862,7 @@ export default function AttendancePage() {
   // Scoped attendance records for Guru and Active Period
   const scopedAttendanceRecords = useMemo(() => {
     const periodFiltered = attendanceRecords.filter((r) =>
-      matchesCurrentPeriod(r.academicYear, r.semester)
+      r.academicYear ? matchesCurrentPeriod(r.academicYear, r.semester) : true
     );
     if (!isGuru) return periodFiltered;
     if (teacherHomeroomClasses.length === 0) return [];
@@ -1513,6 +1524,9 @@ export default function AttendancePage() {
 
     const pool = isGuru ? scopedStudentsList : studentsList;
 
+    // Lookup table from any student identifier (id, nisn, nis, uid, _firestoreId, name) to st.id in pool
+    const idToStudentMap: Record<string, string> = {};
+
     // Populate from scoped students
     pool.forEach((st) => {
       const displayClass = st.className || st.class || st.kelas || st.classId || "10 MIPA 1";
@@ -1527,12 +1541,32 @@ export default function AttendancePage() {
         alpa: 0,
         total: 0
       };
+
+      if (st.id) idToStudentMap[String(st.id).toLowerCase().trim()] = st.id;
+      if (st.nisn) idToStudentMap[String(st.nisn).toLowerCase().trim()] = st.id;
+      if (st.nis) idToStudentMap[String(st.nis).toLowerCase().trim()] = st.id;
+      if (st.uid) idToStudentMap[String(st.uid).toLowerCase().trim()] = st.id;
+      if (st._firestoreId) idToStudentMap[String(st._firestoreId).toLowerCase().trim()] = st.id;
+      if (st.name) idToStudentMap[st.name.toLowerCase().trim()] = st.id;
+      if (st.fullName) idToStudentMap[st.fullName.toLowerCase().trim()] = st.id;
     });
+
+    // Track counted days per student to avoid double-counting the same date
+    const seenStudentDates = new Set<string>();
 
     // Tally attendance records matching monthlyMonth (YYYY-MM)
     scopedAttendanceRecords.forEach((r) => {
       if (r.date && r.date.startsWith(monthlyMonth)) {
-        let entry = map[r.studentId];
+        const canonicalId = 
+          (r.studentId && idToStudentMap[r.studentId.toLowerCase().trim()]) ||
+          (r.nisn && idToStudentMap[String(r.nisn).toLowerCase().trim()]) ||
+          ((r as any).studentUid && idToStudentMap[String((r as any).studentUid).toLowerCase().trim()]) ||
+          ((r as any).uid && idToStudentMap[String((r as any).uid).toLowerCase().trim()]) ||
+          (r.studentName && idToStudentMap[r.studentName.toLowerCase().trim()]) ||
+          (map[r.studentId] ? r.studentId : null);
+
+        let entry = canonicalId ? map[canonicalId] : null;
+
         if (!entry) {
           // If student not in map, create only if student belongs to homeroom or not guru
           const rcNorm = normalizeClassName(r.className);
@@ -1553,10 +1587,19 @@ export default function AttendancePage() {
               total: 0
             };
             map[r.studentId] = entry;
+            idToStudentMap[r.studentId.toLowerCase().trim()] = r.studentId;
+            if (r.nisn) idToStudentMap[String(r.nisn).toLowerCase().trim()] = r.studentId;
+            if (r.studentName) idToStudentMap[r.studentName.toLowerCase().trim()] = r.studentId;
           }
         }
 
         if (entry) {
+          const dateKey = `${entry.id}_${r.date}`;
+          if (seenStudentDates.has(dateKey)) {
+            return;
+          }
+          seenStudentDates.add(dateKey);
+
           entry.total++;
           if (r.status === "Hadir") entry.hadir++;
           else if (r.status === "Terlambat") entry.terlambat++;
@@ -1582,7 +1625,9 @@ export default function AttendancePage() {
     return filtered.map((item) => {
       const activeDaysCount = item.total || 22; // default 22 school days in month
       const attended = item.hadir + item.terlambat;
-      const rate = activeDaysCount > 0 ? ((attended / activeDaysCount) * 100).toFixed(1) : "100.0";
+      const rate = item.total > 0
+        ? Math.round((attended / item.total) * 100)
+        : (activeDaysCount > 0 ? Math.round((attended / activeDaysCount) * 100) : 0);
       return {
         ...item,
         activeDaysCount,

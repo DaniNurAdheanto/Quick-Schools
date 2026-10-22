@@ -187,10 +187,13 @@ export async function GET(req: NextRequest) {
 
       const mappedRecords = attendances.map((att) => {
         const statusStr = statusEnumToString[att.status] || "Hadir";
+        const isPastDate = att.date < today;
         const isHadirOrTerlambat = att.status === AttendanceStatus.HADIR || att.status === AttendanceStatus.TERLAMBAT;
         const isTerlambat = att.status === AttendanceStatus.TERLAMBAT;
         const checkInTimeStr = att.time || (att.checkInTime ? att.checkInTime.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "07:00");
-        const checkOutTimeStr = att.checkOutTime ? att.checkOutTime.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : (isHadirOrTerlambat ? "15:30" : null);
+        const checkOutTimeStr = att.checkOutTime
+          ? att.checkOutTime.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
+          : (isPastDate && isHadirOrTerlambat ? "15:30" : null);
 
         return {
           id: att.id,
@@ -232,8 +235,8 @@ export async function GET(req: NextRequest) {
             },
             notes: "Presensi pulang harian",
           } : null,
-          workDurationMinutes: isHadirOrTerlambat ? 480 : 0,
-          workDurationFormatted: isHadirOrTerlambat ? "8 jam" : "0m",
+          workDurationMinutes: checkOutTimeStr ? 480 : 0,
+          workDurationFormatted: checkOutTimeStr ? "8 jam" : "-",
           academicYear: "2025/2026",
           semester: "Ganjil",
           status: statusStr,
@@ -342,12 +345,14 @@ export async function GET(req: NextRequest) {
           time: att.checkOutTime.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
           timestamp: `${targetDate}T${att.checkOutTime.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}:00`,
           status: "Normal",
-        } : (isHadirOrTerlambat ? {
+          earlyMinutes: 0,
+        } : (isPastDate && isHadirOrTerlambat ? {
           time: "15:30",
           status: "Normal",
+          earlyMinutes: 0,
         } : null),
-        workDurationMinutes: isHadirOrTerlambat ? 480 : 0,
-        workDurationFormatted: isHadirOrTerlambat ? "8 jam" : "0m",
+        workDurationMinutes: (att?.checkOutTime || (isPastDate && isHadirOrTerlambat)) ? 480 : 0,
+        workDurationFormatted: (att?.checkOutTime || (isPastDate && isHadirOrTerlambat)) ? "8 jam" : "-",
         academicYear: "2025/2026",
         semester: "Ganjil",
         status: statusStr,

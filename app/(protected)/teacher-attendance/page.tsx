@@ -655,10 +655,14 @@ export default function TeacherAttendancePage() {
 
   // Robust converter from API payload to TeacherAttendanceRecord
   const mapApiTeacherRecord = useCallback((r: any): TeacherAttendanceRecord => {
+    const today = getTodayDateString();
+    const isPastDate = (r.date || "") < today;
     const isHadirOrTerlambat = r.status === "Hadir" || r.status === "Terlambat";
     const isTerlambat = r.status === "Terlambat";
     const checkInTime = r.time && r.time !== "-" ? r.time : (r.clockIn?.time || "07:00");
-    const checkOutTime = r.clockOut?.time || (isHadirOrTerlambat ? "15:30" : undefined);
+    const hasRealClockOut = Boolean(r.clockOut && r.clockOut.time && r.clockOut.time !== "-");
+    const checkOutTime = hasRealClockOut ? r.clockOut.time : (isPastDate && isHadirOrTerlambat ? "15:30" : undefined);
+    const hasClockOut = hasRealClockOut || (isPastDate && Boolean(checkOutTime));
 
     return {
       id: r.id,
@@ -671,8 +675,8 @@ export default function TeacherAttendancePage() {
       date: r.date,
       status: r.status as TeacherAttendanceStatus,
       notes: r.notes || "",
-      workDurationMinutes: r.workDurationMinutes ?? (isHadirOrTerlambat ? 480 : 0),
-      workDurationFormatted: r.workDurationFormatted ?? (isHadirOrTerlambat ? "8 jam" : "0m"),
+      workDurationMinutes: r.workDurationMinutes ?? (hasClockOut ? 480 : 0),
+      workDurationFormatted: r.workDurationFormatted ?? (hasClockOut ? "8 jam" : "-"),
       academicYear: r.academicYear || "2025/2026",
       semester: r.semester || "Ganjil",
       clockIn: r.clockIn || (isHadirOrTerlambat ? {
@@ -687,9 +691,9 @@ export default function TeacherAttendancePage() {
           inRadius: true,
         },
       } : null),
-      clockOut: r.clockOut || (checkOutTime ? {
-        time: checkOutTime,
-        timestamp: `${r.date}T${checkOutTime}:00`,
+      clockOut: hasRealClockOut ? r.clockOut : (isPastDate && isHadirOrTerlambat ? {
+        time: checkOutTime || "15:30",
+        timestamp: `${r.date}T${checkOutTime || "15:30"}:00`,
         status: "Normal",
         earlyMinutes: 0,
         location: {
