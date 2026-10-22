@@ -13,6 +13,7 @@ import {
   Download,
   Printer,
   ChevronRight,
+  ChevronDown,
   FileText,
   ShieldCheck,
   CalendarDays,
@@ -37,6 +38,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
+
+function formatIndonesianMonthYear(ym: string): string {
+  if (!ym || ym === "all") return "Semua Bulan";
+  const [y, m] = ym.split("-").map(Number);
+  if (!y || !m) return ym;
+  const d = new Date(y, m - 1, 1);
+  return d.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+}
 
 const playShutterSound = () => {
   try {
@@ -631,13 +640,89 @@ export default function TeacherAttendancePage() {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("all");
   const [selectedAdminDate, setSelectedAdminDate] = useState(() => getTodayDateString());
 
+  // Filters for Teacher Personal Attendance History
+  const [teacherMonthFilter, setTeacherMonthFilter] = useState<string>(() => getTodayDateString().slice(0, 7)); // Default: "2026-10"
+  const [teacherStatusFilter, setTeacherStatusFilter] = useState<string>("Semua");
+  const [teacherSearchQuery, setTeacherSearchQuery] = useState<string>("");
+
   const { profile: schoolProfile } = useSchoolProfile();
   const operationalDays = schoolProfile?.operationalDays || "Senin - Jumat";
 
   // PostgreSQL teacher attendance records for the selected admin date
   const [pgRecords, setPgRecords] = useState<TeacherAttendanceRecord[]>([]);
+  // All historical teacher attendance records from PostgreSQL (multi-month / full history)
+  const [allPgRecords, setAllPgRecords] = useState<TeacherAttendanceRecord[]>([]);
 
-  // Fetch historical teacher attendance from PostgreSQL API
+  // Robust converter from API payload to TeacherAttendanceRecord
+  const mapApiTeacherRecord = useCallback((r: any): TeacherAttendanceRecord => {
+    const isHadirOrTerlambat = r.status === "Hadir" || r.status === "Terlambat";
+    const isTerlambat = r.status === "Terlambat";
+    const checkInTime = r.time && r.time !== "-" ? r.time : (r.clockIn?.time || "07:00");
+    const checkOutTime = r.clockOut?.time || (isHadirOrTerlambat ? "15:30" : undefined);
+
+    return {
+      id: r.id,
+      teacherId: r.teacherId,
+      teacherName: r.teacherName || r.fullName || r.name,
+      nip: r.nip,
+      subject: r.subject || "Guru Pengajar",
+      email: r.email,
+      phone: r.phone,
+      date: r.date,
+      status: r.status as TeacherAttendanceStatus,
+      notes: r.notes || "",
+      workDurationMinutes: r.workDurationMinutes ?? (isHadirOrTerlambat ? 480 : 0),
+      workDurationFormatted: r.workDurationFormatted ?? (isHadirOrTerlambat ? "8 jam" : "0m"),
+      academicYear: r.academicYear || "2025/2026",
+      semester: r.semester || "Ganjil",
+      clockIn: r.clockIn || (isHadirOrTerlambat ? {
+        time: checkInTime,
+        timestamp: `${r.date}T${checkInTime}:00`,
+        status: isTerlambat ? "Terlambat" : "Tepat Waktu",
+        lateMinutes: isTerlambat ? 15 : 0,
+        location: {
+          lat: r.latitude || -6.16968,
+          lng: r.longitude || 107.00562,
+          distance: 5,
+          inRadius: true,
+        },
+      } : null),
+      clockOut: r.clockOut || (checkOutTime ? {
+        time: checkOutTime,
+        timestamp: `${r.date}T${checkOutTime}:00`,
+        status: "Normal",
+        earlyMinutes: 0,
+        location: {
+          lat: r.latitude || -6.16968,
+          lng: r.longitude || 107.00562,
+          distance: 5,
+          inRadius: true,
+        },
+      } : null),
+    };
+  }, []);
+
+  // Fetch ALL historical teacher attendance records from PostgreSQL API
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchAllPgTeacherAttendance() {
+      try {
+        const res = await fetch(`/api/teacher-attendance?all=true&operationalDays=${encodeURIComponent(operationalDays)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success && Array.isArray(data.records) && isMounted) {
+          const mapped = data.records.map(mapApiTeacherRecord);
+          setAllPgRecords(mapped);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch all historical teacher attendance:", err);
+      }
+    }
+    fetchAllPgTeacherAttendance();
+    return () => { isMounted = false; };
+  }, [operationalDays, mapApiTeacherRecord]);
+
+  // Fetch historical teacher attendance from PostgreSQL API for the selected admin date
   useEffect(() => {
     let isMounted = true;
     async function fetchPgTeacherAttendance() {
@@ -646,28 +731,7 @@ export default function TeacherAttendancePage() {
         if (!res.ok) return;
         const data = await res.json();
         if (data.success && Array.isArray(data.records) && isMounted) {
-          const mapped: TeacherAttendanceRecord[] = data.records.map((r: any) => ({
-            id: r.id,
-            teacherId: r.teacherId,
-            teacherName: r.fullName || r.name,
-            nip: r.nip,
-            date: r.date,
-            status: r.status as TeacherAttendanceStatus,
-            notes: r.notes || "",
-            workDurationMinutes: 0,
-            workDurationFormatted: "-",
-            clockIn: r.status === "Hadir" || r.status === "Terlambat" ? {
-              time: r.time && r.time !== "-" ? r.time : "07:00",
-              status: r.status === "Terlambat" ? "Terlambat" : "Tepat Waktu",
-              lateMinutes: r.status === "Terlambat" ? 15 : 0,
-              location: {
-                lat: r.latitude || -6.2,
-                lng: r.longitude || 106.8,
-                distance: 5,
-                inRadius: true,
-              },
-            } : undefined,
-          }));
+          const mapped = data.records.map(mapApiTeacherRecord);
           setPgRecords(mapped);
         }
       } catch (err) {
@@ -676,11 +740,15 @@ export default function TeacherAttendancePage() {
     }
     fetchPgTeacherAttendance();
     return () => { isMounted = false; };
-  }, [selectedAdminDate, operationalDays]);
+  }, [selectedAdminDate, operationalDays, mapApiTeacherRecord]);
 
-  // Combined records from Firestore and PostgreSQL
+  // Combined records from Firestore, Historical PostgreSQL, and Date-specific PostgreSQL
   const combinedTeacherRecords = useMemo(() => {
     const map = new Map<string, TeacherAttendanceRecord>();
+    allPgRecords.forEach((r) => {
+      const key = `${r.teacherId}_${r.date}`;
+      map.set(key, r);
+    });
     pgRecords.forEach((r) => {
       const key = `${r.teacherId}_${r.date}`;
       map.set(key, r);
@@ -689,8 +757,8 @@ export default function TeacherAttendancePage() {
       const key = `${r.teacherId || r.id}_${(r.date || "").slice(0, 10)}`;
       map.set(key, r);
     });
-    return Array.from(map.values());
-  }, [records, pgRecords]);
+    return Array.from(map.values()).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  }, [records, pgRecords, allPgRecords]);
 
   const operationalStatus = useMemo(
     () => getOperationalDayStatus(selectedAdminDate, operationalDays),
@@ -1017,16 +1085,20 @@ export default function TeacherAttendancePage() {
     };
   }, [teachersList, todayRecords, operationalStatus.isOperational]);
 
-  // Personal records of the logged in teacher
-  const myPersonalRecords = useMemo(() => {
+  // All personal records of the logged in teacher (all periods)
+  const allMyPersonalRecords = useMemo(() => {
     const activeUid = authUser?.uid || currentUser?.uid;
     const activeEmail = (authUserEmail || authUser?.email || currentUser?.email || "").toLowerCase();
     const activeName = (authUserData?.fullName || authUserData?.name || authUserName || currentUser?.displayName || currentTeacherInfo?.name || "").toLowerCase().trim();
     const activeNip = (authUserData?.nip || currentTeacherInfo?.nip || "").trim();
+    const currentTeacherId = currentTeacherInfo?.id;
+    const currentTeacherUid = currentTeacherInfo?.uid;
 
     return combinedTeacherRecords.filter((r) => {
-      if (!matchesCurrentPeriod(r.academicYear, r.semester)) return false;
-      if (activeUid && (r.teacherId === activeUid || (r as any).uid === activeUid || r.id.includes(activeUid))) return true;
+      if (r.academicYear && !matchesCurrentPeriod(r.academicYear, r.semester)) return false;
+      if (currentTeacherId && (r.teacherId === currentTeacherId || r.id === currentTeacherId || r.id?.includes(currentTeacherId))) return true;
+      if (currentTeacherUid && (r.teacherId === currentTeacherUid || r.id === currentTeacherUid || r.id?.includes(currentTeacherUid))) return true;
+      if (activeUid && (r.teacherId === activeUid || (r as any).uid === activeUid || r.id?.includes(activeUid))) return true;
       if (activeEmail && r.email && r.email.toLowerCase() === activeEmail) return true;
       if (activeNip && activeNip !== "-" && r.nip && r.nip === activeNip) return true;
       if (activeName && r.teacherName && r.teacherName.toLowerCase().trim() === activeName) return true;
@@ -1034,20 +1106,75 @@ export default function TeacherAttendancePage() {
     });
   }, [combinedTeacherRecords, authUser, currentUser, authUserEmail, authUserData, authUserName, currentTeacherInfo, matchesCurrentPeriod]);
 
-  // Current Teacher's Personal Monthly Stats - calculated directly from database records
+  // Months available in this teacher's attendance history
+  const availableTeacherMonths = useMemo(() => {
+    const set = new Set<string>();
+    const currentM = getTodayDateString().slice(0, 7);
+    set.add(currentM);
+    allMyPersonalRecords.forEach((r) => {
+      if (r.date && r.date.length >= 7) {
+        set.add(r.date.slice(0, 7));
+      }
+    });
+    return Array.from(set).sort().reverse();
+  }, [allMyPersonalRecords]);
+
+  // Filtered personal records based on month, status, and search query
+  const filteredMyPersonalRecords = useMemo(() => {
+    return allMyPersonalRecords.filter((rec) => {
+      // 1. Month filter
+      if (teacherMonthFilter !== "all") {
+        if (!(rec.date || "").startsWith(teacherMonthFilter)) {
+          return false;
+        }
+      }
+
+      // 2. Status filter
+      if (teacherStatusFilter !== "Semua") {
+        if (teacherStatusFilter === "Hadir" && rec.status !== "Hadir") return false;
+        if (teacherStatusFilter === "Terlambat" && rec.status !== "Terlambat") return false;
+        if (teacherStatusFilter === "Pulang Awal" && rec.status !== "Pulang Awal") return false;
+        if (teacherStatusFilter === "Izin/Cuti" && rec.status !== "Izin" && rec.status !== "Sakit" && rec.status !== "Cuti") return false;
+      }
+
+      // 3. Search query
+      if (teacherSearchQuery.trim()) {
+        const q = teacherSearchQuery.toLowerCase().trim();
+        const dStr = (rec.date || "").toLowerCase();
+        const stStr = (rec.status || "").toLowerCase();
+        const notesStr = (rec.clockIn?.notes || rec.permitReason || rec.notes || "").toLowerCase();
+        if (!dStr.includes(q) && !stStr.includes(q) && !notesStr.includes(q)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [allMyPersonalRecords, teacherMonthFilter, teacherStatusFilter, teacherSearchQuery]);
+
+  // Current Teacher's Personal Monthly Stats - calculated directly from database records for selected month
   const myMonthlyStats = useMemo(() => {
-    const presentCount = myPersonalRecords.filter((r) => r.status === "Hadir" || r.status === "Terlambat").length;
-    const lateCount = myPersonalRecords.filter((r) => r.status === "Terlambat").length;
-    const totalMinutes = myPersonalRecords.reduce((acc, r) => acc + (r.workDurationMinutes || 0), 0);
+    const scopedRecords = teacherMonthFilter === "all"
+      ? allMyPersonalRecords
+      : allMyPersonalRecords.filter((r) => (r.date || "").startsWith(teacherMonthFilter));
+
+    const presentCount = scopedRecords.filter((r) => r.status === "Hadir" || r.status === "Terlambat").length;
+    const onTimeCount = scopedRecords.filter((r) => r.clockIn?.status === "Tepat Waktu" || (r.status === "Hadir" && r.clockIn?.status !== "Terlambat")).length;
+    const lateCount = scopedRecords.filter((r) => r.status === "Terlambat").length;
+    const permitCount = scopedRecords.filter((r) => r.status === "Izin" || r.status === "Sakit" || r.status === "Cuti").length;
+    const totalMinutes = scopedRecords.reduce((acc, r) => acc + (r.workDurationMinutes || 0), 0);
 
     return {
-      totalDays: myPersonalRecords.length,
+      totalDays: scopedRecords.length,
       presentCount,
+      onTimeCount,
       lateCount,
+      permitCount,
       totalDurationFormatted: formatDurationMinutes(totalMinutes),
-      avgDailyMinutes: myPersonalRecords.length > 0 ? Math.round(totalMinutes / myPersonalRecords.length) : 0,
+      avgDailyMinutes: scopedRecords.length > 0 ? Math.round(totalMinutes / scopedRecords.length) : 0,
+      monthLabel: teacherMonthFilter === "all" ? "Semua Bulan" : formatIndonesianMonthYear(teacherMonthFilter),
     };
-  }, [myPersonalRecords]);
+  }, [allMyPersonalRecords, teacherMonthFilter]);
 
   // Unique subjects for filter
   const subjectList = useMemo(() => {
@@ -1897,13 +2024,13 @@ export default function TeacherAttendancePage() {
               <span className="font-mono text-2xl font-black text-gray-900 mt-1 block">
                 {myMonthlyStats.presentCount} Hari
               </span>
-              <span className="text-[10px] text-gray-400 font-medium">Bulan berjalan</span>
+              <span className="text-[10px] text-gray-400 font-medium">Periode: {myMonthlyStats.monthLabel}</span>
             </div>
 
             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
               <span className="text-[11px] font-bold text-emerald-600 uppercase block">Tepat Waktu</span>
               <span className="font-mono text-2xl font-black text-emerald-700 mt-1 block">
-                {Math.max(0, myMonthlyStats.presentCount - myMonthlyStats.lateCount)} Hari
+                {myMonthlyStats.onTimeCount} Hari
               </span>
               <span className="text-[10px] text-emerald-600 font-medium">Sesuai shift kerja</span>
             </div>
@@ -1929,12 +2056,149 @@ export default function TeacherAttendancePage() {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] p-5 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="font-black text-sm text-gray-900">Riwayat Presensi Guru Anda</h3>
-                <p className="text-xs text-gray-500">Daftar presensi, jam kerja, dan status kehadiran pribadi Anda.</p>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-black text-sm text-gray-900">Riwayat Presensi Guru Anda</h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-[#531FFF]">
+                    {teacherMonthFilter === "all" ? "Semua Periode" : formatIndonesianMonthYear(teacherMonthFilter)}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500">Daftar presensi, jam kerja, dan status kehadiran pribadi Anda di database.</p>
               </div>
-              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100 self-start sm:self-auto">
-                Tercatat {myPersonalRecords.length} Hari Kerja
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100 self-start sm:self-auto">
+                  Menampilkan {filteredMyPersonalRecords.length} dari {allMyPersonalRecords.length} Hari
+                </span>
+              </div>
+            </div>
+
+            {/* Filter Bar: Bulan, Status, & Pencarian */}
+            <div className="bg-gray-50/70 p-3.5 rounded-xl border border-gray-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              {/* Left Side: Month Filter (Dropdown, Month Input, and Quick Pills) */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
+                  <CalendarDays className="w-4 h-4 text-[#531FFF]" />
+                  <span>Bulan:</span>
+                </div>
+
+                {/* Month Dropdown */}
+                <div className="relative">
+                  <select
+                    value={teacherMonthFilter}
+                    onChange={(e) => setTeacherMonthFilter(e.target.value)}
+                    className="bg-white border border-gray-200 text-gray-800 font-bold pl-3 pr-8 py-1.5 rounded-lg text-xs appearance-none focus:outline-hidden focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-2xs"
+                  >
+                    <option value="all">Semua Bulan</option>
+                    {availableTeacherMonths.map((m) => (
+                      <option key={m} value={m}>
+                        {formatIndonesianMonthYear(m)}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
+
+                {/* Direct Month Input (YYYY-MM) */}
+                <input
+                  type="month"
+                  value={teacherMonthFilter === "all" ? "" : teacherMonthFilter}
+                  onChange={(e) => setTeacherMonthFilter(e.target.value || "all")}
+                  className="bg-white border border-gray-200 text-gray-700 font-bold px-2.5 py-1.5 rounded-lg text-xs focus:outline-hidden focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-2xs cursor-pointer"
+                  title="Pilih Bulan & Tahun Kustom"
+                />
+
+                {/* Quick Month Pills */}
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setTeacherMonthFilter(getTodayDateString().slice(0, 7))}
+                    className={cn(
+                      "px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
+                      teacherMonthFilter === getTodayDateString().slice(0, 7)
+                        ? "bg-[#531FFF] text-white shadow-xs"
+                        : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
+                    )}
+                  >
+                    Bulan Ini
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTeacherMonthFilter("all")}
+                    className={cn(
+                      "px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
+                      teacherMonthFilter === "all"
+                        ? "bg-[#531FFF] text-white shadow-xs"
+                        : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
+                    )}
+                  >
+                    Semua Bulan
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Side: Status Filter & Search */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Status Pills */}
+                <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+                  {[
+                    { label: "Semua", val: "Semua" },
+                    { label: "Hadir", val: "Hadir" },
+                    { label: "Terlambat", val: "Terlambat" },
+                    { label: "Pulang Awal", val: "Pulang Awal" },
+                    { label: "Izin / Cuti", val: "Izin/Cuti" },
+                  ].map((st) => (
+                    <button
+                      key={st.val}
+                      type="button"
+                      onClick={() => setTeacherStatusFilter(st.val)}
+                      className={cn(
+                        "px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer",
+                        teacherStatusFilter === st.val
+                          ? "bg-purple-100 text-[#531FFF] border border-[#531FFF]/30 shadow-2xs"
+                          : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
+                      )}
+                    >
+                      {st.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search Input */}
+                <div className="relative min-w-[160px] sm:min-w-[190px]">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari tanggal / catatan..."
+                    value={teacherSearchQuery}
+                    onChange={(e) => setTeacherSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-2.5 py-1.5 text-xs font-medium bg-white border border-gray-200 rounded-lg focus:outline-hidden focus:border-[#531FFF] shadow-2xs"
+                  />
+                  {teacherSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setTeacherSearchQuery("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Reset Button */}
+                {(teacherMonthFilter !== getTodayDateString().slice(0, 7) || teacherStatusFilter !== "Semua" || teacherSearchQuery) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTeacherMonthFilter(getTodayDateString().slice(0, 7));
+                      setTeacherStatusFilter("Semua");
+                      setTeacherSearchQuery("");
+                    }}
+                    className="p-1.5 text-xs font-bold text-gray-600 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors cursor-pointer"
+                    title="Reset Filter"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -1951,14 +2215,36 @@ export default function TeacherAttendancePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 font-medium text-gray-800">
-                  {myPersonalRecords.length === 0 ? (
+                  {filteredMyPersonalRecords.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-gray-400 font-medium">
-                        Belum ada riwayat presensi yang tercatat untuk akun Anda di database.
+                      <td colSpan={7} className="py-10 text-center">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <CalendarDays className="w-8 h-8 text-gray-300" />
+                          <p className="text-gray-600 font-bold text-xs">
+                            Tidak ada riwayat presensi yang cocok dengan filter.
+                          </p>
+                          <p className="text-gray-400 text-[11px]">
+                            {teacherMonthFilter !== "all" ? `Periode: ${formatIndonesianMonthYear(teacherMonthFilter)}` : "Semua Periode"}
+                            {teacherStatusFilter !== "Semua" ? ` • Status: ${teacherStatusFilter}` : ""}
+                          </p>
+                          {(teacherMonthFilter !== "all" || teacherStatusFilter !== "Semua" || teacherSearchQuery) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTeacherMonthFilter("all");
+                                setTeacherStatusFilter("Semua");
+                                setTeacherSearchQuery("");
+                              }}
+                              className="mt-1 px-3 py-1 bg-purple-50 text-[#531FFF] hover:bg-purple-100 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                            >
+                              Tampilkan Semua Riwayat Presensi
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ) : (
-                    myPersonalRecords.map((rec) => (
+                    filteredMyPersonalRecords.map((rec) => (
                       <tr key={rec.id} className="hover:bg-gray-50/50 transition-colors">
                         <td className="py-3.5 px-4 font-bold text-gray-900">{rec.date}</td>
                         <td className="py-3.5 px-4 font-mono font-bold text-emerald-700">
@@ -2394,8 +2680,32 @@ export default function TeacherAttendancePage() {
                     type="month"
                     value={monthlyMonth}
                     onChange={(e) => setMonthlyMonth(e.target.value)}
-                    className="px-3 py-1.5 text-xs font-bold bg-white border border-gray-200 rounded-lg"
+                    className="px-3 py-1.5 text-xs font-bold bg-white border border-gray-200 rounded-lg text-gray-800 focus:outline-hidden focus:border-[#531FFF] shadow-2xs cursor-pointer"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setMonthlyMonth(getTodayDateString().slice(0, 7))}
+                    className={cn(
+                      "px-2.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer",
+                      monthlyMonth === getTodayDateString().slice(0, 7)
+                        ? "bg-[#531FFF] text-white shadow-xs"
+                        : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                    )}
+                  >
+                    Bulan Ini
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMonthlyMonth("")}
+                    className={cn(
+                      "px-2.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer",
+                      monthlyMonth === ""
+                        ? "bg-[#531FFF] text-white shadow-xs"
+                        : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                    )}
+                  >
+                    Semua Bulan
+                  </button>
                 </div>
               </div>
 
@@ -2422,10 +2732,10 @@ export default function TeacherAttendancePage() {
                       </tr>
                     ) : (
                       teachersList.map((teacher, idx) => {
-                      const tRecs = records.filter(
+                      const tRecs = combinedTeacherRecords.filter(
                         (r) =>
-                          matchesCurrentPeriod(r.academicYear, r.semester) &&
-                          (r.date || "").startsWith(monthlyMonth) &&
+                          (r.academicYear ? matchesCurrentPeriod(r.academicYear, r.semester) : true) &&
+                          (!monthlyMonth || (r.date || "").startsWith(monthlyMonth)) &&
                           (r.teacherId === teacher.id ||
                             r.teacherId === teacher.uid ||
                             (teacher._firestoreId && r.teacherId === teacher._firestoreId) ||
@@ -2434,7 +2744,7 @@ export default function TeacherAttendancePage() {
                             (teacher.name && r.teacherName && teacher.name.toLowerCase().trim() === r.teacherName.toLowerCase().trim()))
                       );
                       const hadir = tRecs.filter((r) => r.status === "Hadir" || r.status === "Terlambat").length;
-                      const tepatWaktu = tRecs.filter((r) => r.clockIn?.status === "Tepat Waktu").length;
+                      const tepatWaktu = tRecs.filter((r) => r.clockIn?.status === "Tepat Waktu" || (r.status === "Hadir" && r.clockIn?.status !== "Terlambat")).length;
                       const terlambat = tRecs.filter((r) => r.status === "Terlambat").length;
                       const izin = tRecs.filter((r) => r.status === "Izin" || r.status === "Sakit" || r.status === "Cuti").length;
                       const totalMinutes = tRecs.reduce((acc, r) => acc + (r.workDurationMinutes || 0), 0);
