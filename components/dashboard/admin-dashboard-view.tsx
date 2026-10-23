@@ -49,7 +49,9 @@ import {
   Cell,
   Line,
   LineChart,
-  ReferenceLine
+  ReferenceLine,
+  PieChart,
+  Pie
 } from "recharts";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { isSchoolOperationalDay, getOperationalDayStatus } from "@/lib/operational-days";
@@ -128,6 +130,8 @@ export function AdminDashboardView({
   const [selectedTimeRange, setSelectedTimeRange] = useState<"7d" | "14d" | "30d">("7d");
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>("ALL");
   const [showRoleDropdown, setShowRoleDropdown] = useState<boolean>(false);
+  const [teacherSectionTimeRange, setTeacherSectionTimeRange] = useState<"7d" | "14d" | "30d">("7d");
+  const [teacherSectionChartType, setTeacherSectionChartType] = useState<"area" | "bar">("area");
 
   // ─── Attendance Mode & Historical States ──────────────────────────────────
   const [selectedAttendanceMode, setSelectedAttendanceMode] = useState<"siswa" | "guru" | "komparasi">("siswa");
@@ -842,6 +846,180 @@ export function AdminDashboardView({
     teacherDailyTrends,
     schoolProfile?.operationalDays
   ]);
+
+  // Dedicated multi-day trend data for Teacher Attendance & Discipline Chart Section
+  const teacherSectionTrendData = useMemo(() => {
+    const daysCount = teacherSectionTimeRange === "30d" ? 30 : teacherSectionTimeRange === "14d" ? 14 : 7;
+    const days: {
+      date: string;
+      fullDate: string;
+      rate: number;
+      tepatWaktuPct: number;
+      terlambatPct: number;
+      disciplineRate: number;
+      hadir: number;
+      tepatWaktu: number;
+      terlambat: number;
+      izinSakit: number;
+      alpa: number;
+      total: number;
+    }[] = [];
+    const now = new Date();
+    const countTeachers = teachers.length || unifiedTeachers.length || 1;
+
+    for (let i = daysCount - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dStr = d.toISOString().slice(0, 10);
+      const dayName = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+      const isOp = isSchoolOperationalDay(dStr, schoolProfile?.operationalDays || "Senin - Jumat");
+
+      if (dStr === todayDateStr) {
+        const discRate = teacherAttendanceToday.hadir > 0
+          ? Math.min(100, Math.round((teacherAttendanceToday.tepatWaktu / teacherAttendanceToday.hadir) * 100))
+          : 0;
+        const twPct = isOp && countTeachers > 0
+          ? Math.min(100, Math.round((teacherAttendanceToday.tepatWaktu / countTeachers) * 100))
+          : 0;
+        const terPct = isOp && countTeachers > 0
+          ? Math.min(100, Math.round((teacherAttendanceToday.terlambat / countTeachers) * 100))
+          : 0;
+
+        days.push({
+          date: dayName,
+          fullDate: dStr,
+          rate: teacherAttendanceToday.rate,
+          tepatWaktuPct: twPct,
+          terlambatPct: terPct,
+          disciplineRate: discRate,
+          hadir: teacherAttendanceToday.hadir,
+          tepatWaktu: teacherAttendanceToday.tepatWaktu,
+          terlambat: teacherAttendanceToday.terlambat,
+          izinSakit: teacherAttendanceToday.izinSakit,
+          alpa: teacherAttendanceToday.alpa,
+          total: teacherAttendanceToday.total
+        });
+      } else {
+        const tTrend = teacherDailyTrends.find((t: any) => t.fullDate === dStr);
+        if (tTrend) {
+          const tot = tTrend.total || countTeachers;
+          const tepat = Math.max(0, (tTrend.hadir || 0) - (tTrend.terlambat || 0));
+          const discRate = (tTrend.hadir || 0) > 0 ? Math.min(100, Math.round((tepat / tTrend.hadir) * 100)) : 0;
+          const twPct = tot > 0 ? Math.min(100, Math.round((tepat / tot) * 100)) : 0;
+          const terPct = tot > 0 ? Math.min(100, Math.round(((tTrend.terlambat || 0) / tot) * 100)) : 0;
+
+          days.push({
+            date: dayName,
+            fullDate: dStr,
+            rate: tTrend.rate || 0,
+            tepatWaktuPct: twPct,
+            terlambatPct: terPct,
+            disciplineRate: discRate,
+            hadir: tTrend.hadir || 0,
+            tepatWaktu: tepat,
+            terlambat: tTrend.terlambat || 0,
+            izinSakit: (tTrend.izin || 0) + (tTrend.sakit || 0),
+            alpa: tTrend.alpa || 0,
+            total: tot
+          });
+        } else {
+          const tRecords = teacherAttendance.filter((r: any) => r.date === dStr || r.date?.startsWith(dStr));
+          let h = 0;
+          let tw = 0;
+          let ter = 0;
+          let is = 0;
+          let a = 0;
+
+          tRecords.forEach((r: any) => {
+            const st = (r.status || "").toLowerCase().trim();
+            if (st === "hadir" || (r.clockIn && st !== "alpa")) {
+              h++;
+              if (r.clockIn?.status === "Terlambat" || st === "terlambat") {
+                ter++;
+              } else {
+                tw++;
+              }
+            } else if (st === "terlambat") {
+              h++;
+              ter++;
+            } else if (["izin", "sakit", "cuti"].includes(st)) {
+              is++;
+            } else if (st === "alpa") {
+              a++;
+            }
+          });
+
+          if (isOp && countTeachers > tRecords.length) {
+            a += (countTeachers - tRecords.length);
+          }
+
+          const pct = isOp && countTeachers > 0 ? Math.min(100, Math.round((h / countTeachers) * 100)) : 0;
+          const discRate = h > 0 ? Math.min(100, Math.round((tw / h) * 100)) : 0;
+          const twPct = countTeachers > 0 ? Math.min(100, Math.round((tw / countTeachers) * 100)) : 0;
+          const terPct = countTeachers > 0 ? Math.min(100, Math.round((ter / countTeachers) * 100)) : 0;
+
+          days.push({
+            date: dayName,
+            fullDate: dStr,
+            rate: pct,
+            tepatWaktuPct: twPct,
+            terlambatPct: terPct,
+            disciplineRate: discRate,
+            hadir: h,
+            tepatWaktu: tw,
+            terlambat: ter,
+            izinSakit: is,
+            alpa: a,
+            total: countTeachers
+          });
+        }
+      }
+    }
+    return days;
+  }, [
+    teacherAttendance,
+    teachers.length,
+    unifiedTeachers.length,
+    teacherSectionTimeRange,
+    todayDateStr,
+    teacherAttendanceToday,
+    teacherDailyTrends,
+    schoolProfile?.operationalDays
+  ]);
+
+  // Donut chart composition for Teacher Attendance Today
+  const teacherDonutData = useMemo(() => {
+    const raw = [
+      { name: "Tepat Waktu", value: teacherAttendanceToday.tepatWaktu, color: "#10B981" },
+      { name: "Terlambat", value: teacherAttendanceToday.terlambat, color: "#F59E0B" },
+      { name: "Izin / Sakit", value: teacherAttendanceToday.izinSakit, color: "#8B5CF6" },
+      { name: "Alpa / Belum Absen", value: Math.max(0, teacherAttendanceToday.alpa + teacherAttendanceToday.belumPresensi), color: "#EF4444" },
+    ];
+    const nonZero = raw.filter((item) => item.value > 0);
+    if (nonZero.length === 0) {
+      return [{ name: "Belum Ada Presensi", value: 1, color: "#E2E8F0" }];
+    }
+    return nonZero;
+  }, [teacherAttendanceToday]);
+
+  // Teacher Discipline Summary Metrics
+  const teacherDisciplineMetrics = useMemo(() => {
+    const validDays = teacherSectionTrendData.filter((d) => d.hadir > 0);
+    const avgAttendance = validDays.length > 0
+      ? Math.round(validDays.reduce((acc, d) => acc + d.rate, 0) / validDays.length)
+      : teacherAttendanceToday.rate;
+    const avgPunctuality = validDays.length > 0
+      ? Math.round(validDays.reduce((acc, d) => acc + d.disciplineRate, 0) / validDays.length)
+      : (teacherAttendanceToday.hadir > 0 ? Math.round((teacherAttendanceToday.tepatWaktu / teacherAttendanceToday.hadir) * 100) : 0);
+    const totalLate = validDays.reduce((acc, d) => acc + d.terlambat, 0);
+
+    return {
+      avgAttendance,
+      avgPunctuality,
+      totalLate,
+      daysSampled: validDays.length
+    };
+  }, [teacherSectionTrendData, teacherAttendanceToday]);
 
   // Comparative Attendance Data (Siswa vs Guru)
   const comparativeAttendanceData = useMemo(() => {
@@ -2681,6 +2859,463 @@ export function AdminDashboardView({
             <p className="text-[10px] text-purple-700 mt-1">
               {teacherAttendanceToday.alpa > 0 ? `${teacherAttendanceToday.alpa} Guru Alpa` : "Semua izin terverifikasi"}
             </p>
+          </div>
+        </div>
+
+        {/* Visual Charts: Multi-day Discipline Trends & Daily Distribution Donut */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 pt-1">
+          {/* Left Chart (8 cols): Trend Area / Stacked Bar */}
+          <div className="lg:col-span-8 p-4 sm:p-5 rounded-xl bg-gray-50/70 border border-gray-200/80 flex flex-col justify-between">
+            <div>
+              {/* Header with Title and Mode/Range Controls */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 mb-3 border-b border-gray-200/70">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <h4 className="font-extrabold text-sm text-gray-900">
+                      Grafik Tren Kehadiran & Ketepatan Jam Masuk Guru
+                    </h4>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    Monitoring fluktuasi ketepatan waktu clock-in vs target kedisiplinan sekolah (90%)
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Chart Type Toggle */}
+                  <div className="flex items-center bg-white p-0.5 rounded-lg border border-gray-200 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setTeacherSectionChartType("area")}
+                      className={cn(
+                        "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer",
+                        teacherSectionChartType === "area"
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                      )}
+                    >
+                      <TrendingUp className="w-3 h-3" />
+                      <span>Tren (%)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTeacherSectionChartType("bar")}
+                      className={cn(
+                        "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer",
+                        teacherSectionChartType === "bar"
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                      )}
+                    >
+                      <BarChart2 className="w-3 h-3" />
+                      <span>Bar Komposisi</span>
+                    </button>
+                  </div>
+
+                  {/* Time Range Selector */}
+                  <div className="flex items-center bg-white p-0.5 rounded-lg border border-gray-200 shadow-2xs">
+                    {(["7d", "14d", "30d"] as const).map((rng) => (
+                      <button
+                        key={rng}
+                        type="button"
+                        onClick={() => setTeacherSectionTimeRange(rng)}
+                        className={cn(
+                          "px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer",
+                          teacherSectionTimeRange === rng
+                            ? "bg-gray-900 text-white shadow-xs"
+                            : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                        )}
+                      >
+                        {rng === "7d" ? "7 Hari" : rng === "14d" ? "14 Hari" : "30 Hari"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Chart Render Area */}
+              <div className="w-full h-[250px] min-h-[250px]">
+                {teacherSectionChartType === "area" ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={teacherSectionTrendData} margin={{ top: 15, right: 15, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="teacherSecAreaHadir" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#10B981" stopOpacity={0.0} />
+                        </linearGradient>
+                        <linearGradient id="teacherSecAreaTepat" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#0D9488" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#0D9488" stopOpacity={0.0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                      <XAxis
+                        dataKey="date"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#6B7280", fontSize: 10.5, fontWeight: 600 }}
+                        dy={6}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }}
+                        domain={[0, 100]}
+                        tickFormatter={(val) => `${val}%`}
+                      />
+                      <ReferenceLine
+                        y={90}
+                        stroke="#10B981"
+                        strokeDasharray="4 4"
+                        strokeWidth={1.5}
+                        label={{
+                          value: "Target 90%",
+                          position: "insideTopRight",
+                          fill: "#059669",
+                          fontSize: 9.5,
+                          fontWeight: 700
+                        }}
+                      />
+                      <RechartsTooltip
+                        cursor={{ stroke: "#10B981", strokeWidth: 1.5, strokeDasharray: "4 4" }}
+                        content={({ active, payload, label }) => {
+                          if (active && payload && payload.length) {
+                            const d = payload[0].payload;
+                            const isMet = (d.rate || 0) >= 90;
+                            return (
+                              <div className="bg-gray-900/95 backdrop-blur-md text-white p-3 rounded-xl shadow-xl text-xs space-y-1.5 border border-white/10 min-w-[210px]">
+                                <div className="flex items-center justify-between pb-1 border-b border-white/10">
+                                  <span className="font-extrabold text-emerald-300">{label}</span>
+                                  <span
+                                    className={cn(
+                                      "text-[9px] font-black px-1.5 py-0.5 rounded",
+                                      isMet ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"
+                                    )}
+                                  >
+                                    {isMet ? "Target Terpenuhi" : "Evaluasi"}
+                                  </span>
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-emerald-400 font-bold">
+                                    <span>Tingkat Hadir:</span>
+                                    <span>{d.rate}% ({d.hadir}/{d.total} Guru)</span>
+                                  </div>
+                                  <div className="flex justify-between text-teal-300">
+                                    <span>Hadir Tepat Waktu:</span>
+                                    <span className="font-bold text-white">{d.tepatWaktu} Guru ({d.tepatWaktuPct}%)</span>
+                                  </div>
+                                  <div className="flex justify-between text-amber-300">
+                                    <span>Terlambat:</span>
+                                    <span className="font-bold text-white">{d.terlambat} Guru ({d.terlambatPct}%)</span>
+                                  </div>
+                                  <div className="flex justify-between text-purple-300">
+                                    <span>Izin / Sakit / Cuti:</span>
+                                    <span className="font-bold text-white">{d.izinSakit} Guru</span>
+                                  </div>
+                                  <div className="flex justify-between text-rose-300">
+                                    <span>Alpa:</span>
+                                    <span className="font-bold text-white">{d.alpa} Guru</span>
+                                  </div>
+                                  <div className="pt-1 mt-1 border-t border-white/10 flex justify-between text-emerald-200 font-semibold">
+                                    <span>Rasio Ketepatan Hadir:</span>
+                                    <span className="font-extrabold">{d.disciplineRate}%</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="rate"
+                        name="Kehadiran Total (%)"
+                        stroke="#10B981"
+                        strokeWidth={2.5}
+                        fillOpacity={1}
+                        fill="url(#teacherSecAreaHadir)"
+                        dot={{ r: 3, fill: "#10B981" }}
+                        activeDot={{ r: 5 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="tepatWaktuPct"
+                        name="Tepat Waktu (%)"
+                        stroke="#0D9488"
+                        strokeWidth={2}
+                        dot={{ r: 2.5, fill: "#0D9488" }}
+                        activeDot={{ r: 4.5 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="terlambatPct"
+                        name="Terlambat (%)"
+                        stroke="#F59E0B"
+                        strokeWidth={1.8}
+                        strokeDasharray="3 3"
+                        dot={{ r: 2, fill: "#F59E0B" }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={teacherSectionTrendData} margin={{ top: 15, right: 15, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                      <XAxis
+                        dataKey="date"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#6B7280", fontSize: 10.5, fontWeight: 600 }}
+                        dy={6}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }}
+                        allowDecimals={false}
+                      />
+                      <RechartsTooltip
+                        cursor={{ fill: "rgba(16, 185, 129, 0.06)" }}
+                        content={({ active, payload, label }) => {
+                          if (active && payload && payload.length) {
+                            const d = payload[0].payload;
+                            return (
+                              <div className="bg-gray-900/95 backdrop-blur-md text-white p-3 rounded-xl shadow-xl text-xs space-y-1.5 border border-white/10 min-w-[200px]">
+                                <div className="flex items-center justify-between pb-1 border-b border-white/10 font-extrabold text-emerald-300">
+                                  <span>{label}</span>
+                                  <span className="text-[10px] text-gray-400 font-normal">Total {d.total} Guru</span>
+                                </div>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-emerald-300">
+                                    <span>Hadir Tepat Waktu:</span>
+                                    <span className="font-bold text-white">{d.tepatWaktu} Guru</span>
+                                  </div>
+                                  <div className="flex justify-between text-amber-300">
+                                    <span>Terlambat:</span>
+                                    <span className="font-bold text-white">{d.terlambat} Guru</span>
+                                  </div>
+                                  <div className="flex justify-between text-purple-300">
+                                    <span>Izin / Sakit / Cuti:</span>
+                                    <span className="font-bold text-white">{d.izinSakit} Guru</span>
+                                  </div>
+                                  <div className="flex justify-between text-rose-300">
+                                    <span>Alpa:</span>
+                                    <span className="font-bold text-white">{d.alpa} Guru</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Bar dataKey="tepatWaktu" name="Tepat Waktu" stackId="a" fill="#10B981" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="terlambat" name="Terlambat" stackId="a" fill="#F59E0B" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="izinSakit" name="Izin / Sakit" stackId="a" fill="#8B5CF6" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="alpa" name="Alpa" stackId="a" fill="#EF4444" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+
+            {/* Bottom Legend & Mini Summary Badges */}
+            <div className="pt-3 mt-2 border-t border-gray-200/70 flex flex-wrap items-center justify-between gap-2.5">
+              <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-gray-600">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                  Hadir Tepat Waktu
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+                  Terlambat
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block" />
+                  Izin/Sakit/Cuti
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
+                  Alpa
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100/70 text-emerald-800">
+                  Rata-rata: {teacherDisciplineMetrics.avgAttendance}%
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-100/70 text-teal-800">
+                  Ketepatan: {teacherDisciplineMetrics.avgPunctuality}%
+                </span>
+                {teacherDisciplineMetrics.totalLate > 0 && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100/70 text-amber-800">
+                    {teacherDisciplineMetrics.totalLate}x Terlambat
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Donut Chart & Discipline Index (4 cols) */}
+          <div className="lg:col-span-4 p-4 sm:p-5 rounded-xl bg-gray-50/70 border border-gray-200/80 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between pb-2 border-b border-gray-200/70">
+                <div>
+                  <h4 className="font-extrabold text-sm text-gray-900">
+                    Komposisi Hari Ini
+                  </h4>
+                  <p className="text-[11px] text-gray-500">
+                    Tanggal: {selectedAdminAttendanceDate}
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold text-gray-700 bg-white px-2 py-0.5 rounded-md border border-gray-200 shadow-2xs">
+                  {teacherAttendanceToday.total} Guru
+                </span>
+              </div>
+
+              {/* Donut Chart with Centered Stats */}
+              <div className="relative w-full h-[165px] flex items-center justify-center my-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <RechartsTooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0];
+                          const pct = Math.round(((data.value as number) / Math.max(1, teacherAttendanceToday.total)) * 100);
+                          return (
+                            <div className="bg-gray-900/95 backdrop-blur-md text-white p-2.5 rounded-xl shadow-xl text-xs space-y-1 border border-white/10">
+                              <p className="font-bold flex items-center gap-1.5" style={{ color: data.payload.color }}>
+                                <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: data.payload.color }} />
+                                {data.name}
+                              </p>
+                              <p className="text-gray-300">
+                                <span className="font-extrabold text-white">{data.value}</span> Guru ({pct}%)
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Pie
+                      data={teacherDonutData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={46}
+                      outerRadius={68}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {teacherDonutData.map((entry, index) => (
+                        <Cell key={`donut-cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-xl font-black text-gray-900 leading-tight">
+                    {teacherAttendanceToday.rate}%
+                  </span>
+                  <span className="text-[9.5px] font-bold text-gray-500 uppercase tracking-wider">
+                    Hadir
+                  </span>
+                </div>
+              </div>
+
+              {/* Itemized Breakdown List */}
+              <div className="space-y-1.5 mt-1">
+                <div className="flex items-center justify-between p-1.5 rounded-lg bg-white border border-gray-100 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <span className="text-gray-700 font-medium">Tepat Waktu</span>
+                  </div>
+                  <span className="font-extrabold text-emerald-700">
+                    {teacherAttendanceToday.tepatWaktu} <span className="text-[10px] font-semibold text-gray-400">({Math.round((teacherAttendanceToday.tepatWaktu / Math.max(1, teacherAttendanceToday.total)) * 100)}%)</span>
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-1.5 rounded-lg bg-white border border-gray-100 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    <span className="text-gray-700 font-medium">Terlambat Masuk</span>
+                  </div>
+                  <span className="font-extrabold text-amber-700">
+                    {teacherAttendanceToday.terlambat} <span className="text-[10px] font-semibold text-gray-400">({Math.round((teacherAttendanceToday.terlambat / Math.max(1, teacherAttendanceToday.total)) * 100)}%)</span>
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-1.5 rounded-lg bg-white border border-gray-100 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                    <span className="text-gray-700 font-medium">Izin / Sakit / Cuti</span>
+                  </div>
+                  <span className="font-extrabold text-purple-700">
+                    {teacherAttendanceToday.izinSakit} <span className="text-[10px] font-semibold text-gray-400">({Math.round((teacherAttendanceToday.izinSakit / Math.max(1, teacherAttendanceToday.total)) * 100)}%)</span>
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-1.5 rounded-lg bg-white border border-gray-100 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                    <span className="text-gray-700 font-medium">Alpa / Belum Absen</span>
+                  </div>
+                  <span className="font-extrabold text-rose-700">
+                    {Math.max(0, teacherAttendanceToday.alpa + teacherAttendanceToday.belumPresensi)} <span className="text-[10px] font-semibold text-gray-400">({Math.round((Math.max(0, teacherAttendanceToday.alpa + teacherAttendanceToday.belumPresensi) / Math.max(1, teacherAttendanceToday.total)) * 100)}%)</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Discipline Score Indicator Bar */}
+            <div className="pt-2.5 mt-2.5 border-t border-gray-200/70">
+              {(() => {
+                const punctualityRatio = teacherAttendanceToday.hadir > 0
+                  ? Math.round((teacherAttendanceToday.tepatWaktu / teacherAttendanceToday.hadir) * 100)
+                  : 0;
+                const isOptimal = punctualityRatio >= 85;
+                const isWarning = punctualityRatio < 70 && teacherAttendanceToday.hadir > 0;
+
+                return (
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-[11px] font-bold text-gray-700 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        Indeks Ketepatan Waktu:
+                      </span>
+                      <span
+                        className={cn(
+                          "font-black text-xs",
+                          isOptimal ? "text-emerald-700" : isWarning ? "text-rose-700" : "text-amber-700"
+                        )}
+                      >
+                        {punctualityRatio}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-2 rounded-full transition-all duration-500",
+                          isOptimal
+                            ? "bg-gradient-to-r from-emerald-500 to-teal-400"
+                            : isWarning
+                            ? "bg-gradient-to-r from-rose-500 to-amber-500"
+                            : "bg-gradient-to-r from-amber-500 to-yellow-400"
+                        )}
+                        style={{ width: `${Math.min(100, Math.max(0, punctualityRatio))}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      {isOptimal
+                        ? "Kedisiplinan guru sangat optimal (tepat waktu)."
+                        : isWarning
+                        ? "Perlu evaluasi presensi & supervisi ketepatan jam kerja."
+                        : "Tingkat ketepatan waktu cukup memadai."}
+                    </p>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </div>
 
