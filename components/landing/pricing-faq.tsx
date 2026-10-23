@@ -264,34 +264,35 @@ export default function PricingFaq({ lang }: PricingFaqProps) {
             return (
               <div
                 key={plan.id}
-                className={`rounded-xl p-8 flex flex-col justify-between transition-all duration-300 relative ${
+                className={`rounded-2xl p-8 flex flex-col justify-between transition-all duration-300 relative bg-white ${
                   isPopular
-                    ? "bg-[#531FFF] text-white shadow-[0_25px_60px_-15px_rgba(83,31,255,0.35)] ring-2 ring-[#531FFF] lg:-translate-y-4"
-                    : "bg-white text-gray-900 border border-gray-200/90 hover:border-gray-300 shadow-sm"
+                    ? "border-2 border-[#531FFF] shadow-xl shadow-[#531FFF]/10 lg:-translate-y-2 ring-1 ring-[#531FFF]/20"
+                    : "border border-slate-200/90 hover:border-slate-300 shadow-2xs hover:shadow-md"
                 }`}
               >
                 {isPopular && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-400 to-amber-500 text-slate-900 text-[11px] font-black uppercase tracking-wider px-3.5 py-1 rounded-md shadow-md">
-                    ★ {t.popularBadge}
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#531FFF] text-white text-[10px] font-bold uppercase tracking-wider px-3.5 py-1 rounded-full shadow-xs flex items-center gap-1">
+                    <span>★</span>
+                    <span>{t.popularBadge}</span>
                   </div>
                 )}
 
                 <div>
                   <div className="mb-6">
-                    <h3 className={`text-xl font-black tracking-tight ${isPopular ? "text-white" : "text-gray-900"}`}>
+                    <h3 className="text-xl font-bold tracking-tight text-gray-900">
                       {plan.name}
                     </h3>
-                    <p className={`text-xs mt-1 leading-relaxed ${isPopular ? "text-purple-200" : "text-gray-500"}`}>
+                    <p className="text-xs mt-1 leading-relaxed text-slate-500">
                       {plan.desc}
                     </p>
                   </div>
 
-                  <div className="mb-8 pb-6 border-b border-gray-100/20">
+                  <div className="mb-8 pb-6 border-b border-slate-100">
                     <div className="flex items-baseline gap-1.5">
-                      <span className={`text-4xl font-black tracking-tight ${isPopular ? "text-white" : "text-gray-900"}`}>
+                      <span className="text-4xl font-black tracking-tight text-gray-900">
                         {price}
                       </span>
-                      <span className={`text-xs font-semibold ${isPopular ? "text-purple-200" : "text-gray-400"}`}>
+                      <span className="text-xs font-semibold text-slate-400">
                         {plan.unit}
                       </span>
                     </div>
@@ -301,12 +302,10 @@ export default function PricingFaq({ lang }: PricingFaqProps) {
                   <ul className="space-y-3.5 mb-8">
                     {plan.features.map((feat, fIdx) => (
                       <li key={fIdx} className="flex items-start gap-3">
-                        <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 ${
-                          isPopular ? "bg-white/20 text-white" : "bg-[#F3F0FF] text-[#531FFF]"
-                        }`}>
+                        <div className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 bg-[#F3F0FF] text-[#531FFF]">
                           <Check className="w-3.5 h-3.5" strokeWidth={3} />
                         </div>
-                        <span className={`text-xs font-semibold leading-tight ${isPopular ? "text-purple-100" : "text-gray-700"}`}>
+                        <span className="text-xs font-semibold leading-tight text-slate-700">
                           {feat}
                         </span>
                       </li>
@@ -316,10 +315,10 @@ export default function PricingFaq({ lang }: PricingFaqProps) {
 
                 <Link
                   href={plan.buttonLink}
-                  className={`w-full py-3.5 rounded-lg text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+                  className={`w-full py-3.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-98 ${
                     isPopular
-                      ? "bg-white text-[#531FFF] hover:bg-slate-50 shadow-md shadow-black/10"
-                      : "bg-[#531FFF] text-white hover:bg-[#4314cc] shadow-md shadow-[#531FFF]/25"
+                      ? "bg-[#531FFF] text-white hover:bg-[#4314cc] shadow-md shadow-[#531FFF]/20"
+                      : "bg-slate-50 hover:bg-slate-100 text-slate-800 border border-slate-200"
                   }`}
                 >
                   <span>{plan.buttonText}</span>

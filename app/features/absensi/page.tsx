@@ -1,15 +1,17 @@
 "use client";
 
-import Link from "next/link";
-import { useState, useEffect } from "react";
-import { motion } from "motion/react";
+import React from "react";
 import {
-  UserCheck, ArrowRight, Check,
-  MapPin, Clock, ShieldCheck, Smartphone, BarChart2,
-  CheckCircle2
+  UserCheck,
+  MapPin,
+  Clock,
+  ShieldCheck,
+  Smartphone,
+  BarChart2
 } from "lucide-react";
+import FeatureSubpageLayout, { FeatureSubpageData } from "@/components/landing/feature-subpage-layout";
 
-const T = {
+const T: { id: FeatureSubpageData; en: FeatureSubpageData } = {
   id: {
     badge: "Modul Absensi Siswa & Guru",
     h1a: "Presensi Sekolah Akurat",
@@ -43,9 +45,9 @@ const T = {
       "Rekap kehadiran harian kelas terbit otomatis tanpa perlu hitung manual",
       "Terintegrasi langsung ke sistem penilaian sikap dan cetak rapor digital",
       "Hemat waktu guru piket dalam mendata siswa yang hadir atau terlambat",
-      "Data tersimpan aman di cloud Firebase dengan riwayat per semester",
+      "Data tersimpan permanen di cloud dengan riwayat per semester",
     ],
-    ctaBannerTitle: "Tingkatkan Kedisiplinan Sekolah Anda",
+    ctaBannerTitle: "Tingkatkan Kedisiplinan Sekolah Anda Hari Ini",
     ctaBannerDesc: "Kelola absensi siswa dan guru dengan mudah, cepat, dan transparan bersama Quick Schools.",
     ctaBannerBtn: "Daftar Gratis Sekarang",
   },
@@ -92,51 +94,53 @@ const T = {
 
 function AbsensiMockup() {
   return (
-    <div style={{ backgroundColor: "white", borderRadius: 24, border: "1px solid #f3f4f6", boxShadow: "0 25px 50px -12px rgba(83,31,255,0.15), 0 0 0 1px rgba(83,31,255,0.06)", overflow: "hidden" }}>
-      {/* Top bar */}
-      <div style={{ background: "linear-gradient(135deg, #531FFF 0%, #6D3DFF 100%)", padding: "20px 24px", color: "white" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: "#34d399", animation: "pulse 2s infinite" }} />
-            <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: "#DDD6FF", textTransform: "uppercase", letterSpacing: "0.08em" }}>Live Presensi Radius Geofence</p>
-              <p style={{ fontSize: 14, fontWeight: 800 }}>Senin, 15 September 2026 — 06:52 WIB</p>
-            </div>
-          </div>
-          <div style={{ backgroundColor: "rgba(255,255,255,0.18)", padding: "4px 10px", borderRadius: 8, fontSize: 11, fontWeight: 700 }}>
-            Radius: 100m
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* Top Banner */}
+      <div className="bg-gradient-to-r from-[#531FFF] to-[#6D3DFF] px-5 py-4 text-white flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+          <div>
+            <p className="text-[10px] font-bold text-purple-200 uppercase tracking-wider">Live Presensi Geofence GPS</p>
+            <p className="text-xs font-black text-white">Senin, 15 September 2026 — 06:52 WIB</p>
           </div>
         </div>
+        <span className="bg-white/20 px-2.5 py-1 rounded-md text-[11px] font-bold backdrop-blur-xs">
+          Radius: 100m
+        </span>
       </div>
 
       {/* Feed */}
-      <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10, backgroundColor: "#FAFBFF" }}>
+      <div className="p-4 space-y-2.5 bg-slate-50/50">
         {[
-          { name: "Ahmad Rizqi Pratama", class: "10 IPA 1", time: "06:45 WIB", dist: "18m dari gerbang", status: "HADIR", ok: true },
-          { name: "Siti Nurhaliza", class: "11 IPS 2", time: "06:48 WIB", dist: "32m dari gerbang", status: "HADIR", ok: true },
-          { name: "Budi Santoso", class: "12 IPA 3", time: "06:51 WIB", dist: "15m dari gerbang", status: "HADIR", ok: true },
-          { name: "Dewi Rahayu Putri", class: "10 IPS 1", time: "06:52 WIB", dist: "44m dari gerbang", status: "HADIR", ok: true },
+          { name: "Ahmad Rizqi Pratama", class: "10 IPA 1", time: "06:45 WIB", dist: "18m dari gerbang", status: "HADIR" },
+          { name: "Siti Nurhaliza", class: "11 IPS 2", time: "06:48 WIB", dist: "32m dari gerbang", status: "HADIR" },
+          { name: "Budi Santoso", class: "12 IPA 3", time: "06:51 WIB", dist: "15m dari gerbang", status: "HADIR" },
+          { name: "Dewi Rahayu Putri", class: "10 IPS 1", time: "06:52 WIB", dist: "44m dari gerbang", status: "HADIR" },
         ].map((s, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", backgroundColor: "white", borderRadius: 14, border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.03)" }}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", backgroundColor: "#F3F0FF", display: "flex", alignItems: "center", justifyContent: "center", color: "#531FFF", fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
-              {s.name[0]}
+          <div key={i} className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 shadow-2xs hover:border-[#531FFF]/20 transition-all">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold text-xs shrink-0">
+                {s.name[0]}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-gray-900 truncate">{s.name}</p>
+                <p className="text-[11px] text-gray-500 font-medium">
+                  {s.class} · <span className="text-emerald-600 font-semibold">✓ {s.dist}</span>
+                </p>
+              </div>
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.name}</p>
-              <p style={{ fontSize: 11, color: "#6B7280", fontWeight: 500 }}>{s.class} · <span style={{ color: "#059669" }}>✓ {s.dist}</span></p>
-            </div>
-            <div style={{ textAlign: "right", flexShrink: 0 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: "#374151" }}>{s.time}</p>
-              <span style={{ fontSize: 10, fontWeight: 800, color: "#059669", backgroundColor: "#ECFDF5", padding: "2px 8px", borderRadius: 6 }}>
+            <div className="text-right shrink-0">
+              <p className="text-[11px] font-bold text-gray-700">{s.time}</p>
+              <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                 {s.status}
               </span>
             </div>
           </div>
         ))}
 
-        <div style={{ marginTop: 6, padding: "12px 16px", backgroundColor: "white", borderRadius: 12, border: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#6B7280" }}>Total Hadir Hari Ini</span>
-          <span style={{ fontSize: 14, fontWeight: 800, color: "#531FFF" }}>1.189 / 1.248 Siswa (95.3%)</span>
+        <div className="mt-2 p-3 bg-white rounded-xl border border-gray-200/80 flex items-center justify-between text-xs">
+          <span className="font-semibold text-gray-600">Total Hadir Hari Ini</span>
+          <span className="font-extrabold text-[#531FFF]">1.189 / 1.248 Siswa (95.3%)</span>
         </div>
       </div>
     </div>
@@ -144,165 +148,13 @@ function AbsensiMockup() {
 }
 
 export default function AbsensiPage() {
-  const [lang, setLang] = useState<"id" | "en">("id");
-
-  useEffect(() => {
-    const saved = localStorage.getItem("qs_lang") as "id" | "en";
-    if (saved === "id" || saved === "en") setLang(saved);
-  }, []);
-
-  const t = T[lang];
-
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "white", color: "#111827" }}>
-      {/* Hero */}
-      <section style={{ position: "relative", paddingTop: 140, paddingBottom: 80, overflow: "hidden", background: "linear-gradient(135deg, #F3F0FF 0%, #FFFFFF 60%, #EEF2FF 100%)" }}>
-        <div style={{ position: "absolute", top: 0, right: 0, width: 600, height: 600, background: "radial-gradient(circle, rgba(83,31,255,0.08) 0%, transparent 70%)", pointerEvents: "none" }} />
-        <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle, rgba(83,31,255,0.08) 1px, transparent 1px)", backgroundSize: "36px 36px", pointerEvents: "none" }} />
-
-        <div style={{ position: "relative", zIndex: 10, maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 56, alignItems: "center" }} className="grid-cols-1 lg:grid-cols-2">
-            <div>
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.25)", borderRadius: 12, marginBottom: 24 }}>
-                <UserCheck style={{ width: 14, height: 14, color: "#531FFF" }} />
-                <span style={{ fontSize: 12, fontWeight: 800, color: "#531FFF" }}>{t.badge}</span>
-              </div>
-
-              <h1 style={{ fontSize: "clamp(38px, 4.5vw, 56px)", fontWeight: 900, color: "#111827", lineHeight: 1.12, letterSpacing: "-0.03em", marginBottom: 20 }}>
-                {t.h1a}{" "}
-                <span style={{ background: "linear-gradient(135deg, #531FFF 0%, #7B4DFF 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
-                  {t.h1b}
-                </span>
-              </h1>
-
-              <p style={{ fontSize: 17, color: "#4B5563", lineHeight: 1.7, fontWeight: 500, marginBottom: 32, maxWidth: 520 }}>
-                {t.desc}
-              </p>
-
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 28 }}>
-                <Link href="/register" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "14px 32px", backgroundColor: "#531FFF", color: "white", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none", boxShadow: "0 8px 24px -4px rgba(83,31,255,0.4)", transition: "all 0.2s" }} className="hover:bg-[#4314cc]">
-                  {t.cta1} <ArrowRight style={{ width: 16, height: 16 }} />
-                </Link>
-                <Link href="/attendance" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 28px", backgroundColor: "white", border: "1.5px solid #e5e7eb", color: "#374151", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none" }}>
-                  {t.cta2}
-                </Link>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#6B7280", fontWeight: 500 }}>
-                <CheckCircle2 style={{ width: 16, height: 16, color: "#10b981" }} />
-                <span>Radius sekolah diatur langsung di Pengaturan Profil Sekolah</span>
-              </div>
-            </div>
-
-            <div>
-              <AbsensiMockup />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section id="features" style={{ padding: "96px 0", backgroundColor: "#FAFBFF" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <div style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 64px" }}>
-            <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.2)", borderRadius: 999, marginBottom: 16 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#531FFF", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.featBadge}</span>
-            </div>
-            <h2 style={{ fontSize: "clamp(28px, 3.5vw, 40px)", fontWeight: 900, color: "#111827", letterSpacing: "-0.02em" }}>{t.featTitle}</h2>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 24 }}>
-            {t.feats.map((f, i) => {
-              const Icon = f.icon;
-              return (
-                <motion.div
-                  key={i}
-                  whileHover={{ y: -4, borderColor: "rgba(83,31,255,0.3)", boxShadow: "0 16px 32px -8px rgba(83,31,255,0.12)" }}
-                  transition={{ duration: 0.2 }}
-                  style={{ backgroundColor: "white", border: "1px solid #f3f4f6", borderRadius: 20, padding: 28, boxShadow: "0 2px 8px -4px rgba(0,0,0,0.05)", transition: "all 0.2s" }}
-                >
-                  <div style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: "#F3F0FF", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-                    <Icon style={{ width: 22, height: 22, color: "#531FFF" }} />
-                  </div>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{f.title}</h3>
-                  <p style={{ fontSize: 14, color: "#6B7280", fontWeight: 500, lineHeight: 1.6 }}>{f.desc}</p>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Workflow */}
-      <section style={{ padding: "96px 0", backgroundColor: "white" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <div style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 64px" }}>
-            <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.2)", borderRadius: 999, marginBottom: 16 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#531FFF", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.workBadge}</span>
-            </div>
-            <h2 style={{ fontSize: "clamp(28px, 3.5vw, 40px)", fontWeight: 900, color: "#111827", letterSpacing: "-0.02em" }}>{t.workTitle}</h2>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 24 }}>
-            {t.workSteps.map((s, i) => (
-              <motion.div
-                key={i}
-                whileHover={{ y: -4 }}
-                transition={{ duration: 0.2 }}
-                style={{ background: "linear-gradient(135deg, rgba(243,240,255,0.5) 0%, white 100%)", border: "1px solid rgba(83,31,255,0.12)", borderRadius: 24, padding: 28 }}
-              >
-                <div style={{ fontSize: 36, fontWeight: 900, color: "#531FFF", opacity: 0.3, marginBottom: 12 }}>{s.n}</div>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{s.title}</h3>
-                <p style={{ fontSize: 13, color: "#6B7280", fontWeight: 500, lineHeight: 1.6 }}>{s.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Benefits */}
-      <section style={{ padding: "96px 0", backgroundColor: "#FAFBFF" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 56, alignItems: "center" }} className="grid-cols-1 lg:grid-cols-2">
-            <div>
-              <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.2)", borderRadius: 999, marginBottom: 16 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: "#531FFF", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.benefitBadge}</span>
-              </div>
-              <h2 style={{ fontSize: "clamp(28px, 3.5vw, 40px)", fontWeight: 900, color: "#111827", letterSpacing: "-0.02em", marginBottom: 28 }}>{t.benefitTitle}</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {t.benefits.map((b, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                    <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: "#F3F0FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
-                      <Check style={{ width: 13, height: 13, color: "#531FFF", strokeWidth: 3 }} />
-                    </div>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: "#374151", lineHeight: 1.5 }}>{b}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <AbsensiMockup />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section style={{ padding: "80px 24px", backgroundColor: "white" }}>
-        <div style={{ maxWidth: 960, margin: "0 auto", borderRadius: 32, background: "linear-gradient(135deg, #531FFF 0%, #6D3DFF 50%, #4314cc 100%)", padding: "64px 48px", textAlign: "center", boxShadow: "0 32px 80px -12px rgba(83,31,255,0.35)", color: "white" }}>
-          <h2 style={{ fontSize: "clamp(28px, 4vw, 40px)", fontWeight: 900, marginBottom: 16 }}>{t.ctaBannerTitle}</h2>
-          <p style={{ fontSize: 16, color: "#DDD6FF", fontWeight: 500, marginBottom: 32, maxWidth: 540, margin: "0 auto 32px" }}>{t.ctaBannerDesc}</p>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
-            <Link href="/register" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "16px 36px", backgroundColor: "white", color: "#531FFF", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
-              {t.ctaBannerBtn} <ArrowRight style={{ width: 16, height: 16 }} />
-            </Link>
-            <Link href="/" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "16px 32px", backgroundColor: "rgba(255,255,255,0.1)", border: "1.5px solid rgba(255,255,255,0.25)", color: "white", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none" }}>
-              {lang === "id" ? "Kembali ke Beranda" : "Back to Home"}
-            </Link>
-          </div>
-        </div>
-      </section>
-    </div>
+    <FeatureSubpageLayout
+      moduleKey="absensi"
+      translations={T}
+      mockup={<AbsensiMockup />}
+      dashboardHref="/attendance"
+      icon={UserCheck}
+    />
   );
 }

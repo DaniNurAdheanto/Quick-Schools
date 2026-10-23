@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import {
-  MapPin, CheckCircle2, ShieldCheck, ArrowUpRight,
-  CreditCard, Sparkles, UserCheck, Bell, School
+  LayoutDashboard, UserCheck, BookOpen, CreditCard,
+  GraduationCap, Users, FileText, Settings, Search,
+  Bell, ChevronDown, CheckCircle2, School
 } from "lucide-react";
 
 interface HeroCanvasProps {
@@ -12,345 +13,403 @@ interface HeroCanvasProps {
 }
 
 export default function HeroCanvas({ lang }: HeroCanvasProps) {
-  const [activeTab, setActiveTab] = useState<"presensi" | "rapor" | "spp">("presensi");
+  const [activeMenu, setActiveMenu] = useState("dashboard");
 
   const t = {
     id: {
-      liveStatus: "Sistem Terhubung Real-Time",
-      schoolName: "SMA Nusantara Mandiri Jakarta",
-      academicYear: "T.A. 2026/2027 · Semester Ganjil",
-      tabAttendance: "Presensi Geofence",
-      tabGrades: "Rapor K-Merdeka",
-      tabFinance: "Billing SPP",
-      attendanceBadge: "Radius Sekolah: 120m",
-      onTimeRate: "Tingkat Kehadiran",
-      onTimeValue: "98.4%",
-      studentsPresent: "1.142 dari 1.160 siswa hadir",
-      recentCheckins: "Aktivitas Presensi Terverifikasi",
-      gradesBadge: "Otomasi Kurikulum Merdeka",
-      gradeSummary: "100% Rapor Siap Cetak",
-      gradeDesc: "Deskripsi capaian TP dirumuskan otomatis dari rekap formatif & sumatif.",
-      financeBadge: "Rekap SPP Real-Time",
-      financeRate: "Tingkat Pelunasan",
-      financeValue: "Rp 348.500.000",
-      financeSub: "94.2% tagihan terbayar bulan ini",
+      welcome: "Selamat datang, Admin Sekolah 👋",
+      school: "SMA Nusantara Mandiri Jakarta",
+      date: "Sen, 14 Okt 2026",
+      searchPlaceholder: "Cari siswa, kelas, invoice...",
+      navDashboard: "Dashboard",
+      navAttendance: "Presensi",
+      navAcademic: "Akademik",
+      navFinance: "Keuangan",
+      navStudents: "Siswa",
+      navTeachers: "Guru",
+      navReports: "Laporan",
+      navSettings: "Pengaturan",
+      kpi1Title: "Tingkat Kehadiran",
+      kpi1Badge: "↑ 1.2% dari minggu lalu",
+      kpi2Title: "Siswa Aktif",
+      kpi2Badge: "+12 siswa baru",
+      kpi3Title: "Guru",
+      kpi3Badge: "+2 guru baru",
+      kpi4Title: "SPP Terkumpul",
+      kpi4Badge: "Rata-rata per siswa/bln",
+      activityTitle: "Aktivitas Terbaru",
+      seeAll: "Lihat Semua",
+      chartTitle: "Presensi Hari Ini",
+      chartSub: "1.142 siswa",
+      act1Title: "Presensi Siswa",
+      act1Sub: "Kelas X MIPA 1 · 07:12 WIB",
+      act1Status: "Terverifikasi",
+      act2Title: "Pengumpulan Tugas",
+      act2Sub: "Matematika · 10:24 WIB",
+      act2Status: "Menunggu",
+      act3Title: "Pembayaran SPP",
+      act3Sub: "Raka Pratama · 09:18 WIB",
+      act3Status: "Berhasil",
+      act4Title: "Laporan Nilai",
+      act4Sub: "Kelas XI IPS 2 · 08:45 WIB",
+      act4Status: "Diproses",
+      floatingPill1: "Geofence Aktif · 0 Titip Absen",
+      floatingPill2Title: "SPP Terverifikasi (BCA VA)",
+      floatingPill2Sub: "Rp 750.000 · Rekonsiliasi Otomatis",
     },
     en: {
-      liveStatus: "System Connected Real-Time",
-      schoolName: "Nusantara Mandiri High School",
-      academicYear: "A.Y. 2026/2027 · Odd Semester",
-      tabAttendance: "Geofence Attendance",
-      tabGrades: "Merdeka Report Cards",
-      tabFinance: "Tuition Billing",
-      attendanceBadge: "School Radius: 120m",
-      onTimeRate: "Attendance Rate",
-      onTimeValue: "98.4%",
-      studentsPresent: "1,142 of 1,160 students present",
-      recentCheckins: "Verified Attendance Stream",
-      gradesBadge: "Merdeka Curriculum Engine",
-      gradeSummary: "100% Ready-to-Print Cards",
-      gradeDesc: "Outcome narratives automatically computed from formative & summative scores.",
-      financeBadge: "Real-Time Tuition Stream",
-      financeRate: "Collection Rate",
-      financeValue: "Rp 348,500,000",
-      financeSub: "94.2% bills cleared this month",
+      welcome: "Welcome back, School Admin 👋",
+      school: "Nusantara Mandiri High School",
+      date: "Mon, Oct 14, 2026",
+      searchPlaceholder: "Search students, classes, bills...",
+      navDashboard: "Dashboard",
+      navAttendance: "Attendance",
+      navAcademic: "Academics",
+      navFinance: "Finance",
+      navStudents: "Students",
+      navTeachers: "Teachers",
+      navReports: "Reports",
+      navSettings: "Settings",
+      kpi1Title: "Attendance Rate",
+      kpi1Badge: "↑ 1.2% vs last week",
+      kpi2Title: "Active Students",
+      kpi2Badge: "+12 new enrollments",
+      kpi3Title: "Teachers",
+      kpi3Badge: "+2 new faculty",
+      kpi4Title: "Tuition Collected",
+      kpi4Badge: "Avg per student/mo",
+      activityTitle: "Recent Activity",
+      seeAll: "View All",
+      chartTitle: "Today's Attendance",
+      chartSub: "1,142 students",
+      act1Title: "Student Check-in",
+      act1Sub: "Class 10-A · 07:12 AM",
+      act1Status: "Verified",
+      act2Title: "Assignment Submitted",
+      act2Sub: "Mathematics · 10:24 AM",
+      act2Status: "Pending",
+      act3Title: "Tuition Payment",
+      act3Sub: "Raka Pratama · 09:18 AM",
+      act3Status: "Success",
+      act4Title: "Grade Report",
+      act4Sub: "Class 11-B · 08:45 AM",
+      act4Status: "In Review",
+      floatingPill1: "Geofence Active · 0 Spoofing",
+      floatingPill2Title: "Tuition Verified (BCA VA)",
+      floatingPill2Sub: "Rp 750,000 · Auto Reconciled",
     }
   }[lang];
 
+  const navItems = [
+    { id: "dashboard", icon: LayoutDashboard, label: t.navDashboard },
+    { id: "presensi", icon: UserCheck, label: t.navAttendance },
+    { id: "akademik", icon: BookOpen, label: t.navAcademic },
+    { id: "keuangan", icon: CreditCard, label: t.navFinance },
+    { id: "siswa", icon: GraduationCap, label: t.navStudents },
+    { id: "guru", icon: Users, label: t.navTeachers },
+    { id: "laporan", icon: FileText, label: t.navReports },
+    { id: "pengaturan", icon: Settings, label: t.navSettings },
+  ];
+
   return (
     <div className="relative w-full max-w-2xl mx-auto lg:max-w-none select-none">
-      {/* Outer ambient glow */}
-      <div className="absolute -inset-4 bg-gradient-to-tr from-[#531FFF]/20 via-[#7B4DFF]/15 to-transparent rounded-2xl blur-xl -z-10 pointer-events-none" />
+      {/* Dynamic Animated Pastel Aura behind Mockup */}
+      <motion.div
+        animate={{
+          scale: [1, 1.08, 1],
+          opacity: [0.65, 0.9, 0.65]
+        }}
+        transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute -top-12 -right-10 w-[500px] h-[450px] bg-gradient-to-bl from-[#531FFF]/15 via-[#7B4DFF]/10 to-transparent rounded-full blur-3xl -z-10 pointer-events-none"
+      />
+      <motion.div
+        animate={{
+          scale: [1, 1.05, 1],
+          opacity: [0.5, 0.75, 0.5]
+        }}
+        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+        className="absolute -bottom-8 -left-8 w-[380px] h-[380px] bg-[#531FFF]/8 rounded-full blur-2xl -z-10 pointer-events-none"
+      />
 
-      {/* Main SaaS Window Frame */}
-      <div className="bg-white/95 backdrop-blur-xl rounded-xl md:rounded-2xl border border-gray-200/90 shadow-[0_20px_60px_-15px_rgba(83,31,255,0.18),0_0_0_1px_rgba(83,31,255,0.06)] overflow-hidden">
-        
-        {/* Window Chrome Header */}
-        <div className="bg-slate-900 px-4 py-3 flex items-center justify-between border-b border-slate-800">
-          <div className="flex items-center gap-2">
-            <div className="flex gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500/90" />
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400/90" />
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400/90" />
-            </div>
-            <div className="hidden sm:flex items-center gap-1.5 ml-3 px-3 py-1 bg-slate-800/80 rounded-md text-[11px] text-slate-300 font-mono">
-              <ShieldCheck className="w-3 h-3 text-[#7B4DFF]" />
-              <span className="text-slate-400">https://</span>quickschools.id/os/live-preview
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs">
-            <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-semibold">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              {t.liveStatus}
-            </span>
-          </div>
-        </div>
-
-        {/* Window Subheader & School Identity */}
-        <div className="px-5 py-3.5 bg-slate-50/80 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#531FFF] to-[#7B4DFF] flex items-center justify-center text-white shadow-xs">
-              <School className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-gray-900 tracking-tight">{t.schoolName}</h4>
-              <p className="text-[10px] text-gray-500 font-medium">{t.academicYear}</p>
-            </div>
-          </div>
-
-          {/* Interactive Feature Tabs */}
-          <div className="flex items-center gap-1 p-1 bg-white border border-gray-200/80 rounded-lg shadow-xs">
-            {(["presensi", "rapor", "spp"] as const).map((tab) => {
-              const label = tab === "presensi" ? t.tabAttendance : tab === "rapor" ? t.tabGrades : t.tabFinance;
-              const isActive = activeTab === tab;
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`relative px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
-                    isActive ? "text-[#531FFF] shadow-xs" : "text-gray-500 hover:text-gray-800"
-                  }`}
-                >
-                  {isActive && (
-                    <motion.span
-                      layoutId="canvasActiveTab"
-                      className="absolute inset-0 bg-[#F3F0FF] rounded-md -z-0"
-                      transition={{ type: "spring", stiffness: 450, damping: 35 }}
-                    />
-                  )}
-                  <span className="relative z-10">{label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Dynamic Canvas Workspace */}
-        <div className="p-5 min-h-[330px] bg-gradient-to-b from-white to-slate-50/50">
-          <AnimatePresence mode="wait">
-            {activeTab === "presensi" && (
-              <motion.div
-                key="presensi"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-4"
-              >
-                {/* Metric Strip */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="p-3.5 rounded-lg bg-white border border-gray-100 shadow-xs">
-                    <div className="flex items-center justify-between text-gray-400 mb-1">
-                      <span className="text-[11px] font-semibold text-gray-500">{t.onTimeRate}</span>
-                      <UserCheck className="w-4 h-4 text-emerald-600" />
-                    </div>
-                    <div className="text-xl font-extrabold text-gray-900 tracking-tight">{t.onTimeValue}</div>
-                    <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">↑ +1.2% dari minggu lalu</p>
-                  </div>
-
-                  <div className="p-3.5 rounded-lg bg-white border border-gray-100 shadow-xs">
-                    <div className="flex items-center justify-between text-gray-400 mb-1">
-                      <span className="text-[11px] font-semibold text-gray-500">{t.attendanceBadge}</span>
-                      <MapPin className="w-4 h-4 text-[#531FFF]" />
-                    </div>
-                    <div className="text-xl font-extrabold text-[#531FFF] tracking-tight">Geofence GPS</div>
-                    <p className="text-[10px] text-gray-500 font-medium mt-0.5">Validasi koordinat radius 120m</p>
-                  </div>
-
-                  <div className="p-3.5 rounded-lg bg-white border border-gray-100 shadow-xs sm:col-span-1">
-                    <div className="flex items-center justify-between text-gray-400 mb-1">
-                      <span className="text-[11px] font-semibold text-gray-500">Rekapitulasi</span>
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                    </div>
-                    <div className="text-xs font-bold text-gray-800">{t.studentsPresent}</div>
-                    <div className="w-full bg-gray-100 h-1.5 rounded-full mt-2 overflow-hidden">
-                      <div className="bg-gradient-to-r from-[#531FFF] to-emerald-500 h-full rounded-full w-[98.4%]" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Simulated Live Check-in Feed */}
-                <div className="bg-slate-50/80 rounded-xl p-3 border border-gray-100">
-                  <div className="flex items-center justify-between px-1 mb-2.5">
-                    <span className="text-[11px] font-bold text-gray-700 tracking-wide uppercase">{t.recentCheckins}</span>
-                    <span className="text-[10px] font-semibold text-[#531FFF] bg-[#F3F0FF] px-2 py-0.5 rounded-md">3 detik lalu</span>
-                  </div>
-
-                  <div className="space-y-2">
-                    {[
-                      { name: "Rafi Pratama", class: "11-IPA 1", time: "06:48 WIB", dist: "34m dari titik pusat", status: "Terverifikasi" },
-                      { name: "Anindya Putri", class: "10-IPS 2", time: "06:51 WIB", dist: "18m dari titik pusat", status: "Terverifikasi" },
-                      { name: "Daffa Alfarizi", class: "12-MIPA 3", time: "06:53 WIB", dist: "62m dari titik pusat", status: "Terverifikasi" },
-                    ].map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-gray-100 shadow-2xs">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-md bg-[#F3F0FF] text-[#531FFF] font-bold text-xs flex items-center justify-center">
-                            {item.name[0]}
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-gray-900 leading-tight">{item.name}</p>
-                            <p className="text-[10px] text-gray-500">{item.class} · {item.time}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-right">
-                          <span className="text-[10px] text-gray-400 font-mono hidden sm:inline">{item.dist}</span>
-                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-semibold text-[10px] border border-emerald-100 flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> {item.status}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === "rapor" && (
-              <motion.div
-                key="rapor"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-4"
-              >
-                <div className="bg-[#F3F0FF]/60 border border-[#531FFF]/20 rounded-xl p-3.5 flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#531FFF] text-white flex items-center justify-center shrink-0">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-gray-900">{t.gradeSummary}</h5>
-                    <p className="text-[11px] text-gray-600 leading-relaxed mt-0.5">{t.gradeDesc}</p>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-xl border border-gray-100 p-3.5 shadow-xs space-y-2.5">
-                  <div className="flex items-center justify-between text-xs pb-2 border-b border-gray-100">
-                    <span className="font-bold text-gray-900">Format Rapor K-Merdeka (Fase E/F)</span>
-                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">Format Kemdikbudristek</span>
-                  </div>
-
-                  {[
-                    { mapel: "Matematika Tingkat Lanjut", tp: "Mampu memodelkan fungsi trigonometri dan menyelesaikan persamaan diferensial sederhana", score: 92, badge: "Sangat Baik" },
-                    { mapel: "Bahasa Indonesia", tp: "Mampu mengevaluasi informasi dan gagasan dalam teks editorial serta menyajikan teks eksposisi", score: 88, badge: "Tercapai" },
-                    { mapel: "Informatika & Pemrograman", tp: "Mampu merancang algoritma sorting serta menerapkan konsep modularitas perangkat lunak", score: 95, badge: "Sangat Baik" },
-                  ].map((sub, idx) => (
-                    <div key={idx} className="p-2.5 rounded-lg bg-slate-50/70 border border-gray-100 flex items-start justify-between gap-3">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-gray-900">{sub.mapel}</span>
-                          <span className="text-[9px] font-bold text-[#531FFF] bg-[#F3F0FF] px-1.5 py-0.2 rounded">Nilai Akhir: {sub.score}</span>
-                        </div>
-                        <p className="text-[10px] text-gray-500 line-clamp-1">{sub.tp}</p>
-                      </div>
-                      <span className="shrink-0 text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">
-                        {sub.badge}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === "spp" && (
-              <motion.div
-                key="spp"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-4"
-              >
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="p-4 rounded-xl bg-gradient-to-br from-[#531FFF] to-[#4314cc] text-white shadow-xs">
-                    <p className="text-[11px] font-semibold text-purple-200">{t.financeRate}</p>
-                    <h3 className="text-2xl font-black mt-1 tracking-tight">{t.financeValue}</h3>
-                    <p className="text-[10px] text-purple-200 mt-1">{t.financeSub}</p>
-                  </div>
-
-                  <div className="p-4 rounded-xl bg-white border border-gray-100 shadow-xs flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between text-gray-400 mb-1">
-                        <span className="text-[11px] font-semibold text-gray-500">Rekonsiliasi Otomatis</span>
-                        <CreditCard className="w-4 h-4 text-emerald-600" />
-                      </div>
-                      <h4 className="text-base font-black text-gray-900">Virtual Account & QRIS</h4>
-                      <p className="text-[10px] text-gray-500 mt-0.5">Integrasi payment gateway tanpa verifikasi mutasi manual.</p>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 mt-2">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> 100% Bukti Bayar Otomatis Dikirim via WA
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  {[
-                    { student: "Muhammad Farhan", invoice: "INV-SPP-2026-0901", amount: "Rp 650.000", method: "BCA VA", status: "Lunas" },
-                    { student: "Zahra Aulia", invoice: "INV-SPP-2026-0902", amount: "Rp 650.000", method: "Mandiri VA", status: "Lunas" },
-                  ].map((inv, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-gray-100 shadow-2xs">
-                      <div>
-                        <p className="text-xs font-bold text-gray-900">{inv.student}</p>
-                        <p className="text-[10px] text-gray-400 font-mono">{inv.invoice} · {inv.method}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs font-black text-gray-900">{inv.amount}</p>
-                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                          {inv.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Footer info bar */}
-        <div className="px-5 py-2.5 bg-slate-50 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#531FFF]" />
-            <span className="font-semibold text-gray-700">Multi-Role Portal:</span>
-            <span className="hidden sm:inline text-gray-500">Admin · Guru · Siswa · Orang Tua · Bendahara</span>
-          </div>
-          <span className="text-[10px] font-bold text-[#531FFF] flex items-center gap-1">
-            Simulasi Interaktif <ArrowUpRight className="w-3 h-3" />
-          </span>
-        </div>
-      </div>
-
-      {/* Floating Micro-Card 1 (Left): Live Geofence Radar badge */}
+      {/* Floating Eye-Candy Micro-Pill 1: Top-Right Geofence Radar */}
       <motion.div
         animate={{ y: [0, -6, 0] }}
-        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-        className="hidden xl:flex items-center gap-3 absolute -left-8 top-1/4 bg-white/95 backdrop-blur-md p-3 rounded-xl border border-gray-100 shadow-lg z-20"
+        transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
+        className="hidden xl:flex items-center gap-2.5 absolute -top-5 -right-4 bg-white/95 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-slate-200/90 shadow-lg shadow-[#531FFF]/5 z-20"
       >
-        <div className="w-8 h-8 rounded-lg bg-[#F3F0FF] flex items-center justify-center text-[#531FFF] shrink-0">
-          <MapPin className="w-4 h-4" />
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
+        <span className="text-[11px] font-bold text-slate-800">{t.floatingPill1}</span>
+      </motion.div>
+
+      {/* Floating Eye-Candy Micro-Pill 2: Bottom-Left Auto-Reconciliation */}
+      <motion.div
+        animate={{ y: [0, 6, 0] }}
+        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1.2 }}
+        className="hidden xl:flex items-center gap-2.5 absolute -bottom-5 -left-4 bg-white/95 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-slate-200/90 shadow-lg shadow-[#531FFF]/5 z-20"
+      >
+        <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold">
+          ✓
         </div>
         <div>
-          <p className="text-xs font-bold text-gray-900 leading-tight">Geofence Presisi</p>
-          <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3" /> Anti-Fake GPS Aktif
-          </p>
+          <p className="text-[10px] font-bold text-slate-800 leading-none">{t.floatingPill2Title}</p>
+          <p className="text-[8px] text-slate-400 mt-0.5">{t.floatingPill2Sub}</p>
         </div>
       </motion.div>
 
-      {/* Floating Micro-Card 2 (Right): WhatsApp Real-time Alert */}
+      {/* Main SaaS Mockup Card with Entrance & Subtle Hover Depth */}
       <motion.div
-        animate={{ y: [0, 6, 0] }}
-        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1.2 }}
-        className="hidden xl:flex items-center gap-3 absolute -right-8 bottom-12 bg-white/95 backdrop-blur-md p-3 rounded-xl border border-gray-100 shadow-lg z-20"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        whileHover={{ y: -3 }}
+        className="bg-white rounded-2xl md:rounded-3xl border border-slate-200/90 shadow-[0_25px_70px_-15px_rgba(83,31,255,0.12),0_1px_3px_rgba(0,0,0,0.05)] overflow-hidden transition-shadow hover:shadow-[0_30px_80px_-15px_rgba(83,31,255,0.18)]"
       >
-        <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
-          <Bell className="w-4 h-4" />
+        {/* Inner 2-Column Layout: Mini Sidebar + Dashboard Body */}
+        <div className="grid grid-cols-12 min-h-[440px]">
+          
+          {/* ── Left Mini Sidebar (3 cols on md+) ── */}
+          <div className="col-span-3 sm:col-span-3 border-r border-slate-100 bg-slate-50/70 p-3 sm:p-4 flex flex-col justify-between">
+            <div className="space-y-4">
+              {/* Mini Brand Logo */}
+              <div className="flex items-center gap-2 px-1">
+                <div className="w-6 h-6 rounded-md bg-[#531FFF] flex items-center justify-center text-white shadow-xs">
+                  <span className="text-[11px] font-black leading-none">Q</span>
+                </div>
+                <div className="hidden sm:block leading-none">
+                  <p className="text-[12px] font-black text-slate-900 tracking-tight">Quick Schools</p>
+                  <p className="text-[8px] font-bold text-[#531FFF] uppercase tracking-wider">School OS</p>
+                </div>
+              </div>
+
+              {/* Sidebar Navigation */}
+              <nav className="space-y-0.5">
+                {navItems.map((item) => {
+                  const isActive = activeMenu === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveMenu(item.id)}
+                      className={`w-full flex items-center gap-2 px-2 sm:px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all text-left ${
+                        isActive
+                          ? "bg-[#531FFF] text-white shadow-xs font-bold"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                      }`}
+                    >
+                      <item.icon className="w-3.5 h-3.5 shrink-0" strokeWidth={isActive ? 2.5 : 2} />
+                      <span className="hidden sm:inline truncate">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+
+            {/* School Profile Pill bottom */}
+            <div className="hidden sm:flex items-center gap-2 p-1.5 rounded-lg bg-white border border-slate-200/60 shadow-2xs mt-4">
+              <div className="w-6 h-6 rounded-full bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center text-[10px] font-bold">
+                SN
+              </div>
+              <div className="truncate leading-none">
+                <p className="text-[10px] font-bold text-slate-800 truncate">SMA Nusantara</p>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[8px] text-emerald-600 font-semibold">Online</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Right Dashboard Body (9 cols) ── */}
+          <div className="col-span-9 sm:col-span-9 p-4 sm:p-5 flex flex-col justify-between space-y-4 bg-white">
+            
+            {/* Top Bar: Search, Notification, Avatar */}
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200/70 text-slate-400 text-[11px] w-full max-w-[200px] sm:max-w-[240px]">
+                <Search className="w-3 h-3 text-slate-400 shrink-0" />
+                <span className="truncate hidden sm:inline">{t.searchPlaceholder}</span>
+                <span className="truncate sm:hidden">Cari...</span>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="relative p-1.5 rounded-lg text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer">
+                  <Bell className="w-3.5 h-3.5" />
+                  <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#531FFF] animate-ping" />
+                  <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#531FFF]" />
+                </div>
+                <div className="flex items-center gap-1.5 pl-1.5 border-l border-slate-200">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-[#531FFF] to-[#7B4DFF] text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                    AD
+                  </div>
+                  <ChevronDown className="w-3 h-3 text-slate-400 hidden sm:block" />
+                </div>
+              </div>
+            </div>
+
+            {/* Greeting Header */}
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight">
+                  {t.welcome}
+                </h4>
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
+                  <School className="w-3 h-3 text-slate-400" />
+                  <span>{t.school}</span>
+                </div>
+              </div>
+              <span className="text-[10px] font-medium text-slate-400 shrink-0 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">
+                {t.date}
+              </span>
+            </div>
+
+            {/* 4 KPI Metric Cards with Interactive Hover */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <motion.div
+                whileHover={{ y: -2 }}
+                transition={{ duration: 0.15 }}
+                className="p-2 sm:p-2.5 rounded-xl bg-slate-50/80 border border-slate-100 shadow-2xs hover:border-[#531FFF]/30 hover:bg-white transition-colors"
+              >
+                <p className="text-[9px] sm:text-[10px] text-slate-500 font-medium truncate">{t.kpi1Title}</p>
+                <p className="text-sm sm:text-base font-black text-slate-900 tracking-tight mt-0.5">98.4%</p>
+                <span className="text-[8px] font-bold text-emerald-600 block mt-0.5 truncate">{t.kpi1Badge}</span>
+              </motion.div>
+
+              <motion.div
+                whileHover={{ y: -2 }}
+                transition={{ duration: 0.15 }}
+                className="p-2 sm:p-2.5 rounded-xl bg-slate-50/80 border border-slate-100 shadow-2xs hover:border-[#531FFF]/30 hover:bg-white transition-colors"
+              >
+                <p className="text-[9px] sm:text-[10px] text-slate-500 font-medium truncate">{t.kpi2Title}</p>
+                <p className="text-sm sm:text-base font-black text-slate-900 tracking-tight mt-0.5">1.142</p>
+                <span className="text-[8px] font-bold text-[#531FFF] block mt-0.5 truncate">{t.kpi2Badge}</span>
+              </motion.div>
+
+              <motion.div
+                whileHover={{ y: -2 }}
+                transition={{ duration: 0.15 }}
+                className="p-2 sm:p-2.5 rounded-xl bg-slate-50/80 border border-slate-100 shadow-2xs hover:border-[#531FFF]/30 hover:bg-white transition-colors"
+              >
+                <p className="text-[9px] sm:text-[10px] text-slate-500 font-medium truncate">{t.kpi3Title}</p>
+                <p className="text-sm sm:text-base font-black text-slate-900 tracking-tight mt-0.5">62</p>
+                <span className="text-[8px] font-bold text-[#531FFF] block mt-0.5 truncate">{t.kpi3Badge}</span>
+              </motion.div>
+
+              <motion.div
+                whileHover={{ y: -2 }}
+                transition={{ duration: 0.15 }}
+                className="p-2 sm:p-2.5 rounded-xl bg-slate-50/80 border border-slate-100 shadow-2xs hover:border-[#531FFF]/30 hover:bg-white transition-colors"
+              >
+                <p className="text-[9px] sm:text-[10px] text-slate-500 font-medium truncate">{t.kpi4Title}</p>
+                <p className="text-xs sm:text-[13px] font-black text-slate-900 tracking-tight mt-0.5 truncate">Rp 285jt</p>
+                <span className="text-[8px] text-slate-400 block mt-0.5 truncate">{t.kpi4Badge}</span>
+              </motion.div>
+            </div>
+
+            {/* Bottom 2 Columns: Aktivitas Terbaru & Chart Presensi Hari Ini */}
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
+              
+              {/* Left Column: Aktivitas Terbaru (7 cols) */}
+              <div className="sm:col-span-7 p-3 rounded-xl bg-white border border-slate-100 shadow-2xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#531FFF] animate-pulse" />
+                    <span className="text-[11px] font-extrabold text-slate-900">{t.activityTitle}</span>
+                  </div>
+                  <span className="text-[9px] font-bold text-[#531FFF] hover:underline cursor-pointer">{t.seeAll}</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  {[
+                    { title: t.act1Title, sub: t.act1Sub, status: t.act1Status, badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100" },
+                    { title: t.act2Title, sub: t.act2Sub, status: t.act2Status, badgeColor: "bg-sky-50 text-sky-700 border-sky-100" },
+                    { title: t.act3Title, sub: t.act3Sub, status: t.act3Status, badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-100" },
+                    { title: t.act4Title, sub: t.act4Sub, status: t.act4Status, badgeColor: "bg-slate-100 text-slate-600 border-slate-200" },
+                  ].map((act, i) => (
+                    <motion.div
+                      key={i}
+                      whileHover={{ x: 2 }}
+                      transition={{ duration: 0.15 }}
+                      className="flex items-center justify-between p-1.5 rounded-lg bg-slate-50/60 hover:bg-slate-100/60 transition-colors cursor-default"
+                    >
+                      <div className="truncate mr-2">
+                        <p className="text-[10px] font-bold text-slate-800 truncate">{act.title}</p>
+                        <p className="text-[8px] text-slate-400 truncate">{act.sub}</p>
+                      </div>
+                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md border shrink-0 ${act.badgeColor}`}>
+                        {act.status}
+                      </span>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right Column: Presensi Hari Ini + SVG Area Chart (5 cols) */}
+              <div className="sm:col-span-5 p-3 rounded-xl bg-white border border-slate-100 shadow-2xs flex flex-col justify-between">
+                <div>
+                  <p className="text-[10px] font-semibold text-slate-500">{t.chartTitle}</p>
+                  <p className="text-sm font-black text-slate-900 tracking-tight mt-0.5">{t.chartSub}</p>
+                </div>
+
+                {/* SVG Curve Chart with Dynamic Pulsing Peak */}
+                <div className="my-2">
+                  <svg viewBox="0 0 160 60" className="w-full h-14 overflow-visible">
+                    <defs>
+                      <linearGradient id="purpleAreaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#531FFF" stopOpacity="0.28" />
+                        <stop offset="100%" stopColor="#531FFF" stopOpacity="0.0" />
+                      </linearGradient>
+                    </defs>
+                    {/* Area fill */}
+                    <path
+                      d="M 0,42 Q 25,38 50,48 T 100,28 T 135,16 T 160,22 L 160,60 L 0,60 Z"
+                      fill="url(#purpleAreaGrad)"
+                    />
+                    {/* Line stroke */}
+                    <path
+                      d="M 0,42 Q 25,38 50,48 T 100,28 T 135,16 T 160,22"
+                      fill="none"
+                      stroke="#531FFF"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                    />
+                    {/* Data Points with gentle pulse on peak */}
+                    <circle cx="100" cy="28" r="3" fill="#531FFF" />
+                    <motion.circle
+                      cx="135"
+                      cy="16"
+                      r="3.5"
+                      fill="#531FFF"
+                      animate={{ scale: [1, 1.35, 1] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                    />
+                  </svg>
+
+                  {/* Day labels along bottom */}
+                  <div className="flex items-center justify-between text-[8px] font-semibold text-slate-400 px-1 pt-1 border-t border-slate-100">
+                    <span>Sen</span>
+                    <span>Sel</span>
+                    <span>Rab</span>
+                    <span>Kam</span>
+                    <span>Jum</span>
+                    <span>Sab</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[8px] text-slate-400 font-medium">
+                  <span className="flex items-center gap-1 text-emerald-600 font-bold">
+                    <CheckCircle2 className="w-2.5 h-2.5" /> 98.4% Hadir
+                  </span>
+                  <span>Target: 95%</span>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
         </div>
-        <div>
-          <p className="text-xs font-bold text-gray-900 leading-tight">Notifikasi Wali Murid</p>
-          <p className="text-[10px] text-gray-500 font-medium">Anak tiba di sekolah (06:48)</p>
-        </div>
+
       </motion.div>
     </div>
   );

@@ -13,7 +13,7 @@ export default function LandingFooter({ lang }: FooterProps) {
       tagline: "Platform sistem informasi manajemen sekolah cerdas terdepan di Indonesia.",
       prod: "Produk", company: "Perusahaan", contact: "Kontak",
       links: {
-        prod: ["Absensi Siswa & Guru", "Jadwal & Kalender", "Pembayaran SPP", "Laporan Keuangan", "Pengumuman Sekolah", "Penilaian & Rapor"],
+        prod: ["Absensi Siswa & Guru", "Jadwal & Kalender", "Pembayaran SPP", "Laporan Keuangan", "Perpustakaan Digital", "Pengumuman Sekolah", "Penilaian & Rapor"],
         company: ["Tentang Kami", "Blog", "Karir", "Partner Sekolah", "Kebijakan Privasi", "Syarat & Ketentuan"],
       },
       rights: "Hak cipta dilindungi undang-undang.",
@@ -23,7 +23,7 @@ export default function LandingFooter({ lang }: FooterProps) {
       tagline: "Leading smart school management information platform in Indonesia.",
       prod: "Product", company: "Company", contact: "Contact",
       links: {
-        prod: ["Student & Teacher Attendance", "Schedule & Calendar", "Tuition (SPP) Payment", "Financial Reports", "School Announcements", "Grades & Report Cards"],
+        prod: ["Student & Teacher Attendance", "Schedule & Calendar", "Tuition (SPP) Payment", "Financial Reports", "Digital Library", "School Announcements", "Grades & Report Cards"],
         company: ["About Us", "Blog", "Careers", "School Partners", "Privacy Policy", "Terms of Service"],
       },
       rights: "All rights reserved.",
@@ -31,7 +31,7 @@ export default function LandingFooter({ lang }: FooterProps) {
     },
   }[lang];
 
-  const prodLinks = ["/features/absensi", "/features/akademik", "/features/spp", "/features/keuangan", "/features/pengumuman", "/features/laporan"];
+  const prodLinks = ["/features/absensi", "/features/akademik", "/features/spp", "/features/keuangan", "/features/perpustakaan", "/features/pengumuman", "/features/laporan"];
   const companyLinks = ["#about", "#blog", "#careers", "#partners", "#privacy", "#terms"];
 
   return (

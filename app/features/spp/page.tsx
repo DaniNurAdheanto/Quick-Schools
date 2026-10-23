@@ -1,15 +1,18 @@
 "use client";
 
-import Link from "next/link";
-import { useState, useEffect } from "react";
-import { motion } from "motion/react";
+import React from "react";
 import {
-  CreditCard, ArrowRight, Check, Receipt,
-  CheckCircle2, Bell, BarChart3, RefreshCw,
+  CreditCard,
+  Receipt,
+  CheckCircle2,
+  Bell,
+  BarChart3,
+  RefreshCw,
   Wallet
 } from "lucide-react";
+import FeatureSubpageLayout, { FeatureSubpageData } from "@/components/landing/feature-subpage-layout";
 
-const T = {
+const T: { id: FeatureSubpageData; en: FeatureSubpageData } = {
   id: {
     badge: "Modul Pembayaran SPP",
     h1a: "Kelola Pembayaran SPP",
@@ -59,33 +62,33 @@ const T = {
     featBadge: "Tuition Features",
     featTitle: "Comprehensive School Tuition Solution",
     feats: [
-      { icon: Receipt, title: "Digital Invoicing", desc: "Auto-generate and organize monthly tuition fees for all active students." },
-      { icon: CheckCircle2, title: "Real-Time Confirmation", desc: "Instantly register and verify student payments, flipping status to paid in real time." },
-      { icon: BarChart3, title: "Arrears & Status Monitoring", desc: "Filter students by paid, pending, or overdue status across classrooms and terms." },
-      { icon: Wallet, title: "Official Digital Receipts", desc: "Generate and print official verified digital receipts with school branding." },
-      { icon: RefreshCw, title: "Monthly Auto Summaries", desc: "Cumulative monthly tuition revenue flows directly into school treasury records." },
-      { icon: Bell, title: "Due Date Reminders", desc: "Integrates with announcements to notify parents of approaching payment deadlines." },
+      { icon: Receipt, title: "Automated Billing Generator", desc: "Generate monthly tuition fees for all active cohorts in structured batches." },
+      { icon: CheckCircle2, title: "Instant Verification", desc: "Payment confirmations update student clearance statuses with zero ledger delay." },
+      { icon: BarChart3, title: "Arrears & Collection Analytics", desc: "Track settled accounts and overdue balances by grade level and term." },
+      { icon: Wallet, title: "Digital Stamped Receipts", desc: "Print or export official branded tuition payment receipts in seconds." },
+      { icon: RefreshCw, title: "Automated Monthly Tally", desc: "All incoming tuition payments flow automatically into the institutional cash ledger." },
+      { icon: Bell, title: "Gentle SMS / WhatsApp Alerts", desc: "Linked with circular notices to remind parents of upcoming payment windows." },
     ],
     workBadge: "Workflow",
-    workTitle: "4 Steps to Effortless Tuition Control",
+    workTitle: "4 Steps to Frictionless Tuition Management",
     workSteps: [
-      { n: "01", title: "Define Fee Schedule", desc: "Set monthly rates per grade tier or academic year cohort in settings." },
-      { n: "02", title: "Automated Monthly Bills", desc: "Student billing records populate at the start of each calendar month." },
-      { n: "03", title: "Log & Confirm", desc: "Finance officers log incoming cash or transfer payments with instant confirmation." },
-      { n: "04", title: "Instant Receipts & Ledgers", desc: "Receipts generate automatically while cashflow figures update live." },
+      { n: "01", title: "Set Fee Tiers", desc: "Bursars configure base tuition rates by grade levels or cohort programs." },
+      { n: "02", title: "Auto-Generate Invoices", desc: "Monthly billing ledger items issue automatically at the start of each month." },
+      { n: "03", title: "Verify Payments", desc: "Finance officers reconcile cash, bank transfer, or payment gateway transactions." },
+      { n: "04", title: "Instant Receipts & Reports", desc: "Clearance marks apply instantly, receipts print out, and school cashbook updates." },
     ],
     benefitBadge: "Benefits",
-    benefitTitle: "Advantages of Quick Schools Tuition Module",
+    benefitTitle: "Advantages of Quick Schools Tuition OS",
     benefits: [
-      "Error-free, fully accountable payment ledgers with zero discrepancy",
-      "Homeroom teachers and treasurers view real-time class payment summaries",
-      "Instant printable digital receipts replace manual handwritten paper slips",
-      "Clear overdue tracking enables proactive communication with guardians",
-      "Direct integration into the school cashflow and financial reports module",
-      "Complete historical payment archives preserved securely through graduation",
+      "Pristine tuition accounts free from manual mathematical ledger discrepancies",
+      "Homeroom mentors and bursars audit class payment progress simultaneously",
+      "Official institutional digital receipts generated without hand-writing booklets",
+      "Delinquent account tracking enables proactive and respectful follow-ups",
+      "Full automatic reconciliation into general financial inflow reports",
+      "Permanent historical payment archives preserved through student graduation",
     ],
-    ctaBannerTitle: "Streamline Tuition Collection Today",
-    ctaBannerDesc: "Handle billing, payments, and financial accountability with Quick Schools.",
+    ctaBannerTitle: "Streamline School Tuition Collection Today",
+    ctaBannerDesc: "Manage billing, payments, and financial accountability with Quick Schools.",
     ctaBannerBtn: "Register Free Now",
   },
 };
@@ -95,64 +98,68 @@ function SPPMockup() {
     { name: "Ahmad Rizqi Pratama", class: "10 IPA 1", month: "September 2026", amount: "Rp 350.000", status: "LUNAS", date: "05 Sep 2026", isPaid: true },
     { name: "Siti Nurhaliza", class: "11 IPS 2", month: "September 2026", amount: "Rp 350.000", status: "LUNAS", date: "08 Sep 2026", isPaid: true },
     { name: "Budi Santoso", class: "12 IPA 3", month: "September 2026", amount: "Rp 350.000", status: "LUNAS", date: "10 Sep 2026", isPaid: true },
-    { name: "Dewi Rahayu Putri", class: "10 IPS 1", month: "September 2026", amount: "Rp 350.000", status: "PENDING", date: "Tenggat 15 Sep", isPaid: false },
+    { name: "Dewi Rahayu Putri", class: "10 IPS 1", month: "September 2026", amount: "Rp 350.000", status: "BELUM LUNAS", date: "Tenggat 15 Sep", isPaid: false },
   ];
 
   return (
-    <div style={{ backgroundColor: "white", borderRadius: 24, border: "1px solid #f3f4f6", boxShadow: "0 25px 50px -12px rgba(83,31,255,0.15), 0 0 0 1px rgba(83,31,255,0.06)", overflow: "hidden" }}>
-      <div style={{ background: "linear-gradient(135deg, #531FFF 0%, #6D3DFF 100%)", padding: "20px 24px", color: "white" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <CreditCard style={{ width: 18, height: 18, color: "white" }} />
-            </div>
-            <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: "#DDD6FF", textTransform: "uppercase", letterSpacing: "0.08em" }}>Rekap SPP Real-Time</p>
-              <p style={{ fontSize: 14, fontWeight: 800 }}>Periode September 2026</p>
-            </div>
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* Top Header */}
+      <div className="bg-gradient-to-r from-[#531FFF] to-[#6D3DFF] px-5 py-4 text-white flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+            <CreditCard className="w-4 h-4 text-white" />
           </div>
-          <div style={{ backgroundColor: "rgba(255,255,255,0.18)", padding: "4px 10px", borderRadius: 8, fontSize: 11, fontWeight: 700 }}>
-            92% Terbayar
+          <div>
+            <p className="text-[10px] font-bold text-purple-200 uppercase tracking-wider">Rekap SPP Real-Time</p>
+            <p className="text-xs font-black text-white">Periode September 2026</p>
           </div>
         </div>
+        <span className="bg-white/20 px-2.5 py-1 rounded-md text-[11px] font-bold backdrop-blur-xs">
+          92% Terbayar
+        </span>
       </div>
 
-      <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10, backgroundColor: "#FAFBFF" }}>
+      {/* Feed list */}
+      <div className="p-4 space-y-2.5 bg-slate-50/50">
         {transactions.map((tx, i) => (
           <div
             key={i}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              padding: "12px 14px",
-              backgroundColor: "white",
-              borderRadius: 14,
-              border: "1px solid #f3f4f6",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
-            }}
+            className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 shadow-2xs hover:border-[#531FFF]/20 transition-all"
           >
-            <div style={{ width: 36, height: 36, borderRadius: "50%", backgroundColor: tx.isPaid ? "#ECFDF5" : "#FFFBEB", display: "flex", alignItems: "center", justifyContent: "center", color: tx.isPaid ? "#059669" : "#d97706", fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
-              {tx.name[0]}
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                  tx.isPaid ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                }`}
+              >
+                {tx.name[0]}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-gray-900 truncate">{tx.name}</p>
+                <p className="text-[11px] text-gray-500 font-medium">
+                  {tx.class} · {tx.date}
+                </p>
+              </div>
             </div>
 
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tx.name}</p>
-              <p style={{ fontSize: 11, color: "#6B7280", fontWeight: 500 }}>{tx.class} · {tx.date}</p>
-            </div>
-
-            <div style={{ textAlign: "right", flexShrink: 0 }}>
-              <p style={{ fontSize: 12, fontWeight: 800, color: "#111827" }}>{tx.amount}</p>
-              <span style={{ fontSize: 10, fontWeight: 800, color: tx.isPaid ? "#059669" : "#d97706", backgroundColor: tx.isPaid ? "#ECFDF5" : "#FFFBEB", padding: "2px 8px", borderRadius: 6 }}>
+            <div className="text-right shrink-0">
+              <p className="text-xs font-black text-gray-900">{tx.amount}</p>
+              <span
+                className={`text-[9.5px] font-black px-1.5 py-0.5 rounded border inline-block ${
+                  tx.isPaid
+                    ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                    : "text-amber-700 bg-amber-50 border-amber-200"
+                }`}
+              >
                 {tx.status}
               </span>
             </div>
           </div>
         ))}
 
-        <div style={{ marginTop: 6, padding: "12px 16px", backgroundColor: "white", borderRadius: 12, border: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "#6B7280" }}>Total Terkumpul Bulan Ini</span>
-          <span style={{ fontSize: 14, fontWeight: 800, color: "#531FFF" }}>Rp 412.300.000</span>
+        <div className="mt-2 p-3 bg-white rounded-xl border border-gray-200/80 flex items-center justify-between text-xs">
+          <span className="font-semibold text-gray-600">Total SPP Terhimpun</span>
+          <span className="font-extrabold text-[#531FFF]">Rp 412.300.000 (1.178 Siswa)</span>
         </div>
       </div>
     </div>
@@ -160,165 +167,13 @@ function SPPMockup() {
 }
 
 export default function SPPPage() {
-  const [lang, setLang] = useState<"id" | "en">("id");
-
-  useEffect(() => {
-    const saved = localStorage.getItem("qs_lang") as "id" | "en";
-    if (saved === "id" || saved === "en") setLang(saved);
-  }, []);
-
-  const t = T[lang];
-
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "white", color: "#111827" }}>
-      {/* Hero */}
-      <section style={{ position: "relative", paddingTop: 140, paddingBottom: 80, overflow: "hidden", background: "linear-gradient(135deg, #F3F0FF 0%, #FFFFFF 60%, #EEF2FF 100%)" }}>
-        <div style={{ position: "absolute", top: 0, right: 0, width: 600, height: 600, background: "radial-gradient(circle, rgba(83,31,255,0.08) 0%, transparent 70%)", pointerEvents: "none" }} />
-        <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle, rgba(83,31,255,0.08) 1px, transparent 1px)", backgroundSize: "36px 36px", pointerEvents: "none" }} />
-
-        <div style={{ position: "relative", zIndex: 10, maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 56, alignItems: "center" }} className="grid-cols-1 lg:grid-cols-2">
-            <div>
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.25)", borderRadius: 12, marginBottom: 24 }}>
-                <CreditCard style={{ width: 14, height: 14, color: "#531FFF" }} />
-                <span style={{ fontSize: 12, fontWeight: 800, color: "#531FFF" }}>{t.badge}</span>
-              </div>
-
-              <h1 style={{ fontSize: "clamp(38px, 4.5vw, 56px)", fontWeight: 900, color: "#111827", lineHeight: 1.12, letterSpacing: "-0.03em", marginBottom: 20 }}>
-                {t.h1a}{" "}
-                <span style={{ background: "linear-gradient(135deg, #531FFF 0%, #7B4DFF 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
-                  {t.h1b}
-                </span>
-              </h1>
-
-              <p style={{ fontSize: 17, color: "#4B5563", lineHeight: 1.7, fontWeight: 500, marginBottom: 32, maxWidth: 520 }}>
-                {t.desc}
-              </p>
-
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 28 }}>
-                <Link href="/register" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "14px 32px", backgroundColor: "#531FFF", color: "white", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none", boxShadow: "0 8px 24px -4px rgba(83,31,255,0.4)", transition: "all 0.2s" }} className="hover:bg-[#4314cc]">
-                  {t.cta1} <ArrowRight style={{ width: 16, height: 16 }} />
-                </Link>
-                <Link href="/payments" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 28px", backgroundColor: "white", border: "1.5px solid #e5e7eb", color: "#374151", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none" }}>
-                  {t.cta2}
-                </Link>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#6B7280", fontWeight: 500 }}>
-                <CheckCircle2 style={{ width: 16, height: 16, color: "#10b981" }} />
-                <span>Terhubung langsung ke modul Laporan Keuangan sekolah</span>
-              </div>
-            </div>
-
-            <div>
-              <SPPMockup />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section id="features" style={{ padding: "96px 0", backgroundColor: "#FAFBFF" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <div style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 64px" }}>
-            <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.2)", borderRadius: 999, marginBottom: 16 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#531FFF", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.featBadge}</span>
-            </div>
-            <h2 style={{ fontSize: "clamp(28px, 3.5vw, 40px)", fontWeight: 900, color: "#111827", letterSpacing: "-0.02em" }}>{t.featTitle}</h2>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 24 }}>
-            {t.feats.map((f, i) => {
-              const Icon = f.icon;
-              return (
-                <motion.div
-                  key={i}
-                  whileHover={{ y: -4, borderColor: "rgba(83,31,255,0.3)", boxShadow: "0 16px 32px -8px rgba(83,31,255,0.12)" }}
-                  transition={{ duration: 0.2 }}
-                  style={{ backgroundColor: "white", border: "1px solid #f3f4f6", borderRadius: 20, padding: 28, boxShadow: "0 2px 8px -4px rgba(0,0,0,0.05)", transition: "all 0.2s" }}
-                >
-                  <div style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: "#F3F0FF", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
-                    <Icon style={{ width: 22, height: 22, color: "#531FFF" }} />
-                  </div>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{f.title}</h3>
-                  <p style={{ fontSize: 14, color: "#6B7280", fontWeight: 500, lineHeight: 1.6 }}>{f.desc}</p>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Workflow */}
-      <section style={{ padding: "96px 0", backgroundColor: "white" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <div style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 64px" }}>
-            <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.2)", borderRadius: 999, marginBottom: 16 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#531FFF", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.workBadge}</span>
-            </div>
-            <h2 style={{ fontSize: "clamp(28px, 3.5vw, 40px)", fontWeight: 900, color: "#111827", letterSpacing: "-0.02em" }}>{t.workTitle}</h2>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 24 }}>
-            {t.workSteps.map((s, i) => (
-              <motion.div
-                key={i}
-                whileHover={{ y: -4 }}
-                transition={{ duration: 0.2 }}
-                style={{ background: "linear-gradient(135deg, rgba(243,240,255,0.5) 0%, white 100%)", border: "1px solid rgba(83,31,255,0.12)", borderRadius: 24, padding: 28 }}
-              >
-                <div style={{ fontSize: 36, fontWeight: 900, color: "#531FFF", opacity: 0.3, marginBottom: 12 }}>{s.n}</div>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 8 }}>{s.title}</h3>
-                <p style={{ fontSize: 13, color: "#6B7280", fontWeight: 500, lineHeight: 1.6 }}>{s.desc}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Benefits */}
-      <section style={{ padding: "96px 0", backgroundColor: "#FAFBFF" }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 24px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 56, alignItems: "center" }} className="grid-cols-1 lg:grid-cols-2">
-            <div>
-              <div style={{ display: "inline-flex", padding: "6px 16px", backgroundColor: "#F3F0FF", border: "1px solid rgba(83,31,255,0.2)", borderRadius: 999, marginBottom: 16 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: "#531FFF", textTransform: "uppercase", letterSpacing: "0.12em" }}>{t.benefitBadge}</span>
-              </div>
-              <h2 style={{ fontSize: "clamp(28px, 3.5vw, 40px)", fontWeight: 900, color: "#111827", letterSpacing: "-0.02em", marginBottom: 28 }}>{t.benefitTitle}</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {t.benefits.map((b, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                    <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: "#F3F0FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
-                      <Check style={{ width: 13, height: 13, color: "#531FFF", strokeWidth: 3 }} />
-                    </div>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: "#374151", lineHeight: 1.5 }}>{b}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <SPPMockup />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section style={{ padding: "80px 24px", backgroundColor: "white" }}>
-        <div style={{ maxWidth: 960, margin: "0 auto", borderRadius: 32, background: "linear-gradient(135deg, #531FFF 0%, #6D3DFF 50%, #4314cc 100%)", padding: "64px 48px", textAlign: "center", boxShadow: "0 32px 80px -12px rgba(83,31,255,0.35)", color: "white" }}>
-          <h2 style={{ fontSize: "clamp(28px, 4vw, 40px)", fontWeight: 900, marginBottom: 16 }}>{t.ctaBannerTitle}</h2>
-          <p style={{ fontSize: 16, color: "#DDD6FF", fontWeight: 500, marginBottom: 32, maxWidth: 540, margin: "0 auto 32px" }}>{t.ctaBannerDesc}</p>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
-            <Link href="/register" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "16px 36px", backgroundColor: "white", color: "#531FFF", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
-              {t.ctaBannerBtn} <ArrowRight style={{ width: 16, height: 16 }} />
-            </Link>
-            <Link href="/" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "16px 32px", backgroundColor: "rgba(255,255,255,0.1)", border: "1.5px solid rgba(255,255,255,0.25)", color: "white", borderRadius: 16, fontSize: 15, fontWeight: 700, textDecoration: "none" }}>
-              {lang === "id" ? "Kembali ke Beranda" : "Back to Home"}
-            </Link>
-          </div>
-        </div>
-      </section>
-    </div>
+    <FeatureSubpageLayout
+      moduleKey="spp"
+      translations={T}
+      mockup={<SPPMockup />}
+      dashboardHref="/payments"
+      icon={CreditCard}
+    />
   );
 }

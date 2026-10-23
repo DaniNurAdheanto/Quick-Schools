@@ -8,7 +8,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import {
   Zap, ChevronDown, Menu, X, ArrowRight,
   LayoutDashboard, UserCheck, PenLine,
-  CreditCard, FileText, Bell, BookOpen
+  CreditCard, FileText, Bell, BookOpen, Library
 } from "lucide-react";
 
 /* Real features in the system — linking to dedicated showcase pages and modules */
@@ -18,6 +18,7 @@ const FEATURES = [
   { href: "/features/laporan",     icon: PenLine,        label: { id: "Penilaian & Rapor",      en: "Grades & Report Cards" },        desc: { id: "Input nilai & cetak rapor digital",      en: "Grade input & digital report cards" },         color: "text-[#531FFF]", bg: "bg-[#F3F0FF]" },
   { href: "/features/spp",         icon: CreditCard,     label: { id: "Pembayaran SPP",         en: "Tuition Payment" },              desc: { id: "Tagihan, rekap, & konfirmasi SPP",       en: "Invoicing, recap & payment confirmation" },    color: "text-[#531FFF]", bg: "bg-[#F3F0FF]" },
   { href: "/features/keuangan",    icon: FileText,       label: { id: "Laporan Keuangan",       en: "Financial Reports" },            desc: { id: "Rekap arus kas & laporan pengeluaran",  en: "Cashflow & expense reports" },                 color: "text-[#531FFF]", bg: "bg-[#F3F0FF]" },
+  { href: "/features/perpustakaan",icon: Library,        label: { id: "Perpustakaan Digital",   en: "Digital Library" },              desc: { id: "Katalog buku & sirkulasi peminjaman",    en: "Catalog & loan circulation" },                 color: "text-[#531FFF]", bg: "bg-[#F3F0FF]" },
   { href: "/features/pengumuman",  icon: Bell,           label: { id: "Pengumuman Sekolah",     en: "School Announcements" },         desc: { id: "Broadcast ke seluruh civitas sekolah",   en: "Broadcast to all school members" },            color: "text-[#531FFF]", bg: "bg-[#F3F0FF]" },
 ];
 
@@ -50,6 +51,13 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  const handleLang = (l: "id" | "en") => {
+    onChangeLang(l);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("qs_lang_change"));
+    }
+  };
 
   const t = {
     id: { features: "Fitur", pricing: "Harga", about: "Tentang", signIn: "Masuk", getStarted: "Mulai Gratis", dashboard: "Dashboard" },
@@ -138,6 +146,9 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
           <Link href="#testimonials" className="px-4 py-2 text-[14px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100/70 rounded-md transition-all">
             {lang === "id" ? "Testimoni" : "Testimonials"}
           </Link>
+          <Link href="#faq" className="px-4 py-2 text-[14px] font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100/70 rounded-md transition-all">
+            FAQ
+          </Link>
         </nav>
 
         {/* Right Actions */}
@@ -147,7 +158,7 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
             {(["id", "en"] as const).map((l) => (
               <button
                 key={l}
-                onClick={() => onChangeLang(l)}
+                onClick={() => handleLang(l)}
                 className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all ${
                   lang === l ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
                 }`}
@@ -228,7 +239,7 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
               <div className="pt-4 pb-2 border-t border-gray-100 flex flex-col gap-3">
                 <div className="flex items-center gap-2 justify-center">
                   {(["id", "en"] as const).map((l) => (
-                    <button key={l} onClick={() => onChangeLang(l)} className={`px-4 py-2 text-[12px] font-bold rounded-md transition-all ${lang === l ? "bg-[#F3F0FF] text-[#531FFF]" : "text-gray-500 hover:bg-gray-100"}`}>
+                    <button key={l} onClick={() => handleLang(l)} className={`px-4 py-2 text-[12px] font-bold rounded-md transition-all ${lang === l ? "bg-[#F3F0FF] text-[#531FFF]" : "text-gray-500 hover:bg-gray-100"}`}>
                       {l === "id" ? "🇮🇩 Indonesia" : "🇬🇧 English"}
                     </button>
                   ))}
