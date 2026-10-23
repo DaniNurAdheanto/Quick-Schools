@@ -20,7 +20,8 @@ import {
   Search,
   Check,
   Type,
-  Radio
+  Radio,
+  RotateCcw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TARGET_ROLE_OPTIONS, cleanAnnouncementDesc } from "@/lib/announcements-helper";
@@ -121,43 +122,123 @@ export function AnnouncementFormModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [targetDropdownOpen, setTargetDropdownOpen] = useState(false);
   const [targetSearchQuery, setTargetSearchQuery] = useState("");
+  const [draftRestored, setDraftRestored] = useState(false);
   const targetDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Guards against unexpected resets while modal is open
+  const prevOpenRef = useRef(false);
+  const prevDataIdRef = useRef<string | null>(null);
 
   // Sync initialData when modal opens or initialData changes
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      prevOpenRef.current = false;
+      prevDataIdRef.current = null;
+      return;
+    }
 
-    if (initialData && (mode === "edit" || mode === "delete")) {
-      setTitle(initialData.title || "");
-      setDesc(cleanAnnouncementDesc(initialData.desc || ""));
-      
-      // Parse targets
-      if (Array.isArray(initialData.target)) {
-        setSelectedTargets(initialData.target.length ? initialData.target : ["Semua"]);
-      } else if (typeof initialData.target === "string" && initialData.target.trim()) {
-        const parts = initialData.target.split(",").map((s: string) => s.trim()).filter(Boolean);
-        setSelectedTargets(parts.length ? parts : ["Semua"]);
+    const isJustOpening = open && !prevOpenRef.current;
+    const currentId = initialData?.id || null;
+    const isDifferentItem = mode === "edit" && currentId !== prevDataIdRef.current;
+
+    // Only populate/reset the form when the modal first opens, or if an edit modal switches to a different item
+    if (isJustOpening || isDifferentItem) {
+      if (initialData && (mode === "edit" || mode === "delete")) {
+        setTitle(initialData.title || "");
+        setDesc(cleanAnnouncementDesc(initialData.desc || ""));
+        
+        // Parse targets
+        if (Array.isArray(initialData.target)) {
+          setSelectedTargets(initialData.target.length ? initialData.target : ["Semua"]);
+        } else if (typeof initialData.target === "string" && initialData.target.trim()) {
+          const parts = initialData.target.split(",").map((s: string) => s.trim()).filter(Boolean);
+          setSelectedTargets(parts.length ? parts : ["Semua"]);
+        } else {
+          setSelectedTargets(["Semua"]);
+        }
+
+        setTag(initialData.tag || "INFORMASI");
+        setStatus(initialData.status || "Aktif");
+        setEventDate(initialData.eventDate || "");
+        setEventTime(initialData.eventTime || "");
+        setRoom(initialData.room || "");
+        setDraftRestored(false);
       } else {
-        setSelectedTargets(["Semua"]);
+        // Create mode defaults - check if there is an unsaved draft to recover
+        let hasDraft = false;
+        try {
+          const savedDraft = typeof window !== "undefined" ? sessionStorage.getItem("announcement_form_draft") : null;
+          if (savedDraft) {
+            const parsed = JSON.parse(savedDraft);
+            if (parsed && typeof parsed === "object" && (parsed.title || parsed.desc)) {
+              setTitle(parsed.title || "");
+              setDesc(parsed.desc || "");
+              setSelectedTargets(Array.isArray(parsed.target) && parsed.target.length ? parsed.target : ["Semua"]);
+              setTag(parsed.tag || "INFORMASI");
+              setStatus(parsed.status || "Aktif");
+              setEventDate(parsed.eventDate || "");
+              setEventTime(parsed.eventTime || "");
+              setRoom(parsed.room || "");
+              setDraftRestored(true);
+              hasDraft = true;
+            }
+          }
+        } catch {
+          // ignore draft read error
+        }
+
+        if (!hasDraft) {
+          setTitle("");
+          setDesc("");
+          setSelectedTargets(["Semua"]);
+          setTag("INFORMASI");
+          setStatus("Aktif");
+          setEventDate("");
+          setEventTime("");
+          setRoom("");
+          setDraftRestored(false);
+        }
       }
 
-      setTag(initialData.tag || "INFORMASI");
-      setStatus(initialData.status || "Aktif");
-      setEventDate(initialData.eventDate || "");
-      setEventTime(initialData.eventTime || "");
-      setRoom(initialData.room || "");
-    } else {
-      // Create mode defaults
-      setTitle("");
-      setDesc("");
-      setSelectedTargets(["Semua"]);
-      setTag("INFORMASI");
-      setStatus("Aktif");
-      setEventDate("");
-      setEventTime("");
-      setRoom("");
+      prevDataIdRef.current = currentId;
     }
+
+    prevOpenRef.current = open;
   }, [open, initialData, mode]);
+
+  // Auto-save draft in create mode so user never loses their progress
+  useEffect(() => {
+    if (!open || mode !== "create") return;
+    if (title.trim() || desc.trim()) {
+      try {
+        sessionStorage.setItem("announcement_form_draft", JSON.stringify({
+          title,
+          desc,
+          target: selectedTargets,
+          tag,
+          status,
+          eventDate,
+          eventTime,
+          room
+        }));
+      } catch {}
+    }
+  }, [open, mode, title, desc, selectedTargets, tag, status, eventDate, eventTime, room]);
+
+  const handleClearDraft = () => {
+    try {
+      sessionStorage.removeItem("announcement_form_draft");
+    } catch {}
+    setTitle("");
+    setDesc("");
+    setSelectedTargets(["Semua"]);
+    setTag("INFORMASI");
+    setStatus("Aktif");
+    setEventDate("");
+    setEventTime("");
+    setRoom("");
+    setDraftRestored(false);
+  };
 
   // Close target dropdown on outside click
   useEffect(() => {
@@ -229,6 +310,10 @@ export function AnnouncementFormModal({
         eventTime,
         room: room.trim(),
       });
+      try {
+        sessionStorage.removeItem("announcement_form_draft");
+      } catch {}
+      setDraftRestored(false);
       onOpenChange(false);
     } catch (err) {
       console.error("Submit error:", err);
@@ -340,6 +425,25 @@ export function AnnouncementFormModal({
 
         {/* ================= MODAL BODY / FORM ================= */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+          {draftRestored && isCreate && (
+            <div className="flex items-center justify-between p-3 rounded-xl bg-purple-50/90 border border-purple-200 text-xs text-[#531FFF] animate-in fade-in duration-200 shadow-2xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <Sparkles className="w-4 h-4 shrink-0 text-[#531FFF]" />
+                <span className="font-semibold text-gray-800">
+                  Draf isian form yang sebelumnya belum tersimpan berhasil dipulihkan.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleClearDraft}
+                className="font-bold underline hover:text-purple-900 cursor-pointer text-[11px] shrink-0 ml-3 flex items-center gap-1 text-[#531FFF]"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Kosongkan
+              </button>
+            </div>
+          )}
+
           {/* SECTION 1: KONTEN UTAMA */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">

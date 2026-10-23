@@ -52,14 +52,15 @@ export default function AnnouncementsPage() {
   const { role: authRole, rawRole: authRawRole, isAuthLoading, isRoleReady, isSuperAdmin, isAdmin } = useAuth();
   const userRole = (authRawRole || authRole || "").toLowerCase();
   const [announcements, setAnnouncements] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const isStudent = userRole === "siswa" || userRole === "student";
   const isParent = isParentRole(userRole) || userRole === "orang-tua" || userRole === "parent";
   const isReadOnly = isStudent || isParent;
 
-  const fetchAnnouncementsFromApi = useCallback(async () => {
+  const fetchAnnouncementsFromApi = useCallback(async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const res = await fetch("/api/announcements");
       const data = await res.json();
       if (data.success && Array.isArray(data.announcements)) {
@@ -78,15 +79,24 @@ export default function AnnouncementsPage() {
     } catch (e) {
       console.error("Error fetching announcements:", e);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
+      setInitialLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchAnnouncementsFromApi();
-    const interval = setInterval(fetchAnnouncementsFromApi, 15000);
+    // Initial fetch
+    fetchAnnouncementsFromApi(false);
+
+    // Periodic background sync: silent and paused whenever modal is open
+    const interval = setInterval(() => {
+      if (!crudState.open) {
+        fetchAnnouncementsFromApi(true);
+      }
+    }, 25000);
+
     return () => clearInterval(interval);
-  }, [fetchAnnouncementsFromApi]);
+  }, [fetchAnnouncementsFromApi, crudState.open]);
 
   /**
    * Parse Indonesian short-date strings like "10 Apr 2026", "5 Mei 2025", "2 Agu 2026"
@@ -312,7 +322,7 @@ export default function AnnouncementsPage() {
     { label: "Informasi", count: visibleAnnouncements.filter(a => a.tag === 'INFORMASI').length, icon: Info, color: "text-blue-400", bgColor: "bg-blue-50" },
   ];
 
-  if (isAuthLoading || !isRoleReady || loading) {
+  if (isAuthLoading || !isRoleReady || initialLoading) {
     return <PageContentSkeleton />;
   }
 
