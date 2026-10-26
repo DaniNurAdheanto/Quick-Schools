@@ -5,13 +5,13 @@ import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import {
   ArrowRight, CheckCircle2, Star,
-  Zap, ArrowUpRight, Building2, Play,
-  Users, Cloud
+  Zap, ArrowUpRight, Play
 } from "lucide-react";
 import LandingNavbar from "@/components/landing/navbar";
 import LandingFooter from "@/components/landing/footer";
-import HeroCanvas from "@/components/landing/hero-canvas";
+import HeroOrbit from "@/components/landing/hero-orbit";
 import BentoFeatures from "@/components/landing/bento-features";
+import TrustedSchools from "@/components/landing/trusted-schools";
 import PricingFaq from "@/components/landing/pricing-faq";
 
 export default function LandingPage() {
@@ -37,16 +37,16 @@ export default function LandingPage() {
 
   const t = {
     id: {
-      heroBadge: "Sistem Operasi Sekolah Modern",
+      avatarBadge: "500+ Sekolah Terdaftar · Rating 4.9 ★",
       heroH1a: "Satu Sistem Operasi",
       heroH1b: "untuk Seluruh",
       heroH1c: "Ekosistem Sekolah.",
-      heroDesc: "Platform cerdas terintegrasi untuk mengelola presensi geofence, penilaian Kurikulum Merdeka, administrasi SPP otomatis, dan komunikasi 5 portal peran secara real-time.",
+      heroDesc: "Platform terintegrasi untuk mengelola presensi geofence, kurikulum merdeka, rekonsiliasi SPP otomatis, dan 5 portal peran secara real-time.",
       heroCta1: "Mulai Uji Coba Gratis",
-      heroCta2: "Lihat Demo",
-      heroTrust1: "Aktif digunakan 500+ sekolah",
-      heroTrust2: "Tanpa kartu kredit",
-      heroTrust3: "Onboarding didampingi",
+      heroCta2: "Lihat Demo Sistem",
+      heroTrust1: "14 Hari Gratis",
+      heroTrust2: "Tanpa Kartu Kredit",
+      heroTrust3: "Setup < 24 Jam",
       statSchools: "Sekolah Terdaftar",
       statSchoolsVal: "500+",
       statAttend: "Log Presensi GPS",
@@ -89,16 +89,16 @@ export default function LandingPage() {
       ctaSub: "Tanpa instalasi server lokal · Data tersimpan aman di Google Cloud · Uji coba gratis 14 hari"
     },
     en: {
-      heroBadge: "Modern School Operating System",
+      avatarBadge: "500+ Registered Schools · 4.9 ★ Rating",
       heroH1a: "One Operating System",
       heroH1b: "for Your Entire",
       heroH1c: "School Ecosystem.",
-      heroDesc: "An integrated intelligence platform managing GPS geofenced attendance, competency-based report cards, automated tuition billing, and 5 dedicated stakeholder portals in real-time.",
+      heroDesc: "An all-in-one platform managing GPS geofenced attendance, competency report cards, automated tuition reconciliation, and 5 dedicated user portals in real-time.",
       heroCta1: "Start Free Trial",
-      heroCta2: "Watch Demo",
-      heroTrust1: "Used by 500+ schools",
-      heroTrust2: "No credit card required",
-      heroTrust3: "Guided onboarding",
+      heroCta2: "Watch Live Demo",
+      heroTrust1: "14-Day Free Trial",
+      heroTrust2: "No Credit Card Required",
+      heroTrust3: "Setup in < 24 Hours",
       statSchools: "Registered Schools",
       statSchoolsVal: "500+",
       statAttend: "GPS Attendance Logs",
@@ -147,63 +147,72 @@ export default function LandingPage() {
       {/* Global Navigation */}
       <LandingNavbar lang={lang} onChangeLang={changeLang} />
 
-      {/* ── 1. HERO SECTION: Minimalist 2-Column Showcase with Animated Flourishes ── */}
-      <section className="relative pt-28 pb-16 md:pt-36 md:pb-24 overflow-hidden bg-white">
-        {/* Animated subtle floating background ambient orbs */}
+      {/* ── 1. HERO SECTION: Minimalist, Modern, Transix-Inspired Layout ── */}
+      <section className="relative pt-32 pb-20 md:pt-40 md:pb-28 overflow-hidden bg-gradient-to-b from-slate-50/70 via-white to-slate-50/40">
+        
+        {/* Subtle background technical grid mask (matching modern clean SaaS standards) */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-35 pointer-events-none" />
+
+        {/* Ambient Radial Color Glows */}
         <motion.div
           animate={{
             x: [0, 20, 0],
             y: [0, -15, 0],
-            scale: [1, 1.06, 1],
-          }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-gradient-to-b from-[#531FFF]/8 via-[#7B4DFF]/5 to-transparent rounded-full blur-[100px] pointer-events-none -z-0"
-        />
-        <motion.div
-          animate={{
-            x: [0, -15, 0],
-            y: [0, 15, 0],
             scale: [1, 1.05, 1],
           }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-          className="absolute top-1/3 left-0 w-[450px] h-[450px] bg-[#531FFF]/4 rounded-full blur-[90px] pointer-events-none -z-0"
+          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute top-12 right-1/4 w-[500px] h-[500px] bg-gradient-to-tr from-[#531FFF]/10 via-[#7C3AED]/6 to-transparent rounded-full blur-[100px] pointer-events-none -z-0"
         />
 
         <div className="max-w-7xl mx-auto px-6 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-10 items-center">
+          
+          {/* Top Row: Clean 2-Column Split (Headline & Value on Left, Radial Orbit on Right) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
             
-            {/* Left Column: Staggered Entrance Animations */}
-            <div className="lg:col-span-6 space-y-6 text-left">
+            {/* Left Column: Bold Minimalist Headline & Direct CTAs */}
+            <div className="lg:col-span-7 space-y-6 text-left">
               
-              {/* Dynamic Status Pill */}
+              {/* Transix-Style Social Proof Avatar Stack Pill */}
               <motion.div
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#F3F0FF] border border-[#531FFF]/20 text-[#531FFF] shadow-2xs"
+                className="inline-flex items-center gap-3 px-3.5 py-1.5 rounded-full bg-white border border-slate-200/90 shadow-2xs"
               >
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#531FFF] opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#531FFF]"></span>
-                </span>
-                <span className="text-xs font-bold tracking-wide">
-                  {t.heroBadge}
-                </span>
+                {/* 3 Overlapping Avatars */}
+                <div className="flex -space-x-1.5 shrink-0">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 text-white flex items-center justify-center text-[8px] font-black ring-2 ring-white shadow-2xs">
+                    SR
+                  </div>
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-[#531FFF] to-indigo-400 text-white flex items-center justify-center text-[8px] font-black ring-2 ring-white shadow-2xs">
+                    AF
+                  </div>
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-amber-500 to-orange-400 text-white flex items-center justify-center text-[8px] font-black ring-2 ring-white shadow-2xs">
+                    DS
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-xs font-bold text-slate-700 tracking-tight">
+                    {t.avatarBadge}
+                  </span>
+                </div>
               </motion.div>
 
-              {/* Main Heading */}
+              {/* Main Heading: Confident, Spacious, Clean */}
               <motion.h1
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.1 }}
-                className="text-4xl sm:text-5xl md:text-[54px] font-black text-slate-900 tracking-tight leading-[1.12]"
+                className="text-4xl sm:text-5xl md:text-[56px] font-black text-slate-900 tracking-tight leading-[1.1] max-w-2xl"
               >
                 {t.heroH1a} <br />
                 {t.heroH1b} <br />
                 <span className="text-[#531FFF]">{t.heroH1c}</span>
               </motion.h1>
 
-              {/* Subtitle */}
+              {/* Subtitle: High legibility, uncluttered */}
               <motion.p
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -213,7 +222,7 @@ export default function LandingPage() {
                 {t.heroDesc}
               </motion.p>
 
-              {/* Action Buttons */}
+              {/* Action Buttons: Pill-shaped like Transix & Burak with ArrowUpRight */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -222,17 +231,17 @@ export default function LandingPage() {
               >
                 <Link
                   href="/register"
-                  className="inline-flex items-center gap-2 px-6 sm:px-7 py-3.5 rounded-xl bg-[#531FFF] text-white text-sm font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/35 active:scale-98 group"
+                  className="inline-flex items-center gap-2 px-7 sm:px-8 py-3.5 rounded-full bg-[#531FFF] text-white text-sm font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/35 active:scale-98 group"
                 >
                   <span>{t.heroCta1}</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </Link>
 
                 <Link
                   href="#fitur"
-                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-800 text-sm font-bold hover:bg-slate-100 transition-all active:scale-98 group/demo"
+                  className="inline-flex items-center gap-2 px-6 sm:px-7 py-3.5 rounded-full bg-slate-100 hover:bg-slate-200/80 text-slate-800 text-sm font-bold transition-all active:scale-98 group/demo"
                 >
-                  <div className="w-5 h-5 rounded-full bg-white border border-slate-200 flex items-center justify-center text-[#531FFF] group-hover/demo:scale-110 transition-transform">
+                  <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-[#531FFF] group-hover/demo:scale-110 transition-transform shadow-2xs">
                     <Play className="w-2.5 h-2.5 fill-[#531FFF] ml-0.5" />
                   </div>
                   <span>{t.heroCta2}</span>
@@ -244,7 +253,7 @@ export default function LandingPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.6, delay: 0.4 }}
-                className="flex flex-wrap items-center gap-y-2 gap-x-5 text-xs text-slate-600 font-medium pt-2"
+                className="flex flex-wrap items-center gap-y-2 gap-x-5 text-xs text-slate-500 font-medium pt-2"
               >
                 <div className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -262,130 +271,21 @@ export default function LandingPage() {
 
             </div>
 
-            {/* Right Column: Live SaaS Application Dashboard Mockup */}
-            <div className="lg:col-span-6">
-              <HeroCanvas lang={lang} />
+            {/* Right Column: Transix-Inspired Radial Orbit & Key Metrics Centerpiece */}
+            <div className="lg:col-span-5 flex items-center justify-center">
+              <HeroOrbit lang={lang} />
             </div>
 
           </div>
-        </div>
-      </section>
 
-      {/* ── 2. METRICS / STATS RIBBON: Animated Horizontal Bar ── */}
-      <section className="border-y border-slate-100 bg-white py-8">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 divide-y md:divide-y-0 md:divide-x divide-slate-100">
-            
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              whileHover={{ y: -3 }}
-              transition={{ duration: 0.2 }}
-              className="flex items-center gap-4 px-2 sm:px-4 py-2 cursor-default group"
-            >
-              <div className="w-12 h-12 rounded-full bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:bg-[#531FFF]/15 transition-all">
-                <Building2 className="w-6 h-6 text-[#531FFF]" />
-              </div>
-              <div>
-                <p className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">{t.statSchoolsVal}</p>
-                <p className="text-xs text-slate-500 font-medium">{t.statSchools}</p>
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              whileHover={{ y: -3 }}
-              transition={{ duration: 0.2, delay: 0.05 }}
-              className="flex items-center gap-4 px-2 sm:px-4 py-2 pt-4 md:pt-2 cursor-default group"
-            >
-              <div className="w-12 h-12 rounded-full bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:bg-[#531FFF]/15 transition-all">
-                <Users className="w-6 h-6 text-[#531FFF]" />
-              </div>
-              <div>
-                <p className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">{t.statAttendVal}</p>
-                <p className="text-xs text-slate-500 font-medium">{t.statAttend}</p>
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              whileHover={{ y: -3 }}
-              transition={{ duration: 0.2, delay: 0.1 }}
-              className="flex items-center gap-4 px-2 sm:px-4 py-2 pt-4 md:pt-2 cursor-default group"
-            >
-              <div className="w-12 h-12 rounded-full bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:bg-[#531FFF]/15 transition-all">
-                <Cloud className="w-6 h-6 text-[#531FFF]" />
-              </div>
-              <div>
-                <p className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">{t.statUptimeVal}</p>
-                <p className="text-xs text-slate-500 font-medium">{t.statUptime}</p>
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              whileHover={{ y: -3 }}
-              transition={{ duration: 0.2, delay: 0.15 }}
-              className="flex items-center gap-4 px-2 sm:px-4 py-2 pt-4 md:pt-2 cursor-default group"
-            >
-              <div className="w-12 h-12 rounded-full bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:bg-[#531FFF]/15 transition-all">
-                <Zap className="w-6 h-6 text-[#531FFF]" />
-              </div>
-              <div>
-                <p className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">{t.statSetupVal}</p>
-                <p className="text-xs text-slate-500 font-medium">{t.statSetup}</p>
-              </div>
-            </motion.div>
-
-          </div>
         </div>
       </section>
 
       {/* ── 3. BENTO GRID FEATURES: Layout Bento Minimalis with Motion ── */}
       <BentoFeatures lang={lang} />
 
-      {/* ── 4. TRUSTED BY / SOCIAL PROOF STRIP with Hover Lift ── */}
-      <section className="py-12 bg-slate-50/70 border-y border-slate-100">
-        <div className="max-w-7xl mx-auto px-6">
-          <p className="text-center text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-6">
-            {t.trustedTitle}
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
-            {[
-              { name: "SMA Labschool Jakarta", badge: "DKI Jakarta" },
-              { name: "BINUS School Serpong", badge: "Tangerang" },
-              { name: "Yayasan Al-Azhar Indonesia", badge: "Pusat" },
-              { name: "Global Jaya International", badge: "Bintaro" },
-              { name: "SMA Tarakanita 1", badge: "Jakarta" },
-              { name: "Sekolah Pelita Harapan", badge: "Karawaci" }
-            ].map((school, i) => (
-              <motion.div
-                key={i}
-                whileHover={{ scale: 1.03, y: -2 }}
-                transition={{ duration: 0.2 }}
-                className="inline-flex items-center gap-2.5 px-4 py-2 rounded-xl bg-white border border-slate-200/80 shadow-2xs hover:border-[#531FFF]/30 hover:shadow-xs transition-all group cursor-default"
-              >
-                <div className="w-5 h-5 rounded-md bg-slate-100 group-hover:bg-[#531FFF]/10 flex items-center justify-center transition-colors">
-                  <Building2 className="w-3 h-3 text-slate-500 group-hover:text-[#531FFF] transition-colors" />
-                </div>
-                <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 transition-colors">
-                  {school.name}
-                </span>
-                <span className="text-[10px] text-slate-400 font-medium px-1.5 py-0.5 rounded bg-slate-50 border border-slate-100">
-                  {school.badge}
-                </span>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ── 4. TRUSTED BY / SOCIAL PROOF STRIP (Logos Only) ── */}
+      <TrustedSchools lang={lang} />
 
       {/* ── 5. SECTION PRICING & FAQ ── */}
       <PricingFaq lang={lang} />
