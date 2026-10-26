@@ -1,6 +1,8 @@
 "use client";
 
+import { useState, useRef } from "react";
 import { motion } from "motion/react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface TrustedSchoolsProps {
   lang: "id" | "en";
@@ -531,34 +533,95 @@ export default function TrustedSchools({ lang }: TrustedSchoolsProps) {
     },
   ];
 
-  return (
-    <section className="py-12 md:py-16 bg-slate-50/70 border-y border-slate-100 overflow-hidden">
-      <div className="max-w-6xl mx-auto px-6">
-        {/* Section Header */}
-        <p className="text-center text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-8">
-          {title}
-        </p>
+  const [isPaused, setIsPaused] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-        {/* Perfectly Balanced Responsive Grid: 4 columns x 2 rows on tablet & desktop, 2 cols on mobile */}
-        {/* Logos with school name rendered underneath */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-5 md:gap-6 items-center justify-items-center">
-          {schools.map((school, i) => (
-            <motion.div
-              key={i}
-              whileHover={{ scale: 1.04, y: -4 }}
-              transition={{ type: "spring", stiffness: 400, damping: 25 }}
-              title={school.name}
-              aria-label={school.name}
-              className="w-full max-w-[240px] h-32 sm:h-34 rounded-2xl bg-white border border-slate-200/80 shadow-2xs hover:shadow-lg hover:border-[#531FFF]/40 flex flex-col items-center justify-center p-3.5 transition-all group cursor-pointer"
-            >
-              <div className="transition-transform duration-300 group-hover:scale-108 flex items-center justify-center h-14 sm:h-16 w-full">
-                {school.logo}
+  const scroll = (direction: "left" | "right") => {
+    if (scrollRef.current) {
+      const scrollAmount = direction === "left" ? -280 : 280;
+      scrollRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    }
+  };
+
+  // Duplicate for seamless infinite marquee loop
+  const marqueeSchools = [...schools, ...schools, ...schools];
+
+  return (
+    <section className="py-14 md:py-18 bg-slate-50/70 border-y border-slate-100 overflow-hidden relative">
+      <div className="max-w-7xl mx-auto px-6 mb-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+        {/* Section Header */}
+        <div className="text-center sm:text-left">
+          <p className="text-xs sm:text-sm font-bold text-slate-800 tracking-tight">
+            {title}
+          </p>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            {lang === "id"
+              ? "Standar kurikulum nasional, swasta unggulan, hingga yayasan multi-kampus"
+              : "Premier national, private, and multi-campus educational foundations"}
+          </p>
+        </div>
+
+        {/* Carousel Navigation Chevrons */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => scroll("left")}
+            aria-label="Scroll left"
+            className="w-8 h-8 rounded-full bg-white border border-slate-200/90 shadow-2xs hover:bg-slate-50 hover:border-[#531FFF]/40 text-slate-600 hover:text-[#531FFF] flex items-center justify-center transition-all cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => scroll("right")}
+            aria-label="Scroll right"
+            className="w-8 h-8 rounded-full bg-white border border-slate-200/90 shadow-2xs hover:bg-slate-50 hover:border-[#531FFF]/40 text-slate-600 hover:text-[#531FFF] flex items-center justify-center transition-all cursor-pointer"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Carousel Container with Feathered Edge Fade Masks */}
+      <div
+        className="relative w-full overflow-hidden"
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+      >
+        {/* Left Gradient Edge Fade */}
+        <div className="absolute left-0 top-0 bottom-0 w-16 sm:w-32 bg-gradient-to-r from-slate-50 to-transparent z-10 pointer-events-none" />
+
+        {/* Right Gradient Edge Fade */}
+        <div className="absolute right-0 top-0 bottom-0 w-16 sm:w-32 bg-gradient-to-l from-slate-50 to-transparent z-10 pointer-events-none" />
+
+        {/* Horizontal Marquee Runway */}
+        <div
+          ref={scrollRef}
+          className="flex overflow-x-auto scrollbar-none py-2 px-4"
+        >
+          <motion.div
+            animate={isPaused ? {} : { x: ["0%", "-33.333%"] }}
+            transition={{
+              ease: "linear",
+              duration: 32,
+              repeat: Infinity,
+            }}
+            className="flex items-center gap-4 sm:gap-6 shrink-0"
+          >
+            {marqueeSchools.map((school, i) => (
+              <div
+                key={i}
+                title={school.name}
+                aria-label={school.name}
+                className="w-[180px] sm:w-[200px] md:w-[220px] shrink-0 flex flex-col items-center justify-center py-3 px-4 transition-all group cursor-pointer select-none"
+              >
+                <div className="transition-transform duration-300 group-hover:scale-110 flex items-center justify-center h-14 sm:h-16 w-full">
+                  {school.logo}
+                </div>
+                <p className="mt-2.5 text-center text-xs sm:text-[13px] font-semibold text-slate-700 group-hover:text-[#531FFF] transition-colors leading-snug px-1 truncate w-full">
+                  {school.name}
+                </p>
               </div>
-              <p className="mt-2.5 text-center text-xs sm:text-[13px] font-semibold text-slate-700 group-hover:text-[#531FFF] transition-colors leading-snug px-1">
-                {school.name}
-              </p>
-            </motion.div>
-          ))}
+            ))}
+          </motion.div>
         </div>
       </div>
     </section>

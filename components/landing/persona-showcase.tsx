@@ -164,25 +164,25 @@ export default function PersonaShowcase({ lang }: PersonaShowcaseProps) {
   const IconComponent = current.icon;
 
   return (
-    <section className="py-24 md:py-32 bg-slate-50/60 border-t border-gray-200/70 relative overflow-hidden">
+    <section className="py-24 md:py-32 bg-slate-50/50 border-t border-slate-100 relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-6 relative z-10">
         
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md bg-[#F3F0FF] border border-[#531FFF]/20 text-[#531FFF] text-xs font-bold uppercase tracking-wider mb-4">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-slate-200 text-[#531FFF] text-xs font-bold uppercase tracking-wider mb-4 shadow-2xs">
             <Users className="w-3.5 h-3.5 text-[#531FFF]" />
             {t.badge}
           </div>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-gray-900 tracking-tight leading-[1.14] mb-5">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-[1.14] mb-5">
             {t.title}
           </h2>
-          <p className="text-base sm:text-lg text-gray-600 leading-relaxed font-normal">
+          <p className="text-base sm:text-lg text-slate-600 leading-relaxed font-normal">
             {t.desc}
           </p>
         </div>
 
         {/* Persona Switcher Navigation Pills */}
-        <div className="flex items-center justify-start sm:justify-center overflow-x-auto pb-4 gap-2 mb-12 scrollbar-none">
+        <div className="flex items-center justify-start sm:justify-center overflow-x-auto pb-4 gap-2.5 mb-12 scrollbar-none">
           {t.personas.map((p, idx) => {
             const isActive = activePersona === idx;
             const PtrIcon = p.icon;
@@ -190,13 +190,13 @@ export default function PersonaShowcase({ lang }: PersonaShowcaseProps) {
               <button
                 key={idx}
                 onClick={() => setActivePersona(idx)}
-                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap transition-all border shrink-0 ${
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all border shrink-0 cursor-pointer ${
                   isActive
                     ? "bg-[#531FFF] text-white border-[#531FFF] shadow-md shadow-[#531FFF]/25 scale-102"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:text-gray-900 shadow-2xs"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:text-slate-900 shadow-2xs"
                 }`}
               >
-                <PtrIcon className={`w-4 h-4 ${isActive ? "text-white" : "text-gray-400"}`} />
+                <PtrIcon className={`w-4 h-4 ${isActive ? "text-white" : "text-slate-400"}`} />
                 <span>{p.role}</span>
               </button>
             );
@@ -204,7 +204,7 @@ export default function PersonaShowcase({ lang }: PersonaShowcaseProps) {
         </div>
 
         {/* Active Persona Showcase Stage */}
-        <div className="bg-white rounded-2xl border border-gray-200/90 shadow-[0_15px_40px_-15px_rgba(83,31,255,0.06)] p-6 sm:p-10 md:p-12">
+        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm p-6 sm:p-10 md:p-12">
           <AnimatePresence mode="wait">
             <motion.div
               key={activePersona}
@@ -217,16 +217,16 @@ export default function PersonaShowcase({ lang }: PersonaShowcaseProps) {
               {/* Left Column: Role Narrative & Benefits */}
               <div className="lg:col-span-6 space-y-6">
                 <div>
-                  <span className={`text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-md inline-block mb-3 ${current.badgeColor}`}>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full inline-block mb-3 ${current.badgeColor}`}>
                     {current.role}
                   </span>
-                  <h3 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight leading-snug">
+                  <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-snug">
                     {current.tagline}
                   </h3>
                 </div>
 
                 {/* Quote card */}
-                <div className="p-4 rounded-xl bg-slate-50 border-l-4 border-[#531FFF] italic text-xs sm:text-sm text-gray-700 leading-relaxed font-medium">
+                <div className="p-4 rounded-2xl bg-slate-50 border-l-4 border-[#531FFF] italic text-xs sm:text-sm text-slate-700 leading-relaxed font-medium">
                   "{current.quote}"
                 </div>
 
@@ -237,7 +237,7 @@ export default function PersonaShowcase({ lang }: PersonaShowcaseProps) {
                       <div className="w-5 h-5 rounded-full bg-[#F3F0FF] flex items-center justify-center text-[#531FFF] shrink-0 mt-0.5">
                         <CheckCircle2 className="w-3.5 h-3.5 text-[#531FFF]" />
                       </div>
-                      <span className="text-xs sm:text-sm font-semibold text-gray-800 leading-tight">
+                      <span className="text-xs sm:text-sm font-semibold text-slate-800 leading-tight">
                         {b}
                       </span>
                     </div>
@@ -245,49 +245,49 @@ export default function PersonaShowcase({ lang }: PersonaShowcaseProps) {
                 </div>
               </div>
 
-              {/* Right Column: High-Fidelity Persona Micro-Preview */}
+              {/* Right Column: High-Fidelity Persona Micro-Preview (Clean Light Theme) */}
               <div className="lg:col-span-6">
-                <div className="bg-slate-900 text-white rounded-2xl p-6 sm:p-7 border border-slate-800 shadow-xl space-y-5">
-                  <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                <div className="bg-slate-50/80 rounded-3xl p-6 sm:p-7 border border-slate-200/90 shadow-xs space-y-5">
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-200/80">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-[#531FFF] flex items-center justify-center text-white">
+                      <div className="w-8 h-8 rounded-xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center">
                         <IconComponent className="w-4 h-4" />
                       </div>
-                      <span className="text-xs font-bold text-white tracking-tight">
+                      <span className="text-xs font-bold text-slate-900 tracking-tight">
                         {current.mockupTitle}
                       </span>
                     </div>
-                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">
+                    <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/70 font-semibold">
                       Live Environment
                     </span>
                   </div>
 
                   {/* Primary Metric Showcase */}
-                  <div className="p-5 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/80 flex items-center justify-between">
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-slate-400 font-medium">{current.metricLabel}</p>
-                      <h4 className="text-3xl font-black text-white mt-1 tracking-tight">{current.metricValue}</h4>
+                      <p className="text-xs text-slate-500 font-medium">{current.metricLabel}</p>
+                      <h4 className="text-3xl font-black text-slate-900 mt-1 tracking-tight">{current.metricValue}</h4>
                     </div>
-                    <div className="w-11 h-11 rounded-xl bg-[#531FFF]/20 border border-[#531FFF]/40 flex items-center justify-center text-[#A78BFA]">
-                      <BarChart3 className="w-5 h-5 text-[#A78BFA]" />
+                    <div className="w-11 h-11 rounded-xl bg-[#531FFF]/10 border border-[#531FFF]/20 flex items-center justify-center text-[#531FFF]">
+                      <BarChart3 className="w-5 h-5 text-[#531FFF]" />
                     </div>
                   </div>
 
                   {/* Micro-Features Row */}
                   <div className="space-y-2">
-                    <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/50 flex items-center justify-between text-xs">
-                      <span className="text-slate-300 font-medium">Validasi Hak Akses</span>
-                      <span className="font-mono text-emerald-400 font-semibold">Tersertifikasi RBAC</span>
+                    <div className="p-3 rounded-xl bg-white border border-slate-200/70 shadow-2xs flex items-center justify-between text-xs">
+                      <span className="text-slate-600 font-medium">Validasi Hak Akses</span>
+                      <span className="font-mono text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200/60">Tersertifikasi RBAC</span>
                     </div>
-                    <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/50 flex items-center justify-between text-xs">
-                      <span className="text-slate-300 font-medium">Sinkronisasi Basis Data</span>
-                      <span className="font-mono text-[#A78BFA] font-semibold">Cloud Real-Time</span>
+                    <div className="p-3 rounded-xl bg-white border border-slate-200/70 shadow-2xs flex items-center justify-between text-xs">
+                      <span className="text-slate-600 font-medium">Sinkronisasi Basis Data</span>
+                      <span className="font-mono text-[#531FFF] font-bold bg-[#531FFF]/10 px-2.5 py-0.5 rounded-md border border-[#531FFF]/20">Cloud Real-Time</span>
                     </div>
                   </div>
 
                   {/* Quick Action Preview */}
                   <div className="pt-2 text-center">
-                    <p className="text-[11px] text-slate-400 font-medium">
+                    <p className="text-[11px] text-slate-500 font-medium">
                       Setiap akun civitas memiliki URL login dan kredensial aman tersendiri.
                     </p>
                   </div>

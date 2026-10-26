@@ -8,7 +8,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import {
   Zap, ChevronDown, Menu, X, ArrowRight,
   LayoutDashboard, UserCheck, PenLine,
-  CreditCard, FileText, Bell, BookOpen, Library
+  CreditCard, FileText, Bell, BookOpen, Globe, Check
 } from "lucide-react";
 
 /* Real features in the system — linking to dedicated showcase pages and modules */
@@ -18,7 +18,6 @@ const FEATURES = [
   { href: "/features/laporan",     icon: PenLine,        label: { id: "Penilaian & Rapor",      en: "Grades & Report Cards" },        desc: { id: "Input nilai & cetak rapor digital",      en: "Grade input & digital report cards" },         color: "text-[#531FFF]", bg: "bg-[#F3F0FF]" },
   { href: "/features/spp",         icon: CreditCard,     label: { id: "Pembayaran SPP",         en: "Tuition Payment" },              desc: { id: "Tagihan, rekap, & konfirmasi SPP",       en: "Invoicing, recap & payment confirmation" },    color: "text-[#531FFF]", bg: "bg-[#F3F0FF]" },
   { href: "/features/keuangan",    icon: FileText,       label: { id: "Laporan Keuangan",       en: "Financial Reports" },            desc: { id: "Rekap arus kas & laporan pengeluaran",  en: "Cashflow & expense reports" },                 color: "text-[#531FFF]", bg: "bg-[#F3F0FF]" },
-  { href: "/features/perpustakaan",icon: Library,        label: { id: "Perpustakaan Digital",   en: "Digital Library" },              desc: { id: "Katalog buku & sirkulasi peminjaman",    en: "Catalog & loan circulation" },                 color: "text-[#531FFF]", bg: "bg-[#F3F0FF]" },
   { href: "/features/pengumuman",  icon: Bell,           label: { id: "Pengumuman Sekolah",     en: "School Announcements" },         desc: { id: "Broadcast ke seluruh civitas sekolah",   en: "Broadcast to all school members" },            color: "text-[#531FFF]", bg: "bg-[#F3F0FF]" },
 ];
 
@@ -31,9 +30,11 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
   const [user, setUser] = useState<any>(null);
   const [scrolled, setScrolled] = useState(false);
   const [featDropdown, setFeatDropdown] = useState(false);
+  const [langDropdown, setLangDropdown] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileFeat, setMobileFeat] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
+  const langDropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, setUser);
@@ -46,6 +47,9 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
     const handler = (e: MouseEvent) => {
       if (dropRef.current && !dropRef.current.contains(e.target as Node)) {
         setFeatDropdown(false);
+      }
+      if (langDropRef.current && !langDropRef.current.contains(e.target as Node)) {
+        setLangDropdown(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -153,19 +157,68 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
 
         {/* Right Actions */}
         <div className="flex items-center gap-3">
-          {/* Language Toggle */}
-          <div className="hidden md:flex items-center bg-gray-100/80 p-1 rounded-md gap-0.5">
-            {(["id", "en"] as const).map((l) => (
-              <button
-                key={l}
-                onClick={() => handleLang(l)}
-                className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all ${
-                  lang === l ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                {l === "id" ? "🇮🇩 ID" : "🇬🇧 EN"}
-              </button>
-            ))}
+          {/* Language Dropdown */}
+          <div className="relative hidden md:block" ref={langDropRef}>
+            <button
+              type="button"
+              onClick={() => setLangDropdown((v) => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200/90 hover:border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-98"
+              aria-label="Pilih Bahasa / Select Language"
+            >
+              <Globe className="w-3.5 h-3.5 text-slate-500" />
+              <span className="uppercase tracking-wider font-extrabold">{lang}</span>
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${langDropdown ? "rotate-180 text-[#531FFF]" : ""}`} />
+            </button>
+
+            <AnimatePresence>
+              {langDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                  transition={{ duration: 0.16, ease: "easeOut" }}
+                  className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-xl shadow-black/8 border border-slate-100 p-1.5 z-50 space-y-0.5"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleLang("id");
+                      setLangDropdown(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                      lang === "id"
+                        ? "bg-[#F3F0FF] text-[#531FFF]"
+                        : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">ID</span>
+                      <span className="text-[11px] text-slate-500 font-normal">Bahasa Indonesia</span>
+                    </div>
+                    {lang === "id" && <Check className="w-3.5 h-3.5 text-[#531FFF]" strokeWidth={2.5} />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleLang("en");
+                      setLangDropdown(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                      lang === "en"
+                        ? "bg-[#F3F0FF] text-[#531FFF]"
+                        : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">EN</span>
+                      <span className="text-[11px] text-slate-500 font-normal">English</span>
+                    </div>
+                    {lang === "en" && <Check className="w-3.5 h-3.5 text-[#531FFF]" strokeWidth={2.5} />}
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="hidden lg:flex items-center gap-2">
@@ -237,10 +290,18 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
               </Link>
 
               <div className="pt-4 pb-2 border-t border-gray-100 flex flex-col gap-3">
-                <div className="flex items-center gap-2 justify-center">
+                <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg">
                   {(["id", "en"] as const).map((l) => (
-                    <button key={l} onClick={() => handleLang(l)} className={`px-4 py-2 text-[12px] font-bold rounded-md transition-all ${lang === l ? "bg-[#F3F0FF] text-[#531FFF]" : "text-gray-500 hover:bg-gray-100"}`}>
-                      {l === "id" ? "🇮🇩 Indonesia" : "🇬🇧 English"}
+                    <button
+                      key={l}
+                      onClick={() => handleLang(l)}
+                      className={`flex-1 py-2 text-[12px] font-bold rounded-md transition-all ${
+                        lang === l
+                          ? "bg-white text-[#531FFF] shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {l === "id" ? "Bahasa Indonesia" : "English"}
                     </button>
                   ))}
                 </div>

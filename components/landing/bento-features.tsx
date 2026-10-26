@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  UserCheck, Bell, Library, ArrowRight,
+  UserCheck, Bell, Calendar, ArrowRight,
   CheckCircle2, Sparkles, ChevronRight
 } from "lucide-react";
 
@@ -72,11 +72,11 @@ export default function BentoFeatures({ lang }: BentoFeaturesProps) {
       c5Link: "Eksplorasi Pengumuman",
       // Card 6
       c6Badge: "EFISIENSI OPERASIONAL",
-      c6Title: "Penjadwalan Bebas Bentrok & Perpustakaan Digital Cerdas",
-      c6Desc: "Susun jadwal pelajaran mingguan bebas bentrok antar ruang/guru, dan kelola ribuan katalog buku dengan barcode ISBN.",
+      c6Title: "Penjadwalan Bebas Bentrok & Kalender Akademik",
+      c6Desc: "Susun jadwal pelajaran mingguan bebas bentrok antar ruang dan guru secara otomatis, terintegrasi penuh dengan kalender akademik semester.",
       c6Stat1: "0 Konflik Jadwal",
-      c6Stat2: "4.800+ Judul Buku",
-      c6Stat3: "Scan Barcode Cepat",
+      c6Stat2: "Kalender Semester Terpadu",
+      c6Stat3: "Sinkronisasi Otomatis",
       c6Link: "Eksplorasi Fitur Akademik",
     },
     en: {
@@ -134,11 +134,11 @@ export default function BentoFeatures({ lang }: BentoFeaturesProps) {
       c5Link: "Explore Announcements",
       // Card 6
       c6Badge: "OPERATIONAL MASTERY",
-      c6Title: "Conflict-Free Timetabling & Smart Digital Library",
-      c6Desc: "Generate weekly room-and-faculty class schedules with zero clashes, alongside ISBN barcode catalog circulation.",
+      c6Title: "Conflict-Free Timetabling & Academic Calendar",
+      c6Desc: "Automatically build weekly clash-free schedules across rooms and teachers, fully integrated with semester academic calendars.",
       c6Stat1: "0 Schedule Clashes",
-      c6Stat2: "4,800+ Catalog Titles",
-      c6Stat3: "Instant Barcode Scan",
+      c6Stat2: "Integrated Calendar",
+      c6Stat3: "Auto-Synchronization",
       c6Link: "Explore Academic Suite",
     }
   }[lang];
@@ -488,7 +488,7 @@ export default function BentoFeatures({ lang }: BentoFeaturesProps) {
             </div>
           </motion.div>
 
-          {/* ── Bento Card 6: Wide Full-Width Card (12 Cols) - Penjadwalan & Perpustakaan ── */}
+          {/* ── Bento Card 6: Wide Full-Width Card (12 Cols) - Penjadwalan & Kalender Akademik ── */}
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -521,7 +521,7 @@ export default function BentoFeatures({ lang }: BentoFeaturesProps) {
                     whileHover={{ scale: 1.03 }}
                     className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs font-bold text-slate-700 shadow-2xs"
                   >
-                    <Library className="w-3.5 h-3.5 text-[#531FFF]" />
+                    <Calendar className="w-3.5 h-3.5 text-[#531FFF]" />
                     <span>{t.c6Stat2}</span>
                   </motion.div>
                   <motion.div
@@ -583,17 +583,17 @@ export default function BentoFeatures({ lang }: BentoFeaturesProps) {
                 </div>
 
                 <div className="p-2 rounded-lg bg-white border border-slate-200/60 flex items-center justify-between text-[11px] text-slate-600 relative overflow-hidden">
-                  {/* Subtle animated scan beam across barcode */}
+                  {/* Subtle animated scan beam across calendar event */}
                   <motion.div
                     animate={{ x: ["-100%", "200%"] }}
                     transition={{ duration: 4, repeat: Infinity, ease: "linear", repeatDelay: 1.5 }}
                     className="absolute inset-y-0 w-16 bg-gradient-to-r from-transparent via-[#531FFF]/10 to-transparent skew-x-12 pointer-events-none"
                   />
                   <span className="flex items-center gap-1.5 font-medium relative z-10">
-                    <Library className="w-3.5 h-3.5 text-[#531FFF]" />
-                    <span>Peminjaman Perpustakaan: <strong>Fisika Modern (ISBN 978-602)</strong></span>
+                    <Calendar className="w-3.5 h-3.5 text-[#531FFF]" />
+                    <span>Agenda Akademik: <strong>Ujian Tengah Semester Ganjil</strong></span>
                   </span>
-                  <span className="text-slate-400 font-mono text-[10px] relative z-10">Kembali: 28 Okt</span>
+                  <span className="text-slate-400 font-mono text-[10px] relative z-10">Mulai: 28 Okt</span>
                 </div>
               </div>
 

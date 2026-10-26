@@ -9,9 +9,9 @@ import {
 } from "lucide-react";
 import LandingNavbar from "@/components/landing/navbar";
 import LandingFooter from "@/components/landing/footer";
-import HeroOrbit from "@/components/landing/hero-orbit";
 import BentoFeatures from "@/components/landing/bento-features";
 import TrustedSchools from "@/components/landing/trusted-schools";
+import PersonaShowcase from "@/components/landing/persona-showcase";
 import PricingFaq from "@/components/landing/pricing-faq";
 
 export default function LandingPage() {
@@ -37,25 +37,23 @@ export default function LandingPage() {
 
   const t = {
     id: {
-      avatarBadge: "500+ Sekolah Terdaftar · Rating 4.9 ★",
+      avatarBadge: "Dipercaya 500+ Sekolah & Yayasan · Rating 4.9 ★",
       heroH1a: "Satu Sistem Operasi",
-      heroH1b: "untuk Seluruh",
-      heroH1c: "Ekosistem Sekolah.",
-      heroDesc: "Platform terintegrasi untuk mengelola presensi geofence, kurikulum merdeka, rekonsiliasi SPP otomatis, dan 5 portal peran secara real-time.",
+      heroH1b: "untuk Sekolah Modern.",
+      heroDesc: "Platform cerdas untuk mengelola presensi GPS geofence, kurikulum merdeka, rekonsiliasi SPP otomatis, dan 5 portal peran secara real-time tanpa kerumitan teknis.",
       heroCta1: "Mulai Uji Coba Gratis",
-      heroCta2: "Lihat Demo Sistem",
-      heroTrust1: "14 Hari Gratis",
+      heroCta2: "Jadwalkan Demo Sistem",
+      heroTrust1: "14 Hari Gratis Penuh",
       heroTrust2: "Tanpa Kartu Kredit",
-      heroTrust3: "Setup < 24 Jam",
+      heroTrust3: "Setup Mandiri < 24 Jam",
       statSchools: "Sekolah Terdaftar",
       statSchoolsVal: "500+",
-      statAttend: "Log Presensi GPS",
-      statAttendVal: "1.2M+",
-      statUptime: "Uptime Cloud SLA",
+      statAttend: "Presensi Geofence Tepat Waktu",
+      statAttendVal: "98.7%",
+      statFinance: "Otomasi Rekonsiliasi SPP",
+      statFinanceVal: "100%",
+      statUptime: "Cloud SLA Uptime",
       statUptimeVal: "99.9%",
-      statSetup: "Waktu Onboarding",
-      statSetupVal: "< 24 Jam",
-      trustedTitle: "Dipercaya Lebih dari 500+ Sekolah & Yayasan Pendidikan di Seluruh Indonesia",
       testimonialsBadge: "BUKTI KEBERHASILAN",
       testimonialsTitle: "Cerita Nyata dari Pendidik & Pimpinan Sekolah",
       testimonialsDesc: "Bagaimana Quick Schools menghemat ratusan jam kerja staf dan meningkatkan akurasi operasional.",
@@ -82,32 +80,31 @@ export default function LandingPage() {
           metric: "100% Rapor Selesai Tepat Waktu"
         }
       ],
-      ctaTitle: "Mulai Transformasi Digital Sekolah Anda Hari Ini",
-      ctaDesc: "Bergabunglah bersama 500+ institusi pendidikan modern di Indonesia. Setup cepat didampingi langsung oleh tim ahli kami.",
+      ctaBadge: "TRANSFORMASI DIGITAL SEKOLAH",
+      ctaTitle: "Siap Membawa Sekolah Anda ke Standar Digital Modern?",
+      ctaDesc: "Bergabunglah bersama 500+ institusi pendidikan unggulan di seluruh Indonesia. Mulai uji coba gratis 14 hari dengan pendampingan langsung oleh tim ahli kami.",
       ctaBtn1: "Daftar Akun Sekolah — Gratis",
       ctaBtn2: "Konsultasi Tim Onboarding",
       ctaSub: "Tanpa instalasi server lokal · Data tersimpan aman di Google Cloud · Uji coba gratis 14 hari"
     },
     en: {
-      avatarBadge: "500+ Registered Schools · 4.9 ★ Rating",
+      avatarBadge: "Trusted by 500+ Schools & Trusts · 4.9 ★ Rating",
       heroH1a: "One Operating System",
-      heroH1b: "for Your Entire",
-      heroH1c: "School Ecosystem.",
-      heroDesc: "An all-in-one platform managing GPS geofenced attendance, competency report cards, automated tuition reconciliation, and 5 dedicated user portals in real-time.",
-      heroCta1: "Start Free Trial",
-      heroCta2: "Watch Live Demo",
-      heroTrust1: "14-Day Free Trial",
+      heroH1b: "for Modern Schools.",
+      heroDesc: "An all-in-one cloud platform uniting GPS geofenced attendance, competency report cards, automated tuition reconciliation, and 5 dedicated user portals in real-time.",
+      heroCta1: "Start 14-Day Free Trial",
+      heroCta2: "Schedule Live Demo",
+      heroTrust1: "14-Day Full Free Trial",
       heroTrust2: "No Credit Card Required",
-      heroTrust3: "Setup in < 24 Hours",
+      heroTrust3: "Instant Setup in < 24 Hours",
       statSchools: "Registered Schools",
       statSchoolsVal: "500+",
-      statAttend: "GPS Attendance Logs",
-      statAttendVal: "1.2M+",
-      statUptime: "Cloud Uptime SLA",
+      statAttend: "On-Time GPS Attendance",
+      statAttendVal: "98.7%",
+      statFinance: "Tuition Auto-Reconciliation",
+      statFinanceVal: "100%",
+      statUptime: "Cloud SLA Uptime",
       statUptimeVal: "99.9%",
-      statSetup: "Average Onboarding",
-      statSetupVal: "< 24 Hours",
-      trustedTitle: "Trusted by 500+ Premier Schools & Educational Foundations Across Indonesia",
       testimonialsBadge: "PROVEN IMPACT",
       testimonialsTitle: "Real Stories from Educators & School Leaders",
       testimonialsDesc: "How Quick Schools eliminated hundreds of administrative hours and boosted campus transparency.",
@@ -134,8 +131,9 @@ export default function LandingPage() {
           metric: "100% Reports On-Schedule"
         }
       ],
-      ctaTitle: "Begin Your School's Digital Evolution Today",
-      ctaDesc: "Join 500+ premier educational institutions across Indonesia. Rapid onboarding guided personally by our technical specialists.",
+      ctaBadge: "DIGITAL SCHOOL TRANSFORMATION",
+      ctaTitle: "Ready to Elevate Your School to Modern Standards?",
+      ctaDesc: "Join 500+ premier educational institutions across Indonesia. Start your 14-day free trial with personal guidance from our onboarding specialists.",
       ctaBtn1: "Register School Account — Free",
       ctaBtn2: "Talk to Onboarding Specialist",
       ctaSub: "Zero local hardware required · Enterprise data security on Google Cloud · Free 14-day trial"
@@ -144,153 +142,185 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-[#531FFF]/15 selection:text-[#531FFF] overflow-x-hidden">
-      {/* Global Navigation */}
+      {/* ── 1. GLOBAL NAVBAR ── */}
       <LandingNavbar lang={lang} onChangeLang={changeLang} />
 
-      {/* ── 1. HERO SECTION: Minimalist, Modern, Transix-Inspired Layout ── */}
-      <section className="relative pt-32 pb-20 md:pt-40 md:pb-28 overflow-hidden bg-gradient-to-b from-slate-50/70 via-white to-slate-50/40">
+      {/* ── 2. HERO SECTION: Clean, Minimalist, Centered with Rich Primary Ambient Glow ── */}
+      <section className="relative pt-36 pb-20 md:pt-44 md:pb-24 overflow-hidden bg-gradient-to-b from-white via-slate-50/40 to-white">
         
-        {/* Subtle background technical grid mask (matching modern clean SaaS standards) */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-35 pointer-events-none" />
+        {/* Layer 1: Grand Central Primary Glow (#531FFF) */}
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 w-[850px] sm:w-[1000px] h-[520px] bg-gradient-to-b from-[#531FFF]/22 via-[#7C3AED]/18 to-transparent rounded-full blur-[130px] pointer-events-none -z-0" />
 
-        {/* Ambient Radial Color Glows */}
-        <motion.div
-          animate={{
-            x: [0, 20, 0],
-            y: [0, -15, 0],
-            scale: [1, 1.05, 1],
-          }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-12 right-1/4 w-[500px] h-[500px] bg-gradient-to-tr from-[#531FFF]/10 via-[#7C3AED]/6 to-transparent rounded-full blur-[100px] pointer-events-none -z-0"
-        />
+        {/* Layer 2: Top-Left Floating Indigo Accent */}
+        <div className="absolute -top-12 -left-20 w-[520px] h-[420px] bg-gradient-to-br from-[#531FFF]/20 via-[#6366F1]/15 to-transparent rounded-full blur-[110px] pointer-events-none -z-0" />
 
-        <div className="max-w-7xl mx-auto px-6 relative z-10">
+        {/* Layer 3: Top-Right Floating Violet/Fuchsia Accent */}
+        <div className="absolute -top-8 -right-20 w-[550px] h-[440px] bg-gradient-to-bl from-[#7C3AED]/22 via-[#9333EA]/14 to-transparent rounded-full blur-[110px] pointer-events-none -z-0" />
+
+        {/* Layer 4: Subtle Interactive Ambient Mesh Pattern */}
+        <div className="absolute inset-0 bg-[radial-gradient(#531FFF_1px,transparent_1px)] [background-size:28px_28px] opacity-[0.06] [mask-image:radial-gradient(ellipse_70%_55%_at_50%_35%,#000_60%,transparent_100%)] pointer-events-none" />
+
+        <div className="max-w-5xl mx-auto px-6 relative z-10 text-center">
           
-          {/* Top Row: Clean 2-Column Split (Headline & Value on Left, Radial Orbit on Right) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
-            
-            {/* Left Column: Bold Minimalist Headline & Direct CTAs */}
-            <div className="lg:col-span-7 space-y-6 text-left">
-              
-              {/* Transix-Style Social Proof Avatar Stack Pill */}
-              <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="inline-flex items-center gap-3 px-3.5 py-1.5 rounded-full bg-white border border-slate-200/90 shadow-2xs"
-              >
-                {/* 3 Overlapping Avatars */}
-                <div className="flex -space-x-1.5 shrink-0">
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 text-white flex items-center justify-center text-[8px] font-black ring-2 ring-white shadow-2xs">
-                    SR
-                  </div>
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-[#531FFF] to-indigo-400 text-white flex items-center justify-center text-[8px] font-black ring-2 ring-white shadow-2xs">
-                    AF
-                  </div>
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-amber-500 to-orange-400 text-white flex items-center justify-center text-[8px] font-black ring-2 ring-white shadow-2xs">
-                    DS
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-xs font-bold text-slate-700 tracking-tight">
-                    {t.avatarBadge}
-                  </span>
-                </div>
-              </motion.div>
-
-              {/* Main Heading: Confident, Spacious, Clean */}
-              <motion.h1
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.1 }}
-                className="text-4xl sm:text-5xl md:text-[56px] font-black text-slate-900 tracking-tight leading-[1.1] max-w-2xl"
-              >
-                {t.heroH1a} <br />
-                {t.heroH1b} <br />
-                <span className="text-[#531FFF]">{t.heroH1c}</span>
-              </motion.h1>
-
-              {/* Subtitle: High legibility, uncluttered */}
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-                className="text-base sm:text-lg text-slate-600 leading-relaxed font-normal max-w-xl"
-              >
-                {t.heroDesc}
-              </motion.p>
-
-              {/* Action Buttons: Pill-shaped like Transix & Burak with ArrowUpRight */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.3 }}
-                className="flex flex-wrap items-center gap-3.5 pt-1"
-              >
-                <Link
-                  href="/register"
-                  className="inline-flex items-center gap-2 px-7 sm:px-8 py-3.5 rounded-full bg-[#531FFF] text-white text-sm font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/35 active:scale-98 group"
-                >
-                  <span>{t.heroCta1}</span>
-                  <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                </Link>
-
-                <Link
-                  href="#fitur"
-                  className="inline-flex items-center gap-2 px-6 sm:px-7 py-3.5 rounded-full bg-slate-100 hover:bg-slate-200/80 text-slate-800 text-sm font-bold transition-all active:scale-98 group/demo"
-                >
-                  <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center text-[#531FFF] group-hover/demo:scale-110 transition-transform shadow-2xs">
-                    <Play className="w-2.5 h-2.5 fill-[#531FFF] ml-0.5" />
-                  </div>
-                  <span>{t.heroCta2}</span>
-                </Link>
-              </motion.div>
-
-              {/* Trust Checkmarks Row */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.6, delay: 0.4 }}
-                className="flex flex-wrap items-center gap-y-2 gap-x-5 text-xs text-slate-500 font-medium pt-2"
-              >
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{t.heroTrust1}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{t.heroTrust2}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{t.heroTrust3}</span>
-                </div>
-              </motion.div>
-
+          {/* Centered Social Proof Pill Badge */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-white/90 backdrop-blur-md border border-[#531FFF]/20 shadow-sm shadow-[#531FFF]/10 mb-8"
+          >
+            {/* 3 Overlapping Avatars */}
+            <div className="flex -space-x-1.5 shrink-0">
+              <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 text-white flex items-center justify-center text-[7px] font-black ring-2 ring-white">
+                SR
+              </div>
+              <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-[#531FFF] to-indigo-400 text-white flex items-center justify-center text-[7px] font-black ring-2 ring-white">
+                AF
+              </div>
+              <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-amber-500 to-orange-400 text-white flex items-center justify-center text-[7px] font-black ring-2 ring-white">
+                DS
+              </div>
             </div>
 
-            {/* Right Column: Transix-Inspired Radial Orbit & Key Metrics Centerpiece */}
-            <div className="lg:col-span-5 flex items-center justify-center">
-              <HeroOrbit lang={lang} />
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-bold text-slate-700 tracking-tight">
+                {t.avatarBadge}
+              </span>
             </div>
+          </motion.div>
 
-          </div>
+          {/* Main Hero Headline (Bold, Spacious, High Typographic Hierarchy) */}
+          <motion.h1
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="text-4xl sm:text-5xl md:text-6xl lg:text-[68px] font-black text-slate-900 tracking-tight leading-[1.08] max-w-4xl mx-auto mb-6"
+          >
+            {t.heroH1a} <br className="hidden sm:inline" />
+            <span className="bg-gradient-to-r from-[#531FFF] via-[#6366F1] to-[#7C3AED] bg-clip-text text-transparent">
+              {t.heroH1b}
+            </span>
+          </motion.h1>
+
+          {/* Subtitle: High clarity, uncluttered */}
+          <motion.p
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="text-base sm:text-lg md:text-xl text-slate-600 leading-relaxed font-normal max-w-2xl mx-auto mb-10"
+          >
+            {t.heroDesc}
+          </motion.p>
+
+          {/* Action Buttons: Minimalist Pill Buttons */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="flex flex-wrap items-center justify-center gap-4 mb-8"
+          >
+            <Link
+              href="/register"
+              className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-[#531FFF] text-white text-sm font-bold hover:bg-[#4314cc] transition-all shadow-lg shadow-[#531FFF]/30 hover:shadow-xl hover:shadow-[#531FFF]/40 active:scale-98 group"
+            >
+              <span>{t.heroCta1}</span>
+              <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </Link>
+
+            <Link
+              href="#fitur"
+              className="inline-flex items-center gap-2 px-7 py-4 rounded-full bg-white hover:bg-slate-50 text-slate-800 text-sm font-bold border border-slate-200/90 shadow-2xs transition-all active:scale-98 group/demo"
+            >
+              <div className="w-5 h-5 rounded-full bg-[#531FFF]/10 flex items-center justify-center text-[#531FFF] group-hover/demo:scale-110 transition-transform shadow-2xs">
+                <Play className="w-2.5 h-2.5 fill-[#531FFF] ml-0.5" />
+              </div>
+              <span>{t.heroCta2}</span>
+            </Link>
+          </motion.div>
+
+          {/* Trust Points Row */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="flex flex-wrap items-center justify-center gap-y-2 gap-x-6 text-xs text-slate-500 font-medium"
+          >
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{t.heroTrust1}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{t.heroTrust2}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{t.heroTrust3}</span>
+            </div>
+          </motion.div>
 
         </div>
+
+        {/* ── Minimalist 4-Metric Ribbon with Ambient Primary Edge ── */}
+        <div className="max-w-5xl mx-auto px-6 mt-16 md:mt-20 relative z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-5 sm:p-6 rounded-2xl sm:rounded-3xl bg-gradient-to-b from-white via-white to-[#F8F6FF] border border-[#531FFF]/20 shadow-[0_15px_50px_-15px_rgba(83,31,255,0.12),0_2px_8px_rgba(83,31,255,0.04)]"
+          >
+            <div className="text-center p-3 border-r border-slate-200/60 last:border-none">
+              <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-none mb-1">
+                {t.statSchoolsVal}
+              </p>
+              <p className="text-xs text-slate-500 font-medium">
+                {t.statSchools}
+              </p>
+            </div>
+
+            <div className="text-center p-3 sm:border-r border-slate-200/60 last:border-none">
+              <p className="text-2xl sm:text-3xl font-black text-[#531FFF] tracking-tight leading-none mb-1">
+                {t.statAttendVal}
+              </p>
+              <p className="text-xs text-slate-500 font-medium">
+                {t.statAttend}
+              </p>
+            </div>
+
+            <div className="text-center p-3 border-r border-slate-200/60 last:border-none">
+              <p className="text-2xl sm:text-3xl font-black text-emerald-600 tracking-tight leading-none mb-1">
+                {t.statFinanceVal}
+              </p>
+              <p className="text-xs text-slate-500 font-medium">
+                {t.statFinance}
+              </p>
+            </div>
+
+            <div className="text-center p-3">
+              <p className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-none mb-1">
+                {t.statUptimeVal}
+              </p>
+              <p className="text-xs text-slate-500 font-medium">
+                {t.statUptime}
+              </p>
+            </div>
+          </motion.div>
+        </div>
+
       </section>
 
-      {/* ── 3. BENTO GRID FEATURES: Layout Bento Minimalis with Motion ── */}
-      <BentoFeatures lang={lang} />
-
-      {/* ── 4. TRUSTED BY / SOCIAL PROOF STRIP (Logos Only) ── */}
+      {/* ── 3. TRUSTED SCHOOLS & LOGOS STRIP ── */}
       <TrustedSchools lang={lang} />
 
-      {/* ── 5. SECTION PRICING & FAQ ── */}
-      <PricingFaq lang={lang} />
+      {/* ── 4. BENTO GRID FEATURES: Layout Bento Minimalis ── */}
+      <BentoFeatures lang={lang} />
 
-      {/* ── 6. SECTION TESTIMONIALS: Verified Educational Social Proof ── */}
+      {/* ── 5. PERSONA SHOWCASE: Spesifik untuk Setiap Peran Sekolah ── */}
+      <PersonaShowcase lang={lang} />
+
+      {/* ── 6. TESTIMONIALS: Verified Educational Social Proof ── */}
       <section id="testimonials" className="py-20 md:py-28 bg-slate-50/50 border-t border-slate-100 relative">
         <div className="max-w-7xl mx-auto px-6">
           
@@ -351,67 +381,81 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── 7. FINAL HIGH-CONVERTING CTA BANNER with Gentle Ambient Glow ── */}
-      <section className="py-20 px-6 bg-white">
+      {/* ── 7. PRICING & FAQ ── */}
+      <PricingFaq lang={lang} />
+
+      {/* ── 8. FINAL HIGH-CONVERTING CTA BANNER (Light Theme with Rich Primary Ambient Glow) ── */}
+      <section className="py-24 px-6 bg-slate-50/60 border-t border-slate-100 relative overflow-hidden">
+        
+        {/* Strong External Primary Ambient Aura behind the CTA Card */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[450px] bg-gradient-to-tr from-[#531FFF]/25 via-[#7C3AED]/20 to-indigo-300/15 rounded-full blur-[110px] pointer-events-none -z-0" />
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="max-w-6xl mx-auto rounded-3xl bg-[#0B0F19] border border-slate-800 p-10 sm:p-14 md:p-16 text-white text-center shadow-2xl relative overflow-hidden"
+          className="max-w-6xl mx-auto rounded-3xl bg-gradient-to-b from-white via-white to-[#F6F3FF] border border-[#531FFF]/25 p-10 sm:p-14 md:p-16 text-slate-900 text-center shadow-[0_25px_80px_-15px_rgba(83,31,255,0.18),0_2px_10px_rgba(83,31,255,0.06)] relative overflow-hidden z-10"
         >
-          {/* Animated subtle ambient breathing lighting */}
-          <motion.div
-            animate={{ scale: [1, 1.2, 1], opacity: [0.15, 0.25, 0.15] }}
-            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute top-0 right-0 w-80 h-80 bg-[#531FFF]/25 rounded-full blur-3xl pointer-events-none"
-          />
-          <motion.div
-            animate={{ scale: [1, 1.15, 1], opacity: [0.1, 0.2, 0.1] }}
-            transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-            className="absolute bottom-0 left-0 w-80 h-80 bg-purple-500/15 rounded-full blur-3xl pointer-events-none"
-          />
+          {/* Internal Primary Ambient Lights */}
+          <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-gradient-to-b from-[#531FFF]/20 via-[#7C3AED]/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-16 -right-16 w-72 h-72 bg-[#531FFF]/15 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -top-16 -left-16 w-72 h-72 bg-[#7C3AED]/15 rounded-full blur-3xl pointer-events-none" />
 
           <div className="relative z-10 max-w-2xl mx-auto space-y-6">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-purple-200 text-xs font-bold uppercase tracking-wider border border-white/15">
-              <Zap className="w-3.5 h-3.5 text-amber-300" /> Transformasi Digital Sekolah
+            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#531FFF]/10 text-[#531FFF] text-xs font-bold uppercase tracking-wider border border-[#531FFF]/25 shadow-xs shadow-[#531FFF]/10">
+              <Zap className="w-3.5 h-3.5 text-[#531FFF]" /> {t.ctaBadge}
             </span>
 
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tight leading-[1.14]">
-              {t.ctaTitle}
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-[1.12]">
+              {lang === "id" ? (
+                <>
+                  Siap Membawa Sekolah Anda ke{" "}
+                  <span className="bg-gradient-to-r from-[#531FFF] via-[#6366F1] to-[#7C3AED] bg-clip-text text-transparent">
+                    Standar Digital Modern?
+                  </span>
+                </>
+              ) : (
+                <>
+                  Ready to Elevate Your School to{" "}
+                  <span className="bg-gradient-to-r from-[#531FFF] via-[#6366F1] to-[#7C3AED] bg-clip-text text-transparent">
+                    Modern Standards?
+                  </span>
+                </>
+              )}
             </h2>
 
-            <p className="text-sm sm:text-base text-slate-300 font-normal leading-relaxed">
+            <p className="text-sm sm:text-base text-slate-600 font-normal leading-relaxed">
               {t.ctaDesc}
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-3.5 pt-2">
               <Link
                 href="/register"
-                className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-white text-slate-900 text-sm font-extrabold hover:bg-slate-100 transition-all shadow-md active:scale-98"
+                className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-[#531FFF] text-white text-sm font-bold hover:bg-[#4314cc] transition-all shadow-lg shadow-[#531FFF]/30 hover:shadow-xl hover:shadow-[#531FFF]/40 active:scale-98 group"
               >
                 <span>{t.ctaBtn1}</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
               </Link>
 
               <Link
                 href="https://wa.me/6281234567890"
                 target="_blank"
-                className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-sm font-semibold border border-white/20 transition-all active:scale-98"
+                className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-white hover:bg-slate-50 text-slate-800 text-sm font-bold border border-slate-200/90 shadow-2xs transition-all active:scale-98"
               >
                 <span>{t.ctaBtn2}</span>
                 <ArrowUpRight className="w-4 h-4" />
               </Link>
             </div>
 
-            <p className="text-xs text-slate-400 font-medium pt-2">
+            <p className="text-xs text-slate-500 font-medium pt-2">
               {t.ctaSub}
             </p>
           </div>
         </motion.div>
       </section>
 
-      {/* Global Footer */}
+      {/* ── 9. GLOBAL FOOTER ── */}
       <LandingFooter lang={lang} />
     </div>
   );
