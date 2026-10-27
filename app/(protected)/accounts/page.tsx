@@ -18,6 +18,7 @@ import {
   Eye, 
   EyeOff,
   Lock,
+  KeyRound,
   CheckCircle2, 
   Clock, 
   AlertTriangle, 
@@ -113,6 +114,19 @@ export default function AccountManagementPage() {
   const [detailModal, setDetailModal] = useState<{ open: boolean; data: AccountUser | null }>({ open: false, data: null });
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; data: AccountUser | null }>({ open: false, data: null });
   const [createModal, setCreateModal] = useState(false);
+  const [resetPasswordModal, setResetPasswordModal] = useState<{
+    open: boolean;
+    user: AccountUser | null;
+    newPassword: string;
+    showPassword: boolean;
+    isSubmitting: boolean;
+  }>({
+    open: false,
+    user: null,
+    newPassword: "asdasdasd",
+    showPassword: false,
+    isSubmitting: false,
+  });
 
   // Form states for Create / Edit
   const [formName, setFormName] = useState("");
@@ -410,11 +424,65 @@ export default function AccountManagementPage() {
     setEditModal({ open: true, data: user });
     setFormName(user.name);
     setFormEmail(user.email);
+    setFormPassword("");
     setFormRole(normalizeRole(user.role));
     setFormStatus(user.status);
     setFormNip(user.nip || (user as any).nisn || "");
     setFormClass((user as any).className || (user as any).classId || "");
     setFormSubject((user as any).subject || (user as any).role || "");
+  };
+
+  // Open Reset Password Modal
+  const handleOpenResetPassword = (user: AccountUser) => {
+    setResetPasswordModal({
+      open: true,
+      user,
+      newPassword: "asdasdasd",
+      showPassword: false,
+      isSubmitting: false,
+    });
+  };
+
+  // Confirm Reset Password Action
+  const handleConfirmResetPassword = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!resetPasswordModal.user) return;
+    if (!resetPasswordModal.newPassword || resetPasswordModal.newPassword.length < 6) {
+      toast.showError("Kata sandi minimal 6 karakter.", "Validasi Gagal");
+      return;
+    }
+
+    setResetPasswordModal(prev => ({ ...prev, isSubmitting: true }));
+    try {
+      const res = await fetch("/api/accounts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: resetPasswordModal.user.id || resetPasswordModal.user.uid,
+          email: resetPasswordModal.user.email,
+          password: resetPasswordModal.newPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal mereset kata sandi.");
+      }
+
+      try {
+        navigator.clipboard?.writeText(resetPasswordModal.newPassword);
+      } catch (clipErr) {}
+
+      toast.showSuccess(
+        `Kata sandi untuk ${resetPasswordModal.user.name} (${resetPasswordModal.user.email}) berhasil direset menjadi: "${resetPasswordModal.newPassword}" (Tersalin ke clipboard).`,
+        "Kata Sandi Berhasil Direset"
+      );
+      setResetPasswordModal({ open: false, user: null, newPassword: "asdasdasd", showPassword: false, isSubmitting: false });
+    } catch (err: any) {
+      console.error("Reset password error:", err);
+      toast.showError(err.message || "Gagal mereset kata sandi", "Error");
+      setResetPasswordModal(prev => ({ ...prev, isSubmitting: false }));
+    }
   };
 
   // Save Edit
@@ -435,6 +503,28 @@ export default function AccountManagementPage() {
     } : u));
 
     try {
+      // 1. Update in PostgreSQL database
+      try {
+        await fetch("/api/accounts", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: targetId,
+            email: formEmail.trim().toLowerCase(),
+            name: formName.trim(),
+            role: formRole,
+            status: formStatus,
+            nip: formNip.trim(),
+            nisn: formNip.trim(),
+            className: formClass.trim(),
+            ...(formPassword && formPassword.length >= 6 ? { password: formPassword } : {}),
+          }),
+        });
+      } catch (pgErr) {
+        console.warn("PostgreSQL sync edit warning:", pgErr);
+      }
+
+      // 2. Update in Firestore
       await updateDoc(doc(db, "users", targetId), {
         name: formName,
         email: formEmail,
@@ -489,6 +579,7 @@ export default function AccountManagementPage() {
 
       toast.showEdit(`Data akun ${formName} berhasil diperbarui dan disinkronkan.`, "Perubahan Disimpan");
       setEditModal({ open: false, data: null });
+      setFormPassword("");
     } catch (err: any) {
       console.error("Save edit error:", err);
       if (err.code === "permission-denied") {
@@ -1343,6 +1434,14 @@ export default function AccountManagementPage() {
                           </button>
 
                           <button
+                            onClick={() => handleOpenResetPassword(user)}
+                            title="Reset Kata Sandi Akun"
+                            className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <KeyRound className="w-4 h-4" />
+                          </button>
+
+                          <button
                             onClick={() => handleOpenEdit(user)}
                             title="Edit Role & Status"
                             className="p-2 text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
@@ -1509,6 +1608,19 @@ export default function AccountManagementPage() {
                   </div>
                 </div>
               )}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-gray-700 block">Ubah Kata Sandi (Opsional)</label>
+                  <span className="text-[10px] text-gray-400">Kosongkan jika tidak ingin mengubah</span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Masukkan kata sandi baru (minimal 6 karakter)..."
+                  value={formPassword}
+                  onChange={(e) => setFormPassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg font-medium focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none text-xs"
+                />
+              </div>
 
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-gray-100">
                 <button
@@ -2025,13 +2137,38 @@ export default function AccountManagementPage() {
                 </span>
               </div>
 
-              <div className="flex justify-between items-center py-2">
+              <div className="flex justify-between items-center py-2 border-b border-gray-100">
                 <span className="font-bold text-gray-500">Pengingat Terakhir:</span>
                 <span className="font-bold text-gray-800 text-[11px]">
                   {detailModal.data.reminderSentAt 
                     ? new Date(detailModal.data.reminderSentAt).toLocaleString("id-ID") 
                     : "Belum pernah diingatkan"}
                 </span>
+              </div>
+
+              {/* Password Info & Quick Reset */}
+              <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700">
+                    <KeyRound className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-gray-800 block text-[11px]">Kata Sandi Akun</span>
+                    <span className="text-[10px] text-gray-500 font-mono">Default: asdasdasd</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const u = detailModal.data;
+                    setDetailModal({ open: false, data: null });
+                    if (u) handleOpenResetPassword(u);
+                  }}
+                  className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                >
+                  <KeyRound className="w-3 h-3" />
+                  <span>Reset Sandi</span>
+                </button>
               </div>
             </div>
 
@@ -2112,6 +2249,105 @@ export default function AccountManagementPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= RESET PASSWORD MODAL ================= */}
+      {resetPasswordModal.open && resetPasswordModal.user && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-2xl w-full max-w-[460px] overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base">Reset Kata Sandi Akun</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Atur ulang kata sandi login pengguna</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setResetPasswordModal(prev => ({ ...prev, open: false, user: null }))}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <form onSubmit={handleConfirmResetPassword} className="p-6 space-y-4 text-xs">
+              {/* User Info Card */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 text-sm">{resetPasswordModal.user.name}</span>
+                  <span className="font-bold text-[#531FFF] bg-purple-50 border border-purple-100 px-2 py-0.5 rounded text-[10px] capitalize">
+                    {ROLE_CONFIG[normalizeRole(resetPasswordModal.user.role)]?.label || resetPasswordModal.user.role}
+                  </span>
+                </div>
+                <p className="text-slate-500 font-medium">{resetPasswordModal.user.email}</p>
+              </div>
+
+              {/* Password Input */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-bold text-gray-700 block">Kata Sandi Baru</label>
+                  <button
+                    type="button"
+                    onClick={() => setResetPasswordModal(prev => ({ ...prev, newPassword: "asdasdasd" }))}
+                    className="text-[11px] text-amber-600 hover:text-amber-700 font-bold hover:underline cursor-pointer"
+                  >
+                    Gunakan Default: &quot;asdasdasd&quot;
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type={resetPasswordModal.showPassword ? "text" : "password"}
+                    required
+                    minLength={6}
+                    value={resetPasswordModal.newPassword}
+                    onChange={(e) => setResetPasswordModal(prev => ({ ...prev, newPassword: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 pr-10 border border-gray-200 rounded-lg font-medium text-xs focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none"
+                    placeholder="Minimal 6 karakter..."
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setResetPasswordModal(prev => ({ ...prev, showPassword: !prev.showPassword }))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  >
+                    {resetPasswordModal.showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Notice Box */}
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-[11px] leading-relaxed flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                <p>
+                  Kata sandi baru akan otomatis disalin ke clipboard dan pengguna dapat langsung login menggunakan email &amp; kata sandi baru tersebut di halaman login.
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setResetPasswordModal(prev => ({ ...prev, open: false, user: null }))}
+                  className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg text-xs transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetPasswordModal.isSubmitting || resetPasswordModal.newPassword.length < 6}
+                  className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shadow-md shadow-amber-600/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                >
+                  <KeyRound className="w-4 h-4" />
+                  <span>{resetPasswordModal.isSubmitting ? "Menyimpan..." : "Reset Kata Sandi"}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

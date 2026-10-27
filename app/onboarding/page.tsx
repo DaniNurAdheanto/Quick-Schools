@@ -178,22 +178,8 @@ export default function StudentOnboardingPage() {
     setTimeout(() => setCopiedField(""), 2500);
   };
 
-  const getSchoolSlug = (schoolNameStr?: string) => {
-    if (!schoolNameStr) return "smagaruda";
-    const simplified = schoolNameStr
-      .toLowerCase()
-      .replace(/smart school/g, "")
-      .replace(/operating system/g, "")
-      .replace(/[^a-z0-9]/g, "")
-      .trim();
-    return simplified.slice(0, 10) || "sekolah";
-  };
-
-  const generateParentDefaultPassword = (parentFullName: string, schoolNameStr?: string) => {
-    const cleanFirstName = (parentFullName.trim().split(" ")[0] || "ortu").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const schoolSlug = getSchoolSlug(schoolNameStr);
-    const base = `${cleanFirstName}-${schoolSlug}`;
-    return base.length >= 6 ? base : `${base}123`;
+  const generateParentDefaultPassword = (_parentFullName?: string, _schoolNameStr?: string) => {
+    return "asdasdasd";
   };
 
   // Step State: 0 (Welcome), 1 (Pribadi), 2 (Akademik), 3 (OrangTua), 4 (Darurat), 5 (Review), 6 (Selesai)
@@ -1199,6 +1185,7 @@ export default function StudentOnboardingPage() {
             relation: orangTua.relation,
             parentPhone: orangTua.parentPhone,
             parentEmail: parentEmailInput,
+            parentPassword: defaultPassword,
             parentAddress: orangTua.parentAddress,
             parentJob: orangTua.parentJob,
             parentIncome: orangTua.parentIncome,
@@ -2570,7 +2557,7 @@ export default function StudentOnboardingPage() {
                 </div>
 
                 <p className="text-[10px] text-slate-400 italic leading-relaxed">
-                  * Format kata sandi: [nama depan ortu]-[nama sekolah]. Orang tua dapat mengganti kata sandi kapan saja di menu profil setelah berhasil masuk.
+                  * Password default akun orang tua: <span className="font-semibold text-slate-700">asdasdasd</span>. Orang tua dapat langsung login menggunakan email terdaftar dan mengganti kata sandi kapan saja di menu profil setelah berhasil masuk.
                 </p>
               </div>
             )}

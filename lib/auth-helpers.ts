@@ -120,7 +120,10 @@ export function getPostLoginRedirect(userData: any, targetRedirect?: string | nu
  * signs out from Firebase, purges caches, and throws a clear Indonesian error message.
  * If valid, sets session cookie and returns authentic database profile and redirect URL.
  */
-export async function executeGoogleAuth(): Promise<{
+export async function executeGoogleAuth(options?: {
+  isRegister?: boolean;
+  name?: string;
+}): Promise<{
   user: User;
   redirectUrl: string;
   userData: any;
@@ -179,7 +182,7 @@ export async function executeGoogleAuth(): Promise<{
     throw new Error("Akun Google ini telah dihapus oleh Administrator dan tidak dapat digunakan lagi.");
   }
 
-  // 2. STRICT CHECK: Verify that the account exists in PostgreSQL User table!
+  // 2. STRICT CHECK / AUTO-REGISTER: Verify or create the account in PostgreSQL User table!
   let dbCheckRes: Response;
   let dbCheckData: any;
   try {
@@ -189,8 +192,9 @@ export async function executeGoogleAuth(): Promise<{
       body: JSON.stringify({
         email: cleanEmail,
         uid: user.uid,
-        displayName: user.displayName,
+        displayName: options?.name?.trim() || user.displayName,
         photoUrl: user.photoURL,
+        isRegister: Boolean(options?.isRegister),
       }),
     });
     dbCheckData = await dbCheckRes.json();

@@ -23,7 +23,10 @@ export default function RegisterPage() {
     setGoogleLoading(true);
     setError("");
     try {
-      const { redirectUrl } = await executeGoogleAuth();
+      const { redirectUrl } = await executeGoogleAuth({
+        isRegister: true,
+        name: name.trim() || undefined,
+      });
       router.push(redirectUrl);
     } catch (err: any) {
       if (err.code !== "auth/popup-closed-by-user" && err.code !== "auth/cancelled-popup-request") {

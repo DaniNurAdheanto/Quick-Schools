@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromDb } from "@/lib/server-auth";
-import { AccountStatus } from "@prisma/client";
+import { AccountStatus, UserRole } from "@prisma/client";
+import * as bcrypt from "bcryptjs";
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
       relation,
       parentPhone,
       parentEmail,
+      parentPassword,
       parentAddress,
       parentJob,
       parentIncome,
@@ -160,30 +162,98 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 5. Parent Record Linkage (if parent name/email supplied)
+    // 5. Parent User & Record Linkage (if parent name/email supplied)
     const bestParentName = (fatherName || motherName || guardianName || "").trim();
     if (bestParentName) {
+      const cleanParentEmail = parentEmail && String(parentEmail).includes("@")
+        ? String(parentEmail).toLowerCase().trim()
+        : null;
+
+      let parentUserId: string | null = null;
+
+      // 5a. Create or update User account in PostgreSQL User table
+      if (cleanParentEmail) {
+        let parentUser = await prisma.user.findUnique({
+          where: { email: cleanParentEmail },
+        });
+
+        const rawPassword = String(parentPassword || "").trim() || "asdasdasd";
+        const passwordHash = await bcrypt.hash(rawPassword, 10);
+
+        if (!parentUser) {
+          parentUser = await prisma.user.create({
+            data: {
+              email: cleanParentEmail,
+              passwordHash,
+              name: bestParentName,
+              role: UserRole.ORANG_TUA,
+              status: AccountStatus.AKTIF,
+              onboardingCompleted: true,
+              phone: parentPhone || null,
+            },
+          });
+        } else {
+          // If parent user already exists, ensure active and update passwordHash
+          const updates: any = {
+            status: AccountStatus.AKTIF,
+            onboardingCompleted: true,
+          };
+          if (parentPassword) {
+            updates.passwordHash = await bcrypt.hash(String(parentPassword).trim(), 10);
+          } else if (!parentUser.passwordHash) {
+            updates.passwordHash = await bcrypt.hash("asdasdasd", 10);
+          }
+          parentUser = await prisma.user.update({
+            where: { id: parentUser.id },
+            data: updates,
+          });
+        }
+
+        parentUserId = parentUser.id;
+      }
+
+      // 5b. Find or create Parent companion record
       let parent = null;
-      if (parentEmail && String(parentEmail).includes("@")) {
+      if (parentUserId) {
         parent = await prisma.parent.findFirst({
-          where: { email: String(parentEmail).toLowerCase().trim() },
+          where: { userId: parentUserId },
+        });
+      }
+      if (!parent && cleanParentEmail) {
+        parent = await prisma.parent.findFirst({
+          where: { email: cleanParentEmail },
         });
       }
 
       if (!parent) {
         parent = await prisma.parent.create({
           data: {
+            userId: parentUserId,
             fullName: bestParentName,
-            email: parentEmail ? String(parentEmail).toLowerCase().trim() : null,
+            email: cleanParentEmail,
             phone: parentPhone || null,
             address: parentAddress || address || null,
             job: parentJob || null,
             income: parentIncome || null,
           },
         });
+      } else if (parentUserId && !parent.userId) {
+        // Link existing unlinked parent record to User account
+        parent = await prisma.parent.update({
+          where: { id: parent.id },
+          data: {
+            userId: parentUserId,
+            fullName: bestParentName || parent.fullName,
+            email: cleanParentEmail || parent.email,
+            phone: parentPhone || parent.phone,
+            address: parentAddress || parent.address,
+            job: parentJob || parent.job,
+            income: parentIncome || parent.income,
+          },
+        });
       }
 
-      // Check relation link
+      // 5c. Link parent to student in ParentStudent relation
       const existingLink = await prisma.parentStudent.findFirst({
         where: {
           parentId: parent.id,

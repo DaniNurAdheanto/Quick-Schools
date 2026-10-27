@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { signSessionToken } from "@/lib/jwt";
 import { SESSION_COOKIE_NAME } from "@/lib/server-auth";
+import { UserRole, AccountStatus } from "@prisma/client";
 
 // GET /api/auth/google?email=... - Check if an email exists in PostgreSQL User table
 export async function GET(req: NextRequest) {
@@ -57,11 +58,11 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/auth/google - Authenticate Google login strictly against PostgreSQL User table
+// POST /api/auth/google - Authenticate or register Google account in PostgreSQL User table
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, photoUrl } = body;
+    const { email, photoUrl, isRegister, displayName, name } = body;
 
     if (!email) {
       return NextResponse.json(
@@ -72,8 +73,8 @@ export async function POST(req: NextRequest) {
 
     const cleanEmail = String(email).toLowerCase().trim();
 
-    // 1. Strictly look up account in PostgreSQL User table
-    const user = await prisma.user.findFirst({
+    // 1. Look up account in PostgreSQL User table
+    let user = await prisma.user.findFirst({
       where: {
         email: {
           equals: cleanEmail,
@@ -99,20 +100,58 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 2. Reject if account does NOT exist in the database table
+    // 2. If account does NOT exist in the database table
     if (!user) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Akun Google ini belum terdaftar di tabel akun database sekolah. Silakan hubungi Administrator untuk mendaftarkan akun Anda terlebih dahulu.",
-          registeredInDatabase: false,
-        },
-        { status: 404 }
-      );
+      if (isRegister) {
+        // Automatically register new student user in PostgreSQL
+        const finalName = (name || displayName || cleanEmail.split("@")[0]).trim();
+        const avatar =
+          photoUrl && !photoUrl.startsWith("data:") && photoUrl.length < 512
+            ? photoUrl
+            : null;
+
+        user = await prisma.user.create({
+          data: {
+            email: cleanEmail,
+            name: finalName,
+            role: UserRole.SISWA,
+            status: AccountStatus.BELUM_ONBOARDING,
+            onboardingCompleted: false,
+            avatarUrl: avatar,
+          },
+          include: {
+            student: {
+              include: {
+                class: true,
+              },
+            },
+            teacher: {
+              include: {
+                subjects: {
+                  include: {
+                    subject: true,
+                  },
+                },
+              },
+            },
+            parent: true,
+          },
+        });
+      } else {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Akun Google ini belum terdaftar di tabel akun database sekolah. Silakan daftar terlebih dahulu melalui halaman Registrasi atau hubungi Administrator.",
+            registeredInDatabase: false,
+          },
+          { status: 404 }
+        );
+      }
     }
 
     // 3. Reject if account is deactivated in database
-    if (user.status === "NONAKTIF") {
+    if (user.status === AccountStatus.NONAKTIF) {
       return NextResponse.json(
         {
           success: false,

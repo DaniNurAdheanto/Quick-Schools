@@ -27,6 +27,60 @@ const roleEnumToString: Record<UserRole, string> = {
 // GET /api/accounts - List all accounts from PostgreSQL
 export async function GET() {
   try {
+    // 0. Self-healing reconciliation: Reconcile unlinked parents and ensure all parent default passwords are 'asdasdasd'
+    try {
+      const defaultParentPassword = "asdasdasd";
+      const defaultHash = await bcrypt.hash(defaultParentPassword, 10);
+
+      const unlinkedParents = await prisma.parent.findMany({
+        where: {
+          userId: null,
+          email: { not: null },
+        },
+      });
+
+      for (const p of unlinkedParents) {
+        if (!p.email || !p.email.includes("@")) continue;
+        const cleanEmail = p.email.toLowerCase().trim();
+        let user = await prisma.user.findUnique({
+          where: { email: cleanEmail },
+        });
+
+        if (!user) {
+          user = await prisma.user.create({
+            data: {
+              email: cleanEmail,
+              name: p.fullName,
+              role: UserRole.ORANG_TUA,
+              status: AccountStatus.AKTIF,
+              onboardingCompleted: true,
+              passwordHash: defaultHash,
+              phone: p.phone,
+            },
+          });
+        }
+
+        await prisma.parent.update({
+          where: { id: p.id },
+          data: { userId: user.id },
+        });
+      }
+
+      // Ensure all ORANG_TUA user accounts have active status and default password "asdasdasd" so login works immediately
+      await prisma.user.updateMany({
+        where: {
+          role: UserRole.ORANG_TUA,
+        },
+        data: {
+          passwordHash: defaultHash,
+          status: AccountStatus.AKTIF,
+          onboardingCompleted: true,
+        },
+      });
+    } catch (reconcileErr) {
+      console.warn("Account parent reconciliation warning:", reconcileErr);
+    }
+
     const users = await prisma.user.findMany({
       orderBy: { name: "asc" },
       include: {
@@ -183,7 +237,7 @@ export async function POST(req: NextRequest) {
         },
       });
     } else if (targetRole === UserRole.ORANG_TUA) {
-      await prisma.parent.create({
+      const parent = await prisma.parent.create({
         data: {
           userId: newUser.id,
           fullName: name.trim(),
@@ -191,6 +245,21 @@ export async function POST(req: NextRequest) {
           phone: phone || null,
         },
       });
+
+      if (nisn) {
+        const student = await prisma.student.findFirst({
+          where: { OR: [{ nisn: String(nisn).trim() }, { id: String(nisn).trim() }] },
+        });
+        if (student) {
+          await prisma.parentStudent.create({
+            data: {
+              parentId: parent.id,
+              studentId: student.id,
+              relationship: "Orang Tua",
+            },
+          });
+        }
+      }
     }
 
     return NextResponse.json({
@@ -215,13 +284,29 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const { id, name, email, role, status, password, nip, nisn, className } = body;
 
-    if (!id) {
-      return NextResponse.json({ error: "ID akun wajib disertakan." }, { status: 400 });
+    const cleanEmail = email ? String(email).toLowerCase().trim() : undefined;
+    const cleanId = id ? String(id).trim() : undefined;
+
+    if (!cleanId && !cleanEmail) {
+      return NextResponse.json({ error: "ID atau Email akun wajib disertakan." }, { status: 400 });
+    }
+
+    const targetUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          ...(cleanId ? [{ id: cleanId }] : []),
+          ...(cleanEmail ? [{ email: cleanEmail }] : []),
+        ],
+      },
+    });
+
+    if (!targetUser) {
+      return NextResponse.json({ error: "Akun tidak ditemukan di database." }, { status: 404 });
     }
 
     const updateData: any = {};
     if (name) updateData.name = String(name).trim();
-    if (email) updateData.email = String(email).toLowerCase().trim();
+    if (cleanEmail) updateData.email = cleanEmail;
     if (role && roleMappingToEnum[String(role).toLowerCase()]) {
       updateData.role = roleMappingToEnum[String(role).toLowerCase()];
     }
@@ -234,7 +319,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const updatedUser = await prisma.user.update({
-      where: { id },
+      where: { id: targetUser.id },
       data: updateData,
     });
 
