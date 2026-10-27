@@ -27,9 +27,91 @@ async function resolveTeacherId(teacherIdentifier?: string | null): Promise<stri
   }
 }
 
+const DEFAULT_CLASS_PRESETS = [
+  { id: "class-10-mipa-1", name: "10 MIPA 1", level: "Kelas 10", major: "IPA" },
+  { id: "class-10-mipa-2", name: "10 MIPA 2", level: "Kelas 10", major: "IPA" },
+  { id: "class-10-ips-1", name: "10 IPS 1", level: "Kelas 10", major: "IPS" },
+  { id: "class-10-ips-2", name: "10 IPS 2", level: "Kelas 10", major: "IPS" },
+  { id: "class-11-mipa-1", name: "11 MIPA 1", level: "Kelas 11", major: "IPA" },
+  { id: "class-11-mipa-2", name: "11 MIPA 2", level: "Kelas 11", major: "IPA" },
+  { id: "class-11-ips-1", name: "11 IPS 1", level: "Kelas 11", major: "IPS" },
+  { id: "class-11-ips-2", name: "11 IPS 2", level: "Kelas 11", major: "IPS" },
+  { id: "class-12-mipa-1", name: "12 MIPA 1", level: "Kelas 12", major: "IPA" },
+  { id: "class-12-mipa-2", name: "12 MIPA 2", level: "Kelas 12", major: "IPA" },
+  { id: "class-12-ips-1", name: "12 IPS 1", level: "Kelas 12", major: "IPS" },
+  { id: "class-12-ips-2", name: "12 IPS 2", level: "Kelas 12", major: "IPS" },
+];
+
+// Helper to sort classes naturally: Tingkat (10->11->12), Jurusan (MIPA->IPS), No (1->2)
+function sortClassesNaturally(list: any[]) {
+  return [...list].sort((a, b) => {
+    const aName = a.name || a;
+    const bName = b.name || b;
+    const aGrade = parseInt(String(aName).match(/\d+/)?.[0] || "0", 10);
+    const bGrade = parseInt(String(bName).match(/\d+/)?.[0] || "0", 10);
+    if (aGrade !== bGrade) return aGrade - bGrade;
+
+    const getMajorScore = (str: string) => {
+      const l = String(str).toLowerCase();
+      if (l.includes("mipa") || l.includes("ipa")) return 1;
+      if (l.includes("ips")) return 2;
+      return 3;
+    };
+    const aMaj = getMajorScore(aName);
+    const bMaj = getMajorScore(bName);
+    if (aMaj !== bMaj) return aMaj - bMaj;
+
+    return String(aName).localeCompare(String(bName), undefined, { numeric: true });
+  });
+}
+
 // GET /api/classes - List all classes with student count & homeroom teacher
 export async function GET() {
   try {
+    // 0. Clean up rogue unregistered classes and ensure standard classes exist
+    try {
+      const rogueClasses = await prisma.class.findMany({
+        where: {
+          OR: [
+            { name: { contains: "Bahasa", mode: "insensitive" } },
+            { name: { contains: "undefined", mode: "insensitive" } },
+          ],
+        },
+      });
+
+      for (const rc of rogueClasses) {
+        await prisma.student.updateMany({
+          where: { classId: rc.id },
+          data: { classId: "class-10-mipa-1" },
+        });
+        await prisma.class.delete({
+          where: { id: rc.id },
+        });
+      }
+
+      const count = await prisma.class.count();
+      if (count < 12) {
+        for (const p of DEFAULT_CLASS_PRESETS) {
+          await prisma.class.upsert({
+            where: { id: p.id },
+            update: {
+              name: p.name,
+              level: p.level,
+              major: p.major,
+            },
+            create: {
+              id: p.id,
+              name: p.name,
+              level: p.level,
+              major: p.major,
+            },
+          });
+        }
+      }
+    } catch (seedErr) {
+      console.warn("Class auto-seed warning:", seedErr);
+    }
+
     const classes = await prisma.class.findMany({
       orderBy: { name: "asc" },
       include: {
@@ -53,7 +135,7 @@ export async function GET() {
       updatedAt: c.updatedAt.toISOString(),
     }));
 
-    return NextResponse.json({ success: true, classes: formatted });
+    return NextResponse.json({ success: true, classes: sortClassesNaturally(formatted) });
   } catch (err: any) {
     console.error("GET /api/classes error:", err);
     return NextResponse.json({ error: "Gagal memuat daftar kelas: " + err.message }, { status: 500 });

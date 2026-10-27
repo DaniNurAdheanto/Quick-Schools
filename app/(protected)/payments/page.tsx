@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   CreditCard,
   Search,
@@ -57,6 +57,7 @@ import { resolveParentStudent } from "@/lib/parent-child-resolver";
 import Image from "next/image";
 import { useSchoolProfile } from "@/context/SchoolProfileContext";
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { isStudentInClass, normalizeClassName } from "@/lib/class-relations";
 import {
   SPPBill,
   PaymentStatus,
@@ -252,20 +253,28 @@ export default function PaymentsPage() {
   const [classesList, setClassesList] = useState<any[]>([]);
   const [teachersList, setTeachersList] = useState<any[]>([]);
 
-  useEffect(() => {
-    const fetchClasses = async () => {
-      try {
-        const res = await fetch("/api/classes");
-        const data = await res.json();
-        if (data.success && Array.isArray(data.classes)) {
-          setClassesList(data.classes);
-        }
-      } catch (err) {
-        console.error("Error fetching classes in payments:", err);
+  const fetchClasses = useCallback(async () => {
+    try {
+      const res = await fetch("/api/classes");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.classes)) {
+        setClassesList(data.classes);
       }
-    };
-    fetchClasses();
+    } catch (err) {
+      console.error("Error fetching classes in payments:", err);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchClasses();
+  }, [fetchClasses]);
+
+  // Re-fetch classes when modal opens to ensure 100% sync with Super Admin
+  useEffect(() => {
+    if (isAddModalOpen) {
+      fetchClasses();
+    }
+  }, [isAddModalOpen, fetchClasses]);
 
   useEffect(() => {
     setTeachersList(unifiedTeachers);
@@ -379,21 +388,45 @@ export default function PaymentsPage() {
     }
   }, [rateConfigs]);
 
-  // Unique class list from students & bills
+  // Helper to sort classes naturally: Tingkat (10->11->12), Jurusan (MIPA->IPS), No (1->2)
+  const sortClassesNaturally = (list: string[]) => {
+    return [...list].sort((a, b) => {
+      const aGrade = parseInt(a.match(/\d+/)?.[0] || "0", 10);
+      const bGrade = parseInt(b.match(/\d+/)?.[0] || "0", 10);
+      if (aGrade !== bGrade) return aGrade - bGrade;
+
+      const getMajorScore = (str: string) => {
+        const l = str.toLowerCase();
+        if (l.includes("mipa") || l.includes("ipa")) return 1;
+        if (l.includes("ips")) return 2;
+        return 3;
+      };
+      const aMaj = getMajorScore(a);
+      const bMaj = getMajorScore(b);
+      if (aMaj !== bMaj) return aMaj - bMaj;
+
+      return a.localeCompare(b, undefined, { numeric: true });
+    });
+  };
+
+  // Synchronized class list strictly from Super Admin Classes (/api/classes)
   const classList = useMemo(() => {
-    const setCls = new Set<string>();
-    students.forEach((s) => {
-      if (s.className) setCls.add(s.className);
-      if (s.classId) setCls.add(s.classId);
-    });
-    classesList.forEach((c) => {
-      if (c.name) setCls.add(c.name);
-    });
-    bills.forEach((b) => {
-      if (b.classId) setCls.add(b.classId);
-    });
-    return Array.from(setCls).filter(Boolean).sort();
-  }, [students, classesList, bills]);
+    if (classesList && classesList.length > 0) {
+      const validNames = classesList
+        .map((c) => (c.name || c.className || "").trim())
+        .filter(Boolean)
+        .filter((name) => !name.toLowerCase().includes("undefined") && !name.toLowerCase().includes("bahasa"));
+      if (validNames.length > 0) {
+        return sortClassesNaturally(Array.from(new Set(validNames)));
+      }
+    }
+    // Fallback strictly matches Super Admin standard classes
+    return [
+      "10 MIPA 1", "10 MIPA 2", "10 IPS 1", "10 IPS 2",
+      "11 MIPA 1", "11 MIPA 2", "11 IPS 1", "11 IPS 2",
+      "12 MIPA 1", "12 MIPA 2", "12 IPS 1", "12 IPS 2"
+    ];
+  }, [classesList]);
 
   // Selectable classes filter list: locked exclusively to homeroom for Guru
   const availableFilterClasses = useMemo(() => {
@@ -471,8 +504,19 @@ export default function PaymentsPage() {
       }
 
       // 4. Class Filter
-      if (selectedClass !== "Semua" && bill.classId !== selectedClass) {
-        return false;
+      if (selectedClass !== "Semua") {
+        const targetClsObj = classesList.find(
+          (c) => c.name === selectedClass || c.id === selectedClass
+        );
+        const billCls = (bill.classId || "").trim();
+        const matchesCls =
+          billCls.toLowerCase() === selectedClass.toLowerCase() ||
+          (targetClsObj && (
+            billCls.toLowerCase() === (targetClsObj.id || "").toLowerCase() ||
+            normalizeClassName(billCls) === normalizeClassName(targetClsObj.name)
+          )) ||
+          normalizeClassName(billCls) === normalizeClassName(selectedClass);
+        if (!matchesCls) return false;
       }
 
       // 5. Academic Year Filter
@@ -824,7 +868,8 @@ export default function PaymentsPage() {
       const invoiceNo = generateInvoiceNo(singleFormData.periodMonth, bills.length + 1);
       const studentIdentifier = selectedStd._firestoreId || selectedStd.uid || selectedStd.id;
       const studentDisplayName = selectedStd.fullName || selectedStd.name || "Siswa";
-      const studentClass = selectedStd.className || selectedStd.classId || "12 MIPA 1";
+      const matchedCls = classesList.find((c) => isStudentInClass(selectedStd, c));
+      const studentClass = matchedCls?.name || selectedStd.className || selectedStd.classId || "10 MIPA 1";
       const studentNisn = selectedStd.nisn || selectedStd.nis || "-";
 
       await createBill({
@@ -861,10 +906,21 @@ export default function PaymentsPage() {
       showError?.("Aksi ditolak: Hanya Admin/Kasir yang berwenang menerbitkan tagihan massal.");
       return;
     }
-    // Filter target students
+    // Filter target students matching official classes
     const targetStudents = students.filter((s) => {
       if (bulkFormData.classId === "Semua") return true;
-      return (s.className || s.classId) === bulkFormData.classId;
+      const targetClassObj = classesList.find(
+        (c) => c.name === bulkFormData.classId || c.id === bulkFormData.classId
+      );
+      if (targetClassObj) {
+        return isStudentInClass(s, targetClassObj);
+      }
+      return (
+        (s.className || "").trim().toLowerCase() === bulkFormData.classId.toLowerCase() ||
+        (s.classId || "").trim().toLowerCase() === bulkFormData.classId.toLowerCase() ||
+        normalizeClassName(s.className) === normalizeClassName(bulkFormData.classId) ||
+        normalizeClassName(s.classId) === normalizeClassName(bulkFormData.classId)
+      );
     });
 
     if (targetStudents.length === 0) {
@@ -914,12 +970,19 @@ export default function PaymentsPage() {
         }
 
         const invoiceNo = generateInvoiceNo(bulkFormData.periodMonth, counter++);
+        const stdTargetCls = classesList.find(
+          (c) => isStudentInClass(std, c) || c.name === bulkFormData.classId
+        );
+        const cleanClassId =
+          stdTargetCls?.name ||
+          (bulkFormData.classId !== "Semua" ? bulkFormData.classId : std.className || std.classId || "10 MIPA 1");
+
         billsToCreate.push({
           invoiceNo,
           studentId: stdIdentifier,
           studentName: std.fullName || std.name || "Siswa",
           nisn: std.nisn || std.nis || "-",
-          classId: std.className || std.classId || "12 MIPA 1",
+          classId: cleanClassId,
           periodMonth: bulkFormData.periodMonth,
           periodYear: bulkFormData.periodMonth.split(" ")[1] || "2026",
           academicYear: activeAcademicYear || "2025/2026",
@@ -4200,9 +4263,11 @@ export default function PaymentsPage() {
                     <option value="">-- Pilih Siswa Dari Database --</option>
                     {students.map((s) => {
                       const val = s._firestoreId || s.uid || s.id;
+                      const matchedCls = classesList.find((c) => isStudentInClass(s, c));
+                      const displayClass = matchedCls?.name || s.className || s.classId || "Tanpa Kelas";
                       return (
                         <option key={val} value={val}>
-                          {s.fullName || s.name} ({s.className || s.classId || "Tanpa Kelas"}) - NISN: {s.nisn || s.nis || "-"}
+                          {s.fullName || s.name} ({displayClass}) - NISN: {s.nisn || s.nis || "-"}
                         </option>
                       );
                     })}
@@ -4309,7 +4374,7 @@ export default function PaymentsPage() {
                     <option value="Semua">Semua Kelas (Seluruh Sekolah)</option>
                     {classList.map((cls) => (
                       <option key={cls} value={cls}>
-                        Kelas {cls}
+                        {cls}
                       </option>
                     ))}
                   </select>

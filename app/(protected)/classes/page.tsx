@@ -52,9 +52,11 @@ const STANDARD_CLASS_PRESETS = [
   { name: "11 MIPA 1", level: "Kelas 11", major: "IPA", maxCapacity: 36 },
   { name: "11 MIPA 2", level: "Kelas 11", major: "IPA", maxCapacity: 36 },
   { name: "11 IPS 1", level: "Kelas 11", major: "IPS", maxCapacity: 36 },
+  { name: "11 IPS 2", level: "Kelas 11", major: "IPS", maxCapacity: 36 },
   { name: "12 MIPA 1", level: "Kelas 12", major: "IPA", maxCapacity: 36 },
   { name: "12 MIPA 2", level: "Kelas 12", major: "IPA", maxCapacity: 36 },
-  { name: "12 IPS 1", level: "Kelas 12", major: "IPS", maxCapacity: 36 }
+  { name: "12 IPS 1", level: "Kelas 12", major: "IPS", maxCapacity: 36 },
+  { name: "12 IPS 2", level: "Kelas 12", major: "IPS", maxCapacity: 36 },
 ];
 
 export default function ClassesPage() {

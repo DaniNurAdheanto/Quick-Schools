@@ -309,18 +309,40 @@ export default function StudentOnboardingPage() {
     previousSchool: "",
   });
 
-  // Real-time listener for classes from Firestore
+  // Real-time listener for classes from database & Firestore
   const [classesList, setClassesList] = useState<any[]>([]);
 
   useEffect(() => {
+    let isMounted = true;
+    const fetchOfficialClasses = async () => {
+      try {
+        const res = await fetch("/api/classes");
+        const data = await res.json();
+        if (data.success && Array.isArray(data.classes) && data.classes.length > 0 && isMounted) {
+          setClassesList(data.classes);
+        }
+      } catch (err) {
+        console.warn("Classes fetch API warning:", err);
+      }
+    };
+    fetchOfficialClasses();
+
     const q = query(collection(db, "classes"));
     const unsub = onSnapshot(q, (snapshot) => {
-      const cls = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setClassesList(cls);
+      if (!snapshot.empty && isMounted) {
+        const cls = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (cls.length > 0) {
+          setClassesList(cls);
+        }
+      }
     }, (err) => {
       console.warn("Classes listener warning:", err);
     });
-    return () => unsub();
+
+    return () => {
+      isMounted = false;
+      unsub();
+    };
   }, []);
 
   // Update default akademik state when profile, stage, or activeAcademicYear changes
@@ -342,32 +364,40 @@ export default function StudentOnboardingPage() {
   // Compute dynamic available classes matching current stage and selected level
   const availableClasses = useMemo(() => {
     const stage = akademik.level || currentStage;
-    const activeClasses = classesList.filter(c => (c.status || "Aktif") !== "Nonaktif");
-
-    // If real classes exist in Firestore, prioritize matching classes
-    if (activeClasses.length > 0) {
-      const selGrade = akademik.gradeLevel || gradeLevels[0] || "";
-      const selGradeNum = selGrade.replace(/\D/g, "");
-
-      const matching = activeClasses.filter(c => {
-        const cLevel = String(c.level || "");
-        const cName = String(c.name || "");
-        return (
-          (selGrade && cLevel === selGrade) ||
-          (selGradeNum && (cLevel.includes(selGradeNum) || cName.startsWith(selGradeNum)))
-        );
-      });
-
-      if (matching.length > 0) {
-        return matching.map(c => c.name || c.id);
-      }
-      return activeClasses.map(c => c.name || c.id);
-    }
-
-    // Smart fallback generated classes based on stage & grade level
     const selGrade = akademik.gradeLevel || gradeLevels[0] || (stage === "SD" ? "Kelas 1" : stage === "SMP" ? "Kelas 7" : "Kelas 10");
     const lvlNum = selGrade.replace(/\D/g, "") || (stage === "SD" ? "1" : stage === "SMP" ? "7" : "10");
 
+    const activeClasses = classesList.filter(c => (c.status || "Aktif") !== "Nonaktif");
+
+    // 1. If official classes exist in database, filter strictly by matching grade level
+    if (activeClasses.length > 0) {
+      const matching = activeClasses.filter(c => {
+        const cLevel = String(c.level || "").trim();
+        const cName = String(c.name || "").trim();
+        if (cName.toLowerCase().includes("bahasa") || cName.toLowerCase().includes("undefined")) {
+          return false;
+        }
+        const matchesLevel =
+          cLevel === selGrade ||
+          cLevel === `Kelas ${lvlNum}` ||
+          cLevel === lvlNum;
+        const matchesName =
+          cName.startsWith(`${lvlNum} `) ||
+          cName.startsWith(`${lvlNum}-`) ||
+          new RegExp(`^${lvlNum}[A-Za-z]`).test(cName) ||
+          cName.toLowerCase().startsWith(`kelas ${lvlNum} `) ||
+          cName.toLowerCase() === `kelas ${lvlNum}`;
+        return matchesLevel || matchesName;
+      });
+
+      if (matching.length > 0) {
+        return Array.from(new Set(matching.map(c => c.name?.trim()).filter(Boolean))).sort((a, b) =>
+          a.localeCompare(b, undefined, { numeric: true })
+        );
+      }
+    }
+
+    // 2. Standard fallback strictly aligned with Super Admin Classes Menu
     if (stage === "SD" || currentStage === "SD") {
       return [`${lvlNum}A`, `${lvlNum}B`, `${lvlNum}C`, `${lvlNum} Unggulan`];
     }
@@ -386,13 +416,23 @@ export default function StudentOnboardingPage() {
       });
       return gen;
     }
-    // SMA
+
+    // SMA (Strictly matches Super Admin classes preset: 10 MIPA 1-2, 10 IPS 1-2, 11 MIPA 1-2, 11 IPS 1-2, 12 MIPA 1-2, 12 IPS 1-2)
+    if (lvlNum === "10") {
+      return ["10 MIPA 1", "10 MIPA 2", "10 IPS 1", "10 IPS 2"];
+    }
+    if (lvlNum === "11") {
+      return ["11 MIPA 1", "11 MIPA 2", "11 IPS 1", "11 IPS 2"];
+    }
+    if (lvlNum === "12") {
+      return ["12 MIPA 1", "12 MIPA 2", "12 IPS 1", "12 IPS 2"];
+    }
+
     return [
       `${lvlNum} MIPA 1`,
       `${lvlNum} MIPA 2`,
       `${lvlNum} IPS 1`,
-      `${lvlNum} IPS 2`,
-      `${lvlNum} Bahasa 1`
+      `${lvlNum} IPS 2`
     ];
   }, [classesList, akademik.level, akademik.gradeLevel, currentStage, gradeLevels, profile.vocationalPrograms]);
 
