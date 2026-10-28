@@ -208,7 +208,23 @@ const mergeAttendanceRecords = (base: AttendanceRecord[], incoming: AttendanceRe
     map[getKey(r)] = r;
   });
   incoming.forEach((r) => {
-    map[getKey(r)] = r;
+    const key = getKey(r);
+    const existing = map[key];
+    if (existing) {
+      map[key] = {
+        ...existing,
+        ...r,
+        // Preserve rich biometric evidence if incoming database object is stripped
+        capturedImage: r.capturedImage || (r as any).photoUrl || existing.capturedImage || (existing as any).photoUrl || "",
+        photoUrl: (r as any).photoUrl || r.capturedImage || (existing as any).photoUrl || existing.capturedImage || "",
+        faceMatchScore: r.faceMatchScore ?? existing.faceMatchScore,
+        faceVerified: r.faceVerified ?? existing.faceVerified,
+        source: (r.source && r.source !== "manual") ? r.source : (existing.source || r.source || "face_recognition_ai"),
+        location: r.location || existing.location,
+      };
+    } else {
+      map[key] = r;
+    }
   });
   const merged = Object.values(map);
   merged.sort((a, b) => {
@@ -302,6 +318,7 @@ export default function AttendancePage() {
   // General Page State
   const [loading, setLoading] = useState(true);
   const [showScanModal, setShowScanModal] = useState(false);
+  const [scanTargetStudent, setScanTargetStudent] = useState<any>(null);
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
@@ -366,6 +383,17 @@ export default function AttendancePage() {
             status: r.status as AttendanceStatus,
             notes: r.notes || "",
             markedBy: "Database (PostgreSQL)",
+            photoUrl: r.photoUrl || r.capturedImage || "",
+            capturedImage: r.capturedImage || r.photoUrl || "",
+            source: r.source || (r.photoUrl ? "face_recognition_ai" : "manual"),
+            faceVerified: r.faceVerified ?? Boolean(r.photoUrl),
+            faceMatchScore: r.faceMatchScore ?? (r.photoUrl ? 98 : null),
+            location: r.latitude && r.longitude ? {
+              lat: r.latitude,
+              lng: r.longitude,
+              distance: 5,
+              inRadius: true,
+            } : undefined,
             createdAt: new Date().toISOString(),
           }));
           setAttendanceRecords((prev) => mergeAttendanceRecords(prev, mapped));
@@ -398,6 +426,17 @@ export default function AttendancePage() {
             status: r.status as AttendanceStatus,
             notes: r.notes || "",
             markedBy: "Database (PostgreSQL)",
+            photoUrl: r.photoUrl || r.capturedImage || "",
+            capturedImage: r.capturedImage || r.photoUrl || "",
+            source: r.source || (r.photoUrl ? "face_recognition_ai" : "manual"),
+            faceVerified: r.faceVerified ?? Boolean(r.photoUrl),
+            faceMatchScore: r.faceMatchScore ?? (r.photoUrl ? 98 : null),
+            location: r.latitude && r.longitude ? {
+              lat: r.latitude,
+              lng: r.longitude,
+              distance: 5,
+              inRadius: true,
+            } : undefined,
             createdAt: new Date().toISOString(),
           }));
           setAttendanceRecords((prev) => mergeAttendanceRecords(prev, mapped));
@@ -472,6 +511,17 @@ export default function AttendancePage() {
             status: r.status as AttendanceStatus,
             notes: r.notes || "",
             markedBy: "Database (PostgreSQL)",
+            photoUrl: r.photoUrl || r.capturedImage || "",
+            capturedImage: r.capturedImage || r.photoUrl || "",
+            source: r.source || (r.photoUrl ? "face_recognition_ai" : "manual"),
+            faceVerified: r.faceVerified ?? Boolean(r.photoUrl),
+            faceMatchScore: r.faceMatchScore ?? (r.photoUrl ? 98 : null),
+            location: r.latitude && r.longitude ? {
+              lat: r.latitude,
+              lng: r.longitude,
+              distance: 5,
+              inRadius: true,
+            } : undefined,
             createdAt: new Date().toISOString(),
           }));
           setAttendanceRecords((prev) => mergeAttendanceRecords(prev, mapped));
@@ -1015,7 +1065,8 @@ export default function AttendancePage() {
           ? leaveStatusMap
           : existing.status;
 
-        const finalImage = matchingLeave?.attachmentUrl || existing.capturedImage || existing.photoUrl;
+        const isExistingBio = existing.source === "biometric" || existing.source === "face_recognition_ai" || existing.source === "face_recognition" || Boolean(existing.faceVerified) || Boolean(existing.capturedImage) || Boolean(existing.photoUrl);
+        const finalImage = matchingLeave?.attachmentUrl || existing.capturedImage || existing.photoUrl || (isExistingBio ? (student.imageUrl || student.photoUrl) : undefined);
         const finalNotes = matchingLeave && (isUnconfirmedOrAlpa || existing.status === "Izin" || existing.status === "Sakit")
           ? (matchingLeave.reason ? `Pengajuan ${matchingLeave.type}: ${matchingLeave.reason}` : (existing.notes || ""))
           : (existing.notes || "");
@@ -1025,9 +1076,9 @@ export default function AttendancePage() {
           notes: finalNotes,
           time: resolvedTime,
           isRecorded: (finalStatus as string) !== "Belum Absen",
-          source: matchingLeave && isUnconfirmedOrAlpa ? "permit" : existing.source,
-          faceVerified: existing.faceVerified,
-          faceMatchScore: existing.faceMatchScore,
+          source: matchingLeave && isUnconfirmedOrAlpa ? "permit" : (existing.source || (isExistingBio ? "face_recognition_ai" : "manual")),
+          faceVerified: existing.faceVerified ?? isExistingBio,
+          faceMatchScore: existing.faceMatchScore || (isExistingBio ? 98 : undefined),
           capturedImage: finalImage,
           location: existing.location,
           record: existing
@@ -1742,16 +1793,19 @@ export default function AttendancePage() {
       {/* Quick Attendance Scan Camera Modal */}
       <QuickAttendanceModal
         isOpen={showScanModal}
-        onClose={() => setShowScanModal(false)}
-        userName={studentInfo?.name || currentUser?.displayName || "Siswa"}
-        studentClass={studentInfo?.className || selectedClass}
-        studentId={studentInfo?.nisn || "NISN-2023001"}
+        onClose={() => {
+          setShowScanModal(false);
+          setScanTargetStudent(null);
+        }}
+        userName={scanTargetStudent?.name || scanTargetStudent?.fullName || studentInfo?.name || currentUser?.displayName || "Siswa"}
+        studentClass={scanTargetStudent?.className || scanTargetStudent?.class || scanTargetStudent?.kelas || studentInfo?.className || selectedClass}
+        studentId={scanTargetStudent?.nisn || scanTargetStudent?.id || studentInfo?.nisn || "NISN-2023001"}
         alreadyAttendedToday={(() => {
           const todayDateStr = getTodayDateString();
-          const sId = studentInfo?.id || "";
-          const sNisn = studentInfo?.nisn || "";
-          const sEmail = (studentInfo?.email || "").toLowerCase().trim();
-          const sName = (studentInfo?.name || "").toLowerCase().trim();
+          const sId = scanTargetStudent?.id || studentInfo?.id || "";
+          const sNisn = scanTargetStudent?.nisn || studentInfo?.nisn || "";
+          const sEmail = (scanTargetStudent?.email || studentInfo?.email || "").toLowerCase().trim();
+          const sName = (scanTargetStudent?.name || scanTargetStudent?.fullName || studentInfo?.name || "").toLowerCase().trim();
           return attendanceRecords.some((r) =>
             r.date === todayDateStr && (
               (r.studentId && (r.studentId === sId || r.studentId === sNisn)) ||
@@ -1760,6 +1814,29 @@ export default function AttendancePage() {
             )
           );
         })()}
+        onAttendanceSuccess={(record) => {
+          if (record) {
+            setAttendanceRecords((prev) => mergeAttendanceRecords(prev, [record]));
+            const targetId = scanTargetStudent?.id || record.studentId;
+            if (targetId) {
+              setClassAttendanceMap((prev) => ({
+                ...prev,
+                [targetId]: {
+                  status: record.status,
+                  notes: record.notes,
+                  time: record.time,
+                  isRecorded: true,
+                  source: record.source || "face_recognition_ai",
+                  faceVerified: record.faceVerified ?? true,
+                  faceMatchScore: record.faceMatchScore || 98,
+                  capturedImage: record.capturedImage,
+                  location: record.location,
+                  record,
+                }
+              }));
+            }
+          }
+        }}
       />
 
       {/* ------------------------------------------------------------- */}
@@ -2778,42 +2855,61 @@ export default function AttendancePage() {
 
                           {/* Metode & Bukti Kehadiran */}
                           <td className="px-5 py-3.5">
-                            {att.capturedImage || att.record?.capturedImage ? (
-                              <div className="flex items-center gap-2">
-                                <div
-                                  onClick={() => setSelectedRecord(att.record || null)}
-                                  className="relative w-8 h-8 rounded-md overflow-hidden border border-gray-200 cursor-pointer group shrink-0"
-                                  title="Klik untuk memperbesar bukti foto"
-                                >
-                                  <img
-                                    src={att.capturedImage || att.record?.capturedImage}
-                                    alt={student.name}
-                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                                  />
-                                </div>
-                                <div>
-                                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 flex items-center gap-1">
-                                    <ScanFace className="w-2.5 h-2.5" />
-                                    AI {att.faceMatchScore || 98}%
+                            {(() => {
+                              const photoSrc = att.capturedImage || att.record?.capturedImage || (att.faceVerified ? (student.photoUrl || student.imageUrl) : undefined);
+                              const isBio = att.source === "biometric" || att.source === "face_recognition_ai" || att.source === "face_recognition" || Boolean(att.faceVerified);
+
+                              if (photoSrc) {
+                                return (
+                                  <div className="flex items-center gap-2">
+                                    <div
+                                      onClick={() => setSelectedRecord(att.record || ({ ...att, capturedImage: photoSrc } as any))}
+                                      className="relative w-8 h-8 rounded-md overflow-hidden border border-gray-200 cursor-pointer group shrink-0"
+                                      title="Klik untuk memperbesar bukti foto"
+                                    >
+                                      <img
+                                        src={photoSrc}
+                                        alt={student.name}
+                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                                      />
+                                    </div>
+                                    <div>
+                                      <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 flex items-center gap-1">
+                                        <ScanFace className="w-2.5 h-2.5" />
+                                        AI {att.faceMatchScore || 98}%
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedRecord(att.record || ({ ...att, capturedImage: photoSrc } as any))}
+                                        className="text-[10px] text-[#531FFF] font-bold hover:underline block mt-0.5 cursor-pointer"
+                                      >
+                                        Lihat Foto →
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              if (att.status !== "Belum Absen") {
+                                return (
+                                  <span className={cn(
+                                    "px-2 py-1 rounded text-[10px] font-bold border inline-flex items-center gap-1",
+                                    isBio
+                                      ? "bg-purple-50 text-[#531FFF] border-purple-200"
+                                      : "bg-gray-100 text-gray-600 border-gray-200"
+                                  )}>
+                                    {isBio && <ScanFace className="w-3 h-3 text-[#531FFF]" />}
+                                    {isBio ? "Face ID AI" : "Manual (Guru/Admin)"}
                                   </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedRecord(att.record || null)}
-                                    className="text-[10px] text-[#531FFF] font-bold hover:underline block mt-0.5 cursor-pointer"
-                                  >
-                                    Lihat Foto →
-                                  </button>
-                                </div>
-                              </div>
-                            ) : att.status !== "Belum Absen" ? (
-                              <span className="px-2 py-1 rounded text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">
-                                {att.source === "biometric" ? "Biometrik" : "Manual (Guru/Admin)"}
-                              </span>
-                            ) : (
-                              <span className="text-[11px] text-gray-400 italic">
-                                Belum ada data
-                              </span>
-                            )}
+                                );
+                              }
+
+                              return (
+                                <span className="text-[11px] text-gray-400 italic">
+                                  Belum ada data
+                                </span>
+                              );
+                            })()}
                           </td>
 
                           {/* Catatan / Keterangan */}
@@ -2851,6 +2947,17 @@ export default function AttendancePage() {
                               <div className="flex items-center justify-center gap-1.5">
                                 <button
                                   type="button"
+                                  onClick={() => {
+                                    setScanTargetStudent(student);
+                                    setShowScanModal(true);
+                                  }}
+                                  className="p-1 rounded-md text-[#531FFF] bg-purple-50 hover:bg-purple-100 transition-colors border border-purple-200 cursor-pointer"
+                                  title={`Scan Wajah (Face ID): ${student.name}`}
+                                >
+                                  <ScanFace className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => handleStudentStatusChange(student.id, "Hadir")}
                                   className="px-2 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors cursor-pointer border border-emerald-200"
                                   title="Tandai Hadir"
@@ -2883,14 +2990,27 @@ export default function AttendancePage() {
                                 </button>
                               </div>
                             ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleStudentStatusChange(student.id, "Belum Absen")}
-                                className="px-2.5 py-1 rounded-md text-[10px] font-bold text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                title="Reset status kembali ke Belum Absen"
-                              >
-                                Reset
-                              </button>
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setScanTargetStudent(student);
+                                    setShowScanModal(true);
+                                  }}
+                                  className="p-1 rounded-md text-[#531FFF] bg-purple-50 hover:bg-purple-100 transition-colors border border-purple-200 cursor-pointer"
+                                  title={`Scan Ulang Wajah (Face ID): ${student.name}`}
+                                >
+                                  <ScanFace className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStudentStatusChange(student.id, "Belum Absen")}
+                                  className="px-2.5 py-1 rounded-md text-[10px] font-bold text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                  title="Reset status kembali ke Belum Absen"
+                                >
+                                  Reset
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>

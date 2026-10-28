@@ -964,6 +964,11 @@ export function QuickAttendanceModal({
             notes: resolvedNotes,
             latitude: locationData.lat,
             longitude: locationData.lng,
+            photoUrl: capturedPhoto,
+            capturedImage: capturedPhoto,
+            source: recordPayload.source,
+            faceMatchScore: recordPayload.faceMatchScore,
+            faceVerified: recordPayload.faceVerified,
           }),
         });
       } catch (e) {}

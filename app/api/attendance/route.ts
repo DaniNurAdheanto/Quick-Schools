@@ -184,6 +184,11 @@ export async function GET(req: NextRequest) {
         isFinal: att.isFinal,
         latitude: att.latitude,
         longitude: att.longitude,
+        photoUrl: att.photoUrl || null,
+        capturedImage: att.photoUrl || null,
+        source: att.photoUrl ? "face_recognition_ai" : "manual",
+        faceVerified: Boolean(att.photoUrl),
+        faceMatchScore: att.photoUrl ? 98 : null,
         academicYear: "2025/2026",
         semester: "Ganjil",
       }));
@@ -322,6 +327,11 @@ export async function GET(req: NextRequest) {
         isRecorded: Boolean(att),
         latitude: att?.latitude || null,
         longitude: att?.longitude || null,
+        photoUrl: att?.photoUrl || null,
+        capturedImage: att?.photoUrl || null,
+        source: att?.photoUrl ? "face_recognition_ai" : (att ? "manual" : undefined),
+        faceVerified: Boolean(att?.photoUrl),
+        faceMatchScore: att?.photoUrl ? 98 : null,
         academicYear: "2025/2026",
         semester: "Ganjil",
       };
@@ -368,8 +378,9 @@ export async function POST(req: NextRequest) {
     const now = new Date();
 
     const upsertPromises = items.map(async (item: any) => {
-      const { studentId, nisn, date, status, notes, time, latitude, longitude, classId } = item;
+      const { studentId, nisn, date, status, notes, time, latitude, longitude, classId, photoUrl, capturedImage } = item;
       const targetDate = date || todayStr;
+      const finalPhotoUrl = photoUrl || capturedImage || null;
 
       // Find student
       const student = await prisma.student.findFirst({
@@ -415,6 +426,7 @@ export async function POST(req: NextRequest) {
           latitude: latitude ? Number(latitude) : undefined,
           longitude: longitude ? Number(longitude) : undefined,
           classId: classId || student.classId,
+          photoUrl: finalPhotoUrl || undefined,
         },
         create: {
           studentId: student.id,
@@ -426,6 +438,7 @@ export async function POST(req: NextRequest) {
           isFinal: isPastCutoff,
           latitude: latitude ? Number(latitude) : null,
           longitude: longitude ? Number(longitude) : null,
+          photoUrl: finalPhotoUrl || null,
         },
       });
     });
