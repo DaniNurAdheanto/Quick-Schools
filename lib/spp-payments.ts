@@ -504,11 +504,10 @@ export function useSPPPayments() {
       if (localBills) {
         const parsed = JSON.parse(localBills);
         if (Array.isArray(parsed)) {
-          // Filter out any dummy names if any leaked
+          // Filter out any dummy seed items if any leaked
           const cleaned = parsed.filter(
             (b) =>
               b &&
-              b.studentName !== "Ahmad Fauzi" &&
               b.studentName !== "Ahmad Rizky Pratama" &&
               !String(b.id || "").startsWith("spp-seed-")
           );

@@ -95,7 +95,7 @@ export default function PaymentsPage() {
     updateRateConfigs,
   } = useSPPPayments();
 
-  const { students } = useUnifiedStudents();
+  const { students, refreshStudents } = useUnifiedStudents();
   const { teachers: unifiedTeachers } = useUnifiedTeachers();
   const { profile: schoolProfile } = useSchoolProfile();
 
@@ -278,12 +278,13 @@ export default function PaymentsPage() {
     fetchClasses();
   }, [fetchClasses]);
 
-  // Re-fetch classes when modal opens to ensure 100% sync with Super Admin
+  // Re-fetch classes and students when modal opens to ensure 100% sync with Super Admin & Database
   useEffect(() => {
     if (isAddModalOpen) {
       fetchClasses();
+      refreshStudents?.();
     }
-  }, [isAddModalOpen, fetchClasses]);
+  }, [isAddModalOpen, fetchClasses, refreshStudents]);
 
   useEffect(() => {
     setTeachersList(unifiedTeachers);
@@ -874,7 +875,15 @@ export default function PaymentsPage() {
 
     setSubmitting(true);
     try {
-      const invoiceNo = generateInvoiceNo(singleFormData.periodMonth, bills.length + 1);
+      const existingInvoices = bills
+        .map((b) => {
+          const match = (b.invoiceNo || "").match(/\/(\d{3,4})$/);
+          return match ? parseInt(match[1], 10) : 0;
+        })
+        .filter((n) => !isNaN(n));
+      const maxInvoiceNum = existingInvoices.length > 0 ? Math.max(...existingInvoices) : 0;
+      const counter = Math.max(bills.length + 1, maxInvoiceNum + 1);
+      const invoiceNo = generateInvoiceNo(singleFormData.periodMonth, counter);
       const studentIdentifier = selectedStd._firestoreId || selectedStd.uid || selectedStd.id;
       const studentDisplayName = selectedStd.fullName || selectedStd.name || "Siswa";
       const matchedCls = classesList.find((c) => isStudentInClass(selectedStd, c));
@@ -939,19 +948,29 @@ export default function PaymentsPage() {
 
     setSubmitting(true);
     try {
-      let counter = bills.length + 1;
+      const existingInvoices = bills
+        .map((b) => {
+          const match = (b.invoiceNo || "").match(/\/(\d{3,4})$/);
+          return match ? parseInt(match[1], 10) : 0;
+        })
+        .filter((n) => !isNaN(n));
+      const maxInvoiceNum = existingInvoices.length > 0 ? Math.max(...existingInvoices) : 0;
+      let counter = Math.max(bills.length + 1, maxInvoiceNum + 1);
       const billsToCreate: any[] = [];
       let skippedCount = 0;
 
       for (const std of targetStudents) {
         const stdIdentifier = std._firestoreId || std.uid || std.id;
         const stdNisn = std.nisn || std.nis;
+        const stdName = (std.fullName || std.name || "").trim().toLowerCase();
 
         // Prevent duplicates if requested
         if (bulkFormData.skipExisting) {
           const alreadyHasBill = bills.some(
             (b) =>
-              (b.studentId === stdIdentifier || b.studentId === std.id || (stdNisn && stdNisn !== "-" && b.nisn === stdNisn)) &&
+              ((b.studentId && (b.studentId === stdIdentifier || b.studentId === std.id || b.studentId === std.uid)) ||
+                (stdNisn && stdNisn !== "-" && b.nisn === stdNisn) ||
+                (stdName && (b.studentName || "").trim().toLowerCase() === stdName)) &&
               b.periodMonth === bulkFormData.periodMonth &&
               b.status !== "Cancelled"
           );

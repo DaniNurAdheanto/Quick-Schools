@@ -14,9 +14,9 @@ import {
 } from "@/lib/school-level-config";
 
 import { OperationalDaysPattern } from "@/lib/operational-days";
-import { 
-  SchoolProfile, 
-  DEFAULT_SCHOOL_PROFILE 
+import {
+  SchoolProfile,
+  DEFAULT_SCHOOL_PROFILE
 } from "@/lib/school-profile-config";
 
 export type { EducationalStage, VocationalProgram, StageConfig, OperationalDaysPattern };
@@ -45,7 +45,7 @@ const defaultContextValue: SchoolProfileContextType = {
   profile: DEFAULT_SCHOOL_PROFILE,
   loading: false,
   saveProfile: async () => ({ success: false }),
-  resetToDefault: async () => {},
+  resetToDefault: async () => { },
   currentStage: "SMA",
   stageConfig: STAGE_CONFIGS.SMA,
   gradeLevels: STAGE_CONFIGS.SMA.gradeLevels,
@@ -76,7 +76,7 @@ export function SchoolProfileProvider({ children }: { children: ReactNode }) {
           educationalStage: resolvedStage,
         }));
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Fetch from backend API
     fetch("/api/school-profile")
@@ -91,7 +91,7 @@ export function SchoolProfileProvider({ children }: { children: ReactNode }) {
           }));
         }
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, []);
 
