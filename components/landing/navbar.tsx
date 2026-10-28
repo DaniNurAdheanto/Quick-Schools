@@ -64,8 +64,8 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
   };
 
   const t = {
-    id: { features: "Fitur", pricing: "Harga", about: "Tentang", signIn: "Masuk", getStarted: "Mulai Gratis", dashboard: "Dashboard" },
-    en: { features: "Features", pricing: "Pricing", about: "About", signIn: "Sign In", getStarted: "Get Started", dashboard: "Dashboard" },
+    id: { features: "Fitur", pricing: "Harga", about: "Tentang", signIn: "Masuk", getStarted: "Daftar Sekolah", dashboard: "Dashboard" },
+    en: { features: "Features", pricing: "Pricing", about: "About", signIn: "Sign In", getStarted: "Register School", dashboard: "Dashboard" },
   }[lang];
 
   return (
@@ -231,7 +231,7 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
                 <Link href="/login" className="px-4 py-2.5 text-[13px] font-bold text-gray-700 hover:text-[#531FFF] transition-colors">
                   {t.signIn}
                 </Link>
-                <Link href="/register" className="flex items-center gap-1.5 px-5 py-2.5 bg-[#531FFF] text-white rounded-lg text-[13px] font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/30 group">
+                <Link href="/register-school" className="flex items-center gap-1.5 px-5 py-2.5 bg-[#531FFF] text-white rounded-lg text-[13px] font-bold hover:bg-[#4314cc] transition-all shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/30 group">
                   {t.getStarted} <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                 </Link>
               </>
@@ -314,7 +314,7 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
                     <Link href="/login" onClick={() => setMobileOpen(false)} className="block py-3 text-center text-[14px] font-semibold text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">
                       {t.signIn}
                     </Link>
-                    <Link href="/register" onClick={() => setMobileOpen(false)} className="flex items-center justify-center gap-2 py-3 bg-[#531FFF] text-white rounded-lg text-[14px] font-bold">
+                    <Link href="/register-school" onClick={() => setMobileOpen(false)} className="flex items-center justify-center gap-2 py-3 bg-[#531FFF] text-white rounded-lg text-[14px] font-bold">
                       {t.getStarted} <ArrowRight className="w-4 h-4" />
                     </Link>
                   </>

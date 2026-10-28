@@ -202,7 +202,21 @@ export default function RegisterPage() {
             <h2 className="text-[1.75rem] font-bold tracking-tight text-gray-900 mb-1 flex items-center gap-2">
               Buat Akun Baru <span className="text-2xl">🚀</span>
             </h2>
-            <p className="text-gray-500 text-sm mb-8">Bergabunglah dengan Quick Schools hari ini.</p>
+            <p className="text-gray-500 text-sm mb-5">Bergabunglah dengan Quick Schools hari ini.</p>
+
+            {/* School Registration Callout */}
+            <div className="mb-6 p-3.5 bg-[#F3F0FF] border border-[#531FFF]/20 rounded-xl flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold text-[#531FFF]">Mendaftarkan Sekolah / Yayasan?</p>
+                <p className="text-[11px] text-gray-600 mt-0.5">Dapatkan lisensi instansi, modul lengkap & Super Admin.</p>
+              </div>
+              <Link
+                href="/register-school"
+                className="shrink-0 px-3 py-1.5 bg-[#531FFF] text-white text-xs font-bold rounded-lg hover:bg-[#4314cc] transition-colors shadow-xs"
+              >
+                Daftar Sekolah →
+              </Link>
+            </div>
 
             {error && (
               <div className="mb-6 p-4 bg-red-50 border border-red-200/80 text-red-700 text-sm rounded-xl shadow-sm">

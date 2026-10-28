@@ -24,6 +24,7 @@ export default function LandingFooter({ lang }: FooterProps) {
           "Penilaian & Rapor"
         ],
         company: [
+          "Daftar Sekolah Baru",
           "Tentang Kami",
           "Blog",
           "Karir",
@@ -50,6 +51,7 @@ export default function LandingFooter({ lang }: FooterProps) {
           "Grades & Report Cards"
         ],
         company: [
+          "Register New School",
           "About Us",
           "Blog",
           "Careers",
@@ -71,7 +73,7 @@ export default function LandingFooter({ lang }: FooterProps) {
     "/features/pengumuman",
     "/features/laporan"
   ];
-  const companyLinks = ["#about", "#blog", "#careers", "#partners", "#privacy", "#terms"];
+  const companyLinks = ["/register-school", "#about", "#blog", "#careers", "#partners", "#privacy", "#terms"];
 
   return (
     <footer className="bg-slate-50 border-t border-slate-200/80 text-slate-600 relative overflow-hidden">

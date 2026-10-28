@@ -221,7 +221,7 @@ export default function LandingPage() {
             className="flex flex-wrap items-center justify-center gap-4 mb-8"
           >
             <Link
-              href="/register"
+              href="/register-school"
               className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-[#531FFF] text-white text-sm font-bold hover:bg-[#4314cc] transition-all shadow-lg shadow-[#531FFF]/30 hover:shadow-xl hover:shadow-[#531FFF]/40 active:scale-98 group"
             >
               <span>{t.heroCta1}</span>
@@ -431,7 +431,7 @@ export default function LandingPage() {
 
             <div className="flex flex-wrap items-center justify-center gap-3.5 pt-2">
               <Link
-                href="/register"
+                href="/register-school"
                 className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-[#531FFF] text-white text-sm font-bold hover:bg-[#4314cc] transition-all shadow-lg shadow-[#531FFF]/30 hover:shadow-xl hover:shadow-[#531FFF]/40 active:scale-98 group"
               >
                 <span>{t.ctaBtn1}</span>

@@ -333,8 +333,8 @@ export default function AttendancePage() {
     setStudentsList(unifiedStudents);
     const cUser = auth.currentUser;
     if (cUser && unifiedStudents.length > 0) {
-      const matched = unifiedStudents.find((s) => 
-        (s.email && s.email.toLowerCase() === cUser.email?.toLowerCase()) || 
+      const matched = unifiedStudents.find((s) =>
+        (s.email && s.email.toLowerCase() === cUser.email?.toLowerCase()) ||
         s.id === cUser.uid ||
         s.uid === cUser.uid ||
         (s.name && cUser.displayName && s.name.toLowerCase() === cUser.displayName.toLowerCase())
@@ -564,7 +564,7 @@ export default function AttendancePage() {
           setClassesList(list);
         }
       }
-    }, () => {});
+    }, () => { });
 
     // 4. Fetch Attendance Records from localStorage, roles collection, and attendance collection (strictly real records only)
     try {
@@ -583,7 +583,7 @@ export default function AttendancePage() {
           }
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Subscribe to real attendance records stored in roles (allowed in Firestore rules)
     const qRolesAtt = query(collection(db, "roles"), where("type", "==", "attendance_record"));
@@ -697,7 +697,7 @@ export default function AttendancePage() {
           absentThresholdTime: d.absentThresholdTime || d.autoAbsentTime || prev.absentThresholdTime || "09:00"
         }));
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const unsubConfig = onSnapshot(doc(db, "roles", "attendance_config"), (dSnap) => {
       if (dSnap.exists()) {
@@ -709,7 +709,7 @@ export default function AttendancePage() {
         }));
         try {
           localStorage.setItem("quick_schools_attendance_config", JSON.stringify(data));
-        } catch (e) {}
+        } catch (e) { }
       }
     }, (err) => {
       console.warn("Attendance config read error from roles, using fallback:", err);
@@ -766,8 +766,8 @@ export default function AttendancePage() {
       );
       const matchNip = tNip && cNip && cNip === tNip;
       const matchId = (tUid && cId && cId === tUid) ||
-                      (tId && cId && cId === tId) ||
-                      (currentUserData?.teacherId && cId === currentUserData.teacherId);
+        (tId && cId && cId === tId) ||
+        (currentUserData?.teacherId && cId === currentUserData.teacherId);
 
       if (matchName || matchNip || matchId) {
         if (cName) matched.add(cName);
@@ -1305,7 +1305,7 @@ export default function AttendancePage() {
         await setDoc(doc(db, "roles", docId), payload, { merge: true });
         try {
           await setDoc(doc(db, "attendance", docId), payload, { merge: true });
-        } catch (e) {}
+        } catch (e) { }
 
         // Sync to PostgreSQL database permanently
         try {
@@ -1324,7 +1324,7 @@ export default function AttendancePage() {
               longitude: config.schoolCenterLng,
             }),
           }).catch((e) => console.warn("Failed to sync student attendance to PostgreSQL:", e));
-        } catch (e) {}
+        } catch (e) { }
 
         // Save to localStorage
         try {
@@ -1332,7 +1332,7 @@ export default function AttendancePage() {
           const list: AttendanceRecord[] = stored ? JSON.parse(stored) : [];
           const mergedLocal = mergeAttendanceRecords(list, [payload]);
           localStorage.setItem("quick_schools_attendance_records", JSON.stringify(mergedLocal.slice(0, 200)));
-        } catch (e) {}
+        } catch (e) { }
 
         setAttendanceRecords((prev) => mergeAttendanceRecords(prev, [payload]));
       } catch (err) {
@@ -1410,7 +1410,7 @@ export default function AttendancePage() {
         // 2. Silent try to write to 'attendance' collection
         try {
           await setDoc(doc(db, "attendance", docId), payload, { merge: true });
-        } catch (e) {}
+        } catch (e) { }
       }
 
       // Save to localStorage for instant client-side update
@@ -1419,7 +1419,7 @@ export default function AttendancePage() {
         const list: AttendanceRecord[] = stored ? JSON.parse(stored) : [];
         const mergedLocal = mergeAttendanceRecords(list, updatedList);
         localStorage.setItem("quick_schools_attendance_records", JSON.stringify(mergedLocal.slice(0, 200)));
-      } catch (e) {}
+      } catch (e) { }
 
       // 3. Sync to PostgreSQL API for permanent historical storage
       try {
@@ -1610,7 +1610,7 @@ export default function AttendancePage() {
     // Tally attendance records matching monthlyMonth (YYYY-MM)
     scopedAttendanceRecords.forEach((r) => {
       if (r.date && r.date.startsWith(monthlyMonth)) {
-        const canonicalId = 
+        const canonicalId =
           (r.studentId && idToStudentMap[r.studentId.toLowerCase().trim()]) ||
           (r.nisn && idToStudentMap[String(r.nisn).toLowerCase().trim()]) ||
           ((r as any).studentUid && idToStudentMap[String((r as any).studentUid).toLowerCase().trim()]) ||
@@ -1623,7 +1623,7 @@ export default function AttendancePage() {
         if (!entry) {
           // If student not in map, create only if student belongs to homeroom or not guru
           const rcNorm = normalizeClassName(r.className);
-          const studentMatches = !isGuru || teacherHomeroomClasses.some(tc => 
+          const studentMatches = !isGuru || teacherHomeroomClasses.some(tc =>
             (r.className || "").trim().toLowerCase() === tc.trim().toLowerCase() ||
             rcNorm === normalizeClassName(tc)
           );
@@ -1669,10 +1669,10 @@ export default function AttendancePage() {
     const normMonthlyFilter = normalizeClassName(monthlyClassFilter);
     const filtered = (monthlyClassFilter === "Semua" && !isGuru)
       ? arr
-      : arr.filter(i => 
-          i.className.trim().toLowerCase() === monthlyClassFilter.trim().toLowerCase() ||
-          normalizeClassName(i.className) === normMonthlyFilter
-        );
+      : arr.filter(i =>
+        i.className.trim().toLowerCase() === monthlyClassFilter.trim().toLowerCase() ||
+        normalizeClassName(i.className) === normMonthlyFilter
+      );
 
     // Calculate attendance percentage & sort by most issues first
     return filtered.map((item) => {
@@ -1747,21 +1747,21 @@ export default function AttendancePage() {
 
     const dataToExport = activeTab === "daily"
       ? classStudents.map((st, idx) => {
-          const val = classAttendanceMap[st.id] || { status: "Belum Absen", notes: "", time: "-" };
-          const stClass = st.className || st.class || st.kelas || st.classId || (selectedClass !== "Semua Kelas" ? selectedClass : "Umum");
-          return [String(idx + 1), `"${st.id}"`, `"${(st.name || "").replace(/"/g, '""')}"`, `"${stClass}"`, selectedDate, val.time, val.status, "Manual/Kelas", `"${(val.notes || "").replace(/"/g, '""')}"`];
-        })
+        const val = classAttendanceMap[st.id] || { status: "Belum Absen", notes: "", time: "-" };
+        const stClass = st.className || st.class || st.kelas || st.classId || (selectedClass !== "Semua Kelas" ? selectedClass : "Umum");
+        return [String(idx + 1), `"${st.id}"`, `"${(st.name || "").replace(/"/g, '""')}"`, `"${stClass}"`, selectedDate, val.time, val.status, "Manual/Kelas", `"${(val.notes || "").replace(/"/g, '""')}"`];
+      })
       : filteredBiometricData.map((r, idx) => [
-          String(idx + 1),
-          `"${r.studentId}"`,
-          `"${(r.studentName || "").replace(/"/g, '""')}"`,
-          `"${r.className}"`,
-          r.date,
-          r.timestamp,
-          r.status,
-          r.source || "Biometric",
-          `"${(r.notes || '').replace(/"/g, '""')}"`
-        ]);
+        String(idx + 1),
+        `"${r.studentId}"`,
+        `"${(r.studentName || "").replace(/"/g, '""')}"`,
+        `"${r.className}"`,
+        r.date,
+        r.timestamp,
+        r.status,
+        r.source || "Biometric",
+        `"${(r.notes || '').replace(/"/g, '""')}"`
+      ]);
 
     const BOM = "\uFEFF";
     const csvContent = BOM + [headers.join(","), ...dataToExport.map((row) => row.join(","))].join("\n");
@@ -1789,7 +1789,7 @@ export default function AttendancePage() {
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full space-y-3.5 sm:space-y-4 animate-in fade-in duration-300">
-      
+
       {/* Quick Attendance Scan Camera Modal */}
       <QuickAttendanceModal
         isOpen={showScanModal}
@@ -2054,1850 +2054,1851 @@ export default function AttendancePage() {
             </div>
           )}
 
-      {/* ------------------------------------------------------------- */}
-      {/* 2. Real-Time KPI Cards (Ringkasan Kehadiran Hari Ini) */}
-      {/* ------------------------------------------------------------- */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
-        {/* Tingkat Kehadiran */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-[#531FFF]/30 transition-all flex flex-col justify-between">
-          <div className="flex items-center justify-between text-gray-400">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Tingkat Hadir</span>
-            <div className="w-6.5 h-6.5 rounded-md bg-purple-50 text-[#531FFF] flex items-center justify-center">
-              <Sparkles className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-1.5">
-            <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">{statsToday.attendanceRate}%</h3>
-            <p className="text-[10px] text-emerald-600 font-bold mt-0.5">Persentase Hari Ini</p>
-          </div>
-        </div>
-
-        {/* Total Siswa */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all flex flex-col justify-between">
-          <div className="flex items-center justify-between text-gray-400">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Total Siswa</span>
-            <div className="w-6.5 h-6.5 rounded-md bg-gray-100 text-gray-600 flex items-center justify-center">
-              <Users className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-1.5">
-            <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">{statsToday.total}</h3>
-            <p className="text-[10px] text-gray-400 font-medium mt-0.5">Terjadwal</p>
-          </div>
-        </div>
-
-        {/* Hadir Tepat */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-emerald-200 transition-all flex flex-col justify-between">
-          <div className="flex items-center justify-between text-gray-400">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Hadir Tepat</span>
-            <div className="w-6.5 h-6.5 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-1.5">
-            <h3 className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight">{statsToday.hadir}</h3>
-            <p className="text-[10px] text-gray-400 font-medium mt-0.5">Siswa Hadir</p>
-          </div>
-        </div>
-
-        {/* Terlambat */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-amber-200 transition-all flex flex-col justify-between">
-          <div className="flex items-center justify-between text-gray-400">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Terlambat</span>
-            <div className="w-6.5 h-6.5 rounded-md bg-amber-50 text-amber-600 flex items-center justify-center">
-              <Clock className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-1.5">
-            <h3 className="text-xl sm:text-2xl font-black text-amber-600 tracking-tight">{statsToday.terlambat}</h3>
-            <p className="text-[10px] text-gray-400 font-medium mt-0.5">Lewat jam masuk</p>
-          </div>
-        </div>
-
-        {/* Sakit & Izin */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-blue-200 transition-all flex flex-col justify-between">
-          <div className="flex items-center justify-between text-gray-400">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Sakit / Izin</span>
-            <div className="w-6.5 h-6.5 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Info className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-1.5">
-            <h3 className="text-xl sm:text-2xl font-black text-blue-600 tracking-tight">{statsToday.sakit + statsToday.izin}</h3>
-            <p className="text-[10px] text-gray-400 font-medium mt-0.5">Dengan Keterangan</p>
-          </div>
-        </div>
-
-        {/* Alpa / Tanpa Keterangan */}
-        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-rose-200 transition-all flex flex-col justify-between">
-          <div className="flex items-center justify-between text-gray-400">
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Alpa</span>
-            <div className="w-6.5 h-6.5 rounded-md bg-rose-50 text-rose-600 flex items-center justify-center">
-              <AlertTriangle className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-1.5">
-            <h3 className="text-xl sm:text-2xl font-black text-rose-600 tracking-tight">{statsToday.alpa}</h3>
-            <p className="text-[10px] text-gray-400 font-medium mt-0.5">Tanpa Keterangan</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ------------------------------------------------------------- */}
-      {/* 3. Navigation Tabs Bar */}
-      {/* ------------------------------------------------------------- */}
-      <div className="flex items-center justify-between border-b border-gray-200 overflow-x-auto scrollbar-none gap-2">
-        <div className="flex items-center gap-1.5 min-w-max">
-          <button
-            type="button"
-            onClick={() => setActiveTab("daily")}
-            className={cn(
-              "flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer",
-              activeTab === "daily"
-                ? "border-[#531FFF] text-[#531FFF] bg-purple-50/40 rounded-t-xl"
-                : "border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300"
-            )}
-          >
-            <Calendar className="w-4 h-4" />
-            <span>Presensi Harian Kelas</span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] bg-gray-100 text-gray-600 font-extrabold">
-              {classStudents.length} Siswa
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("biometric")}
-            className={cn(
-              "flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer",
-              activeTab === "biometric"
-                ? "border-[#531FFF] text-[#531FFF] bg-purple-50/40 rounded-t-xl"
-                : "border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300"
-            )}
-          >
-            <ScanFace className="w-4 h-4" />
-            <span>Log Biometrik & GPS</span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-50 text-emerald-700 font-extrabold">
-              {filteredBiometricData.length} Feed
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("monthly")}
-            className={cn(
-              "flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer",
-              activeTab === "monthly"
-                ? "border-[#531FFF] text-[#531FFF] bg-purple-50/40 rounded-t-xl"
-                : "border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300"
-            )}
-          >
-            <FileText className="w-4 h-4" />
-            <span>Rekap Bulanan & Siswa Kritis</span>
-            {criticalStudents.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] bg-rose-50 text-rose-700 font-extrabold">
-                {criticalStudents.length} Perhatian
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* ------------------------------------------------------------- */}
-      {/* 4. TAB 1: PRESENSI HARIAN KELAS (MONITORING & PENCATATAN) */}
-      {/* ------------------------------------------------------------- */}
-      {activeTab === "daily" && (
-        <div className="space-y-4">
-          
-          {/* A. Top Controls & Action Bar */}
-          <div className="bg-white rounded-lg sm:rounded-xl border border-gray-100 p-4 sm:p-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Class Selector Dropdown */}
-              <div>
-                <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">
-                  {isGuru ? "Kelas Binaan (Wali Kelas)" : "Pilih Kelas"}
-                </label>
-                <div className="relative min-w-[170px]">
-                  <select
-                    value={selectedClass}
-                    onChange={(e) => setSelectedClass(e.target.value)}
-                    className="w-full appearance-none bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 text-gray-900 font-bold pl-3.5 pr-9 py-2 rounded-lg text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all cursor-pointer shadow-xs"
-                  >
-                    {!isGuru && (
-                      <option value="Semua Kelas">Semua Kelas (Seluruh Siswa)</option>
-                    )}
-                    {selectableClasses.map((cls) => (
-                      <option key={cls.id || cls.name} value={cls.name}>
-                        Kelas {cls.name} {isGuru ? "(Wali Kelas Anda)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          {/* ------------------------------------------------------------- */}
+          {/* 2. Real-Time KPI Cards (Ringkasan Kehadiran Hari Ini) */}
+          {/* ------------------------------------------------------------- */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+            {/* Tingkat Kehadiran */}
+            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-[#531FFF]/30 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between text-gray-400">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Tingkat Hadir</span>
+                <div className="w-6.5 h-6.5 rounded-md bg-purple-50 text-[#531FFF] flex items-center justify-center">
+                  <Sparkles className="w-3.5 h-3.5" />
                 </div>
               </div>
-
-              {/* Date Selector */}
-              <div>
-                <div className="flex items-center justify-between mb-1 gap-2">
-                  <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">
-                    Tanggal Presensi
-                  </label>
-                  <span
-                    className={cn(
-                      "text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 shrink-0",
-                      operationalStatus.isOperational
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                        : "bg-rose-50 text-rose-700 border border-rose-200"
-                    )}
-                    title={operationalStatus.reason}
-                  >
-                    <span className={cn("w-1.5 h-1.5 rounded-full", operationalStatus.isOperational ? "bg-emerald-500" : "bg-rose-500")} />
-                    {operationalStatus.isOperational ? "Hari Aktif" : "Hari Libur"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 text-gray-900 font-bold px-3 py-2 rounded-lg text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all shadow-xs"
-                  />
-                  {selectedDate !== getTodayDateString() && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDate(getTodayDateString())}
-                      className="px-2.5 py-2 bg-purple-50 text-[#531FFF] rounded-lg text-[11px] font-bold hover:bg-purple-100 transition-colors cursor-pointer"
-                    >
-                      Hari Ini
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const ym = selectedDate ? selectedDate.slice(0, 7) : getTodayDateString().slice(0, 7);
-                      setMonthlyMonth(ym);
-                      setActiveTab("monthly");
-                    }}
-                    className="px-2.5 py-2 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200/80 text-[#531FFF] rounded-lg text-[11px] font-extrabold hover:bg-purple-100 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
-                    title="Buka Rekapitulasi Presensi per Bulan"
-                  >
-                    <CalendarDays className="w-3.5 h-3.5" />
-                    <span>Lihat Rekap Bulan</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Search in Class */}
-              <div>
-                <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">
-                  Cari Siswa di Kelas
-                </label>
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Nama / NISN..."
-                    value={searchTermDaily}
-                    onChange={(e) => setSearchTermDaily(e.target.value)}
-                    className="pl-8 pr-3 py-2 bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none w-48 sm:w-56 transition-all"
-                  />
-                  {searchTermDaily && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchTermDaily("")}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
+              <div className="mt-1.5">
+                <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">{statsToday.attendanceRate}%</h3>
+                <p className="text-[10px] text-emerald-600 font-bold mt-0.5">Persentase Hari Ini</p>
               </div>
             </div>
 
-            {/* Quick Batch Actions Right */}
-            {isAttendanceLocked ? (
-              <div className="flex flex-wrap items-center gap-2 justify-end">
-                <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs font-extrabold text-amber-900 shadow-xs">
-                  <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Data Terkunci (Final): Melewati 10:00 WIB</span>
+            {/* Total Siswa */}
+            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-gray-200 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between text-gray-400">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Total Siswa</span>
+                <div className="w-6.5 h-6.5 rounded-md bg-gray-100 text-gray-600 flex items-center justify-center">
+                  <Users className="w-3.5 h-3.5" />
                 </div>
               </div>
-            ) : canMutateAttendance ? (
-              <div className="flex flex-wrap items-center gap-2 justify-end">
-                <button
-                  type="button"
-                  onClick={handleMarkAllHadir}
-                  className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  title="Tandai semua siswa di kelas ini Hadir"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Semua Hadir</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleMarkRemainingAlpa}
-                  className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  title="Tandai siswa yang belum ada data absensi sebagai Alpa"
-                >
-                  <UserX className="w-3.5 h-3.5" />
-                  <span>Belum Absen → Alpa</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSaveClassAttendance}
-                  disabled={isSavingBatch}
-                  className="px-4 sm:px-5 py-2 bg-gradient-to-r from-[#531FFF] to-[#7344FF] hover:from-[#4314cc] hover:to-[#5e31e6] text-white rounded-lg text-xs font-extrabold transition-all active:scale-[0.98] flex items-center gap-2 shadow-sm shadow-[#531FFF]/25 cursor-pointer disabled:opacity-50"
-                >
-                  <Save className={cn("w-4 h-4", isSavingBatch && "animate-spin")} />
-                  <span>{isSavingBatch ? "Menyimpan..." : "Simpan Presensi Kelas"}</span>
-                </button>
+              <div className="mt-1.5">
+                <h3 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">{statsToday.total}</h3>
+                <p className="text-[10px] text-gray-400 font-medium mt-0.5">Terjadwal</p>
               </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                  <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
-                  Mode Monitoring (Hanya Lihat)
-                </span>
-              </div>
-            )}
-          </div>
+            </div>
 
-          {/* B. Live Monitoring Dashboard Card for the Selected Class */}
-          <div className="bg-gradient-to-br from-purple-950 via-[#3a0ca3] to-[#531FFF] text-white rounded-lg sm:rounded-xl p-5 sm:p-6 shadow-lg relative overflow-hidden">
-            <div className="absolute -right-10 -bottom-10 w-56 h-56 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-              
-              {/* Left: Class Attendance Progress */}
-              <div className="space-y-2 max-w-md w-full">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-white/15 text-purple-100 text-[11px] font-extrabold border border-white/20 flex items-center gap-1">
-                    <Users className="w-3 h-3" />
-                    {selectedClass === "Semua Kelas" ? "Seluruh Kelas" : `Kelas ${selectedClass}`}
-                  </span>
-                  <span className="text-purple-200 text-xs font-medium">
-                    {new Date(selectedDate).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-                  </span>
-                </div>
-
-                <div className="flex items-baseline gap-3">
-                  <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
-                    {classStats.percentage}%
-                  </h2>
-                  <span className="text-sm text-purple-200 font-semibold">
-                    Kehadiran Tercatat ({classStats.sudahAbsen} dari {classStats.total} Siswa)
-                  </span>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="w-full bg-black/25 h-3 rounded-full overflow-hidden p-0.5 border border-white/10">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all duration-500",
-                      classStats.percentage >= 85 ? "bg-gradient-to-r from-emerald-400 to-teal-300" :
-                      classStats.percentage >= 60 ? "bg-gradient-to-r from-amber-400 to-yellow-300" :
-                      "bg-gradient-to-r from-rose-400 to-pink-400"
-                    )}
-                    style={{ width: `${Math.min(100, Math.max(0, classStats.percentage))}%` }}
-                  />
+            {/* Hadir Tepat */}
+            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-emerald-200 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between text-gray-400">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Hadir Tepat</span>
+                <div className="w-6.5 h-6.5 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
                 </div>
               </div>
+              <div className="mt-1.5">
+                <h3 className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight">{statsToday.hadir}</h3>
+                <p className="text-[10px] text-gray-400 font-medium mt-0.5">Siswa Hadir</p>
+              </div>
+            </div>
 
-              {/* Right: Monitoring Counters */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 w-full md:w-auto">
-                
-                {/* Sudah Absen */}
-                <div
-                  onClick={() => setDailySubFilter("sudah")}
-                  className={cn(
-                    "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
-                    dailySubFilter === "sudah"
-                      ? "bg-white/25 border-white text-white shadow-sm"
-                      : "bg-white/10 hover:bg-white/20 border-white/15"
-                  )}
-                >
-                  <div className="flex items-center justify-between text-emerald-300 mb-1">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Sudah Absen</span>
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                  </div>
-                  <p className="text-xl font-black text-white">{classStats.sudahAbsen}</p>
-                  <p className="text-[10px] text-emerald-300 font-bold mt-0.5">Tercatat di sistem</p>
+            {/* Terlambat */}
+            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-amber-200 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between text-gray-400">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Terlambat</span>
+                <div className="w-6.5 h-6.5 rounded-md bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Clock className="w-3.5 h-3.5" />
                 </div>
+              </div>
+              <div className="mt-1.5">
+                <h3 className="text-xl sm:text-2xl font-black text-amber-600 tracking-tight">{statsToday.terlambat}</h3>
+                <p className="text-[10px] text-gray-400 font-medium mt-0.5">Lewat jam masuk</p>
+              </div>
+            </div>
 
-                {/* Belum Absen */}
-                <div
-                  onClick={() => setDailySubFilter("belum")}
-                  className={cn(
-                    "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
-                    dailySubFilter === "belum"
-                      ? "bg-amber-500/40 border-amber-300 text-white shadow-sm"
-                      : classStats.belumAbsen > 0
-                      ? "bg-amber-500/20 hover:bg-amber-500/30 border-amber-400/40 text-amber-200"
-                      : "bg-white/10 hover:bg-white/20 border-white/15 text-purple-200"
-                  )}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider">Belum Absen</span>
-                    <Clock className="w-3.5 h-3.5 text-amber-300" />
-                  </div>
-                  <p className="text-xl font-black text-white">{classStats.belumAbsen}</p>
-                  <p className="text-[10px] text-amber-300 font-bold mt-0.5">
-                    {classStats.belumAbsen > 0 ? "Perlu ditindaklanjuti" : "Semua sudah absen"}
-                  </p>
+            {/* Sakit & Izin */}
+            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-blue-200 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between text-gray-400">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Sakit / Izin</span>
+                <div className="w-6.5 h-6.5 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Info className="w-3.5 h-3.5" />
                 </div>
+              </div>
+              <div className="mt-1.5">
+                <h3 className="text-xl sm:text-2xl font-black text-blue-600 tracking-tight">{statsToday.sakit + statsToday.izin}</h3>
+                <p className="text-[10px] text-gray-400 font-medium mt-0.5">Dengan Keterangan</p>
+              </div>
+            </div>
 
-                {/* Hadir Tepat */}
-                <div
-                  onClick={() => setDailySubFilter("hadir")}
-                  className={cn(
-                    "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
-                    dailySubFilter === "hadir"
-                      ? "bg-white/25 border-white text-white shadow-sm"
-                      : "bg-white/10 hover:bg-white/20 border-white/15"
-                  )}
-                >
-                  <div className="flex items-center justify-between text-teal-300 mb-1">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Hadir Tepat</span>
-                    <UserCheck className="w-3.5 h-3.5" />
-                  </div>
-                  <p className="text-xl font-black text-white">{classStats.hadir}</p>
-                  <p className="text-[10px] text-teal-300 font-bold mt-0.5">Tepat Waktu</p>
+            {/* Alpa / Tanpa Keterangan */}
+            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-xs hover:border-rose-200 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between text-gray-400">
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-500">Alpa</span>
+                <div className="w-6.5 h-6.5 rounded-md bg-rose-50 text-rose-600 flex items-center justify-center">
+                  <AlertTriangle className="w-3.5 h-3.5" />
                 </div>
-
-                {/* Terlambat */}
-                <div
-                  onClick={() => setDailySubFilter("terlambat")}
-                  className={cn(
-                    "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
-                    dailySubFilter === "terlambat"
-                      ? "bg-white/25 border-white text-white shadow-sm"
-                      : "bg-white/10 hover:bg-white/20 border-white/15"
-                  )}
-                >
-                  <div className="flex items-center justify-between text-amber-300 mb-1">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Terlambat</span>
-                    <Clock className="w-3.5 h-3.5" />
-                  </div>
-                  <p className="text-xl font-black text-white">{classStats.terlambat}</p>
-                  <p className="text-[10px] text-amber-300 font-bold mt-0.5">Lewat jam masuk</p>
-                </div>
-
-                {/* Izin / Sakit */}
-                <div
-                  onClick={() => setDailySubFilter("izin_sakit")}
-                  className={cn(
-                    "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
-                    dailySubFilter === "izin_sakit"
-                      ? "bg-white/25 border-white text-white shadow-sm"
-                      : "bg-white/10 hover:bg-white/20 border-white/15"
-                  )}
-                >
-                  <div className="flex items-center justify-between text-blue-300 mb-1">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Izin / Sakit</span>
-                    <HeartPulse className="w-3.5 h-3.5" />
-                  </div>
-                  <p className="text-xl font-black text-white">{classStats.izinSakit}</p>
-                  <p className="text-[10px] text-blue-300 font-bold mt-0.5">{classStats.sakit} Sakit, {classStats.izin} Izin</p>
-                </div>
-
-                {/* Alpa */}
-                <div
-                  onClick={() => setDailySubFilter("alpa")}
-                  className={cn(
-                    "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
-                    dailySubFilter === "alpa"
-                      ? "bg-white/25 border-white text-white shadow-sm"
-                      : "bg-white/10 hover:bg-white/20 border-white/15"
-                  )}
-                >
-                  <div className="flex items-center justify-between text-rose-300 mb-1">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Alpa</span>
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                  </div>
-                  <p className="text-xl font-black text-white">{classStats.alpa}</p>
-                  <p className="text-[10px] text-rose-300 font-bold mt-0.5">Tanpa Keterangan</p>
-                </div>
-
+              </div>
+              <div className="mt-1.5">
+                <h3 className="text-xl sm:text-2xl font-black text-rose-600 tracking-tight">{statsToday.alpa}</h3>
+                <p className="text-[10px] text-gray-400 font-medium mt-0.5">Tanpa Keterangan</p>
               </div>
             </div>
           </div>
 
-          {/* Lock Status Banner (Pukul 12:00 WIB Lock Enforcement) */}
-          {isAttendanceLocked ? (
-            <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border-l-4 border-amber-500 p-4 rounded-r-xl flex items-start sm:items-center justify-between gap-3 shadow-xs animate-in fade-in duration-200">
-              <div className="flex items-start sm:items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-800 flex items-center justify-center shrink-0 border border-amber-500/30">
-                  <Lock className="w-5 h-5 text-amber-700" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="text-xs sm:text-sm font-black text-amber-950">
-                      Data Absensi Terkunci (Status Data Final)
-                    </h4>
-                    <span className="text-[10px] bg-amber-200/80 text-amber-950 px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">
-                      Locked • Final
-                    </span>
-                  </div>
-                  <p className="text-[11px] sm:text-xs text-amber-900 font-medium mt-0.5 leading-relaxed">
-                    {isPastDate
-                      ? `Data absensi untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} sudah melewati batas waktu dan berstatus data final.`
-                      : "Sesuai aturan sekolah, waktu presensi hari ini telah mencapai batas pukul 10:00 WIB. Data absensi yang telah tersimpan di database otomatis berstatus FINAL dan tidak dapat diubah atau diedit lagi."}
-                  </p>
-                </div>
-              </div>
-              <div className="shrink-0 hidden md:flex items-center gap-1.5 text-[11px] font-bold text-amber-800 bg-white/90 border border-amber-200 px-3 py-1.5 rounded-lg shadow-2xs">
-                <Clock className="w-3.5 h-3.5 text-amber-600" />
-                <span>Batas Edit: 10:00 WIB</span>
-              </div>
-            </div>
-          ) : isToday ? (
-            <div className="bg-emerald-50/70 border-l-4 border-emerald-500 p-3 sm:p-3.5 rounded-r-xl flex items-center justify-between gap-3 shadow-xs">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                  <Clock className="w-4 h-4 text-emerald-600 animate-pulse" />
-                </div>
-                <div className="text-xs text-emerald-900 font-medium">
-                  <span className="font-extrabold text-emerald-950">Pengeditan Presensi Aktif: </span>
-                  Data absensi siswa dapat diinput & disunting hingga pukul <strong className="font-black text-emerald-950">10:00 WIB</strong> hari ini.
-                </div>
-              </div>
-              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-md hidden sm:inline-block">
-                Tersisa {Math.max(0, ATTENDANCE_LOCK_HOUR_MINUTES - currentMinutesTick)} menit
-              </span>
-            </div>
-          ) : null}
-
-          {/* C. Sub-Filters Chips & Table Container */}
-          <div className="bg-white rounded-lg sm:rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
-            
-            {/* Sub-filter Chips Bar */}
-            <div className="p-3.5 sm:p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3 overflow-x-auto scrollbar-none">
-              <div className="flex items-center gap-1.5 min-w-max">
-                <span className="text-xs font-bold text-gray-500 mr-1 flex items-center gap-1">
-                  <Filter className="w-3.5 h-3.5 text-gray-400" />
-                  Filter Siswa:
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => setDailySubFilter("all")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                    dailySubFilter === "all"
-                      ? "bg-[#531FFF] text-white shadow-xs"
-                      : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200/80"
-                  )}
-                >
-                  Semua Siswa ({classStats.total})
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setDailySubFilter("sudah")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
-                    dailySubFilter === "sudah"
-                      ? "bg-emerald-600 text-white shadow-xs"
-                      : "bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-200/80"
-                  )}
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-                  Sudah Absen ({classStats.sudahAbsen})
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setDailySubFilter("belum")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
-                    dailySubFilter === "belum"
-                      ? "bg-amber-600 text-white shadow-xs"
-                      : "bg-white text-amber-700 hover:bg-amber-50 border border-amber-200/80"
-                  )}
-                >
-                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
-                  Belum Absen ({classStats.belumAbsen})
-                  {classStats.belumAbsen > 0 && (
-                    <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded-full text-[10px] font-extrabold">
-                      Perlu Cek
-                    </span>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setDailySubFilter("terlambat")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                    dailySubFilter === "terlambat"
-                      ? "bg-orange-600 text-white shadow-xs"
-                      : "bg-white text-orange-700 hover:bg-orange-50 border border-orange-200/80"
-                  )}
-                >
-                  Terlambat ({classStats.terlambat})
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setDailySubFilter("izin_sakit")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                    dailySubFilter === "izin_sakit"
-                      ? "bg-blue-600 text-white shadow-xs"
-                      : "bg-white text-blue-700 hover:bg-blue-50 border border-blue-200/80"
-                  )}
-                >
-                  Izin & Sakit ({classStats.izinSakit})
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setDailySubFilter("alpa")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                    dailySubFilter === "alpa"
-                      ? "bg-rose-600 text-white shadow-xs"
-                      : "bg-white text-rose-700 hover:bg-rose-50 border border-rose-200/80"
-                  )}
-                >
-                  Alpa ({classStats.alpa})
-                </button>
-              </div>
-
-              <span className="text-xs text-gray-400 font-medium hidden sm:inline-block">
-                Menampilkan {displayedDailyStudents.length} dari {classStudents.length} siswa
-              </span>
-            </div>
-
-            {/* Operational Day Holiday Notice */}
-            {!operationalStatus.isOperational && (
-              <div className="mx-5 mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 flex items-start gap-3 shadow-xs">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
-                  <Calendar className="w-4 h-4" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-xs font-bold text-amber-900">
-                    Hari Libur / Non-Operasional Sekolah
-                  </h4>
-                  <p className="text-xs text-amber-700/90 mt-0.5 leading-relaxed">
-                    {operationalStatus.reason} Siswa tidak diwajibkan melakukan presensi dan sistem tidak membebankan status Alpa secara otomatis pada hari libur.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Students Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-white border-b border-gray-100 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">
-                    <th className="px-5 py-3.5 w-12 text-center">No</th>
-                    <th className="px-5 py-3.5">Nama & NISN Siswa</th>
-                    <th className="px-5 py-3.5">Status Presensi</th>
-                    <th className="px-5 py-3.5">Jam Masuk</th>
-                    <th className="px-5 py-3.5">Metode & Bukti</th>
-                    <th className="px-5 py-3.5">Catatan / Keterangan</th>
-                    <th className="px-5 py-3.5 text-center">Aksi Cepat</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 text-xs">
-                  {displayedDailyStudents.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-5 py-12 text-center text-gray-400">
-                        <div className="flex flex-col items-center justify-center space-y-2">
-                          <Users className="w-8 h-8 text-gray-300" />
-                          <p className="font-bold text-gray-700 text-sm">
-                            {classStudents.length === 0
-                              ? isGuru && teacherHomeroomClasses.length === 0
-                                ? "Anda Belum Ditugaskan Sebagai Wali Kelas"
-                                : `Belum Ada Siswa Terdaftar di Kelas ${selectedClass}`
-                              : "Tidak ada siswa pada filter ini"}
-                          </p>
-                          <p className="text-xs text-gray-400 max-w-sm">
-                            {classStudents.length === 0
-                              ? isGuru && teacherHomeroomClasses.length === 0
-                                ? "Silakan hubungi Administrator Sekolah untuk penugasan kelas Wali Kelas Anda."
-                                : isGuru
-                                ? `Belum ada data siswa yang terdaftar di kelas binaan Anda (${selectedClass}).`
-                                : `Belum ada data siswa yang terdaftar di kelas ${selectedClass}. Silakan pilih kelas lain atau klik tombol di bawah untuk menampilkan seluruh kelas.`
-                              : dailySubFilter === "belum"
-                              ? "Semua siswa di kelas ini sudah berhasil melakukan absensi!"
-                              : "Coba ubah kata kunci pencarian atau pilih filter status lainnya."}
-                          </p>
-                          {!isGuru && classStudents.length === 0 && selectedClass !== "Semua Kelas" && (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedClass("Semua Kelas")}
-                              className="mt-2 px-3.5 py-1.5 bg-purple-50 text-[#531FFF] hover:bg-purple-100 rounded-lg text-xs font-bold transition-all cursor-pointer border border-purple-200"
-                            >
-                              Tampilkan Semua Kelas
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    displayedDailyStudents.map((student, idx) => {
-                      const att = classAttendanceMap[student.id] || {
-                        status: "Belum Absen",
-                        notes: "",
-                        time: "-",
-                        isRecorded: false
-                      };
-
-                      return (
-                        <tr
-                          key={student.id}
-                          className={cn(
-                            "hover:bg-gray-50/80 transition-colors",
-                            att.status === "Belum Absen" && "bg-amber-50/20"
-                          )}
-                        >
-                          {/* Number */}
-                          <td className="px-5 py-3.5 text-center text-gray-400 font-bold">
-                            {idx + 1}
-                          </td>
-
-                          {/* Student Profile */}
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-3">
-                              <ProfileAvatar
-                                name={student.name}
-                                imageUrl={student.imageUrl}
-                                photoUrl={student.photoUrl}
-                                avatar={student.avatar}
-                                gender={student.gender}
-                                role="student"
-                                size="sm"
-                                shape="rounded"
-                              />
-                              <div>
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <p className="font-bold text-gray-900 leading-tight">
-                                    {student.name}
-                                  </p>
-                                  {att.status === "Belum Absen" && (
-                                    <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" title="Belum absen" />
-                                  )}
-                                  {(student.className || student.class || student.kelas || student.classId) && (
-                                    <span className="px-1.5 py-0.5 rounded bg-purple-50 text-[#531FFF] text-[10px] font-extrabold border border-purple-100">
-                                      {student.className || student.class || student.kelas || student.classId}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-[11px] text-gray-400 font-medium mt-0.5">
-                                  NISN: {student.nisn || student.id.slice(0, 8)}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Status Presensi Dropdown / Selector */}
-                          <td className="px-5 py-3.5">
-                            <div className="relative inline-block min-w-[140px]">
-                              <select
-                                value={att.status}
-                                disabled={isAttendanceLocked || !canMutateAttendance}
-                                onChange={(e) => handleStudentStatusChange(student.id, e.target.value as any)}
-                                className={cn(
-                                  "w-full appearance-none pl-3 pr-8 py-1.5 rounded-lg text-xs font-bold border transition-all focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20",
-                                  (isAttendanceLocked || !canMutateAttendance) ? "cursor-not-allowed opacity-90" : "cursor-pointer",
-                                  att.status === "Hadir" && "bg-emerald-50 text-emerald-700 border-emerald-200",
-                                  att.status === "Terlambat" && "bg-amber-50 text-amber-700 border-amber-200",
-                                  att.status === "Sakit" && "bg-blue-50 text-blue-700 border-blue-200",
-                                  att.status === "Izin" && "bg-indigo-50 text-indigo-700 border-indigo-200",
-                                  att.status === "Alpa" && "bg-rose-50 text-rose-700 border-rose-200",
-                                  att.status === "Belum Absen" && "bg-gray-100 text-gray-600 border-gray-200 font-medium"
-                                )}
-                              >
-                                <option value="Belum Absen">⏳ Belum Absen</option>
-                                <option value="Hadir">✅ Hadir</option>
-                                <option value="Terlambat">⚠️ Terlambat</option>
-                                <option value="Sakit">🏥 Sakit</option>
-                                <option value="Izin">📝 Izin</option>
-                                <option value="Alpa">❌ Alpa</option>
-                              </select>
-                              {isAttendanceLocked ? (
-                                <Lock className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                              ) : (
-                                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                              )}
-                            </div>
-                          </td>
-
-                          {/* Jam Masuk */}
-                          <td className="px-5 py-3.5">
-                            {att.status === "Belum Absen" ? (
-                              <span className="text-gray-400 text-xs font-mono">-</span>
-                            ) : (
-                              <div className="flex items-center gap-1.5">
-                                <Clock className="w-3.5 h-3.5 text-gray-400" />
-                                <input
-                                  type="time"
-                                  disabled={isAttendanceLocked || !canMutateAttendance}
-                                  value={extractValidTimeHM(att.time, att.record?.createdAt)}
-                                  onChange={(e) => {
-                                    const newTime = e.target.value;
-                                    setClassAttendanceMap((prev) => ({
-                                      ...prev,
-                                      [student.id]: {
-                                        ...(prev[student.id] || { status: "Hadir", notes: "", isRecorded: true }),
-                                        time: newTime
-                                      }
-                                    }));
-                                  }}
-                                  className="px-2 py-1 bg-white border border-gray-200 rounded-md text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#531FFF] disabled:opacity-75 disabled:bg-gray-50"
-                                />
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Metode & Bukti Kehadiran */}
-                          <td className="px-5 py-3.5">
-                            {(() => {
-                              const photoSrc = att.capturedImage || att.record?.capturedImage || (att.faceVerified ? (student.photoUrl || student.imageUrl) : undefined);
-                              const isBio = att.source === "biometric" || att.source === "face_recognition_ai" || att.source === "face_recognition" || Boolean(att.faceVerified);
-
-                              if (photoSrc) {
-                                return (
-                                  <div className="flex items-center gap-2">
-                                    <div
-                                      onClick={() => setSelectedRecord(att.record || ({ ...att, capturedImage: photoSrc } as any))}
-                                      className="relative w-8 h-8 rounded-md overflow-hidden border border-gray-200 cursor-pointer group shrink-0"
-                                      title="Klik untuk memperbesar bukti foto"
-                                    >
-                                      <img
-                                        src={photoSrc}
-                                        alt={student.name}
-                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                                      />
-                                    </div>
-                                    <div>
-                                      <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 flex items-center gap-1">
-                                        <ScanFace className="w-2.5 h-2.5" />
-                                        AI {att.faceMatchScore || 98}%
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => setSelectedRecord(att.record || ({ ...att, capturedImage: photoSrc } as any))}
-                                        className="text-[10px] text-[#531FFF] font-bold hover:underline block mt-0.5 cursor-pointer"
-                                      >
-                                        Lihat Foto →
-                                      </button>
-                                    </div>
-                                  </div>
-                                );
-                              }
-
-                              if (att.status !== "Belum Absen") {
-                                return (
-                                  <span className={cn(
-                                    "px-2 py-1 rounded text-[10px] font-bold border inline-flex items-center gap-1",
-                                    isBio
-                                      ? "bg-purple-50 text-[#531FFF] border-purple-200"
-                                      : "bg-gray-100 text-gray-600 border-gray-200"
-                                  )}>
-                                    {isBio && <ScanFace className="w-3 h-3 text-[#531FFF]" />}
-                                    {isBio ? "Face ID AI" : "Manual (Guru/Admin)"}
-                                  </span>
-                                );
-                              }
-
-                              return (
-                                <span className="text-[11px] text-gray-400 italic">
-                                  Belum ada data
-                                </span>
-                              );
-                            })()}
-                          </td>
-
-                          {/* Catatan / Keterangan */}
-                          <td className="px-5 py-3.5">
-                            <input
-                              type="text"
-                              disabled={isAttendanceLocked || !canMutateAttendance}
-                              placeholder={
-                                isAttendanceLocked
-                                  ? "-"
-                                  : att.status === "Sakit"
-                                  ? "Surat dokter / keluhan..."
-                                  : att.status === "Izin"
-                                  ? "Alasan permohonan izin..."
-                                  : att.status === "Belum Absen"
-                                  ? "Catatan konfirmasi (opsional)..."
-                                  : "Catatan tambahan..."
-                              }
-                              value={att.notes}
-                              onChange={(e) => handleStudentNotesChange(student.id, e.target.value)}
-                              className="w-full min-w-[160px] px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all disabled:opacity-75 disabled:bg-gray-50"
-                            />
-                          </td>
-
-                          {/* Aksi Cepat */}
-                          <td className="px-5 py-3.5 text-center">
-                            {isAttendanceLocked ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/80">
-                                <Lock className="w-2.5 h-2.5 text-amber-600" />
-                                <span>Final</span>
-                              </span>
-                            ) : !canMutateAttendance ? (
-                              <span className="text-[11px] font-medium text-gray-400 italic">Hanya Pantau</span>
-                            ) : att.status === "Belum Absen" ? (
-                              <div className="flex items-center justify-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setScanTargetStudent(student);
-                                    setShowScanModal(true);
-                                  }}
-                                  className="p-1 rounded-md text-[#531FFF] bg-purple-50 hover:bg-purple-100 transition-colors border border-purple-200 cursor-pointer"
-                                  title={`Scan Wajah (Face ID): ${student.name}`}
-                                >
-                                  <ScanFace className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleStudentStatusChange(student.id, "Hadir")}
-                                  className="px-2 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors cursor-pointer border border-emerald-200"
-                                  title="Tandai Hadir"
-                                >
-                                  Hadir
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleStudentStatusChange(student.id, "Izin")}
-                                  className="px-2 py-1 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors cursor-pointer border border-indigo-200"
-                                  title="Tandai Izin"
-                                >
-                                  Izin
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleStudentStatusChange(student.id, "Sakit")}
-                                  className="px-2 py-1 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer border border-blue-200"
-                                  title="Tandai Sakit"
-                                >
-                                  Sakit
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleStudentStatusChange(student.id, "Alpa")}
-                                  className="px-2 py-1 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors cursor-pointer border border-rose-200"
-                                  title="Tandai Alpa"
-                                >
-                                  Alpa
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setScanTargetStudent(student);
-                                    setShowScanModal(true);
-                                  }}
-                                  className="p-1 rounded-md text-[#531FFF] bg-purple-50 hover:bg-purple-100 transition-colors border border-purple-200 cursor-pointer"
-                                  title={`Scan Ulang Wajah (Face ID): ${student.name}`}
-                                >
-                                  <ScanFace className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleStudentStatusChange(student.id, "Belum Absen")}
-                                  className="px-2.5 py-1 rounded-md text-[10px] font-bold text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                  title="Reset status kembali ke Belum Absen"
-                                >
-                                  Reset
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Table Footer Actions */}
-            <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500 font-medium">
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="font-extrabold text-gray-900">Keterangan Status:</span>
-                <span className="flex items-center gap-1 font-bold text-emerald-700"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Hadir</span>
-                <span className="flex items-center gap-1 font-bold text-amber-700"><span className="w-2 h-2 rounded-full bg-amber-500" /> Terlambat</span>
-                <span className="flex items-center gap-1 font-bold text-blue-700"><span className="w-2 h-2 rounded-full bg-blue-500" /> Sakit</span>
-                <span className="flex items-center gap-1 font-bold text-indigo-700"><span className="w-2 h-2 rounded-full bg-indigo-500" /> Izin</span>
-                <span className="flex items-center gap-1 font-bold text-rose-700"><span className="w-2 h-2 rounded-full bg-rose-500" /> Alpa</span>
-                <span className="flex items-center gap-1 font-bold text-gray-600"><span className="w-2 h-2 rounded-full bg-gray-400" /> Belum Absen</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400 text-xs">
-                  {classStats.belumAbsen > 0 ? `${classStats.belumAbsen} siswa belum absen` : "Semua kehadiran telah terdata"}
-                </span>
-                {canMutateAttendance && !isAttendanceLocked && (
-                  <button
-                    type="button"
-                    onClick={handleSaveClassAttendance}
-                    disabled={isSavingBatch}
-                    className="px-4 py-2 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
-                  >
-                    {isSavingBatch ? "Menyimpan..." : "Simpan Perubahan"}
-                  </button>
+          {/* ------------------------------------------------------------- */}
+          {/* 3. Navigation Tabs Bar */}
+          {/* ------------------------------------------------------------- */}
+          <div className="flex items-center justify-between border-b border-gray-200 overflow-x-auto scrollbar-none gap-2">
+            <div className="flex items-center gap-1.5 min-w-max">
+              <button
+                type="button"
+                onClick={() => setActiveTab("daily")}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer",
+                  activeTab === "daily"
+                    ? "border-[#531FFF] text-[#531FFF] bg-purple-50/40 rounded-t-xl"
+                    : "border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300"
                 )}
-                {isAttendanceLocked && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                    <Lock className="w-3.5 h-3.5 text-amber-600" />
-                    Terkunci (Final)
+              >
+                <Calendar className="w-4 h-4" />
+                <span>Presensi Harian Kelas</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] bg-gray-100 text-gray-600 font-extrabold">
+                  {classStudents.length} Siswa
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("biometric")}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer",
+                  activeTab === "biometric"
+                    ? "border-[#531FFF] text-[#531FFF] bg-purple-50/40 rounded-t-xl"
+                    : "border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300"
+                )}
+              >
+                <ScanFace className="w-4 h-4" />
+                <span>Log Biometrik & GPS</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-50 text-emerald-700 font-extrabold">
+                  {filteredBiometricData.length} Feed
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("monthly")}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer",
+                  activeTab === "monthly"
+                    ? "border-[#531FFF] text-[#531FFF] bg-purple-50/40 rounded-t-xl"
+                    : "border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300"
+                )}
+              >
+                <FileText className="w-4 h-4" />
+                <span>Rekap Bulanan & Siswa Kritis</span>
+                {criticalStudents.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-rose-50 text-rose-700 font-extrabold">
+                    {criticalStudents.length} Perhatian
                   </span>
                 )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------- */}
-      {/* 5. TAB 2: LOG BIOMETRIK & GPS FEED (PENGECEKAN BIOMETRIK) */}
-      {/* ------------------------------------------------------------- */}
-      {activeTab === "biometric" && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col">
-          
-          {/* Biometric Filter Toolbar */}
-          <div className="p-4 sm:p-5 border-b border-gray-100 flex flex-col md:flex-row gap-4 justify-between items-center bg-gray-50/50">
-            {/* View Switcher & Search */}
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              <div className="flex items-center bg-gray-200/70 p-1 rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => setBiometricViewMode("table")}
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer",
-                    biometricViewMode === "table" ? "bg-white text-gray-900 shadow-xs" : "text-gray-600 hover:text-gray-900"
-                  )}
-                >
-                  <List className="w-3.5 h-3.5" />
-                  Tabel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBiometricViewMode("grid")}
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer",
-                    biometricViewMode === "grid" ? "bg-white text-gray-900 shadow-xs" : "text-gray-600 hover:text-gray-900"
-                  )}
-                >
-                  <LayoutGrid className="w-3.5 h-3.5" />
-                  Kartu Foto
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBiometricViewMode("map")}
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer",
-                    biometricViewMode === "map" ? "bg-white text-gray-900 shadow-xs" : "text-gray-600 hover:text-gray-900"
-                  )}
-                >
-                  <Map className="w-3.5 h-3.5" />
-                  Peta Radar GPS
-                </button>
-              </div>
-
-              <div className="relative flex-1 md:w-64">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Cari nama, NISN, atau kelas..."
-                  value={biometricSearch}
-                  onChange={(e) => setBiometricSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Class, Month & Status Filter */}
-            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-              <div className="relative">
-                <select
-                  value={biometricClassFilter}
-                  onChange={(e) => setBiometricClassFilter(e.target.value)}
-                  className="appearance-none bg-white border border-gray-200 text-gray-700 pl-3.5 pr-8 py-2 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-xs"
-                >
-                  {!isGuru && <option value="Semua Kelas">Semua Kelas</option>}
-                  {selectableClasses.map((cls) => (
-                    <option key={cls.id || cls.name} value={cls.name}>
-                      {cls.name} {isGuru ? "(Wali Kelas)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
-
-              {/* Month Selector in Tab 2 */}
-              <div className="relative flex items-center gap-1.5">
-                <input
-                  type="month"
-                  value={biometricMonthFilter === "all" ? "" : biometricMonthFilter}
-                  onChange={(e) => setBiometricMonthFilter(e.target.value || "all")}
-                  className="bg-white border border-gray-200 text-gray-700 font-bold px-3 py-2 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-xs cursor-pointer"
-                  title="Filter Log Biometrik per Bulan (YYYY-MM)"
-                />
-                {biometricMonthFilter !== "all" && (
-                  <button
-                    type="button"
-                    onClick={() => setBiometricMonthFilter("all")}
-                    className="px-2 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-                    title="Tampilkan Semua Bulan"
-                  >
-                    Semua
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
-                {["Semua", "Hadir", "Terlambat", "Ditolak"].map((st) => (
-                  <button
-                    key={st}
-                    type="button"
-                    onClick={() => setBiometricStatusFilter(st)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer",
-                      biometricStatusFilter === st
-                        ? "bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/30 shadow-xs"
-                        : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
-                    )}
-                  >
-                    {st}
-                  </button>
-                ))}
-              </div>
+              </button>
             </div>
           </div>
 
-          {/* View Mode 1: Table */}
-          {biometricViewMode === "table" && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-white border-b border-gray-100 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                    <th className="px-6 py-4">Siswa</th>
-                    <th className="px-6 py-4">Face Recognition (AI)</th>
-                    <th className="px-6 py-4">Waktu & Tanggal</th>
-                    <th className="px-6 py-4">Lokasi & Radius GPS</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 text-xs">
-                  {filteredBiometricData.length > 0 ? (
-                    filteredBiometricData.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50/70 transition-colors group">
-                        {/* Student info */}
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden relative shrink-0 border border-gray-200 shadow-xs">
-                              <Image
-                                src={item.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80"}
-                                alt={item.studentName || "Siswa"}
-                                fill
-                                className="object-cover"
-                                unoptimized
-                              />
-                            </div>
-                            <div>
-                              <p className="font-bold text-gray-900 group-hover:text-[#531FFF] transition-colors">
-                                {item.studentName}
-                              </p>
-                              <p className="text-gray-400 font-medium mt-0.5">
-                                {item.studentId} • {item.className}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
+          {/* ------------------------------------------------------------- */}
+          {/* 4. TAB 1: PRESENSI HARIAN KELAS (MONITORING & PENCATATAN) */}
+          {/* ------------------------------------------------------------- */}
+          {activeTab === "daily" && (
+            <div className="space-y-4">
 
-                        {/* Face Recognition Score */}
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={cn(
-                                "px-2.5 py-1 rounded-md text-xs font-extrabold inline-flex items-center gap-1.5 border",
-                                item.faceVerified
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : "bg-rose-50 text-rose-700 border-rose-200"
-                              )}
-                            >
-                              <ScanFace className="w-3.5 h-3.5" />
-                              {item.faceMatchScore || 0}% Match
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Timestamp */}
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-1.5 font-bold text-gray-800">
-                            <Clock className="w-3.5 h-3.5 text-gray-400" />
-                            <span>{item.timestamp}</span>
-                          </div>
-                          <p className="text-[11px] text-gray-400 mt-0.5">{item.date}</p>
-                        </td>
-
-                        {/* GPS Radius */}
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className={cn(
-                                "w-7 h-7 rounded-md flex items-center justify-center shrink-0 border",
-                                item.location?.inRadius
-                                  ? "bg-emerald-50 border-emerald-200 text-emerald-600"
-                                  : "bg-rose-50 border-rose-200 text-rose-600"
-                              )}
-                            >
-                              <MapPin className="w-3.5 h-3.5" />
-                            </div>
-                            <div>
-                              <p className="font-bold text-gray-900">
-                                {item.location?.distance || 0}m <span className="text-gray-400 font-normal">dari sekolah</span>
-                              </p>
-                              <p
-                                className={cn(
-                                  "text-[10px] font-bold",
-                                  item.location?.inRadius ? "text-emerald-600" : "text-rose-600"
-                                )}
-                              >
-                                {item.location?.inRadius ? "Dalam Radius" : "Luar Radius"}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Status */}
-                        <td className="px-6 py-4">
-                          <span
-                            className={cn(
-                              "px-2.5 py-1 text-xs font-bold rounded-md inline-flex items-center gap-1 border shadow-2xs",
-                              item.status === "Hadir" && "bg-emerald-50 text-emerald-700 border-emerald-200",
-                              item.status === "Terlambat" && "bg-amber-50 text-amber-700 border-amber-200",
-                              item.status === "Sakit" && "bg-blue-50 text-blue-700 border-blue-200",
-                              item.status === "Izin" && "bg-indigo-50 text-indigo-700 border-indigo-200",
-                              (item.status === "Alpa" || item.status === "Ditolak") && "bg-rose-50 text-rose-700 border-rose-200"
-                            )}
-                          >
-                            {item.status === "Hadir" && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
-                            {item.status === "Terlambat" && <Clock className="w-3 h-3 text-amber-600" />}
-                            {(item.status === "Alpa" || item.status === "Ditolak") && <XCircle className="w-3 h-3 text-rose-600" />}
-                            {item.status}
-                          </span>
-                        </td>
-
-                        {/* Detail Action */}
-                        <td className="px-6 py-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedRecord(item)}
-                            className="px-3 py-1.5 bg-gray-100 hover:bg-[#F3F0FF] text-gray-700 hover:text-[#531FFF] rounded-lg font-bold transition-all border border-gray-200 cursor-pointer"
-                          >
-                            Detail AI
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
-                        Belum ada log biometrik yang cocok dengan filter pencarian.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* View Mode 2: Photo Cards Grid */}
-          {biometricViewMode === "grid" && (
-            filteredBiometricData.length > 0 ? (
-              <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-gray-50/50">
-                {filteredBiometricData.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => setSelectedRecord(item)}
-                    className="bg-white rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-lg hover:border-[#531FFF]/30 transition-all overflow-hidden cursor-pointer group flex flex-col"
-                  >
-                    <div className="relative aspect-[4/3] w-full bg-gray-100">
-                      {item.capturedImage ? (
-                        <Image
-                          src={item.capturedImage}
-                          alt={item.studentName}
-                          fill
-                          className="object-cover group-hover:scale-105 transition-transform duration-500"
-                          unoptimized
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-400">
-                          <UserCheck className="w-10 h-10 opacity-30" />
-                        </div>
-                      )}
-                      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
-                        <span
-                          className={cn(
-                            "px-2 py-0.5 text-[10px] font-extrabold rounded backdrop-blur-md shadow-xs",
-                            item.status === "Hadir" && "bg-emerald-500/90 text-white",
-                            item.status === "Terlambat" && "bg-amber-500/90 text-white",
-                            (item.status === "Alpa" || item.status === "Ditolak") && "bg-rose-500/90 text-white"
-                          )}
-                        >
-                          {item.status}
-                        </span>
-                        <span className="px-2 py-0.5 text-[10px] font-extrabold bg-black/60 text-white rounded backdrop-blur-md flex items-center gap-1 shadow-xs">
-                          <ScanFace className="w-3 h-3 text-cyan-300" />
-                          {item.faceMatchScore}%
-                        </span>
-                      </div>
-                      <div className="absolute bottom-2.5 left-2.5 bg-white/90 backdrop-blur-md px-2 py-0.5 rounded text-[11px] font-bold text-gray-900 shadow-xs flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-[#531FFF]" />
-                        {item.timestamp}
-                      </div>
-                    </div>
-
-                    <div className="p-3.5 flex flex-col justify-between flex-1">
-                      <div>
-                        <h4 className="font-bold text-gray-900 group-hover:text-[#531FFF] transition-colors truncate">
-                          {item.studentName}
-                        </h4>
-                        <p className="text-[11px] text-gray-400 font-medium">
-                          {item.studentId} • {item.className}
-                        </p>
-                      </div>
-                      <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-[11px]">
-                        <span className="text-gray-500 flex items-center gap-1 font-medium">
-                          <MapPin className="w-3 h-3 text-emerald-600" />
-                          {item.location?.distance || 0}m radius
-                        </span>
-                        <span className="text-[#531FFF] font-bold">Detail AI →</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-16 text-center text-gray-400 bg-gray-50/50 flex flex-col items-center justify-center">
-                <ScanFace className="w-12 h-12 text-gray-300 mb-3" />
-                <p className="font-semibold text-gray-600 text-sm">Belum ada log biometrik</p>
-                <p className="text-xs text-gray-400 mt-1">Data absensi biometrik akan muncul secara otomatis saat siswa melakukan presensi.</p>
-              </div>
-            )
-          )}
-
-          {/* View Mode 3: Radar Peta GPS Leaflet */}
-          {biometricViewMode === "map" && (
-            <div className="p-6 bg-gray-50/50 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                    <Map className="w-4 h-4 text-[#531FFF]" />
-                    Peta Persebaran Lokasi Presensi Siswa (Real-Time GPS)
-                  </h4>
-                  <p className="text-xs text-gray-500">
-                    {filteredBiometricData.length > 0 
-                      ? `Menampilkan titik presensi ${filteredBiometricData.length} siswa relatif terhadap lingkaran radius absensi (${config.geofenceRadiusMeters}m).`
-                      : `Belum ada presensi siswa yang tercatat hari ini. Lingkaran hijau menunjukkan radius absensi sekolah (${config.geofenceRadiusMeters}m).`}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="flex items-center gap-1.5 font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" /> Di Dalam Radius
-                  </span>
-                  <span className="flex items-center gap-1.5 font-medium text-rose-700 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-200">
-                    <span className="w-2 h-2 rounded-full bg-rose-500" /> Di Luar Radius
-                  </span>
-                </div>
-              </div>
-
-              <AttendanceGeofenceMap
-                centerLat={config.schoolCenterLat}
-                centerLng={config.schoolCenterLng}
-                radius={config.geofenceRadiusMeters}
-                interactive={false}
-                attendanceMarkers={mapAttendanceMarkers}
-                onSelectMarker={(m) => {
-                  const found = filteredBiometricData.find((r) => r.id === m.id);
-                  if (found) setSelectedRecord(found);
-                }}
-                height="500px"
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ------------------------------------------------------------- */}
-      {/* 6. TAB 3: REKAP BULANAN & EARLY WARNING (SISWA KRITIS) */}
-      {/* ------------------------------------------------------------- */}
-      {activeTab === "monthly" && (
-        <div className="space-y-6">
-          
-          {/* Early Warning Banner if critical students exist */}
-          {criticalStudents.length > 0 && (
-            <div className="bg-gradient-to-r from-rose-50 to-orange-50 border border-rose-200 rounded-xl p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div className="flex items-start gap-3.5">
-                <div className="w-10 h-10 rounded-lg bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-rose-500/20">
-                  <AlertTriangle className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-rose-900">
-                    Peringatan Dini: {criticalStudents.length} Siswa Perlu Perhatian Khusus
-                  </h3>
-                  <p className="text-xs text-rose-700 mt-0.5">
-                    Terdapat siswa dengan jumlah Alpa ≥ 3 kali atau Keterlambatan ≥ 4 kali pada bulan ini. Disarankan segera koordinasi dengan Wali Kelas & Guru BK.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    toast.showInfo("Pengingat notifikasi otomatis dikirimkan ke orang tua siswa yang bersangkutan.", "Notifikasi Peringatan");
-                  }}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  Kirim Notifikasi Peringatan
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Monthly Table Card */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
-            
-            {/* Filter Header */}
-            <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <div>
-                  <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">
-                    Bulan Rekap
-                  </label>
-                  <input
-                    type="month"
-                    value={monthlyMonth}
-                    onChange={(e) => setMonthlyMonth(e.target.value)}
-                    className="bg-white border border-gray-200 text-gray-900 font-bold px-3 py-1.5 rounded-lg text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none shadow-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">
-                    Filter Kelas
-                  </label>
-                  <select
-                    value={monthlyClassFilter}
-                    onChange={(e) => setMonthlyClassFilter(e.target.value)}
-                    className="bg-white border border-gray-200 text-gray-900 font-bold px-3 py-1.5 rounded-lg text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none shadow-xs cursor-pointer"
-                  >
-                    {!isGuru && <option value="Semua">Semua Kelas</option>}
-                    {selectableClasses.map((c) => (
-                      <option key={c.id || c.name} value={c.name}>
-                        {c.name} {isGuru ? "(Wali Kelas)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="text-xs text-gray-500 font-medium">
-                Total Siswa Terdata: <span className="font-bold text-gray-900">{monthlySummaryList.length}</span>
-              </div>
-            </div>
-
-            {/* Table Matrix */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-white border-b border-gray-100 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                    <th className="px-5 py-4">Nama Siswa</th>
-                    <th className="px-5 py-4">Kelas</th>
-                    <th className="px-5 py-4 text-center">Hadir (H)</th>
-                    <th className="px-5 py-4 text-center">Terlambat (T)</th>
-                    <th className="px-5 py-4 text-center">Sakit (S)</th>
-                    <th className="px-5 py-4 text-center">Izin (I)</th>
-                    <th className="px-5 py-4 text-center">Alpa (A)</th>
-                    <th className="px-5 py-4 text-center">% Kehadiran</th>
-                    <th className="px-5 py-4 text-right">Status Evaluasi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 text-xs">
-                  {monthlySummaryList.map((item) => (
-                    <tr
-                      key={item.id}
-                      className={cn(
-                        "hover:bg-gray-50/70 transition-colors",
-                        item.isCritical && "bg-rose-50/30"
-                      )}
-                    >
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-purple-50 text-[#531FFF] font-bold flex items-center justify-center text-[11px]">
-                            {item.name.charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-bold text-gray-900">{item.name}</p>
-                            <p className="text-[10px] text-gray-400 font-mono">{item.id.slice(0, 10)}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5 font-semibold text-gray-600">{item.className}</td>
-                      <td className="px-5 py-3.5 text-center font-bold text-emerald-600">{item.hadir}</td>
-                      <td className="px-5 py-3.5 text-center font-bold text-amber-600">{item.terlambat}</td>
-                      <td className="px-5 py-3.5 text-center font-bold text-blue-600">{item.sakit}</td>
-                      <td className="px-5 py-3.5 text-center font-bold text-indigo-600">{item.izin}</td>
-                      <td className="px-5 py-3.5 text-center font-black text-rose-600">{item.alpa}</td>
-                      <td className="px-5 py-3.5 text-center">
-                        <span
-                          className={cn(
-                            "px-2 py-0.5 rounded font-extrabold text-xs",
-                            item.rate >= 90
-                              ? "bg-emerald-50 text-emerald-700"
-                              : item.rate >= 75
-                              ? "bg-amber-50 text-amber-700"
-                              : "bg-rose-50 text-rose-700"
-                          )}
-                        >
-                          {item.rate}%
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-right">
-                        {item.isCritical ? (
-                          <span className="px-2.5 py-1 text-[11px] font-black bg-rose-100 text-rose-800 rounded-md inline-flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3 text-rose-600" />
-                            Perhatian Khusus
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-1 text-[11px] font-bold bg-emerald-50 text-emerald-700 rounded-md">
-                            Disiplin Baik
-                          </span>
+              {/* A. Top Controls & Action Bar */}
+              <div className="bg-white rounded-lg sm:rounded-xl border border-gray-100 p-4 sm:p-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Class Selector Dropdown */}
+                  <div>
+                    <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">
+                      {isGuru ? "Kelas Binaan (Wali Kelas)" : "Pilih Kelas"}
+                    </label>
+                    <div className="relative min-w-[170px]">
+                      <select
+                        value={selectedClass}
+                        onChange={(e) => setSelectedClass(e.target.value)}
+                        className="w-full appearance-none bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 text-gray-900 font-bold pl-3.5 pr-9 py-2 rounded-lg text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all cursor-pointer shadow-xs"
+                      >
+                        {!isGuru && (
+                          <option value="Semua Kelas">Semua Kelas (Seluruh Siswa)</option>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-
-      {/* ------------------------------------------------------------- */}
-      {/* 8. Slide-Over Drawer for Biometric AI Detail */}
-      {/* ------------------------------------------------------------- */}
-      {selectedRecord && (
-        <div className="fixed inset-0 z-50 flex justify-end animate-in fade-in duration-200">
-          <div
-            className="absolute inset-0 bg-gray-900/40 backdrop-blur-xs transition-opacity"
-            onClick={() => setSelectedRecord(null)}
-          />
-
-          <div className="relative w-full max-w-md bg-white shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-300 flex flex-col h-full z-10">
-            {/* Drawer Header */}
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-20">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-[#531FFF]" />
-                <h3 className="text-base font-black text-gray-900">Verifikasi Presensi AI</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedRecord(null)}
-                className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
-              >
-                <XCircle className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Drawer Content */}
-            <div className="p-6 space-y-6 flex-1 overflow-y-auto text-xs">
-              
-              {/* Student info card */}
-              <div className="flex items-center gap-3.5 p-4 rounded-lg bg-gray-50 border border-gray-100">
-                <div className="w-14 h-14 rounded-lg bg-white overflow-hidden relative shrink-0 border border-gray-200 shadow-xs">
-                  <Image
-                    src={selectedRecord.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80"}
-                    alt={selectedRecord.studentName}
-                    fill
-                    className="object-cover"
-                    unoptimized
-                  />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-gray-900">{selectedRecord.studentName}</h4>
-                  <p className="text-gray-400 font-medium mt-0.5">{selectedRecord.studentId} • {selectedRecord.className}</p>
-                  <span
-                    className={cn(
-                      "mt-1.5 px-2 py-0.5 text-[10px] font-black rounded inline-block",
-                      selectedRecord.status === "Hadir" && "bg-emerald-100 text-emerald-800",
-                      selectedRecord.status === "Terlambat" && "bg-amber-100 text-amber-800",
-                      (selectedRecord.status === "Alpa" || selectedRecord.status === "Ditolak") && "bg-rose-100 text-rose-800"
-                    )}
-                  >
-                    {selectedRecord.status}
-                  </span>
-                </div>
-              </div>
-
-              {/* AI Facial Metrics */}
-              <div className="space-y-3">
-                <h4 className="font-extrabold text-gray-400 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-                  <ScanFace className="w-3.5 h-3.5 text-[#531FFF]" />
-                  Hasil Verifikasi AI Biometrik
-                </h4>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3.5 rounded-lg bg-purple-50/50 border border-purple-100">
-                    <p className="text-purple-700 font-bold">Face Match Score</p>
-                    <p className="text-2xl font-black text-[#531FFF] mt-1">{selectedRecord.faceMatchScore || 0}%</p>
-                    <p className="text-[10px] text-purple-600 mt-1">Batas Minimal: {config.minFaceMatchScore}%</p>
+                        {selectableClasses.map((cls) => (
+                          <option key={cls.id || cls.name} value={cls.name}>
+                            Kelas {cls.name} {isGuru ? "(Wali Kelas Anda)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    </div>
                   </div>
 
-                  <div className="p-3.5 rounded-lg bg-gray-50 border border-gray-100">
-                    <p className="text-gray-500 font-bold">Status Verifikasi</p>
-                    <p className={cn("text-base font-black mt-1", selectedRecord.faceVerified ? "text-emerald-600" : "text-rose-600")}>
-                      {selectedRecord.faceVerified ? "Valid Sesuai" : "Gagal Cocok"}
-                    </p>
-                    <p className="text-[10px] text-gray-400 mt-1">Master Database</p>
+                  {/* Date Selector */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">
+                        Tanggal Presensi
+                      </label>
+                      <span
+                        className={cn(
+                          "text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 shrink-0",
+                          operationalStatus.isOperational
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : "bg-rose-50 text-rose-700 border border-rose-200"
+                        )}
+                        title={operationalStatus.reason}
+                      >
+                        <span className={cn("w-1.5 h-1.5 rounded-full", operationalStatus.isOperational ? "bg-emerald-500" : "bg-rose-500")} />
+                        {operationalStatus.isOperational ? "Hari Aktif" : "Hari Libur"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 text-gray-900 font-bold px-3 py-2 rounded-lg text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none transition-all shadow-xs"
+                      />
+                      {selectedDate !== getTodayDateString() && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDate(getTodayDateString())}
+                          className="px-2.5 py-2 bg-purple-50 text-[#531FFF] rounded-lg text-[11px] font-bold hover:bg-purple-100 transition-colors cursor-pointer"
+                        >
+                          Hari Ini
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ym = selectedDate ? selectedDate.slice(0, 7) : getTodayDateString().slice(0, 7);
+                          setMonthlyMonth(ym);
+                          setActiveTab("monthly");
+                        }}
+                        className="px-2.5 py-2 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200/80 text-[#531FFF] rounded-lg text-[11px] font-extrabold hover:bg-purple-100 transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                        title="Buka Rekapitulasi Presensi per Bulan"
+                      >
+                        <CalendarDays className="w-3.5 h-3.5" />
+                        <span>Lihat Rekap Bulan</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Search in Class */}
+                  <div>
+                    <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">
+                      Cari Siswa di Kelas
+                    </label>
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Nama / NISN..."
+                        value={searchTermDaily}
+                        onChange={(e) => setSearchTermDaily(e.target.value)}
+                        className="pl-8 pr-3 py-2 bg-gray-50/80 hover:bg-gray-100/80 border border-gray-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none w-48 sm:w-56 transition-all"
+                      />
+                      {searchTermDaily && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchTermDaily("")}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                {/* Photo Preview */}
-                <div className="relative aspect-[4/3] w-full rounded-lg overflow-hidden bg-gray-900 border border-gray-200 shadow-inner">
-                  <Image
-                    src={selectedRecord.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80"}
-                    alt="Foto Presensi"
-                    fill
-                    className="object-cover"
-                    unoptimized
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-3 text-white">
-                    <p className="text-[11px] font-bold flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-cyan-300" />
-                      {selectedRecord.timestamp} ({selectedRecord.date})
-                    </p>
+                {/* Quick Batch Actions Right */}
+                {isAttendanceLocked ? (
+                  <div className="flex flex-wrap items-center gap-2 justify-end">
+                    <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs font-extrabold text-amber-900 shadow-xs">
+                      <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Data Terkunci (Final): Melewati 10:00 WIB</span>
+                    </div>
+                  </div>
+                ) : canMutateAttendance ? (
+                  <div className="flex flex-wrap items-center gap-2 justify-end">
+                    <button
+                      type="button"
+                      onClick={handleMarkAllHadir}
+                      className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      title="Tandai semua siswa di kelas ini Hadir"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Semua Hadir</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleMarkRemainingAlpa}
+                      className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      title="Tandai siswa yang belum ada data absensi sebagai Alpa"
+                    >
+                      <UserX className="w-3.5 h-3.5" />
+                      <span>Belum Absen → Alpa</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveClassAttendance}
+                      disabled={isSavingBatch}
+                      className="px-4 sm:px-5 py-2 bg-gradient-to-r from-[#531FFF] to-[#7344FF] hover:from-[#4314cc] hover:to-[#5e31e6] text-white rounded-lg text-xs font-extrabold transition-all active:scale-[0.98] flex items-center gap-2 shadow-sm shadow-[#531FFF]/25 cursor-pointer disabled:opacity-50"
+                    >
+                      <Save className={cn("w-4 h-4", isSavingBatch && "animate-spin")} />
+                      <span>{isSavingBatch ? "Menyimpan..." : "Simpan Presensi Kelas"}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                      <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                      Mode Monitoring (Hanya Lihat)
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* B. Live Monitoring Dashboard Card for the Selected Class */}
+              <div className="bg-gradient-to-br from-purple-950 via-[#3a0ca3] to-[#531FFF] text-white rounded-lg sm:rounded-xl p-5 sm:p-6 shadow-lg relative overflow-hidden">
+                <div className="absolute -right-10 -bottom-10 w-56 h-56 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+                <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+
+                  {/* Left: Class Attendance Progress */}
+                  <div className="space-y-2 max-w-md w-full">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-white/15 text-purple-100 text-[11px] font-extrabold border border-white/20 flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {selectedClass === "Semua Kelas" ? "Seluruh Kelas" : `Kelas ${selectedClass}`}
+                      </span>
+                      <span className="text-purple-200 text-xs font-medium">
+                        {new Date(selectedDate).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline gap-3">
+                      <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
+                        {classStats.percentage}%
+                      </h2>
+                      <span className="text-sm text-purple-200 font-semibold">
+                        Kehadiran Tercatat ({classStats.sudahAbsen} dari {classStats.total} Siswa)
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-black/25 h-3 rounded-full overflow-hidden p-0.5 border border-white/10">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all duration-500",
+                          classStats.percentage >= 85 ? "bg-gradient-to-r from-emerald-400 to-teal-300" :
+                            classStats.percentage >= 60 ? "bg-gradient-to-r from-amber-400 to-yellow-300" :
+                              "bg-gradient-to-r from-rose-400 to-pink-400"
+                        )}
+                        style={{ width: `${Math.min(100, Math.max(0, classStats.percentage))}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Right: Monitoring Counters */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 w-full md:w-auto">
+
+                    {/* Sudah Absen */}
+                    <div
+                      onClick={() => setDailySubFilter("sudah")}
+                      className={cn(
+                        "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                        dailySubFilter === "sudah"
+                          ? "bg-white/25 border-white text-white shadow-sm"
+                          : "bg-white/10 hover:bg-white/20 border-white/15"
+                      )}
+                    >
+                      <div className="flex items-center justify-between text-emerald-300 mb-1">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Sudah Absen</span>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      </div>
+                      <p className="text-xl font-black text-white">{classStats.sudahAbsen}</p>
+                      <p className="text-[10px] text-emerald-300 font-bold mt-0.5">Tercatat di sistem</p>
+                    </div>
+
+                    {/* Belum Absen */}
+                    <div
+                      onClick={() => setDailySubFilter("belum")}
+                      className={cn(
+                        "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                        dailySubFilter === "belum"
+                          ? "bg-amber-500/40 border-amber-300 text-white shadow-sm"
+                          : classStats.belumAbsen > 0
+                            ? "bg-amber-500/20 hover:bg-amber-500/30 border-amber-400/40 text-amber-200"
+                            : "bg-white/10 hover:bg-white/20 border-white/15 text-purple-200"
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider">Belum Absen</span>
+                        <Clock className="w-3.5 h-3.5 text-amber-300" />
+                      </div>
+                      <p className="text-xl font-black text-white">{classStats.belumAbsen}</p>
+                      <p className="text-[10px] text-amber-300 font-bold mt-0.5">
+                        {classStats.belumAbsen > 0 ? "Perlu ditindaklanjuti" : "Semua sudah absen"}
+                      </p>
+                    </div>
+
+                    {/* Hadir Tepat */}
+                    <div
+                      onClick={() => setDailySubFilter("hadir")}
+                      className={cn(
+                        "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                        dailySubFilter === "hadir"
+                          ? "bg-white/25 border-white text-white shadow-sm"
+                          : "bg-white/10 hover:bg-white/20 border-white/15"
+                      )}
+                    >
+                      <div className="flex items-center justify-between text-teal-300 mb-1">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Hadir Tepat</span>
+                        <UserCheck className="w-3.5 h-3.5" />
+                      </div>
+                      <p className="text-xl font-black text-white">{classStats.hadir}</p>
+                      <p className="text-[10px] text-teal-300 font-bold mt-0.5">Tepat Waktu</p>
+                    </div>
+
+                    {/* Terlambat */}
+                    <div
+                      onClick={() => setDailySubFilter("terlambat")}
+                      className={cn(
+                        "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                        dailySubFilter === "terlambat"
+                          ? "bg-white/25 border-white text-white shadow-sm"
+                          : "bg-white/10 hover:bg-white/20 border-white/15"
+                      )}
+                    >
+                      <div className="flex items-center justify-between text-amber-300 mb-1">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Terlambat</span>
+                        <Clock className="w-3.5 h-3.5" />
+                      </div>
+                      <p className="text-xl font-black text-white">{classStats.terlambat}</p>
+                      <p className="text-[10px] text-amber-300 font-bold mt-0.5">Lewat jam masuk</p>
+                    </div>
+
+                    {/* Izin / Sakit */}
+                    <div
+                      onClick={() => setDailySubFilter("izin_sakit")}
+                      className={cn(
+                        "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                        dailySubFilter === "izin_sakit"
+                          ? "bg-white/25 border-white text-white shadow-sm"
+                          : "bg-white/10 hover:bg-white/20 border-white/15"
+                      )}
+                    >
+                      <div className="flex items-center justify-between text-blue-300 mb-1">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Izin / Sakit</span>
+                        <HeartPulse className="w-3.5 h-3.5" />
+                      </div>
+                      <p className="text-xl font-black text-white">{classStats.izinSakit}</p>
+                      <p className="text-[10px] text-blue-300 font-bold mt-0.5">{classStats.sakit} Sakit, {classStats.izin} Izin</p>
+                    </div>
+
+                    {/* Alpa */}
+                    <div
+                      onClick={() => setDailySubFilter("alpa")}
+                      className={cn(
+                        "rounded-lg p-3 border cursor-pointer transition-all active:scale-[0.98]",
+                        dailySubFilter === "alpa"
+                          ? "bg-white/25 border-white text-white shadow-sm"
+                          : "bg-white/10 hover:bg-white/20 border-white/15"
+                      )}
+                    >
+                      <div className="flex items-center justify-between text-rose-300 mb-1">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-200">Alpa</span>
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                      </div>
+                      <p className="text-xl font-black text-white">{classStats.alpa}</p>
+                      <p className="text-[10px] text-rose-300 font-bold mt-0.5">Tanpa Keterangan</p>
+                    </div>
+
                   </div>
                 </div>
               </div>
 
-              {/* Geolokasi Details */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-extrabold text-gray-400 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-[#531FFF]" />
-                    Lokasi GPS Presensi
-                  </h4>
-                  <span className={cn(
-                    "font-extrabold text-[11px] px-2 py-0.5 rounded",
-                    selectedRecord.location?.inRadius ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
-                  )}>
-                    {selectedRecord.location?.distance || 0} Meter
+              {/* Lock Status Banner (Pukul 12:00 WIB Lock Enforcement) */}
+              {isAttendanceLocked ? (
+                <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border-l-4 border-amber-500 p-4 rounded-r-xl flex items-start sm:items-center justify-between gap-3 shadow-xs animate-in fade-in duration-200">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-800 flex items-center justify-center shrink-0 border border-amber-500/30">
+                      <Lock className="w-5 h-5 text-amber-700" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-xs sm:text-sm font-black text-amber-950">
+                          Data Absensi Terkunci (Status Data Final)
+                        </h4>
+                        <span className="text-[10px] bg-amber-200/80 text-amber-950 px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider">
+                          Locked • Final
+                        </span>
+                      </div>
+                      <p className="text-[11px] sm:text-xs text-amber-900 font-medium mt-0.5 leading-relaxed">
+                        {isPastDate
+                          ? `Data absensi untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} sudah melewati batas waktu dan berstatus data final.`
+                          : "Sesuai aturan sekolah, waktu presensi hari ini telah mencapai batas pukul 10:00 WIB. Data absensi yang telah tersimpan di database otomatis berstatus FINAL dan tidak dapat diubah atau diedit lagi."}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="shrink-0 hidden md:flex items-center gap-1.5 text-[11px] font-bold text-amber-800 bg-white/90 border border-amber-200 px-3 py-1.5 rounded-lg shadow-2xs">
+                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Batas Edit: 10:00 WIB</span>
+                  </div>
+                </div>
+              ) : isToday ? (
+                <div className="bg-emerald-50/70 border-l-4 border-emerald-500 p-3 sm:p-3.5 rounded-r-xl flex items-center justify-between gap-3 shadow-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                      <Clock className="w-4 h-4 text-emerald-600 animate-pulse" />
+                    </div>
+                    <div className="text-xs text-emerald-900 font-medium">
+                      <span className="font-extrabold text-emerald-950">Pengeditan Presensi Aktif: </span>
+                      Data absensi siswa dapat diinput & disunting hingga pukul <strong className="font-black text-emerald-950">10:00 WIB</strong> hari ini.
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-md hidden sm:inline-block">
+                    Tersisa {Math.max(0, ATTENDANCE_LOCK_HOUR_MINUTES - currentMinutesTick)} menit
+                  </span>
+                </div>
+              ) : null}
+
+              {/* C. Sub-Filters Chips & Table Container */}
+              <div className="bg-white rounded-lg sm:rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
+
+                {/* Sub-filter Chips Bar */}
+                <div className="p-3.5 sm:p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3 overflow-x-auto scrollbar-none">
+                  <div className="flex items-center gap-1.5 min-w-max">
+                    <span className="text-xs font-bold text-gray-500 mr-1 flex items-center gap-1">
+                      <Filter className="w-3.5 h-3.5 text-gray-400" />
+                      Filter Siswa:
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => setDailySubFilter("all")}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                        dailySubFilter === "all"
+                          ? "bg-[#531FFF] text-white shadow-xs"
+                          : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200/80"
+                      )}
+                    >
+                      Semua Siswa ({classStats.total})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDailySubFilter("sudah")}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
+                        dailySubFilter === "sudah"
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-200/80"
+                      )}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                      Sudah Absen ({classStats.sudahAbsen})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDailySubFilter("belum")}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
+                        dailySubFilter === "belum"
+                          ? "bg-amber-600 text-white shadow-xs"
+                          : "bg-white text-amber-700 hover:bg-amber-50 border border-amber-200/80"
+                      )}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                      Belum Absen ({classStats.belumAbsen})
+                      {classStats.belumAbsen > 0 && (
+                        <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded-full text-[10px] font-extrabold">
+                          Perlu Cek
+                        </span>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDailySubFilter("terlambat")}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                        dailySubFilter === "terlambat"
+                          ? "bg-orange-600 text-white shadow-xs"
+                          : "bg-white text-orange-700 hover:bg-orange-50 border border-orange-200/80"
+                      )}
+                    >
+                      Terlambat ({classStats.terlambat})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDailySubFilter("izin_sakit")}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                        dailySubFilter === "izin_sakit"
+                          ? "bg-blue-600 text-white shadow-xs"
+                          : "bg-white text-blue-700 hover:bg-blue-50 border border-blue-200/80"
+                      )}
+                    >
+                      Izin & Sakit ({classStats.izinSakit})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDailySubFilter("alpa")}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                        dailySubFilter === "alpa"
+                          ? "bg-rose-600 text-white shadow-xs"
+                          : "bg-white text-rose-700 hover:bg-rose-50 border border-rose-200/80"
+                      )}
+                    >
+                      Alpa ({classStats.alpa})
+                    </button>
+                  </div>
+
+                  <span className="text-xs text-gray-400 font-medium hidden sm:inline-block">
+                    Menampilkan {displayedDailyStudents.length} dari {classStudents.length} siswa
                   </span>
                 </div>
 
-                <div className="w-full h-36 rounded-lg bg-gray-100 relative overflow-hidden border border-gray-200">
-                  <iframe
-                    width="100%"
-                    height="100%"
-                    style={{ border: 0 }}
-                    loading="lazy"
-                    allowFullScreen
-                    src={`https://maps.google.com/maps?q=${selectedRecord.location?.lat || config.schoolCenterLat},${selectedRecord.location?.lng || config.schoolCenterLng}&z=16&output=embed`}
-                  />
-                </div>
+                {/* Operational Day Holiday Notice */}
+                {!operationalStatus.isOperational && (
+                  <div className="mx-5 mb-4 p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 flex items-start gap-3 shadow-xs">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-xs font-bold text-amber-900">
+                        Hari Libur / Non-Operasional Sekolah
+                      </h4>
+                      <p className="text-xs text-amber-700/90 mt-0.5 leading-relaxed">
+                        {operationalStatus.reason} Siswa tidak diwajibkan melakukan presensi dan sistem tidak membebankan status Alpa secara otomatis pada hari libur.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
-                <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-between text-[11px]">
-                  <span className="text-gray-500 font-mono">
-                    {selectedRecord.location?.lat || config.schoolCenterLat}, {selectedRecord.location?.lng || config.schoolCenterLng}
-                  </span>
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${selectedRecord.location?.lat || config.schoolCenterLat},${selectedRecord.location?.lng || config.schoolCenterLng}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[#531FFF] font-bold flex items-center gap-1 hover:underline"
-                  >
-                    Buka Google Maps <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            {/* Drawer Footer */}
-            <div className="p-4 border-t border-gray-100 bg-gray-50">
-              <button
-                type="button"
-                onClick={() => setSelectedRecord(null)}
-                className="w-full py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-100 transition-all text-xs shadow-xs cursor-pointer"
-              >
-                Tutup Detail
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* OFFICIAL ATTENDANCE PRINT-READY MODAL                                     */}
-      {/* ========================================================================= */}
-      {isPrintModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-white rounded-lg shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar p-8 text-gray-900 font-sans attendance-print-area">
-            
-            {/* Controls */}
-            <div className="flex justify-between items-center pb-6 border-b border-gray-200 no-print">
-              <div className="flex items-center gap-2">
-                <School className="w-5 h-5 text-[#531FFF]" />
-                <h3 className="font-extrabold text-base">
-                  Pratinjau Cetak {activeTab === "monthly" ? "Rekapitulasi Bulanan" : "Daftar Hadir Harian"}
-                </h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="flex items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-xs cursor-pointer"
-                >
-                  <Printer className="w-4 h-4" /> Cetak / Download PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsPrintModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-lg cursor-pointer"
-                >
-                  Tutup
-                </button>
-              </div>
-            </div>
-
-            {/* Document Content */}
-            <div className="pt-6 space-y-6">
-              
-              {/* KOP RESMI */}
-              <div className="text-center border-b-2 border-gray-900 pb-4">
-                <h2 className="text-2xl font-extrabold tracking-widest text-gray-900 uppercase">SMA KEREN PARAH INDONESIA</h2>
-                <p className="text-xs font-medium text-gray-600 mt-1">
-                  Jl. Pendidikan Utama No. 45, Jakarta Selatan · Telp: (021) 7890123 · NSS: 301016001001 · Akreditasi A
-                </p>
-                <p className="text-xs font-extrabold text-gray-900 uppercase mt-2 tracking-wider">
-                  {activeTab === "monthly"
-                    ? `REKAPITULASI PRESENSI BULANAN SISWA · BULAN ${monthlyMonth}`
-                    : `DAFTAR PRESENSI HARIAN SISWA · TANGGAL ${selectedDate}`}
-                </p>
-                <div className="flex justify-center gap-6 text-[11px] font-semibold text-gray-700 mt-1">
-                  <span>Kelas: <strong>{activeTab === "monthly" ? (monthlyClassFilter === "Semua" ? "Semua Kelas" : monthlyClassFilter) : selectedClass}</strong></span>
-                  <span>Tahun Ajaran: <strong>{activeAcademicYear || "2025/2026"} ({activeSemester || "Ganjil"})</strong></span>
-                  {teacherHomeroomClasses.length > 0 && (
-                    <span>Wali Kelas: <strong>{teacherHomeroomClasses.join(", ")}</strong></span>
-                  )}
-                </div>
-              </div>
-
-              {/* Table */}
-              <div>
-                {activeTab === "monthly" ? (
-                  <table className="w-full border-collapse border border-gray-300 text-xs text-left">
+                {/* Students Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-gray-100 font-bold text-gray-800">
-                        <th className="border border-gray-300 p-2 text-center w-8">No</th>
-                        <th className="border border-gray-300 p-2">Nama Siswa</th>
-                        <th className="border border-gray-300 p-2 text-center w-24">NISN / ID</th>
-                        <th className="border border-gray-300 p-2 text-center w-20">Kelas</th>
-                        <th className="border border-gray-300 p-2 text-center w-12">Hadir</th>
-                        <th className="border border-gray-300 p-2 text-center w-14">Terlambat</th>
-                        <th className="border border-gray-300 p-2 text-center w-12">Sakit</th>
-                        <th className="border border-gray-300 p-2 text-center w-12">Izin</th>
-                        <th className="border border-gray-300 p-2 text-center w-12">Alpa</th>
-                        <th className="border border-gray-300 p-2 text-center w-16">% Hadir</th>
-                        <th className="border border-gray-300 p-2 text-center w-24">Evaluasi</th>
+                      <tr className="bg-white border-b border-gray-100 text-[11px] font-extrabold text-gray-400 uppercase tracking-wider">
+                        <th className="px-5 py-3.5 w-12 text-center">No</th>
+                        <th className="px-5 py-3.5">Nama & NISN Siswa</th>
+                        <th className="px-5 py-3.5">Status Presensi</th>
+                        <th className="px-5 py-3.5">Jam Masuk</th>
+                        <th className="px-5 py-3.5">Metode & Bukti</th>
+                        <th className="px-5 py-3.5">Catatan / Keterangan</th>
+                        <th className="px-5 py-3.5 text-center">Aksi Cepat</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {monthlySummaryList.map((item, i) => (
-                        <tr key={item.id} className="border-b border-gray-200">
-                          <td className="border border-gray-300 p-2 text-center font-medium">{i + 1}</td>
-                          <td className="border border-gray-300 p-2 font-bold text-gray-900">{item.name}</td>
-                          <td className="border border-gray-300 p-2 text-center font-mono">{item.id.slice(0, 10)}</td>
-                          <td className="border border-gray-300 p-2 text-center">{item.className}</td>
-                          <td className="border border-gray-300 p-2 text-center font-bold text-emerald-700">{item.hadir}</td>
-                          <td className="border border-gray-300 p-2 text-center font-bold text-amber-700">{item.terlambat}</td>
-                          <td className="border border-gray-300 p-2 text-center font-bold text-blue-700">{item.sakit}</td>
-                          <td className="border border-gray-300 p-2 text-center font-bold text-indigo-700">{item.izin}</td>
-                          <td className="border border-gray-300 p-2 text-center font-bold text-rose-700">{item.alpa}</td>
-                          <td className="border border-gray-300 p-2 text-center font-bold">{item.rate}%</td>
-                          <td className="border border-gray-300 p-2 text-center font-semibold">
-                            {item.isCritical ? "Perhatian" : "Baik"}
+                    <tbody className="divide-y divide-gray-50 text-xs">
+                      {displayedDailyStudents.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-5 py-12 text-center text-gray-400">
+                            <div className="flex flex-col items-center justify-center space-y-2">
+                              <Users className="w-8 h-8 text-gray-300" />
+                              <p className="font-bold text-gray-700 text-sm">
+                                {classStudents.length === 0
+                                  ? isGuru && teacherHomeroomClasses.length === 0
+                                    ? "Anda Belum Ditugaskan Sebagai Wali Kelas"
+                                    : `Belum Ada Siswa Terdaftar di Kelas ${selectedClass}`
+                                  : "Tidak ada siswa pada filter ini"}
+                              </p>
+                              <p className="text-xs text-gray-400 max-w-sm">
+                                {classStudents.length === 0
+                                  ? isGuru && teacherHomeroomClasses.length === 0
+                                    ? "Silakan hubungi Administrator Sekolah untuk penugasan kelas Wali Kelas Anda."
+                                    : isGuru
+                                      ? `Belum ada data siswa yang terdaftar di kelas binaan Anda (${selectedClass}).`
+                                      : `Belum ada data siswa yang terdaftar di kelas ${selectedClass}. Silakan pilih kelas lain atau klik tombol di bawah untuk menampilkan seluruh kelas.`
+                                  : dailySubFilter === "belum"
+                                    ? "Semua siswa di kelas ini sudah berhasil melakukan absensi!"
+                                    : "Coba ubah kata kunci pencarian atau pilih filter status lainnya."}
+                              </p>
+                              {!isGuru && classStudents.length === 0 && selectedClass !== "Semua Kelas" && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedClass("Semua Kelas")}
+                                  className="mt-2 px-3.5 py-1.5 bg-purple-50 text-[#531FFF] hover:bg-purple-100 rounded-lg text-xs font-bold transition-all cursor-pointer border border-purple-200"
+                                >
+                                  Tampilkan Semua Kelas
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        displayedDailyStudents.map((student, idx) => {
+                          const att = classAttendanceMap[student.id] || {
+                            status: "Belum Absen",
+                            notes: "",
+                            time: "-",
+                            isRecorded: false
+                          };
+
+                          return (
+                            <tr
+                              key={student.id}
+                              className={cn(
+                                "hover:bg-gray-50/80 transition-colors",
+                                att.status === "Belum Absen" && "bg-amber-50/20"
+                              )}
+                            >
+                              {/* Number */}
+                              <td className="px-5 py-3.5 text-center text-gray-400 font-bold">
+                                {idx + 1}
+                              </td>
+
+                              {/* Student Profile */}
+                              <td className="px-5 py-3.5">
+                                <div className="flex items-center gap-3">
+                                  <ProfileAvatar
+                                    name={student.name}
+                                    imageUrl={student.imageUrl}
+                                    photoUrl={student.photoUrl}
+                                    avatar={student.avatar}
+                                    gender={student.gender}
+                                    role="student"
+                                    size="sm"
+                                    shape="rounded"
+                                  />
+                                  <div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <p className="font-bold text-gray-900 leading-tight">
+                                        {student.name}
+                                      </p>
+                                      {att.status === "Belum Absen" && (
+                                        <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" title="Belum absen" />
+                                      )}
+                                      {(student.className || student.class || student.kelas || student.classId) && (
+                                        <span className="px-1.5 py-0.5 rounded bg-purple-50 text-[#531FFF] text-[10px] font-extrabold border border-purple-100">
+                                          {student.className || student.class || student.kelas || student.classId}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+                                      NISN: {student.nisn || student.id.slice(0, 8)}
+                                    </p>
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Status Presensi Dropdown / Selector */}
+                              <td className="px-5 py-3.5">
+                                <div className="relative inline-block min-w-[140px]">
+                                  <select
+                                    value={att.status}
+                                    disabled={isAttendanceLocked || !canMutateAttendance}
+                                    onChange={(e) => handleStudentStatusChange(student.id, e.target.value as any)}
+                                    className={cn(
+                                      "w-full appearance-none pl-3 pr-8 py-1.5 rounded-lg text-xs font-bold border transition-all focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20",
+                                      (isAttendanceLocked || !canMutateAttendance) ? "cursor-not-allowed opacity-90" : "cursor-pointer",
+                                      att.status === "Hadir" && "bg-emerald-50 text-emerald-700 border-emerald-200",
+                                      att.status === "Terlambat" && "bg-amber-50 text-amber-700 border-amber-200",
+                                      att.status === "Sakit" && "bg-blue-50 text-blue-700 border-blue-200",
+                                      att.status === "Izin" && "bg-indigo-50 text-indigo-700 border-indigo-200",
+                                      att.status === "Alpa" && "bg-rose-50 text-rose-700 border-rose-200",
+                                      att.status === "Belum Absen" && "bg-gray-100 text-gray-600 border-gray-200 font-medium"
+                                    )}
+                                  >
+                                    <option value="Belum Absen">⏳ Belum Absen</option>
+                                    <option value="Hadir">✅ Hadir</option>
+                                    <option value="Terlambat">⚠️ Terlambat</option>
+                                    <option value="Sakit">🏥 Sakit</option>
+                                    <option value="Izin">📝 Izin</option>
+                                    <option value="Alpa">❌ Alpa</option>
+                                  </select>
+                                  {isAttendanceLocked ? (
+                                    <Lock className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                  ) : (
+                                    <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Jam Masuk */}
+                              <td className="px-5 py-3.5">
+                                {att.status === "Belum Absen" ? (
+                                  <span className="text-gray-400 text-xs font-mono">-</span>
+                                ) : (
+                                  <div className="flex items-center gap-1.5">
+                                    <Clock className="w-3.5 h-3.5 text-gray-400" />
+                                    <input
+                                      type="time"
+                                      disabled={isAttendanceLocked || !canMutateAttendance}
+                                      value={extractValidTimeHM(att.time, att.record?.createdAt)}
+                                      onChange={(e) => {
+                                        const newTime = e.target.value;
+                                        setClassAttendanceMap((prev) => ({
+                                          ...prev,
+                                          [student.id]: {
+                                            ...(prev[student.id] || { status: "Hadir", notes: "", isRecorded: true }),
+                                            time: newTime
+                                          }
+                                        }));
+                                      }}
+                                      className="px-2 py-1 bg-white border border-gray-200 rounded-md text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#531FFF] disabled:opacity-75 disabled:bg-gray-50"
+                                    />
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Metode & Bukti Kehadiran */}
+                              <td className="px-5 py-3.5">
+                                {(() => {
+                                  const photoSrc = att.capturedImage || att.record?.capturedImage || (att.faceVerified ? (student.photoUrl || student.imageUrl) : undefined);
+                                  const isBio = att.source === "biometric" || att.source === "face_recognition_ai" || att.source === "face_recognition" || Boolean(att.faceVerified);
+
+                                  if (photoSrc) {
+                                    return (
+                                      <div className="flex items-center gap-2">
+                                        <div
+                                          onClick={() => setSelectedRecord(att.record || ({ ...att, capturedImage: photoSrc } as any))}
+                                          className="relative w-8 h-8 rounded-md overflow-hidden border border-gray-200 cursor-pointer group shrink-0"
+                                          title="Klik untuk memperbesar bukti foto"
+                                        >
+                                          <img
+                                            src={photoSrc}
+                                            alt={student.name}
+                                            className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                                          />
+                                        </div>
+                                        <div>
+                                          <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 flex items-center gap-1">
+                                            <ScanFace className="w-2.5 h-2.5" />
+                                            AI {att.faceMatchScore || 98}%
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => setSelectedRecord(att.record || ({ ...att, capturedImage: photoSrc } as any))}
+                                            className="text-[10px] text-[#531FFF] font-bold hover:underline block mt-0.5 cursor-pointer"
+                                          >
+                                            Lihat Foto →
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+
+                                  if (att.status !== "Belum Absen") {
+                                    return (
+                                      <span className={cn(
+                                        "px-2 py-1 rounded text-[10px] font-bold border inline-flex items-center gap-1",
+                                        isBio
+                                          ? "bg-purple-50 text-[#531FFF] border-purple-200"
+                                          : "bg-gray-100 text-gray-600 border-gray-200"
+                                      )}>
+                                        {isBio && <ScanFace className="w-3 h-3 text-[#531FFF]" />}
+                                        {isBio ? "Face ID AI" : "Manual (Guru/Admin)"}
+                                      </span>
+                                    );
+                                  }
+
+                                  return (
+                                    <span className="text-[11px] text-gray-400 italic">
+                                      Belum ada data
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+
+                              {/* Catatan / Keterangan */}
+                              <td className="px-5 py-3.5">
+                                <input
+                                  type="text"
+                                  disabled={isAttendanceLocked || !canMutateAttendance}
+                                  placeholder={
+                                    isAttendanceLocked
+                                      ? "-"
+                                      : att.status === "Sakit"
+                                        ? "Surat dokter / keluhan..."
+                                        : att.status === "Izin"
+                                          ? "Alasan permohonan izin..."
+                                          : att.status === "Belum Absen"
+                                            ? "Catatan konfirmasi (opsional)..."
+                                            : "Catatan tambahan..."
+                                  }
+                                  value={att.notes}
+                                  onChange={(e) => handleStudentNotesChange(student.id, e.target.value)}
+                                  className="w-full min-w-[160px] px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all disabled:opacity-75 disabled:bg-gray-50"
+                                />
+                              </td>
+
+                              {/* Aksi Cepat */}
+                              <td className="px-5 py-3.5 text-center">
+                                {isAttendanceLocked ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/80">
+                                    <Lock className="w-2.5 h-2.5 text-amber-600" />
+                                    <span>Final</span>
+                                  </span>
+                                ) : !canMutateAttendance ? (
+                                  <span className="text-[11px] font-medium text-gray-400 italic">Hanya Pantau</span>
+                                ) : att.status === "Belum Absen" ? (
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setScanTargetStudent(student);
+                                        setShowScanModal(true);
+                                      }}
+                                      className="p-1 rounded-md text-[#531FFF] bg-purple-50 hover:bg-purple-100 transition-colors border border-purple-200 cursor-pointer"
+                                      title={`Scan Wajah (Face ID): ${student.name}`}
+                                    >
+                                      <ScanFace className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStudentStatusChange(student.id, "Hadir")}
+                                      className="px-2 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors cursor-pointer border border-emerald-200"
+                                      title="Tandai Hadir"
+                                    >
+                                      Hadir
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStudentStatusChange(student.id, "Izin")}
+                                      className="px-2 py-1 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors cursor-pointer border border-indigo-200"
+                                      title="Tandai Izin"
+                                    >
+                                      Izin
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStudentStatusChange(student.id, "Sakit")}
+                                      className="px-2 py-1 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer border border-blue-200"
+                                      title="Tandai Sakit"
+                                    >
+                                      Sakit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStudentStatusChange(student.id, "Alpa")}
+                                      className="px-2 py-1 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors cursor-pointer border border-rose-200"
+                                      title="Tandai Alpa"
+                                    >
+                                      Alpa
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setScanTargetStudent(student);
+                                        setShowScanModal(true);
+                                      }}
+                                      className="p-1 rounded-md text-[#531FFF] bg-purple-50 hover:bg-purple-100 transition-colors border border-purple-200 cursor-pointer"
+                                      title={`Scan Ulang Wajah (Face ID): ${student.name}`}
+                                    >
+                                      <ScanFace className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStudentStatusChange(student.id, "Belum Absen")}
+                                      className="px-2.5 py-1 rounded-md text-[10px] font-bold text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+                                      title="Reset status kembali ke Belum Absen"
+                                    >
+                                      Reset
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Table Footer Actions */}
+                <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500 font-medium">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="font-extrabold text-gray-900">Keterangan Status:</span>
+                    <span className="flex items-center gap-1 font-bold text-emerald-700"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Hadir</span>
+                    <span className="flex items-center gap-1 font-bold text-amber-700"><span className="w-2 h-2 rounded-full bg-amber-500" /> Terlambat</span>
+                    <span className="flex items-center gap-1 font-bold text-blue-700"><span className="w-2 h-2 rounded-full bg-blue-500" /> Sakit</span>
+                    <span className="flex items-center gap-1 font-bold text-indigo-700"><span className="w-2 h-2 rounded-full bg-indigo-500" /> Izin</span>
+                    <span className="flex items-center gap-1 font-bold text-rose-700"><span className="w-2 h-2 rounded-full bg-rose-500" /> Alpa</span>
+                    <span className="flex items-center gap-1 font-bold text-gray-600"><span className="w-2 h-2 rounded-full bg-gray-400" /> Belum Absen</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 text-xs">
+                      {classStats.belumAbsen > 0 ? `${classStats.belumAbsen} siswa belum absen` : "Semua kehadiran telah terdata"}
+                    </span>
+                    {canMutateAttendance && !isAttendanceLocked && (
+                      <button
+                        type="button"
+                        onClick={handleSaveClassAttendance}
+                        disabled={isSavingBatch}
+                        className="px-4 py-2 bg-[#531FFF] hover:bg-[#4314cc] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingBatch ? "Menyimpan..." : "Simpan Perubahan"}
+                      </button>
+                    )}
+                    {isAttendanceLocked && (
+                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                        <Lock className="w-3.5 h-3.5 text-amber-600" />
+                        Terkunci (Final)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ------------------------------------------------------------- */}
+          {/* 5. TAB 2: LOG BIOMETRIK & GPS FEED (PENGECEKAN BIOMETRIK) */}
+          {/* ------------------------------------------------------------- */}
+          {activeTab === "biometric" && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col">
+
+              {/* Biometric Filter Toolbar */}
+              <div className="p-4 sm:p-5 border-b border-gray-100 flex flex-col md:flex-row gap-4 justify-between items-center bg-gray-50/50">
+                {/* View Switcher & Search */}
+                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                  <div className="flex items-center bg-gray-200/70 p-1 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setBiometricViewMode("table")}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer",
+                        biometricViewMode === "table" ? "bg-white text-gray-900 shadow-xs" : "text-gray-600 hover:text-gray-900"
+                      )}
+                    >
+                      <List className="w-3.5 h-3.5" />
+                      Tabel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBiometricViewMode("grid")}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer",
+                        biometricViewMode === "grid" ? "bg-white text-gray-900 shadow-xs" : "text-gray-600 hover:text-gray-900"
+                      )}
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      Kartu Foto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBiometricViewMode("map")}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer",
+                        biometricViewMode === "map" ? "bg-white text-gray-900 shadow-xs" : "text-gray-600 hover:text-gray-900"
+                      )}
+                    >
+                      <Map className="w-3.5 h-3.5" />
+                      Peta Radar GPS
+                    </button>
+                  </div>
+
+                  <div className="relative flex-1 md:w-64">
+                    <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Cari nama, NISN, atau kelas..."
+                      value={biometricSearch}
+                      onChange={(e) => setBiometricSearch(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Class, Month & Status Filter */}
+                <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                  <div className="relative">
+                    <select
+                      value={biometricClassFilter}
+                      onChange={(e) => setBiometricClassFilter(e.target.value)}
+                      className="appearance-none bg-white border border-gray-200 text-gray-700 pl-3.5 pr-8 py-2 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-xs"
+                    >
+                      {!isGuru && <option value="Semua Kelas">Semua Kelas</option>}
+                      {selectableClasses.map((cls) => (
+                        <option key={cls.id || cls.name} value={cls.name}>
+                          {cls.name} {isGuru ? "(Wali Kelas)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  </div>
+
+                  {/* Month Selector in Tab 2 */}
+                  <div className="relative flex items-center gap-1.5">
+                    <input
+                      type="month"
+                      value={biometricMonthFilter === "all" ? "" : biometricMonthFilter}
+                      onChange={(e) => setBiometricMonthFilter(e.target.value || "all")}
+                      className="bg-white border border-gray-200 text-gray-700 font-bold px-3 py-2 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all shadow-xs cursor-pointer"
+                      title="Filter Log Biometrik per Bulan (YYYY-MM)"
+                    />
+                    {biometricMonthFilter !== "all" && (
+                      <button
+                        type="button"
+                        onClick={() => setBiometricMonthFilter("all")}
+                        className="px-2 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
+                        title="Tampilkan Semua Bulan"
+                      >
+                        Semua
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+                    {["Semua", "Hadir", "Terlambat", "Ditolak"].map((st) => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setBiometricStatusFilter(st)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer",
+                          biometricStatusFilter === st
+                            ? "bg-[#F3F0FF] text-[#531FFF] border border-[#531FFF]/30 shadow-xs"
+                            : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
+                        )}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* View Mode 1: Table */}
+              {biometricViewMode === "table" && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-white border-b border-gray-100 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                        <th className="px-6 py-4">Siswa</th>
+                        <th className="px-6 py-4">Face Recognition (AI)</th>
+                        <th className="px-6 py-4">Waktu & Tanggal</th>
+                        <th className="px-6 py-4">Lokasi & Radius GPS</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4 text-right">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 text-xs">
+                      {filteredBiometricData.length > 0 ? (
+                        filteredBiometricData.map((item) => (
+                          <tr key={item.id} className="hover:bg-gray-50/70 transition-colors group">
+                            {/* Student info */}
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden relative shrink-0 border border-gray-200 shadow-xs">
+                                  <Image
+                                    src={item.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80"}
+                                    alt={item.studentName || "Siswa"}
+                                    fill
+                                    className="object-cover"
+                                    unoptimized
+                                  />
+                                </div>
+                                <div>
+                                  <p className="font-bold text-gray-900 group-hover:text-[#531FFF] transition-colors">
+                                    {item.studentName}
+                                  </p>
+                                  <p className="text-gray-400 font-medium mt-0.5">
+                                    {item.studentId} • {item.className}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Face Recognition Score */}
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={cn(
+                                    "px-2.5 py-1 rounded-md text-xs font-extrabold inline-flex items-center gap-1.5 border",
+                                    item.faceVerified
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                      : "bg-rose-50 text-rose-700 border-rose-200"
+                                  )}
+                                >
+                                  <ScanFace className="w-3.5 h-3.5" />
+                                  {item.faceMatchScore || 0}% Match
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Timestamp */}
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-1.5 font-bold text-gray-800">
+                                <Clock className="w-3.5 h-3.5 text-gray-400" />
+                                <span>{item.timestamp}</span>
+                              </div>
+                              <p className="text-[11px] text-gray-400 mt-0.5">{item.date}</p>
+                            </td>
+
+                            {/* GPS Radius */}
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className={cn(
+                                    "w-7 h-7 rounded-md flex items-center justify-center shrink-0 border",
+                                    item.location?.inRadius
+                                      ? "bg-emerald-50 border-emerald-200 text-emerald-600"
+                                      : "bg-rose-50 border-rose-200 text-rose-600"
+                                  )}
+                                >
+                                  <MapPin className="w-3.5 h-3.5" />
+                                </div>
+                                <div>
+                                  <p className="font-bold text-gray-900">
+                                    {item.location?.distance || 0}m <span className="text-gray-400 font-normal">dari sekolah</span>
+                                  </p>
+                                  <p
+                                    className={cn(
+                                      "text-[10px] font-bold",
+                                      item.location?.inRadius ? "text-emerald-600" : "text-rose-600"
+                                    )}
+                                  >
+                                    {item.location?.inRadius ? "Dalam Radius" : "Luar Radius"}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Status */}
+                            <td className="px-6 py-4">
+                              <span
+                                className={cn(
+                                  "px-2.5 py-1 text-xs font-bold rounded-md inline-flex items-center gap-1 border shadow-2xs",
+                                  item.status === "Hadir" && "bg-emerald-50 text-emerald-700 border-emerald-200",
+                                  item.status === "Terlambat" && "bg-amber-50 text-amber-700 border-amber-200",
+                                  item.status === "Sakit" && "bg-blue-50 text-blue-700 border-blue-200",
+                                  item.status === "Izin" && "bg-indigo-50 text-indigo-700 border-indigo-200",
+                                  (item.status === "Alpa" || item.status === "Ditolak") && "bg-rose-50 text-rose-700 border-rose-200"
+                                )}
+                              >
+                                {item.status === "Hadir" && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
+                                {item.status === "Terlambat" && <Clock className="w-3 h-3 text-amber-600" />}
+                                {(item.status === "Alpa" || item.status === "Ditolak") && <XCircle className="w-3 h-3 text-rose-600" />}
+                                {item.status}
+                              </span>
+                            </td>
+
+                            {/* Detail Action */}
+                            <td className="px-6 py-4 text-right">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRecord(item)}
+                                className="px-3 py-1.5 bg-gray-100 hover:bg-[#F3F0FF] text-gray-700 hover:text-[#531FFF] rounded-lg font-bold transition-all border border-gray-200 cursor-pointer"
+                              >
+                                Detail AI
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
+                            Belum ada log biometrik yang cocok dengan filter pencarian.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* View Mode 2: Photo Cards Grid */}
+              {biometricViewMode === "grid" && (
+                filteredBiometricData.length > 0 ? (
+                  <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-gray-50/50">
+                    {filteredBiometricData.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => setSelectedRecord(item)}
+                        className="bg-white rounded-lg border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-lg hover:border-[#531FFF]/30 transition-all overflow-hidden cursor-pointer group flex flex-col"
+                      >
+                        <div className="relative aspect-[4/3] w-full bg-gray-100">
+                          {item.capturedImage ? (
+                            <Image
+                              src={item.capturedImage}
+                              alt={item.studentName}
+                              fill
+                              className="object-cover group-hover:scale-105 transition-transform duration-500"
+                              unoptimized
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-400">
+                              <UserCheck className="w-10 h-10 opacity-30" />
+                            </div>
+                          )}
+                          <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
+                            <span
+                              className={cn(
+                                "px-2 py-0.5 text-[10px] font-extrabold rounded backdrop-blur-md shadow-xs",
+                                item.status === "Hadir" && "bg-emerald-500/90 text-white",
+                                item.status === "Terlambat" && "bg-amber-500/90 text-white",
+                                (item.status === "Alpa" || item.status === "Ditolak") && "bg-rose-500/90 text-white"
+                              )}
+                            >
+                              {item.status}
+                            </span>
+                            <span className="px-2 py-0.5 text-[10px] font-extrabold bg-black/60 text-white rounded backdrop-blur-md flex items-center gap-1 shadow-xs">
+                              <ScanFace className="w-3 h-3 text-cyan-300" />
+                              {item.faceMatchScore}%
+                            </span>
+                          </div>
+                          <div className="absolute bottom-2.5 left-2.5 bg-white/90 backdrop-blur-md px-2 py-0.5 rounded text-[11px] font-bold text-gray-900 shadow-xs flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-[#531FFF]" />
+                            {item.timestamp}
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 flex flex-col justify-between flex-1">
+                          <div>
+                            <h4 className="font-bold text-gray-900 group-hover:text-[#531FFF] transition-colors truncate">
+                              {item.studentName}
+                            </h4>
+                            <p className="text-[11px] text-gray-400 font-medium">
+                              {item.studentId} • {item.className}
+                            </p>
+                          </div>
+                          <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-[11px]">
+                            <span className="text-gray-500 flex items-center gap-1 font-medium">
+                              <MapPin className="w-3 h-3 text-emerald-600" />
+                              {item.location?.distance || 0}m radius
+                            </span>
+                            <span className="text-[#531FFF] font-bold">Detail AI →</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-16 text-center text-gray-400 bg-gray-50/50 flex flex-col items-center justify-center">
+                    <ScanFace className="w-12 h-12 text-gray-300 mb-3" />
+                    <p className="font-semibold text-gray-600 text-sm">Belum ada log biometrik</p>
+                    <p className="text-xs text-gray-400 mt-1">Data absensi biometrik akan muncul secara otomatis saat siswa melakukan presensi.</p>
+                  </div>
+                )
+              )}
+
+              {/* View Mode 3: Radar Peta GPS Leaflet */}
+              {biometricViewMode === "map" && (
+                <div className="p-6 bg-gray-50/50 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                        <Map className="w-4 h-4 text-[#531FFF]" />
+                        Peta Persebaran Lokasi Presensi Siswa (Real-Time GPS)
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        {filteredBiometricData.length > 0
+                          ? `Menampilkan titik presensi ${filteredBiometricData.length} siswa relatif terhadap lingkaran radius absensi (${config.geofenceRadiusMeters}m).`
+                          : `Belum ada presensi siswa yang tercatat hari ini. Lingkaran hijau menunjukkan radius absensi sekolah (${config.geofenceRadiusMeters}m).`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="flex items-center gap-1.5 font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" /> Di Dalam Radius
+                      </span>
+                      <span className="flex items-center gap-1.5 font-medium text-rose-700 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-200">
+                        <span className="w-2 h-2 rounded-full bg-rose-500" /> Di Luar Radius
+                      </span>
+                    </div>
+                  </div>
+
+                  <AttendanceGeofenceMap
+                    centerLat={config.schoolCenterLat}
+                    centerLng={config.schoolCenterLng}
+                    radius={config.geofenceRadiusMeters}
+                    interactive={false}
+                    attendanceMarkers={mapAttendanceMarkers}
+                    onSelectMarker={(m) => {
+                      const found = filteredBiometricData.find((r) => r.id === m.id);
+                      if (found) setSelectedRecord(found);
+                    }}
+                    height="500px"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ------------------------------------------------------------- */}
+          {/* 6. TAB 3: REKAP BULANAN & EARLY WARNING (SISWA KRITIS) */}
+          {/* ------------------------------------------------------------- */}
+          {activeTab === "monthly" && (
+            <div className="space-y-6">
+
+              {/* Early Warning Banner if critical students exist */}
+              {criticalStudents.length > 0 && (
+                <div className="bg-gradient-to-r from-rose-50 to-orange-50 border border-rose-200 rounded-xl p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-lg bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-rose-500/20">
+                      <AlertTriangle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-rose-900">
+                        Peringatan Dini: {criticalStudents.length} Siswa Perlu Perhatian Khusus
+                      </h3>
+                      <p className="text-xs text-rose-700 mt-0.5">
+                        Terdapat siswa dengan jumlah Alpa ≥ 3 kali atau Keterlambatan ≥ 4 kali pada bulan ini. Disarankan segera koordinasi dengan Wali Kelas & Guru BK.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toast.showInfo("Pengingat notifikasi otomatis dikirimkan ke orang tua siswa yang bersangkutan.", "Notifikasi Peringatan");
+                      }}
+                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      Kirim Notifikasi Peringatan
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Monthly Table Card */}
+              <div className="bg-white rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
+
+                {/* Filter Header */}
+                <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <div>
+                      <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">
+                        Bulan Rekap
+                      </label>
+                      <input
+                        type="month"
+                        value={monthlyMonth}
+                        onChange={(e) => setMonthlyMonth(e.target.value)}
+                        className="bg-white border border-gray-200 text-gray-900 font-bold px-3 py-1.5 rounded-lg text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none shadow-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block mb-1">
+                        Filter Kelas
+                      </label>
+                      <select
+                        value={monthlyClassFilter}
+                        onChange={(e) => setMonthlyClassFilter(e.target.value)}
+                        className="bg-white border border-gray-200 text-gray-900 font-bold px-3 py-1.5 rounded-lg text-xs focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] focus:outline-none shadow-xs cursor-pointer"
+                      >
+                        {!isGuru && <option value="Semua">Semua Kelas</option>}
+                        {selectableClasses.map((c) => (
+                          <option key={c.id || c.name} value={c.name}>
+                            {c.name} {isGuru ? "(Wali Kelas)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-gray-500 font-medium">
+                    Total Siswa Terdata: <span className="font-bold text-gray-900">{monthlySummaryList.length}</span>
+                  </div>
+                </div>
+
+                {/* Table Matrix */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-white border-b border-gray-100 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                        <th className="px-5 py-4">Nama Siswa</th>
+                        <th className="px-5 py-4">Kelas</th>
+                        <th className="px-5 py-4 text-center">Hadir (H)</th>
+                        <th className="px-5 py-4 text-center">Terlambat (T)</th>
+                        <th className="px-5 py-4 text-center">Sakit (S)</th>
+                        <th className="px-5 py-4 text-center">Izin (I)</th>
+                        <th className="px-5 py-4 text-center">Alpa (A)</th>
+                        <th className="px-5 py-4 text-center">% Kehadiran</th>
+                        <th className="px-5 py-4 text-right">Status Evaluasi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 text-xs">
+                      {monthlySummaryList.map((item) => (
+                        <tr
+                          key={item.id}
+                          className={cn(
+                            "hover:bg-gray-50/70 transition-colors",
+                            item.isCritical && "bg-rose-50/30"
+                          )}
+                        >
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-full bg-purple-50 text-[#531FFF] font-bold flex items-center justify-center text-[11px]">
+                                {item.name.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="font-bold text-gray-900">{item.name}</p>
+                                <p className="text-[10px] text-gray-400 font-mono">{item.id.slice(0, 10)}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5 font-semibold text-gray-600">{item.className}</td>
+                          <td className="px-5 py-3.5 text-center font-bold text-emerald-600">{item.hadir}</td>
+                          <td className="px-5 py-3.5 text-center font-bold text-amber-600">{item.terlambat}</td>
+                          <td className="px-5 py-3.5 text-center font-bold text-blue-600">{item.sakit}</td>
+                          <td className="px-5 py-3.5 text-center font-bold text-indigo-600">{item.izin}</td>
+                          <td className="px-5 py-3.5 text-center font-black text-rose-600">{item.alpa}</td>
+                          <td className="px-5 py-3.5 text-center">
+                            <span
+                              className={cn(
+                                "px-2 py-0.5 rounded font-extrabold text-xs",
+                                item.rate >= 90
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : item.rate >= 75
+                                    ? "bg-amber-50 text-amber-700"
+                                    : "bg-rose-50 text-rose-700"
+                              )}
+                            >
+                              {item.rate}%
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            {item.isCritical ? (
+                              <span className="px-2.5 py-1 text-[11px] font-black bg-rose-100 text-rose-800 rounded-md inline-flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3 text-rose-600" />
+                                Perhatian Khusus
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 text-[11px] font-bold bg-emerald-50 text-emerald-700 rounded-md">
+                                Disiplin Baik
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                ) : (
-                  <table className="w-full border-collapse border border-gray-300 text-xs text-left">
-                    <thead>
-                      <tr className="bg-gray-100 font-bold text-gray-800">
-                        <th className="border border-gray-300 p-2 text-center w-8">No</th>
-                        <th className="border border-gray-300 p-2">Nama Siswa</th>
-                        <th className="border border-gray-300 p-2 text-center w-28">NISN / ID</th>
-                        <th className="border border-gray-300 p-2 text-center w-24">Kelas</th>
-                        <th className="border border-gray-300 p-2 text-center w-20">Jam Masuk</th>
-                        <th className="border border-gray-300 p-2 text-center w-24">Status</th>
-                        <th className="border border-gray-300 p-2">Keterangan</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {classStudents.map((st, i) => {
-                        const att = classAttendanceMap[st.id] || { status: "Belum Absen", notes: "", time: "-" };
-                        return (
-                          <tr key={st.id} className="border-b border-gray-200">
-                            <td className="border border-gray-300 p-2 text-center font-medium">{i + 1}</td>
-                            <td className="border border-gray-300 p-2 font-bold text-gray-900">{st.name}</td>
-                            <td className="border border-gray-300 p-2 text-center font-mono">{st.id.slice(0, 10)}</td>
-                            <td className="border border-gray-300 p-2 text-center">{st.className || selectedClass}</td>
-                            <td className="border border-gray-300 p-2 text-center font-mono">{att.time || "-"}</td>
-                            <td className="border border-gray-300 p-2 text-center font-bold">{att.status}</td>
-                            <td className="border border-gray-300 p-2 text-gray-600">{att.notes || "-"}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-
-              {/* Signatures */}
-              <div className="grid grid-cols-2 text-center text-xs pt-10 border-t border-gray-300">
-                <div>
-                  <p>Mengetahui,</p>
-                  <p className="font-semibold text-gray-700">Wali Kelas</p>
-                  <div className="h-14" />
-                  <p className="font-bold border-b border-gray-400 inline-block px-4">Budi Santoso, M.Pd.</p>
-                  <p className="text-[10px] text-gray-500 font-mono mt-0.5">NIP: 198501012010011001</p>
-                </div>
-                <div>
-                  <p>Menyetujui,</p>
-                  <p className="font-semibold text-gray-700">Kepala Sekolah</p>
-                  <div className="h-14" />
-                  <p className="font-bold border-b border-gray-400 inline-block px-4">Dr. H. Rahmat Wijaya, M.Si.</p>
-                  <p className="text-[10px] text-gray-500 font-mono mt-0.5">NIP: 197503151998031002</p>
                 </div>
               </div>
-
             </div>
+          )}
 
-          </div>
-        </div>
-      )}
 
-      {/* Print CSS for Attendance */}
-      <style dangerouslySetInnerHTML={{__html: `
+
+          {/* ------------------------------------------------------------- */}
+          {/* 8. Slide-Over Drawer for Biometric AI Detail */}
+          {/* ------------------------------------------------------------- */}
+          {selectedRecord && (
+            <div className="fixed inset-0 z-50 flex justify-end animate-in fade-in duration-200">
+              <div
+                className="absolute inset-0 bg-gray-900/40 backdrop-blur-xs transition-opacity"
+                onClick={() => setSelectedRecord(null)}
+              />
+
+              <div className="relative w-full max-w-md bg-white shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-300 flex flex-col h-full z-10">
+                {/* Drawer Header */}
+                <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-20">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-[#531FFF]" />
+                    <h3 className="text-base font-black text-gray-900">Verifikasi Presensi AI</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRecord(null)}
+                    className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                  >
+                    <XCircle className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Drawer Content */}
+                <div className="p-6 space-y-6 flex-1 overflow-y-auto text-xs">
+
+                  {/* Student info card */}
+                  <div className="flex items-center gap-3.5 p-4 rounded-lg bg-gray-50 border border-gray-100">
+                    <div className="w-14 h-14 rounded-lg bg-white overflow-hidden relative shrink-0 border border-gray-200 shadow-xs">
+                      <Image
+                        src={selectedRecord.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80"}
+                        alt={selectedRecord.studentName}
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900">{selectedRecord.studentName}</h4>
+                      <p className="text-gray-400 font-medium mt-0.5">{selectedRecord.studentId} • {selectedRecord.className}</p>
+                      <span
+                        className={cn(
+                          "mt-1.5 px-2 py-0.5 text-[10px] font-black rounded inline-block",
+                          selectedRecord.status === "Hadir" && "bg-emerald-100 text-emerald-800",
+                          selectedRecord.status === "Terlambat" && "bg-amber-100 text-amber-800",
+                          (selectedRecord.status === "Alpa" || selectedRecord.status === "Ditolak") && "bg-rose-100 text-rose-800"
+                        )}
+                      >
+                        {selectedRecord.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* AI Facial Metrics */}
+                  <div className="space-y-3">
+                    <h4 className="font-extrabold text-gray-400 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                      <ScanFace className="w-3.5 h-3.5 text-[#531FFF]" />
+                      Hasil Verifikasi AI Biometrik
+                    </h4>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3.5 rounded-lg bg-purple-50/50 border border-purple-100">
+                        <p className="text-purple-700 font-bold">Face Match Score</p>
+                        <p className="text-2xl font-black text-[#531FFF] mt-1">{selectedRecord.faceMatchScore || 0}%</p>
+                        <p className="text-[10px] text-purple-600 mt-1">Batas Minimal: {config.minFaceMatchScore}%</p>
+                      </div>
+
+                      <div className="p-3.5 rounded-lg bg-gray-50 border border-gray-100">
+                        <p className="text-gray-500 font-bold">Status Verifikasi</p>
+                        <p className={cn("text-base font-black mt-1", selectedRecord.faceVerified ? "text-emerald-600" : "text-rose-600")}>
+                          {selectedRecord.faceVerified ? "Valid Sesuai" : "Gagal Cocok"}
+                        </p>
+                        <p className="text-[10px] text-gray-400 mt-1">Master Database</p>
+                      </div>
+                    </div>
+
+                    {/* Photo Preview */}
+                    <div className="relative aspect-[4/3] w-full rounded-lg overflow-hidden bg-gray-900 border border-gray-200 shadow-inner">
+                      <Image
+                        src={selectedRecord.capturedImage || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80"}
+                        alt="Foto Presensi"
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end p-3 text-white">
+                        <p className="text-[11px] font-bold flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-cyan-300" />
+                          {selectedRecord.timestamp} ({selectedRecord.date})
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Geolokasi Details */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-extrabold text-gray-400 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-[#531FFF]" />
+                        Lokasi GPS Presensi
+                      </h4>
+                      <span className={cn(
+                        "font-extrabold text-[11px] px-2 py-0.5 rounded",
+                        selectedRecord.location?.inRadius ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+                      )}>
+                        {selectedRecord.location?.distance || 0} Meter
+                      </span>
+                    </div>
+
+                    <div className="w-full h-36 rounded-lg bg-gray-100 relative overflow-hidden border border-gray-200">
+                      <iframe
+                        width="100%"
+                        height="100%"
+                        style={{ border: 0 }}
+                        loading="lazy"
+                        allowFullScreen
+                        src={`https://maps.google.com/maps?q=${selectedRecord.location?.lat || config.schoolCenterLat},${selectedRecord.location?.lng || config.schoolCenterLng}&z=16&output=embed`}
+                      />
+                    </div>
+
+                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-100 flex items-center justify-between text-[11px]">
+                      <span className="text-gray-500 font-mono">
+                        {selectedRecord.location?.lat || config.schoolCenterLat}, {selectedRecord.location?.lng || config.schoolCenterLng}
+                      </span>
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${selectedRecord.location?.lat || config.schoolCenterLat},${selectedRecord.location?.lng || config.schoolCenterLng}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[#531FFF] font-bold flex items-center gap-1 hover:underline"
+                      >
+                        Buka Google Maps <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Drawer Footer */}
+                <div className="p-4 border-t border-gray-100 bg-gray-50">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRecord(null)}
+                    className="w-full py-2.5 bg-white border border-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-100 transition-all text-xs shadow-xs cursor-pointer"
+                  >
+                    Tutup Detail
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* OFFICIAL ATTENDANCE PRINT-READY MODAL                                     */}
+          {/* ========================================================================= */}
+          {isPrintModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-200">
+              <div className="bg-white rounded-lg shadow-2xl border border-gray-200 w-full max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar p-8 text-gray-900 font-sans attendance-print-area">
+
+                {/* Controls */}
+                <div className="flex justify-between items-center pb-6 border-b border-gray-200 no-print">
+                  <div className="flex items-center gap-2">
+                    <School className="w-5 h-5 text-[#531FFF]" />
+                    <h3 className="font-extrabold text-base">
+                      Pratinjau Cetak {activeTab === "monthly" ? "Rekapitulasi Bulanan" : "Daftar Hadir Harian"}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="flex items-center gap-2 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-xs cursor-pointer"
+                    >
+                      <Printer className="w-4 h-4" /> Cetak / Download PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsPrintModalOpen(false)}
+                      className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-lg cursor-pointer"
+                    >
+                      Tutup
+                    </button>
+                  </div>
+                </div>
+
+                {/* Document Content */}
+                <div className="pt-6 space-y-6">
+
+                  {/* KOP RESMI */}
+                  <div className="text-center border-b-2 border-gray-900 pb-4">
+                    <h2 className="text-2xl font-extrabold tracking-widest text-gray-900 uppercase">SMA KEREN PARAH INDONESIA</h2>
+                    <p className="text-xs font-medium text-gray-600 mt-1">
+                      Jl. Pendidikan Utama No. 45, Jakarta Selatan · Telp: (021) 7890123 · NSS: 301016001001 · Akreditasi A
+                    </p>
+                    <p className="text-xs font-extrabold text-gray-900 uppercase mt-2 tracking-wider">
+                      {activeTab === "monthly"
+                        ? `REKAPITULASI PRESENSI BULANAN SISWA · BULAN ${monthlyMonth}`
+                        : `DAFTAR PRESENSI HARIAN SISWA · TANGGAL ${selectedDate}`}
+                    </p>
+                    <div className="flex justify-center gap-6 text-[11px] font-semibold text-gray-700 mt-1">
+                      <span>Kelas: <strong>{activeTab === "monthly" ? (monthlyClassFilter === "Semua" ? "Semua Kelas" : monthlyClassFilter) : selectedClass}</strong></span>
+                      <span>Tahun Ajaran: <strong>{activeAcademicYear || "2025/2026"} ({activeSemester || "Ganjil"})</strong></span>
+                      {teacherHomeroomClasses.length > 0 && (
+                        <span>Wali Kelas: <strong>{teacherHomeroomClasses.join(", ")}</strong></span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Table */}
+                  <div>
+                    {activeTab === "monthly" ? (
+                      <table className="w-full border-collapse border border-gray-300 text-xs text-left">
+                        <thead>
+                          <tr className="bg-gray-100 font-bold text-gray-800">
+                            <th className="border border-gray-300 p-2 text-center w-8">No</th>
+                            <th className="border border-gray-300 p-2">Nama Siswa</th>
+                            <th className="border border-gray-300 p-2 text-center w-24">NISN / ID</th>
+                            <th className="border border-gray-300 p-2 text-center w-20">Kelas</th>
+                            <th className="border border-gray-300 p-2 text-center w-12">Hadir</th>
+                            <th className="border border-gray-300 p-2 text-center w-14">Terlambat</th>
+                            <th className="border border-gray-300 p-2 text-center w-12">Sakit</th>
+                            <th className="border border-gray-300 p-2 text-center w-12">Izin</th>
+                            <th className="border border-gray-300 p-2 text-center w-12">Alpa</th>
+                            <th className="border border-gray-300 p-2 text-center w-16">% Hadir</th>
+                            <th className="border border-gray-300 p-2 text-center w-24">Evaluasi</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {monthlySummaryList.map((item, i) => (
+                            <tr key={item.id} className="border-b border-gray-200">
+                              <td className="border border-gray-300 p-2 text-center font-medium">{i + 1}</td>
+                              <td className="border border-gray-300 p-2 font-bold text-gray-900">{item.name}</td>
+                              <td className="border border-gray-300 p-2 text-center font-mono">{item.id.slice(0, 10)}</td>
+                              <td className="border border-gray-300 p-2 text-center">{item.className}</td>
+                              <td className="border border-gray-300 p-2 text-center font-bold text-emerald-700">{item.hadir}</td>
+                              <td className="border border-gray-300 p-2 text-center font-bold text-amber-700">{item.terlambat}</td>
+                              <td className="border border-gray-300 p-2 text-center font-bold text-blue-700">{item.sakit}</td>
+                              <td className="border border-gray-300 p-2 text-center font-bold text-indigo-700">{item.izin}</td>
+                              <td className="border border-gray-300 p-2 text-center font-bold text-rose-700">{item.alpa}</td>
+                              <td className="border border-gray-300 p-2 text-center font-bold">{item.rate}%</td>
+                              <td className="border border-gray-300 p-2 text-center font-semibold">
+                                {item.isCritical ? "Perhatian" : "Baik"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <table className="w-full border-collapse border border-gray-300 text-xs text-left">
+                        <thead>
+                          <tr className="bg-gray-100 font-bold text-gray-800">
+                            <th className="border border-gray-300 p-2 text-center w-8">No</th>
+                            <th className="border border-gray-300 p-2">Nama Siswa</th>
+                            <th className="border border-gray-300 p-2 text-center w-28">NISN / ID</th>
+                            <th className="border border-gray-300 p-2 text-center w-24">Kelas</th>
+                            <th className="border border-gray-300 p-2 text-center w-20">Jam Masuk</th>
+                            <th className="border border-gray-300 p-2 text-center w-24">Status</th>
+                            <th className="border border-gray-300 p-2">Keterangan</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {classStudents.map((st, i) => {
+                            const att = classAttendanceMap[st.id] || { status: "Belum Absen", notes: "", time: "-" };
+                            return (
+                              <tr key={st.id} className="border-b border-gray-200">
+                                <td className="border border-gray-300 p-2 text-center font-medium">{i + 1}</td>
+                                <td className="border border-gray-300 p-2 font-bold text-gray-900">{st.name}</td>
+                                <td className="border border-gray-300 p-2 text-center font-mono">{st.id.slice(0, 10)}</td>
+                                <td className="border border-gray-300 p-2 text-center">{st.className || selectedClass}</td>
+                                <td className="border border-gray-300 p-2 text-center font-mono">{att.time || "-"}</td>
+                                <td className="border border-gray-300 p-2 text-center font-bold">{att.status}</td>
+                                <td className="border border-gray-300 p-2 text-gray-600">{att.notes || "-"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+
+                  {/* Signatures */}
+                  <div className="grid grid-cols-2 text-center text-xs pt-10 border-t border-gray-300">
+                    <div>
+                      <p>Mengetahui,</p>
+                      <p className="font-semibold text-gray-700">Wali Kelas</p>
+                      <div className="h-14" />
+                      <p className="font-bold border-b border-gray-400 inline-block px-4">Budi Santoso, M.Pd.</p>
+                      <p className="text-[10px] text-gray-500 font-mono mt-0.5">NIP: 198501012010011001</p>
+                    </div>
+                    <div>
+                      <p>Menyetujui,</p>
+                      <p className="font-semibold text-gray-700">Kepala Sekolah</p>
+                      <div className="h-14" />
+                      <p className="font-bold border-b border-gray-400 inline-block px-4">Dr. H. Rahmat Wijaya, M.Si.</p>
+                      <p className="text-[10px] text-gray-500 font-mono mt-0.5">NIP: 197503151998031002</p>
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* Print CSS for Attendance */}
+          <style dangerouslySetInnerHTML={{
+            __html: `
         @media print {
           body * {
             visibility: hidden;
