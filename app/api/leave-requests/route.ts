@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { LeaveType, ApprovalStatus, AttendanceStatus } from "@prisma/client";
+import { checkRolePermission, createForbiddenResponse } from "@/lib/api-permissions";
 
 // GET /api/leave-requests - List all leave requests
 export async function GET(req: NextRequest) {
@@ -57,7 +58,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { studentId, teacherId, nisn, nip, type, startDate, endDate, reason, proofUrl } = body;
+    const { studentId, teacherId, nisn, nip, type, startDate, endDate, reason, proofUrl, callerRole } = body;
+
+    if (callerRole && !checkRolePermission(callerRole, "leave-requests", "create")) {
+      return createForbiddenResponse("leave-requests", "create", callerRole);
+    }
 
     if (!startDate || !endDate || !reason) {
       return NextResponse.json({ error: "Tanggal mulai, selesai, dan alasan wajib diisi." }, { status: 400 });
@@ -110,7 +115,11 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, status, approvedById } = body;
+    const { id, status, approvedById, callerRole } = body;
+
+    if (callerRole && !checkRolePermission(callerRole, "leave-requests", "approve")) {
+      return createForbiddenResponse("leave-requests", "approve", callerRole);
+    }
 
     if (!id || !status) {
       return NextResponse.json({ error: "ID pengajuan dan status wajib diisi." }, { status: 400 });

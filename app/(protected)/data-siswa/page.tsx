@@ -110,13 +110,21 @@ export default function DataSiswaPage() {
   const [cleaning, setCleaning] = useState(false);
 
   // User auth & role detection from centralized useAuth
-  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
+  const { 
+    role: authRole, 
+    rawRole: authRawRole, 
+    userData, 
+    isAuthLoading, 
+    isRoleReady, 
+    isSuperAdmin,
+    canCreate,
+    canEdit,
+    canDelete,
+    canExport
+  } = useAuth();
   const currentUser = userData;
   const rawR = (authRawRole || authRole || "").toLowerCase();
   const userRole = rawR === "teacher" ? "guru" : rawR;
-
-  const canMutateUsers = (rawR === "super-admin" || rawR === "admin" || Boolean(rolePermissions?.users?.write)) && (!isKepalaSekolah || Boolean(rolePermissions?.users?.write));
-  const canDeleteUsers = (rawR === "super-admin" || rawR === "admin" || Boolean(rolePermissions?.users?.delete)) && (!isKepalaSekolah || Boolean(rolePermissions?.users?.delete));
 
   useEffect(() => {
     setTeachers(unifiedTeachers);
@@ -184,9 +192,10 @@ export default function DataSiswaPage() {
   const isTeacherWaliKelas = Boolean(isGuru && teacherClasses && teacherClasses.length > 0);
   const primaryTeacherClass = teacherClasses && teacherClasses.length > 0 ? teacherClasses[0] : "";
 
-  const canCreateStudent = canMutateUsers || isTeacherWaliKelas;
-  const canEditStudent = canMutateUsers || isTeacherWaliKelas;
-  const canDeleteStudent = canDeleteUsers;
+  const canCreateStudent = isSuperAdmin || canCreate("students");
+  const canEditStudent = isSuperAdmin || canEdit("students");
+  const canDeleteStudent = isSuperAdmin || canDelete("students");
+  const canExportStudent = isSuperAdmin || canExport("students");
 
   // Base students scoped to teacher's homeroom class if user is guru
   const baseStudents = useMemo(() => {
@@ -1216,14 +1225,16 @@ export default function DataSiswaPage() {
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-end md:self-auto">
-            <button 
-              onClick={handleExportCSV}
-              disabled={filteredStudents.length === 0}
-              className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
-            >
-              <Download className="w-3.5 h-3.5 text-[#531FFF]" />
-              <span>Export CSV</span>
-            </button>
+            {canExportStudent && (
+              <button 
+                onClick={handleExportCSV}
+                disabled={filteredStudents.length === 0}
+                className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+              >
+                <Download className="w-3.5 h-3.5 text-[#531FFF]" />
+                <span>Export CSV</span>
+              </button>
+            )}
 
             {canCreateStudent && (
               <button 

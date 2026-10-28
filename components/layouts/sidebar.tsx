@@ -30,35 +30,16 @@ import {
   Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { isSuperAdminRole, isTeacherRole, isStudentRole, isParentRole, isKepalaSekolahRole } from "@/lib/roles-config";
+import { 
+  isSuperAdminRole, 
+  canAccessMenu,
+  normalizeRole,
+  MenuPermission
+} from "@/lib/roles-config";
 import { useAuth } from "@/context/AuthContext";
 import { useNotificationBadges } from "@/context/NotificationBadgeContext";
 import { SidebarSkeleton } from "@/components/ui/role-loading-skeleton";
 
-const NAV_MODULE_MAP: Record<string, string> = {
-  "/dashboard": "dashboard",
-  "/calendar": "academic",
-  "/schedule": "academic",
-  "/announcements": "announcements",
-  "/data-siswa": "users",
-  "/parents": "users",
-  "/classes": "academic",
-  "/teachers": "users",
-  "/homeroom": "users",
-  "/subjects": "academic",
-  "/attendance": "attendance",
-  "/leave-requests": "attendance",
-  "/teacher-attendance": "attendance",
-  "/grades": "grades",
-  "/report-cards": "grades",
-  "/exams": "academic",
-  "/academic-years": "settings",
-  "/payments": "finance",
-  "/financial-reports": "finance",
-  "/accounts": "accounts",
-  "/settings": "settings",
-  "/roles": "settings",
-};
 
 const OVERVIEW_NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -115,7 +96,7 @@ function NavGroup({
   items: any[]; 
   currentPath: string; 
   isCollapsed: boolean; 
-  userPermissions: Record<string, { read: boolean; write: boolean; delete: boolean }>;
+  userPermissions: Record<string, Partial<MenuPermission>> | Record<string, any>;
   userRole?: string;
   isFooter?: boolean;
   onLogoutClick?: () => void;
@@ -123,81 +104,24 @@ function NavGroup({
   onItemClick?: (path: string) => void;
 }) {
   const isSuperAdmin = isSuperAdminRole(userRole);
-  const isAdmin = (userRole || "").toLowerCase() === "admin" && !isSuperAdmin;
-  const isParent = isParentRole(userRole);
-  const isStudent = isStudentRole(userRole);
-  const isGuru = isTeacherRole(userRole);
-  const isKepalaSekolah = isKepalaSekolahRole(userRole);
 
-  // Hide entire MASTER DATA group for parents and students
-  if ((isParent || isStudent) && title === "MASTER DATA") {
-    return null;
-  }
-
-  // Filter items based on permissions
+  // Filter items dynamically based on role permissions configured by Admin
   const visibleItems = items.filter(item => {
+    // Danger / logout / non-guarded links always stay visible
     if (item.isDanger || item.href === "/" || item.href === "/profile") return true;
 
-    // Strict rule: Manajemen Akun System is exclusively visible to Super Admin / System Admin
-    if (item.href === "/accounts" || NAV_MODULE_MAP[item.href] === "accounts") {
+    // Strict rule: Manajemen Akun System is exclusively for Super Admin
+    if (item.href === "/accounts") {
       return isSuperAdmin;
     }
 
-    // Role & Permission: Exclusively for Super Admin / Admin
+    // Role & Permission: Only accessible if permitted (defaults to Super Admin and Admin)
     if (item.href === "/roles") {
-      return isSuperAdmin || isAdmin;
+      return isSuperAdmin || canAccessMenu(userRole, userPermissions, "roles", "view");
     }
 
-    // Laporan Keuangan is accessible to Super Admin, Admin, Kepala Sekolah, and any role with finance read permission
-    if (item.href === "/financial-reports") {
-      if (isStudent || isParent) return false;
-      return isSuperAdmin || isAdmin || isKepalaSekolah || Boolean(userPermissions["finance"]?.read);
-    }
-
-    // Pengaturan Sekolah: Exclusively for Super Admin, Admin, or users with explicit settings read permission
-    if (item.href === "/settings") {
-      if (isParent || isStudent || isGuru) {
-        return Boolean(userPermissions["settings"]?.read);
-      }
-      if (isKepalaSekolah) {
-        return Boolean(userPermissions["settings"]?.read);
-      }
-      return isSuperAdmin || isAdmin;
-    }
-
-    // Tahun Ajaran & Kenaikan: Exclusively for Super Admin, Admin, or users with explicit settings read permission
-    if (item.href === "/academic-years") {
-      if (isParent || isStudent || isGuru) {
-        return Boolean(userPermissions["settings"]?.read);
-      }
-      if (isKepalaSekolah) {
-        return Boolean(userPermissions["settings"]?.read);
-      }
-      return isSuperAdmin || isAdmin;
-    }
-
-    // Pembayaran SPP is accessible to Admin, Guru (Wali Kelas), Siswa, Orang Tua, and Kepala Sekolah
-    if (item.href === "/payments") {
-      return true;
-    }
-
-    // Absensi Guru is strictly for Guru, Admin, Kepala Sekolah, Super Admin (HIDDEN from Siswa and Orang Tua)
-    if (item.href === "/teacher-attendance") {
-      if (isStudent || isParent) {
-        return false;
-      }
-      return true;
-    }
-
-    // Izin & Sakit Siswa: Accessible to Siswa, Orang Tua, Guru (Wali Kelas), Admin, and Kepala Sekolah
-    if (item.href === "/leave-requests") {
-      return true;
-    }
-
-    const modId = NAV_MODULE_MAP[item.href];
-    if (!modId) return true;
-    const modPerm = userPermissions[modId];
-    return modPerm ? modPerm.read : true;
+    // Dynamically check if the user's role has "view" permission for this menu
+    return canAccessMenu(userRole, userPermissions, item.href, "view");
   });
 
   if (visibleItems.length === 0) return null;
@@ -364,7 +288,7 @@ export function Sidebar() {
   };
 
   // Derive active normalized role for navigation filtering
-  const effectiveUserRole = (rawRole || role || "").toLowerCase();
+  const effectiveUserRole = normalizeRole(rawRole || role || "");
 
   // Keyboard shortcut ⌘B or Ctrl+B to toggle sidebar
   useEffect(() => {

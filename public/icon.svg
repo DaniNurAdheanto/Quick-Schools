@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6B38FF"/>
+      <stop offset="100%" stop-color="#4110D8"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#grad)"/>
+  <!-- School Crest / Graduation Cap Emblem -->
+  <path d="M64 30L22 50L64 70L106 50L64 30Z" fill="#FFFFFF"/>
+  <path d="M38 58V78C38 78 50 88 64 88C78 88 90 78 90 78V58L64 70L38 58Z" fill="#FFFFFF" fill-opacity="0.95"/>
+  <path d="M106 50V78C106 78 102 82 98 84V54L106 50Z" fill="#F3EEFF"/>
+  <circle cx="98" cy="85" r="4" fill="#FFD700"/>
+  <!-- Accent Stars / Dots -->
+  <circle cx="64" cy="104" r="3.5" fill="#FFFFFF" fill-opacity="0.8"/>
+  <circle cx="50" cy="103" r="2.5" fill="#FFFFFF" fill-opacity="0.5"/>
+  <circle cx="78" cy="103" r="2.5" fill="#FFFFFF" fill-opacity="0.5"/>
+</svg>

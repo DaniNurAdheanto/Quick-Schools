@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnnouncementFormModal } from "@/components/announcements/announcement-form-modal";
-import { isParentRole } from "@/lib/roles-config";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { PageContentSkeleton } from "@/components/ui/role-loading-skeleton";
@@ -49,14 +48,27 @@ export default function AnnouncementsPage() {
   const [quickTarget, setQuickTarget] = useState<string>("Semua");
   
   // Centralized useAuth
-  const { role: authRole, rawRole: authRawRole, isAuthLoading, isRoleReady, isSuperAdmin, isAdmin } = useAuth();
+  const { 
+    role: authRole, 
+    rawRole: authRawRole, 
+    isAuthLoading, 
+    isRoleReady, 
+    isSuperAdmin, 
+    isAdmin,
+    canCreate,
+    canEdit,
+    canDelete
+  } = useAuth();
   const userRole = (authRawRole || authRole || "").toLowerCase();
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-  const isStudent = userRole === "siswa" || userRole === "student";
-  const isParent = isParentRole(userRole) || userRole === "orang-tua" || userRole === "parent";
-  const isReadOnly = isStudent || isParent;
+  
+  // Dynamic RBAC permissions for announcements
+  const canCreateAnnouncement = isSuperAdmin || canCreate("announcements");
+  const canEditAnnouncement = isSuperAdmin || canEdit("announcements");
+  const canDeleteAnnouncement = isSuperAdmin || canDelete("announcements");
+  const isReadOnly = !canCreateAnnouncement && !canEditAnnouncement;
 
   const fetchAnnouncementsFromApi = useCallback(async (isSilent = false) => {
     try {
@@ -342,7 +354,7 @@ export default function AnnouncementsPage() {
         open={detailDrawer.open}
         onClose={() => setDetailDrawer({ open: false })}
         announcement={detailDrawer.data}
-        onEdit={!isReadOnly ? () => {
+        onEdit={canEditAnnouncement ? () => {
           const item = detailDrawer.data;
           setDetailDrawer({ open: false });
           setCrudState({ 
@@ -355,7 +367,7 @@ export default function AnnouncementsPage() {
             } 
           });
         } : undefined}
-        onDelete={!isReadOnly ? () => {
+        onDelete={canDeleteAnnouncement ? () => {
           const item = detailDrawer.data;
           setDetailDrawer({ open: false });
           setCrudState({ open: true, mode: "delete", data: item });
@@ -414,7 +426,7 @@ export default function AnnouncementsPage() {
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-end md:self-auto">
-            {!isReadOnly && (
+            {canCreateAnnouncement && (
               <button 
                 onClick={() => setCrudState({ open: true, mode: "create" })}
                 className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25"

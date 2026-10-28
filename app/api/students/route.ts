@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { UserRole, AccountStatus } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
+import { checkRolePermission, createForbiddenResponse } from "@/lib/api-permissions";
 
 // GET /api/students - List all students with class & parents
 export async function GET() {
@@ -89,7 +90,12 @@ export async function POST(req: NextRequest) {
       motherName,
       guardianName,
       parentPhone,
+      callerRole,
     } = body;
+
+    if (callerRole && !checkRolePermission(callerRole, "students", "create")) {
+      return createForbiddenResponse("students", "create", callerRole);
+    }
 
     const studentName = String(fullName || name || "").trim();
     const studentNisn = String(nisn || nis || "").trim();
@@ -210,7 +216,12 @@ export async function PUT(req: NextRequest) {
       motherName,
       guardianName,
       parentPhone,
+      callerRole,
     } = body;
+
+    if (callerRole && !checkRolePermission(callerRole, "students", "edit")) {
+      return createForbiddenResponse("students", "edit", callerRole);
+    }
 
     const studentIdentifier = _firestoreId || id;
     if (!studentIdentifier) {
@@ -304,6 +315,11 @@ export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
+    const callerRole = searchParams.get("callerRole");
+
+    if (callerRole && !checkRolePermission(callerRole, "students", "delete")) {
+      return createForbiddenResponse("students", "delete", callerRole);
+    }
 
     if (!id) {
       return NextResponse.json({ error: "ID atau NISN siswa wajib disertakan." }, { status: 400 });

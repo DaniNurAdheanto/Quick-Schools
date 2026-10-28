@@ -7,148 +7,142 @@ import {
   Check, 
   Search, 
   RotateCcw, 
-  Sparkles, 
+  RefreshCw,
   Lock, 
   Eye, 
+  Plus,
   Edit3, 
-  Building2,
+  Trash2,
+  CheckCircle,
+  Download,
   ShieldAlert,
   Shield,
   Users,
-  User,
   ArrowUpRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { doc, setDoc, onSnapshot, collection, getDocs } from "firebase/firestore";
+import { doc, setDoc, onSnapshot, collection } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
-import { ROLES, PERMISSION_MODULES, DEFAULT_PERMISSIONS, normalizeRole } from "@/lib/roles-config";
+import { 
+  ROLES, 
+  APP_MENUS, 
+  DEFAULT_PERMISSIONS, 
+  normalizeRole, 
+  MenuPermission, 
+  resolveMenuPermission,
+  PermissionAction 
+} from "@/lib/roles-config";
+
+const ACTION_COLUMNS: { key: PermissionAction; label: string; desc: string; color: string; icon: any }[] = [
+  { key: "view", label: "View", desc: "Akses & Lihat Data", color: "text-blue-600 bg-blue-50 border-blue-200", icon: Eye },
+  { key: "create", label: "Create", desc: "Tambah Data Baru", color: "text-emerald-600 bg-emerald-50 border-emerald-200", icon: Plus },
+  { key: "edit", label: "Edit", desc: "Ubah / Update Data", color: "text-amber-600 bg-amber-50 border-amber-200", icon: Edit3 },
+  { key: "delete", label: "Delete", desc: "Hapus Data", color: "text-rose-600 bg-rose-50 border-rose-200", icon: Trash2 },
+  { key: "approve", label: "Approve", desc: "Persetujuan / Validasi", color: "text-purple-600 bg-purple-50 border-purple-200", icon: CheckCircle },
+  { key: "export", label: "Export", desc: "Ekspor Excel/PDF", color: "text-sky-600 bg-sky-50 border-sky-200", icon: Download },
+];
 
 export default function RolesAndPermissionsPage() {
   const toast = useToast();
-  const { isSuperAdmin, isAdmin, isAuthLoading } = useAuth();
+  const { isSuperAdmin, isAdmin, userRole } = useAuth();
   const [activeRole, setActiveRole] = useState(ROLES[0].id);
-  const [permissions, setPermissions] = useState(DEFAULT_PERMISSIONS);
+  const [permissions, setPermissions] = useState<Record<string, Record<string, MenuPermission>>>(DEFAULT_PERMISSIONS);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("Semua");
   const [usersList, setUsersList] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
-  // Subscribe to Firestore roles collection
+  // 1. Fetch stored permissions from backend API on mount
+  useEffect(() => {
+    const fetchApiPermissions = async () => {
+      try {
+        const res = await fetch("/api/roles");
+        const data = await res.json();
+        if (data.success && data.permissions) {
+          setPermissions(prev => ({
+            ...prev,
+            ...data.permissions,
+          }));
+        }
+      } catch (err) {
+        console.warn("Could not fetch /api/roles on mount:", err);
+      }
+    };
+    fetchApiPermissions();
+  }, []);
+
+  // 2. Subscribe to Firestore roles collection for live multi-tab synchronization
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "roles"), (snapshot) => {
-      const dbPerms = { ...DEFAULT_PERMISSIONS };
-      snapshot.docs.forEach(docSnap => {
-        const roleId = docSnap.id;
-        dbPerms[roleId] = docSnap.data().modules || DEFAULT_PERMISSIONS[roleId] || {};
+      setPermissions(prev => {
+        const updated = { ...prev };
+        snapshot.docs.forEach(docSnap => {
+          const roleId = docSnap.id;
+          // Only process canonical role IDs
+          if (!ROLES.some(r => r.id === roleId) && roleId !== "student" && roleId !== "teacher" && roleId !== "parent") {
+            return;
+          }
+          const data = docSnap.data();
+          if (data && data.modules) {
+            const cleanedMods: Record<string, MenuPermission> = { ...(prev[roleId] || {}) };
+            for (const [mId, mPerm] of Object.entries(data.modules)) {
+              cleanedMods[mId] = resolveMenuPermission(mPerm as any);
+            }
+            updated[roleId] = cleanedMods;
+          }
+        });
+        return updated;
       });
-      setPermissions(dbPerms);
     }, (err) => {
-      console.warn("Firestore roles query error, using default presets:", err);
-      setPermissions(DEFAULT_PERMISSIONS);
+      console.warn("Firestore roles query error, fallback to initial state:", err);
     });
 
     return () => unsub();
   }, []);
 
-  // Subscribe to real-time users collection for live account synchronization
-  useEffect(() => {
-    const unsubUsers = onSnapshot(collection(db, "users"), async (snapshot) => {
-      const deletedIds = new Set<string>();
-      try {
-        const delSnap = await getDocs(collection(db, "deleted_accounts"));
-        delSnap.forEach(d => {
-          deletedIds.add(d.id);
-          const em = (d.data().email || "").toLowerCase().trim();
-          if (em) deletedIds.add(em);
-        });
-      } catch (e) {}
-
-      const userMap = new Map<string, any>();
-      snapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        const docId = docSnap.id;
-        const uid = data.uid || docId;
-        const email = (data.email || "").toLowerCase().trim();
-
-        if (
-          deletedIds.has(docId) ||
-          deletedIds.has(uid) ||
-          (email && deletedIds.has(email)) ||
-          data.status === "deleted" ||
-          data.isDeleted === true
-        ) {
-          return;
-        }
-
-        const key = uid && uid.length >= 10 ? `uid_${uid}` : email ? `email_${email}` : `doc_${docId}`;
-        if (!userMap.has(key)) {
-          userMap.set(key, {
-            id: docId,
-            uid: uid,
-            name: data.name || data.fullName || data.email?.split("@")[0] || "Tanpa Nama",
-            email: data.email || "-",
-            role: data.role || "siswa",
-            status: data.status || (data.onboardingCompleted === false ? "Belum Onboarding" : "Aktif"),
-            onboardingCompleted: data.onboardingCompleted ?? true,
-            nip: data.nip || null,
-            nisn: data.nisn || null,
-            className: data.className || data.classId || null
-          });
-        }
-      });
-
-      setUsersList(Array.from(userMap.values()));
-    }, (err) => {
-      console.warn("Firestore users query in roles error:", err);
-    });
-
-    return () => unsubUsers();
+  // 3. Load authoritative real accounts strictly from PostgreSQL (/api/accounts)
+  const loadAccounts = React.useCallback(async () => {
+    try {
+      setLoadingUsers(true);
+      const res = await fetch("/api/accounts");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.users)) {
+        setUsersList(data.users);
+      }
+    } catch (err) {
+      console.warn("Failed to load accounts from /api/accounts:", err);
+    } finally {
+      setLoadingUsers(false);
+    }
   }, []);
 
-  // Map users to roles
+  useEffect(() => {
+    loadAccounts();
+    const interval = setInterval(loadAccounts, 20000);
+    return () => clearInterval(interval);
+  }, [loadAccounts]);
+
+  // Map users to roles strictly by user.role from database
   const roleUserMap = useMemo(() => {
     const map: Record<string, any[]> = {
+      "super-admin": [],
       "admin": [],
       "guru": [],
       "siswa": [],
       "orang-tua": [],
-      "kepala-sekolah": [],
-      "super-admin": []
+      "kepala-sekolah": []
     };
 
     usersList.forEach(u => {
       const email = (u.email || "").toLowerCase().trim();
-      const name = (u.name || "").toLowerCase().trim();
       let r = normalizeRole(u.role);
 
-      if (email === "dani@gmail.com" || email.includes("superadmin")) {
+      if (email === "dani@gmail.com" || email === "superadmin@school.com") {
         r = "super-admin";
-      } else if (
-        email.includes("kelapa") ||
-        email.includes("kepala") ||
-        email.includes("seokolah") ||
-        email.includes("tohar") ||
-        name.includes("tohar") ||
-        name.includes("kepala sekolah")
-      ) {
-        r = "kepala-sekolah";
-      } else if (email.includes(".guru@") || email.includes("guru.") || email.includes("teacher")) {
-        r = "guru";
-      } else if (email.includes(".wali@") || email.includes("wali.") || email.includes("parent") || email.includes("orangtua")) {
-        r = "orang-tua";
-      } else if (email.includes("siswa") || email.includes("student")) {
-        r = "siswa";
-      } else if (u.role) {
-        r = normalizeRole(u.role);
-      } else if (u.nip || u.subject) {
-        r = "guru";
-      } else if (u.studentId || u.studentIds) {
-        r = "orang-tua";
-      } else if (u.nisn || u.className) {
-        r = "siswa";
       }
 
       if (map[r]) {
@@ -171,47 +165,122 @@ export default function RolesAndPermissionsPage() {
 
   // Filter modules based on search and category
   const filteredModules = useMemo(() => {
-    return PERMISSION_MODULES.filter(mod => {
+    return APP_MENUS.filter(mod => {
       const matchesSearch = 
         mod.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        mod.description.toLowerCase().includes(searchQuery.toLowerCase());
+        mod.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        mod.route.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = categoryFilter === "Semua" || mod.category === categoryFilter;
       return matchesSearch && matchesCategory;
     });
   }, [searchQuery, categoryFilter]);
 
-  const handleToggle = (moduleId: string, action: "read" | "write" | "delete") => {
-    if (activeRole === "super-admin") return;
+  // Toggle single action on single menu
+  const handleToggle = (menuId: string, action: PermissionAction) => {
+    if (activeRole === "super-admin") {
+      toast.showInfo("Role Super Admin memiliki hak akses penuh mutlak pada seluruh fitur sistem.", "Akses Penuh");
+      return;
+    }
 
-    if (moduleId === "accounts") {
-      toast.showWarning("Modul Manajemen Akun System bersifat eksklusif dan hanya dapat diakses oleh peran Super Admin.", "Akses Terkunci");
+    if (menuId === "accounts") {
+      toast.showWarning("Modul Manajemen Akun System bersifat eksklusif dan hanya dapat diakses oleh Super Admin.", "Akses Terkunci");
       return;
     }
 
     setPermissions(prev => {
       const currentRolePerms = prev[activeRole] || DEFAULT_PERMISSIONS[activeRole] || {};
-      const modPerms = { ...(currentRolePerms[moduleId] || { read: false, write: false, delete: false }) };
-      modPerms[action] = !modPerms[action];
-      
-      if ((action === "write" || action === "delete") && modPerms[action]) {
-        modPerms.read = true;
-      }
-      if (action === "read" && !modPerms[action]) {
-        modPerms.write = false;
-        modPerms.delete = false;
+      const currentModPerm = resolveMenuPermission(currentRolePerms[menuId]);
+      const nextVal = !currentModPerm[action];
+
+      const updatedModPerm: MenuPermission = {
+        ...currentModPerm,
+        [action]: nextVal,
+      };
+
+      // Cascade rule: enabling any mutation/export automatically enables view
+      if (action !== "view" && nextVal) {
+        updatedModPerm.view = true;
       }
 
-      const updatedRole = { ...currentRolePerms, [moduleId]: modPerms };
-      const nextPerms = { ...prev, [activeRole]: updatedRole };
-      
-      if (activeRole === "siswa") {
-        nextPerms["student"] = updatedRole;
-      } else if (activeRole === "orang-tua") {
-        nextPerms["parent"] = updatedRole;
-        nextPerms["orangtua"] = updatedRole;
+      // Cascade rule: disabling view automatically disables all other actions
+      if (action === "view" && !nextVal) {
+        updatedModPerm.create = false;
+        updatedModPerm.edit = false;
+        updatedModPerm.delete = false;
+        updatedModPerm.approve = false;
+        updatedModPerm.export = false;
       }
 
-      return nextPerms;
+      // Sync backward compatibility read/write
+      updatedModPerm.read = updatedModPerm.view;
+      updatedModPerm.write = updatedModPerm.create || updatedModPerm.edit;
+
+      const updatedRole = {
+        ...currentRolePerms,
+        [menuId]: updatedModPerm,
+      };
+
+      const nextState: Record<string, Record<string, MenuPermission>> = {
+        ...prev,
+        [activeRole]: updatedRole,
+      };
+
+      if (activeRole === "siswa") nextState["student"] = updatedRole;
+      if (activeRole === "orang-tua") {
+        nextState["parent"] = updatedRole;
+        nextState["orangtua"] = updatedRole;
+      }
+      if (activeRole === "guru") nextState["teacher"] = updatedRole;
+      if (activeRole === "kepala-sekolah") nextState["kepalasekolah"] = updatedRole;
+
+      return nextState;
+    });
+  };
+
+  // Toggle Entire Column (View, Create, Edit, Delete, Approve, Export)
+  const handleToggleColumn = (action: PermissionAction) => {
+    if (activeRole === "super-admin") return;
+
+    const currentRolePerms = permissions[activeRole] || DEFAULT_PERMISSIONS[activeRole] || {};
+    const targetModules = filteredModules.filter(m => m.id !== "accounts");
+    const allEnabled = targetModules.every(mod => {
+      const p = resolveMenuPermission(currentRolePerms[mod.id]);
+      return Boolean(p[action]);
+    });
+    const nextVal = !allEnabled;
+
+    setPermissions(prev => {
+      const nextRolePerms = { ...(prev[activeRole] || {}) };
+      targetModules.forEach(mod => {
+        const cur = resolveMenuPermission(nextRolePerms[mod.id]);
+        const updated: MenuPermission = {
+          ...cur,
+          [action]: nextVal,
+        };
+
+        if (action !== "view" && nextVal) {
+          updated.view = true;
+        }
+        if (action === "view" && !nextVal) {
+          updated.create = false;
+          updated.edit = false;
+          updated.delete = false;
+          updated.approve = false;
+          updated.export = false;
+        }
+
+        updated.read = updated.view;
+        updated.write = updated.create || updated.edit;
+        nextRolePerms[mod.id] = updated;
+      });
+
+      const nextState = { ...prev, [activeRole]: nextRolePerms };
+      if (activeRole === "siswa") nextState["student"] = nextRolePerms;
+      if (activeRole === "orang-tua") {
+        nextState["parent"] = nextRolePerms;
+        nextState["orangtua"] = nextRolePerms;
+      }
+      return nextState;
     });
   };
 
@@ -219,590 +288,753 @@ export default function RolesAndPermissionsPage() {
   const applyPreset = (presetType: "standard" | "readOnly" | "fullWrite" | "clear") => {
     if (activeRole === "super-admin") return;
 
-    let updatedModules: Record<string, { read: boolean; write: boolean; delete: boolean }> = {};
+    let updatedModules: Record<string, MenuPermission> = {};
 
     if (presetType === "standard") {
-      updatedModules = DEFAULT_PERMISSIONS[activeRole] || DEFAULT_PERMISSIONS["siswa"];
+      const canonicalDefaults = DEFAULT_PERMISSIONS[activeRole] || DEFAULT_PERMISSIONS["admin"];
+      APP_MENUS.forEach(mod => {
+        updatedModules[mod.id] = resolveMenuPermission(canonicalDefaults[mod.id]);
+      });
       toast.showInfo(`Rekomendasi standar sekolah diterapkan untuk role ${activeRoleData.name}.`, "Preset Sekolah");
     } else if (presetType === "readOnly") {
-      PERMISSION_MODULES.forEach(mod => {
-        updatedModules[mod.id] = { read: true, write: false, delete: false };
+      APP_MENUS.forEach(mod => {
+        updatedModules[mod.id] = resolveMenuPermission({
+          view: true,
+          create: false,
+          edit: false,
+          delete: false,
+          approve: false,
+          export: true,
+        });
       });
-      toast.showInfo(`Izin di-set ke Read-Only untuk semua modul.`, "Preset Read-Only");
+      toast.showInfo(`Izin di-set ke Hanya Lihat (Read-Only) untuk seluruh menu.`, "Preset Read-Only");
     } else if (presetType === "fullWrite") {
-      PERMISSION_MODULES.forEach(mod => {
-        updatedModules[mod.id] = { read: true, write: true, delete: false };
+      APP_MENUS.forEach(mod => {
+        updatedModules[mod.id] = resolveMenuPermission({
+          view: true,
+          create: true,
+          edit: true,
+          delete: true,
+          approve: true,
+          export: true,
+        });
       });
-      toast.showInfo(`Izin Tambah/Edit diaktifkan untuk semua modul.`, "Preset Full Write");
+      toast.showInfo(`Izin Penuh (Akses Lengkap) diaktifkan untuk seluruh menu.`, "Preset Akses Penuh");
     } else if (presetType === "clear") {
-      PERMISSION_MODULES.forEach(mod => {
-        updatedModules[mod.id] = { read: false, write: false, delete: false };
+      APP_MENUS.forEach(mod => {
+        updatedModules[mod.id] = resolveMenuPermission({
+          view: false,
+          create: false,
+          edit: false,
+          delete: false,
+          approve: false,
+          export: false,
+        });
       });
       toast.showInfo(`Seluruh hak akses dibatasi untuk role ini.`, "Preset Dibatasi");
     }
 
     // Always enforce accounts lock for non-super-admin
     if (activeRole !== "super-admin") {
-      updatedModules["accounts"] = { read: false, write: false, delete: false };
+      updatedModules["accounts"] = resolveMenuPermission({
+        view: false,
+        create: false,
+        edit: false,
+        delete: false,
+        approve: false,
+        export: false,
+      });
     }
 
     setPermissions(prev => ({
       ...prev,
       [activeRole]: updatedModules,
       ...(activeRole === "siswa" ? { student: updatedModules } : {}),
-      ...(activeRole === "orang-tua" ? { parent: updatedModules, orangtua: updatedModules } : {})
+      ...(activeRole === "orang-tua" ? { parent: updatedModules, orangtua: updatedModules } : {}),
+      ...(activeRole === "guru" ? { teacher: updatedModules } : {}),
+      ...(activeRole === "kepala-sekolah" ? { kepalasekolah: updatedModules } : {}),
     }));
   };
 
-  // Toggle All per Column
-  const handleToggleColumn = (action: "read" | "write" | "delete") => {
-    if (activeRole === "super-admin") return;
-
-    const currentRolePerms = permissions[activeRole] || {};
-    const allEnabled = filteredModules.filter(m => m.id !== "accounts").every(mod => currentRolePerms[mod.id]?.[action]);
-
-    setPermissions(prev => {
-      const nextRolePerms = { ...(prev[activeRole] || {}) };
-      filteredModules.forEach(mod => {
-        if (mod.id === "accounts") {
-          nextRolePerms[mod.id] = { read: false, write: false, delete: false };
-          return;
-        }
-        const cur = nextRolePerms[mod.id] || { read: false, write: false, delete: false };
-        const val = !allEnabled;
-        
-        cur[action] = val;
-        if ((action === "write" || action === "delete") && val) cur.read = true;
-        if (action === "read" && !val) {
-          cur.write = false;
-          cur.delete = false;
-        }
-        nextRolePerms[mod.id] = cur;
-      });
-
-      const nextPerms = { ...prev, [activeRole]: nextRolePerms };
-      if (activeRole === "siswa") nextPerms["student"] = nextRolePerms;
-      if (activeRole === "orang-tua") {
-        nextPerms["parent"] = nextRolePerms;
-        nextPerms["orangtua"] = nextRolePerms;
-      }
-      return nextPerms;
-    });
-  };
-
+  // Save updated permissions to backend API & Firestore
   const handleSave = async () => {
     setIsSaving(true);
     setSaveSuccess(false);
 
     try {
       const roleModules = permissions[activeRole] || {};
-      await setDoc(doc(db, "roles", activeRole), {
-        roleId: activeRole,
-        modules: roleModules,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
 
-      if (activeRole === "siswa") {
-        await setDoc(doc(db, "roles", "student"), {
-          roleId: "student",
+      // 1. Post to backend API (persists to data/roles-permissions.json)
+      const res = await fetch("/api/roles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roleId: activeRole,
           modules: roleModules,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
+          userRole: userRole,
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || "Gagal menyimpan ke server");
       }
 
-      if (activeRole === "orang-tua") {
-        await setDoc(doc(db, "roles", "parent"), {
-          roleId: "parent",
-          modules: roleModules,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-        await setDoc(doc(db, "roles", "orangtua"), {
-          roleId: "orangtua",
-          modules: roleModules,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
+      // 2. Broadcast local update immediately so AuthContext, Sidebar, and other tabs receive it instantly
+      if (typeof window !== "undefined") {
+        try {
+          const cached = localStorage.getItem("quick_schools_role_permissions_v2");
+          const currentCache = cached ? JSON.parse(cached) : {};
+          currentCache[activeRole] = roleModules;
+          if (activeRole === "siswa") currentCache["student"] = roleModules;
+          if (activeRole === "orang-tua") {
+            currentCache["parent"] = roleModules;
+            currentCache["orangtua"] = roleModules;
+          }
+          if (activeRole === "guru") currentCache["teacher"] = roleModules;
+          if (activeRole === "kepala-sekolah") currentCache["kepalasekolah"] = roleModules;
+
+          localStorage.setItem("quick_schools_role_permissions_v2", JSON.stringify(currentCache));
+          window.dispatchEvent(new CustomEvent("roles-permissions-updated"));
+        } catch (e) {}
       }
 
-      if (activeRole === "kepala-sekolah") {
-        await setDoc(doc(db, "roles", "kepalasekolah"), {
-          roleId: "kepalasekolah",
+      // 3. Sync to Firestore collection "roles" for live multi-device updates
+      try {
+        await setDoc(doc(db, "roles", activeRole), {
+          roleId: activeRole,
           modules: roleModules,
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
         }, { merge: true });
-        await setDoc(doc(db, "roles", "principal"), {
-          roleId: "principal",
-          modules: roleModules,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
+
+        if (activeRole === "siswa") {
+          await setDoc(doc(db, "roles", "student"), {
+            roleId: "student",
+            modules: roleModules,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        } else if (activeRole === "orang-tua") {
+          await setDoc(doc(db, "roles", "parent"), {
+            roleId: "parent",
+            modules: roleModules,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        } else if (activeRole === "guru") {
+          await setDoc(doc(db, "roles", "teacher"), {
+            roleId: "teacher",
+            modules: roleModules,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        } else if (activeRole === "kepala-sekolah") {
+          await setDoc(doc(db, "roles", "kepalasekolah"), {
+            roleId: "kepalasekolah",
+            modules: roleModules,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        }
+      } catch (fsErr) {
+        console.warn("Firestore sync warning:", fsErr);
       }
 
       setIsSaving(false);
       setSaveSuccess(true);
-      toast.showEdit(`Konfigurasi hak akses RBAC ${activeRoleData.name} berhasil disimpan di database.`, "Berhasil Simpan");
+      toast.showSuccess(
+        `Konfigurasi hak akses role "${activeRoleData.name}" berhasil disimpan dan diterapkan di seluruh sistem.`,
+        "Hak Akses Diperbarui"
+      );
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error saving role permissions:", err);
       setIsSaving(false);
-      toast.showError("Gagal menyimpan konfigurasi hak akses.", "Gagal");
+      toast.showError(err.message || "Gagal menyimpan konfigurasi hak akses.", "Gagal Simpan");
     }
   };
 
-  // Access Restricted if authenticated user is NOT Super Admin or Admin
-  if (!isAuthLoading && !isSuperAdmin && !isAdmin) {
+  // Reset to Factory Default
+  const handleResetToDefault = async () => {
+    if (!confirm(`Apakah Anda yakin ingin mereset hak akses role "${activeRoleData.name}" ke konfigurasi standar sekolah?`)) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const res = await fetch("/api/roles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roleId: activeRole,
+          reset: true,
+          userRole: userRole,
+        }),
+      });
+
+      const resData = await res.json();
+      if (resData.success && resData.permissions) {
+        setPermissions(prev => ({
+          ...prev,
+          [activeRole]: resData.permissions,
+        }));
+
+        if (typeof window !== "undefined") {
+          try {
+            const cached = localStorage.getItem("quick_schools_role_permissions_v2");
+            const currentCache = cached ? JSON.parse(cached) : {};
+            currentCache[activeRole] = resData.permissions;
+            localStorage.setItem("quick_schools_role_permissions_v2", JSON.stringify(currentCache));
+            window.dispatchEvent(new CustomEvent("roles-permissions-updated"));
+          } catch (e) {}
+        }
+
+        toast.showSuccess(`Role ${activeRoleData.name} berhasil direset ke standar sekolah.`, "Reset Berhasil");
+      }
+    } catch (err: any) {
+      toast.showError("Gagal mereset role ke standar.", "Gagal");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // If authenticated user is NOT Super Admin or Admin, block settings access
+  if (!isSuperAdmin && !isAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[65vh] p-6 text-center animate-in fade-in duration-300">
-        <div className="w-16 h-16 rounded-xl bg-purple-50 border border-purple-200 text-[#531FFF] flex items-center justify-center shadow-lg shadow-[#531FFF]/10 mb-4">
-          <ShieldAlert className="w-8 h-8" />
+      <div className="min-h-[80vh] flex items-center justify-center p-6 text-center">
+        <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-xl max-w-md space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto shadow-sm">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <div className="space-y-1.5">
+            <h3 className="text-lg font-extrabold text-gray-900">Akses Pengaturan Terbatas</h3>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Halaman konfigurasi <strong>Role & Permission</strong> hanya dapat diakses oleh Administrator Sekolah.
+            </p>
+          </div>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
+          >
+            Kembali ke Dashboard
+          </Link>
         </div>
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-purple-50 text-[#531FFF] border border-purple-200 uppercase tracking-wider mb-2">
-          <Shield className="w-3.5 h-3.5" />
-          Akses Khusus Administrator
-        </span>
-        <h1 className="text-2xl font-black text-gray-900 tracking-tight">Halaman Role & Permission Dibatasi</h1>
-        <p className="text-gray-500 text-sm mt-2 max-w-md">
-          Halaman konfigurasi Role-Based Access Control (RBAC) hanya dapat diakses oleh Super Admin dan Administrator sistem.
-        </p>
       </div>
     );
   }
 
+  const rolePermsForActive = permissions[activeRole] || DEFAULT_PERMISSIONS[activeRole] || {};
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 1. HEADER SECTION                                             */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Manajemen Role & Hak Akses (RBAC)</h1>
-            <span className="px-2.5 py-0.5 text-xs font-bold bg-[#F3F0FF] text-[#531FFF] rounded-full border border-[#531FFF]/20">
-              Standar Sekolah
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-lg bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center">
+              <Shield className="w-4 h-4" />
+            </div>
+            <span className="text-xs font-extrabold text-[#531FFF] uppercase tracking-wider">
+              Kontrol Akses Terpadu (RBAC)
             </span>
           </div>
-          <p className="text-sm text-gray-500 mt-1">
-            Konfigurasi otorisasi dan kontrol akses modul untuk Admin, Guru, Siswa, Orang Tua, dan Kepala Sekolah.
+          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">
+            Role & Permission Management
+          </h1>
+          <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1">
+            Atur izin <strong>View, Create, Edit, Delete, Approve, dan Export</strong> per menu untuk setiap peran pengguna.
           </p>
         </div>
 
-        {/* Header Action Button */}
-        <button
-          onClick={handleSave}
-          disabled={isSaving || activeRole === "super-admin"}
-          className={cn(
-            "flex items-center gap-2 px-6 py-2.5 rounded-md font-bold transition-all text-sm shadow-sm active:scale-[0.98]",
-            activeRole === "super-admin"
-              ? "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200"
-              : saveSuccess
-                ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20"
-                : "bg-[#531FFF] hover:bg-[#4314cc] text-white shadow-[#531FFF]/20"
-          )}
-        >
-          {saveSuccess ? (
-            <>
-              <Check className="w-4 h-4" />
-              Tersimpan di Database!
-            </>
-          ) : (
-            <>
-              <Save className="w-4 h-4" />
-              {isSaving ? "Menyimpan..." : "Simpan Perubahan RBAC"}
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleResetToDefault}
+            disabled={isSaving || activeRole === "super-admin"}
+            className="px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs disabled:opacity-50 cursor-pointer active:scale-98"
+            title="Kembalikan izin role ini ke standar rekomendasi sekolah"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Reset Standar</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving || activeRole === "super-admin"}
+            className={cn(
+              "px-5 py-2.5 rounded-xl text-white text-xs font-black flex items-center gap-2 transition-all shadow-md active:scale-98 cursor-pointer",
+              saveSuccess
+                ? "bg-emerald-600 shadow-emerald-500/25"
+                : "bg-[#531FFF] hover:bg-[#4314cc] shadow-[#531FFF]/25 disabled:opacity-50"
+            )}
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Menyimpan...</span>
+              </>
+            ) : saveSuccess ? (
+              <>
+                <Check className="w-4 h-4 text-white" strokeWidth={3} />
+                <span>Tersimpan!</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>Simpan Hak Akses</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        
-        {/* Left Roles Selector Sidebar */}
-        <div className="lg:col-span-1 bg-white border border-gray-100 rounded-lg p-4 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] h-fit space-y-4">
-          <div className="px-2 pt-1 flex items-center justify-between">
-            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Peran (Roles) Sekolah</h2>
-            <span className="text-[11px] font-extrabold text-[#531FFF] bg-purple-50 px-2 py-0.5 rounded">
-              {ROLES.length} Roles
-            </span>
-          </div>
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 2. ROLE SELECTOR TABS                                         */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {ROLES.map((r) => {
+          const isActive = activeRole === r.id;
+          const RoleIcon = r.icon;
+          const count = roleUserMap[r.id]?.length || 0;
 
-          <div className="space-y-1.5">
-            {ROLES.map((role) => {
-              const Icon = role.icon;
-              const isActive = activeRole === role.id;
-              const roleAccounts = roleUserMap[role.id] || [];
-
-              return (
-                <button
-                  key={role.id}
-                  onClick={() => setActiveRole(role.id)}
+          return (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setActiveRole(r.id)}
+              className={cn(
+                "p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden flex flex-col justify-between group cursor-pointer",
+                isActive
+                  ? "bg-white border-[#531FFF] shadow-md shadow-[#531FFF]/10 ring-2 ring-[#531FFF]/15"
+                  : "bg-white border-gray-100 hover:border-gray-200 hover:shadow-xs shadow-2xs"
+              )}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div
                   className={cn(
-                    "w-full flex items-center justify-between p-3 rounded-lg text-left transition-all group cursor-pointer",
-                    isActive 
-                      ? "bg-[#531FFF] text-white shadow-md shadow-[#531FFF]/20 font-bold" 
-                      : "text-gray-700 hover:bg-gray-50 hover:text-gray-900 border border-transparent hover:border-gray-200"
+                    "w-9 h-9 rounded-xl flex items-center justify-center transition-colors",
+                    isActive
+                      ? "bg-[#531FFF] text-white"
+                      : "bg-gray-100 text-gray-600 group-hover:bg-[#531FFF]/10 group-hover:text-[#531FFF]"
                   )}
                 >
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <div className={cn(
-                      "p-2 rounded-md shrink-0 transition-colors",
-                      isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500 group-hover:text-[#531FFF]"
-                    )}>
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="overflow-hidden">
-                      <div className="text-xs font-bold leading-tight truncate">{role.name}</div>
-                      <div className={cn("text-[10px] font-medium truncate mt-0.5", isActive ? "text-white/80" : "text-gray-400")}>
-                        {role.badge}
+                  <RoleIcon className="w-4 h-4" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">
+                  {count} Akun
+                </span>
+              </div>
+
+              <div>
+                <p className={cn("text-xs font-black truncate", isActive ? "text-[#531FFF]" : "text-gray-900")}>
+                  {r.name}
+                </p>
+                <p className="text-[10px] text-gray-400 font-semibold truncate mt-0.5">
+                  {r.badge}
+                </p>
+              </div>
+
+              {isActive && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#531FFF]" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 3. ACTIVE ROLE BANNER & PRESETS                               */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-white border border-gray-100 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center shrink-0">
+            {React.createElement(activeRoleData.icon, { className: "w-5 h-5" })}
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base font-extrabold text-gray-900">
+                Konfigurasi Hak Akses: {activeRoleData.name}
+              </h2>
+              <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-[#531FFF]/10 text-[#531FFF]">
+                {activeRoleData.badge}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 font-medium mt-0.5 leading-relaxed">
+              {activeRoleData.description}
+            </p>
+          </div>
+        </div>
+
+        {activeRole !== "super-admin" && (
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <span className="text-[11px] font-bold text-gray-400 mr-1 hidden sm:inline">
+              Template Cepat:
+            </span>
+            <button
+              type="button"
+              onClick={() => applyPreset("standard")}
+              className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors cursor-pointer"
+            >
+              Standar Sekolah
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset("readOnly")}
+              className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors cursor-pointer"
+            >
+              Hanya Lihat (View Only)
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset("fullWrite")}
+              className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors cursor-pointer"
+            >
+              Akses Penuh
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset("clear")}
+              className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors cursor-pointer"
+            >
+              Batas Total
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 4. PERMISSIONS MATRIX TABLE                                   */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-2xs overflow-hidden">
+        {/* Table Toolbar: Search & Category Filter */}
+        <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/50">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari menu, rute (/attendance), atau kata kunci..."
+              className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+            {["Semua", "Umum", "Master Data", "Akademik", "Keuangan", "Komunikasi", "Sistem"].map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setCategoryFilter(cat)}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap transition-colors cursor-pointer",
+                  categoryFilter === cat
+                    ? "bg-[#531FFF] text-white shadow-2xs"
+                    : "bg-white hover:bg-gray-100 text-gray-600 border border-gray-200"
+                )}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Matrix Grid */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[800px]">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50/80 text-[11px] font-black text-gray-500 uppercase tracking-wider">
+                <th className="py-3.5 px-6 min-w-[240px]">Menu & Rute Aplikasi</th>
+                <th className="py-3.5 px-4 text-center">Kategori</th>
+                {ACTION_COLUMNS.map((col) => {
+                  const Icon = col.icon;
+                  return (
+                    <th key={col.key} className="py-3.5 px-3 text-center min-w-[100px]">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleColumn(col.key)}
+                        disabled={activeRole === "super-admin"}
+                        className="inline-flex items-center gap-1 hover:text-[#531FFF] transition-colors cursor-pointer group"
+                        title={`Klik untuk toggle seluruh kolom ${col.label}`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        <span>{col.label}</span>
+                      </button>
+                      <div className="text-[9px] font-medium text-gray-400 normal-case tracking-normal">
+                        {col.desc}
                       </div>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-xs">
+              {filteredModules.length > 0 ? (
+                filteredModules.map((menu) => {
+                  const modPerm = resolveMenuPermission(rolePermsForActive[menu.id]);
+                  const isAccountsMenu = menu.id === "accounts";
+                  const isAccountsLocked = isAccountsMenu && activeRole !== "super-admin";
+                  const MenuIcon = menu.icon;
+
+                  return (
+                    <tr
+                      key={menu.id}
+                      className={cn(
+                        "hover:bg-purple-50/20 transition-colors group",
+                        isAccountsLocked && "bg-rose-50/15"
+                      )}
+                    >
+                      {/* Menu Name, Icon & Route */}
+                      <td className="py-3 px-6">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-[#531FFF]/10 text-gray-600 group-hover:text-[#531FFF] flex items-center justify-center shrink-0 transition-colors mt-0.5">
+                            <MenuIcon className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-extrabold text-gray-900 group-hover:text-[#531FFF] transition-colors">
+                                {menu.name}
+                              </span>
+                              <code className="text-[10px] font-mono text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                                {menu.route}
+                              </code>
+                              {isAccountsMenu && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-rose-50 text-rose-700 border border-rose-200">
+                                  <Lock className="w-2.5 h-2.5" />
+                                  Super Admin
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                              {menu.description}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Category Badge */}
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <span className="px-2 py-1 rounded-md text-[10px] font-extrabold bg-gray-100 text-gray-600 border border-gray-200">
+                          {menu.category}
+                        </span>
+                      </td>
+
+                      {/* View Action Checkbox */}
+                      <td className="py-3 px-3 text-center">
+                        <PermissionToggle
+                          checked={modPerm.view}
+                          onChange={() => handleToggle(menu.id, "view")}
+                          disabled={activeRole === "super-admin" || isAccountsLocked}
+                          activeColor="bg-blue-600 border-blue-600"
+                        />
+                      </td>
+
+                      {/* Create Action Checkbox */}
+                      <td className="py-3 px-3 text-center">
+                        <PermissionToggle
+                          checked={modPerm.create}
+                          onChange={() => handleToggle(menu.id, "create")}
+                          disabled={activeRole === "super-admin" || isAccountsLocked}
+                          activeColor="bg-emerald-600 border-emerald-600"
+                        />
+                      </td>
+
+                      {/* Edit Action Checkbox */}
+                      <td className="py-3 px-3 text-center">
+                        <PermissionToggle
+                          checked={modPerm.edit}
+                          onChange={() => handleToggle(menu.id, "edit")}
+                          disabled={activeRole === "super-admin" || isAccountsLocked}
+                          activeColor="bg-amber-600 border-amber-600"
+                        />
+                      </td>
+
+                      {/* Delete Action Checkbox */}
+                      <td className="py-3 px-3 text-center">
+                        <PermissionToggle
+                          checked={modPerm.delete}
+                          onChange={() => handleToggle(menu.id, "delete")}
+                          disabled={activeRole === "super-admin" || isAccountsLocked}
+                          activeColor="bg-rose-600 border-rose-600"
+                        />
+                      </td>
+
+                      {/* Approve Action Checkbox */}
+                      <td className="py-3 px-3 text-center">
+                        <PermissionToggle
+                          checked={modPerm.approve}
+                          onChange={() => handleToggle(menu.id, "approve")}
+                          disabled={activeRole === "super-admin" || isAccountsLocked}
+                          activeColor="bg-purple-600 border-purple-600"
+                        />
+                      </td>
+
+                      {/* Export Action Checkbox */}
+                      <td className="py-3 px-3 text-center">
+                        <PermissionToggle
+                          checked={modPerm.export}
+                          onChange={() => handleToggle(menu.id, "export")}
+                          disabled={activeRole === "super-admin" || isAccountsLocked}
+                          activeColor="bg-sky-600 border-sky-600"
+                        />
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-gray-400 font-medium">
+                    Tidak ada menu yang sesuai dengan pencarian atau filter kategori.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Matrix Footer Note */}
+        <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500 font-medium">
+          <p>
+            Menampilkan <strong className="text-gray-900">{filteredModules.length}</strong> menu fitur RBAC terkonfigurasi.
+          </p>
+          <div className="flex items-center gap-2 text-[11px] text-gray-400">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Tersinkronisasi langsung dengan Sidebar, Route Guard, dan Aksi CRUD</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 5. REGISTERED USERS UNDER THIS ROLE                           */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      <div className="p-5 rounded-2xl bg-white border border-gray-100 shadow-2xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold">
+              <Users className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-extrabold text-gray-900">
+                  Pengguna dengan Role {activeRoleData.name} ({roleUserMap[activeRole]?.length || 0} akun)
+                </h3>
+                {loadingUsers && (
+                  <RefreshCw className="w-3 h-3 text-[#531FFF] animate-spin" />
+                )}
+              </div>
+              <p className="text-[11px] text-gray-500 font-medium">
+                Daftar akun riil dari database yang saat ini terpengaruh oleh konfigurasi hak akses di atas.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={loadAccounts}
+              disabled={loadingUsers}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 transition-all cursor-pointer disabled:opacity-50"
+              title="Segarkan daftar pengguna terbaru dari database"
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5 text-gray-500", loadingUsers && "animate-spin text-[#531FFF]")} />
+              <span>Segarkan Data</span>
+            </button>
+
+            {isSuperAdmin && (
+              <Link
+                href="/accounts"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-[#531FFF] bg-[#F3F0FF] hover:bg-[#531FFF] hover:text-white transition-all cursor-pointer"
+              >
+                <span>Kelola di Akun System</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </Link>
+            )}
+          </div>
+        </div>
+
+        {(roleUserMap[activeRole] || []).length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {(roleUserMap[activeRole] || []).map((acc) => {
+              const extraInfo = acc.role === "guru"
+                ? (acc.nip ? `NIP: ${acc.nip}` : acc.subject || "Guru Mata Pelajaran")
+                : acc.role === "siswa"
+                ? (acc.className ? `${acc.className}${acc.nisn ? ` • NISN: ${acc.nisn}` : ""}` : (acc.nisn ? `NISN: ${acc.nisn}` : "Siswa"))
+                : acc.role === "orang-tua"
+                ? (acc.studentName ? `Wali dari: ${acc.studentName}` : "Wali Murid")
+                : acc.role === "kepala-sekolah"
+                ? "Kepala Sekolah Quick Schools"
+                : acc.role === "super-admin"
+                ? "Super Administrator"
+                : "Staff Administrasi";
+
+              return (
+                <div
+                  key={acc.id || acc.uid || acc.email}
+                  className="p-3.5 bg-gray-50/70 hover:bg-purple-50/30 border border-gray-200/80 hover:border-purple-200 rounded-xl flex items-center justify-between gap-3 transition-colors"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                      {(acc.name || "U").charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-gray-900 truncate">{acc.name}</p>
+                      <p className="text-[11px] text-gray-500 font-medium truncate">{acc.email}</p>
+                      <p className="text-[10px] text-[#531FFF] font-semibold truncate mt-0.5">
+                        {extraInfo}
+                      </p>
                     </div>
                   </div>
 
                   <span className={cn(
-                    "text-[10px] font-extrabold px-2 py-0.5 rounded-full shrink-0 ml-1.5",
-                    isActive ? "bg-white/20 text-white" : "bg-purple-50 text-[#531FFF] border border-purple-100"
+                    "px-2 py-0.5 rounded-md text-[10px] font-extrabold border shrink-0",
+                    acc.status === "Aktif"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : acc.status === "Belum Onboarding"
+                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                      : "bg-gray-100 text-gray-600 border-gray-200"
                   )}>
-                    {roleAccounts.length}
+                    {acc.status || "Aktif"}
                   </span>
-                </button>
+                </div>
               );
             })}
           </div>
-        </div>
-
-        {/* Right Main Permissions Workspace */}
-        <div className="lg:col-span-3 space-y-6">
-          
-          {/* Active Role Banner & Summary */}
-          <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-lg bg-purple-50 border border-purple-100 text-[#531FFF] flex items-center justify-center font-bold">
-                  <activeRoleData.icon className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-gray-900">Otorisasi Modul: {activeRoleData.name}</h3>
-                    <span className="px-2.5 py-0.5 text-[10px] font-extrabold bg-purple-50 text-[#531FFF] rounded border border-purple-100">
-                      {activeRoleData.badge}
-                    </span>
-                    <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-50 text-emerald-700 rounded border border-emerald-200">
-                      {roleUserMap[activeRole]?.length || 0} Akun Terdaftar
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-0.5">{activeRoleData.description}</p>
-                </div>
-              </div>
-
-              {activeRole === "super-admin" && (
-                <div className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-md text-xs font-bold flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5" />
-                  Super Admin Memiliki Akses Penuh
-                </div>
-              )}
-            </div>
-
-            {/* Quick Access Presets Bar */}
-            {activeRole !== "super-admin" && (
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
-                  <Sparkles className="w-3.5 h-3.5 text-[#531FFF]" />
-                  <span>Preset Akses Cepat:</span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => applyPreset("standard")}
-                    className="px-3 py-1.5 bg-[#F3F0FF] hover:bg-[#531FFF] text-[#531FFF] hover:text-white rounded-md text-xs font-bold transition-all border border-[#531FFF]/20 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Building2 className="w-3.5 h-3.5" />
-                    Standar Sekolah
-                  </button>
-
-                  <button
-                    onClick={() => applyPreset("readOnly")}
-                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs font-bold transition-all border border-gray-200 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Eye className="w-3.5 h-3.5 text-blue-600" />
-                    Read-Only All
-                  </button>
-
-                  <button
-                    onClick={() => applyPreset("fullWrite")}
-                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-xs font-bold transition-all border border-gray-200 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
-                    Full Write
-                  </button>
-
-                  <button
-                    onClick={() => applyPreset("clear")}
-                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md text-xs font-bold transition-all border border-rose-200 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Batasi Semua
-                  </button>
-                </div>
-              </div>
-            )}
+        ) : (
+          <div className="p-8 text-center text-gray-400 text-xs font-medium bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+            Belum ada akun pengguna yang terdaftar dengan peran {activeRoleData.name}.
           </div>
-
-          {/* Permissions Matrix Container */}
-          <div className="bg-white border border-gray-100 rounded-lg shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden">
-            
-            {/* Filter & Bulk Select Bar */}
-            <div className="p-4 border-b border-gray-100 bg-gray-50/60 flex flex-col md:flex-row items-center justify-between gap-4">
-              
-              {/* Search & Category filter */}
-              <div className="flex items-center gap-3 w-full md:w-auto">
-                <div className="relative flex-1 md:w-56">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input 
-                    type="text" 
-                    placeholder="Cari nama modul..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF]"
-                  />
-                </div>
-
-                <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
-                  {["Semua", "Akademik", "Master Data", "Keuangan", "Sistem", "Komunikasi"].map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setCategoryFilter(cat)}
-                      className={cn(
-                        "px-2.5 py-1 rounded text-xs font-semibold transition-all whitespace-nowrap cursor-pointer",
-                        categoryFilter === cat 
-                          ? "bg-white text-[#531FFF] border border-[#531FFF]/30 shadow-xs" 
-                          : "text-gray-600 hover:text-gray-900"
-                      )}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Bulk Toggle Buttons */}
-              {activeRole !== "super-admin" && (
-                <div className="flex items-center gap-2 text-xs">
-                  <button 
-                    onClick={() => handleToggleColumn("read")}
-                    className="px-2.5 py-1 bg-white border border-gray-200 hover:border-blue-300 text-blue-700 rounded font-bold transition-all shadow-xs cursor-pointer"
-                  >
-                    Toggle All Read
-                  </button>
-                  <button 
-                    onClick={() => handleToggleColumn("write")}
-                    className="px-2.5 py-1 bg-white border border-gray-200 hover:border-emerald-300 text-emerald-700 rounded font-bold transition-all shadow-xs cursor-pointer"
-                  >
-                    Toggle All Write
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Matrix Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-white text-xs font-bold text-gray-400 uppercase tracking-wider">
-                    <th className="px-6 py-4">Modul Fitur & Deskripsi</th>
-                    <th className="px-6 py-4 text-center">Kategori</th>
-                    <th className="px-6 py-4 text-center">Lihat (Read)</th>
-                    <th className="px-6 py-4 text-center">Tambah/Edit (Write)</th>
-                    <th className="px-6 py-4 text-center">Hapus (Delete)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 text-xs">
-                  {filteredModules.length > 0 ? (
-                    filteredModules.map((mod) => {
-                      const rolePerms = permissions[activeRole] || DEFAULT_PERMISSIONS[activeRole] || {};
-                      const modPerms = rolePerms[mod.id] || { read: false, write: false, delete: false };
-                      const isAccountsModule = mod.id === "accounts";
-                      const isAccountsLocked = isAccountsModule && activeRole !== "super-admin";
-
-                      return (
-                        <tr key={mod.id} className={cn("hover:bg-gray-50/60 transition-colors group", isAccountsLocked && "bg-rose-50/20")}>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              <p className="font-bold text-gray-900 group-hover:text-[#531FFF] transition-colors">
-                                {mod.name}
-                              </p>
-                              {isAccountsModule && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200">
-                                  <Lock className="w-2.5 h-2.5" />
-                                  Khusus Super Admin
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-gray-500 font-medium mt-0.5">{mod.description}</p>
-                          </td>
-
-                          <td className="px-6 py-4 text-center">
-                            <span className="px-2.5 py-1 rounded text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">
-                              {mod.category}
-                            </span>
-                          </td>
-
-                          <td className="px-6 py-4 text-center">
-                            <PermissionCheckbox 
-                              checked={modPerms.read} 
-                              onChange={() => handleToggle(mod.id, "read")}
-                              disabled={activeRole === "super-admin" || isAccountsLocked}
-                              activeColor="bg-blue-600 border-blue-600"
-                            />
-                          </td>
-
-                          <td className="px-6 py-4 text-center">
-                            <PermissionCheckbox 
-                              checked={modPerms.write} 
-                              onChange={() => handleToggle(mod.id, "write")}
-                              disabled={activeRole === "super-admin" || isAccountsLocked}
-                              activeColor="bg-emerald-600 border-emerald-600"
-                            />
-                          </td>
-
-                          <td className="px-6 py-4 text-center">
-                            <PermissionCheckbox 
-                              checked={modPerms.delete} 
-                              onChange={() => handleToggle(mod.id, "delete")}
-                              disabled={activeRole === "super-admin" || isAccountsLocked || (!modPerms.write && !modPerms.read)}
-                              activeColor="bg-rose-600 border-rose-600"
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-10 text-center text-gray-500 font-semibold">
-                        Modul fitur tidak ditemukan. Coba reset pencarian atau kata kunci filter.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Matrix Footer */}
-            <div className="p-4 border-t border-gray-100 bg-gray-50/40 flex items-center justify-between text-xs text-gray-500 font-medium">
-              <p>Menampilkan <span className="font-bold text-gray-900">{filteredModules.length}</span> modul fitur RBAC</p>
-              <p className="text-[11px] text-gray-400 font-mono">Modul tersinkronisasi dengan Sidebar Navigasi</p>
-            </div>
-          </div>
-
-          {/* ================= REGISTERED ACCOUNTS FOR ACTIVE ROLE ================= */}
-          <div className="bg-white border border-gray-100 rounded-lg shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] overflow-hidden space-y-4 p-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold">
-                  <Users className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-gray-900">
-                    Daftar Akun Pengguna Terdaftar ({activeRoleData.name})
-                  </h3>
-                  <p className="text-[11px] text-gray-500 font-medium">
-                    Tersinkronisasi langsung dengan database <strong>Manajemen Akun System</strong> ({roleUserMap[activeRole]?.length || 0} akun)
-                  </p>
-                </div>
-              </div>
-
-              {isSuperAdmin && (
-                <Link
-                  href="/accounts"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold text-[#531FFF] bg-[#F3F0FF] hover:bg-[#531FFF] hover:text-white transition-all border border-[#531FFF]/20 shrink-0"
-                >
-                  <span>Buka Manajemen Akun</span>
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                </Link>
-              )}
-            </div>
-
-            {/* List of Accounts */}
-            {(roleUserMap[activeRole] || []).length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {(roleUserMap[activeRole] || []).map((acc) => (
-                  <div
-                    key={acc.id || acc.uid}
-                    className="p-3 bg-gray-50/70 hover:bg-purple-50/30 border border-gray-200/80 hover:border-purple-200 rounded-lg flex items-center justify-between gap-3 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#531FFF] to-[#8252FF] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
-                        {(acc.name || "U").charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-gray-900 truncate">{acc.name}</p>
-                        <p className="text-[11px] text-gray-500 font-medium truncate">{acc.email}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={cn(
-                        "px-2 py-0.5 rounded text-[10px] font-bold border",
-                        acc.status === "Aktif"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : acc.status === "Belum Onboarding"
-                            ? "bg-amber-50 text-amber-700 border-amber-200"
-                            : "bg-gray-100 text-gray-600 border-gray-200"
-                      )}>
-                        {acc.status || "Aktif"}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="py-8 text-center bg-gray-50/50 rounded-lg border border-dashed border-gray-200 space-y-2">
-                <User className="w-8 h-8 text-gray-400 mx-auto" />
-                <p className="text-xs font-bold text-gray-700">Belum ada akun dengan peran {activeRoleData.name}</p>
-                <p className="text-[11px] text-gray-400 max-w-sm mx-auto">
-                  Anda dapat menambahkan akun baru dengan peran ini melalui modul Manajemen Akun System.
-                </p>
-                {isSuperAdmin && (
-                  <Link
-                    href="/accounts"
-                    className="inline-flex items-center gap-1 text-xs font-bold text-[#531FFF] hover:underline pt-1"
-                  >
-                    <span>Buka Manajemen Akun System &rarr;</span>
-                  </Link>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
 }
 
-function PermissionCheckbox({ 
-  checked, 
-  onChange, 
-  disabled,
-  activeColor = "bg-[#531FFF] border-[#531FFF]"
-}: { 
-  checked: boolean; 
-  onChange: () => void; 
+/**
+ * Reusable interactive permission checkbox component
+ */
+function PermissionToggle({
+  checked,
+  onChange,
+  disabled = false,
+  activeColor = "bg-[#531FFF] border-[#531FFF]",
+}: {
+  checked: boolean;
+  onChange: () => void;
   disabled?: boolean;
   activeColor?: string;
 }) {
   return (
-    <label className={cn(
-      "relative inline-flex items-center justify-center cursor-pointer p-1.5 rounded-md transition-all",
-      disabled ? "cursor-not-allowed opacity-60" : "hover:bg-gray-100"
-    )}>
-      <input
-        type="checkbox"
-        className="sr-only"
-        checked={checked}
-        onChange={onChange}
-        disabled={disabled}
-      />
-      <div className={cn(
-        "w-5 h-5 flex items-center justify-center rounded border transition-all duration-200",
-        checked 
-          ? `${activeColor} text-white shadow-xs` 
-          : "bg-white border-gray-300 text-transparent hover:border-gray-400"
-      )}>
-        <Check className="w-3.5 h-3.5" strokeWidth={3} />
-      </div>
-    </label>
+    <button
+      type="button"
+      onClick={onChange}
+      disabled={disabled}
+      className={cn(
+        "w-6 h-6 rounded-lg border flex items-center justify-center transition-all mx-auto",
+        disabled ? "opacity-30 cursor-not-allowed bg-gray-100 border-gray-200" : "cursor-pointer active:scale-90",
+        checked
+          ? `${activeColor} text-white shadow-xs`
+          : "bg-white border-gray-300 hover:border-gray-400 text-transparent"
+      )}
+    >
+      <Check className={cn("w-3.5 h-3.5 transition-transform", checked ? "scale-100 text-white" : "scale-0")} strokeWidth={3} />
+    </button>
   );
 }

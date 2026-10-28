@@ -14,65 +14,14 @@ import {
 } from "@/lib/school-level-config";
 
 import { OperationalDaysPattern } from "@/lib/operational-days";
+import { 
+  SchoolProfile, 
+  DEFAULT_SCHOOL_PROFILE 
+} from "@/lib/school-profile-config";
 
 export type { EducationalStage, VocationalProgram, StageConfig, OperationalDaysPattern };
-
-export interface SchoolProfile {
-  schoolName: string;
-  schoolCode: string;
-  npsn: string;
-  schoolType: string;
-  educationalStage: EducationalStage;
-  vocationalPrograms?: VocationalProgram[];
-  accreditation: string;
-  address: string;
-  city: string;
-  province: string;
-  postalCode: string;
-  phone: string;
-  email: string;
-  website: string;
-  logoUrl: string;
-  principalName: string;
-  principalNip: string;
-  operatingHours: string;
-  operationalDays: OperationalDaysPattern;
-  description: string;
-  // Geolocation & Attendance Geofence
-  latitude: number;
-  longitude: number;
-  radiusMeters: number;
-  locationAddress: string;
-  updatedAt?: string;
-  updatedBy?: string;
-}
-
-export const DEFAULT_SCHOOL_PROFILE: SchoolProfile = {
-  schoolName: "SMA Garuda Nusantara Smart School",
-  schoolCode: "SCH-GNS-2026",
-  npsn: "20194820",
-  schoolType: "SMA (Sekolah Menengah Atas)",
-  educationalStage: "SMA",
-  vocationalPrograms: DEFAULT_VOCATIONAL_PRESETS.map((p, i) => ({ id: `prog_${i + 1}`, ...p })),
-  accreditation: "A (Sangat Baik / Unggul)",
-  address: "Jl. Pendidikan No. 45, Kompleks Akademika",
-  city: "Jakarta Selatan",
-  province: "DKI Jakarta",
-  postalCode: "12430",
-  phone: "+62 21 7890-1234",
-  email: "info@garudanusa.sch.id",
-  website: "https://garudanusa.sch.id",
-  logoUrl: "https://images.unsplash.com/photo-1592280771190-3e2e4d571952?w=400&auto=format&fit=crop&q=80",
-  principalName: "Dr. Danur Adhi, M.Pd",
-  principalNip: "19750812 200003 1 002",
-  operatingHours: "06:30 - 16:00 WIB",
-  operationalDays: "Senin - Jumat",
-  description: "Pusat keunggulan pendidikan berbasis teknologi AI, biometrik, dan kepemimpinan berkarakter.",
-  latitude: -6.200000,
-  longitude: 106.816666,
-  radiusMeters: 100,
-  locationAddress: "Kampus Utama - Gerbang & Area Sekolah",
-};
+export type { SchoolProfile };
+export { DEFAULT_SCHOOL_PROFILE };
 
 const STORAGE_KEY = "quick_schools_school_profile";
 
@@ -160,6 +109,9 @@ export function SchoolProfileProvider({ children }: { children: ReactNode }) {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
         setProfile(merged);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("school-profile-updated", { detail: merged }));
+        }
 
         await fetch("/api/school-profile", {
           method: "POST",

@@ -34,7 +34,14 @@ import { ProfileAvatar } from "@/components/ui/profile-avatar";
 
 export default function LeaveRequestsPage() {
   const toast = useToast();
-  const { user: currentUser, userData: currentUserData, role: userRole } = useAuth();
+  const { 
+    user: currentUser, 
+    userData: currentUserData, 
+    role: userRole, 
+    canCreate, 
+    canApprove, 
+    isSuperAdmin 
+  } = useAuth();
   const { activeAcademicYear, activeSemester } = useAcademicYear();
 
   const { students: unifiedStudents } = useUnifiedStudents();
@@ -60,6 +67,10 @@ export default function LeaveRequestsPage() {
   const isParent = roleLower === "orang-tua" || roleLower === "parent";
   const isGuru = roleLower === "guru" || roleLower === "teacher";
   const isAdmin = ["admin", "super-admin", "super admin", "kepala-sekolah", "kepala sekolah"].includes(roleLower);
+
+  // Dynamic RBAC Permission Checks
+  const canSubmitLeave = isSuperAdmin || canCreate("leave-requests");
+  const canApproveLeave = isSuperAdmin || canApprove("leave-requests");
 
   // 1. Fetch classes from PostgreSQL API
   useEffect(() => {
@@ -339,14 +350,16 @@ export default function LeaveRequestsPage() {
               </span>
             )}
 
-            <button
-              type="button"
-              onClick={() => setIsCreateModalOpen(true)}
-              className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7344FF] hover:from-[#4314cc] hover:to-[#5e31e6] text-white rounded-xl text-xs font-extrabold transition-all active:scale-[0.98] flex items-center gap-2 shadow-sm shadow-[#531FFF]/25 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>{isStudent || isParent ? "Ajukan Izin / Sakit" : "+ Buat Pengajuan"}</span>
-            </button>
+            {canSubmitLeave && (
+              <button
+                type="button"
+                onClick={() => setIsCreateModalOpen(true)}
+                className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7344FF] hover:from-[#4314cc] hover:to-[#5e31e6] text-white rounded-xl text-xs font-extrabold transition-all active:scale-[0.98] flex items-center gap-2 shadow-sm shadow-[#531FFF]/25 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{isStudent || isParent ? "Ajukan Izin / Sakit" : "+ Buat Pengajuan"}</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -601,7 +614,7 @@ export default function LeaveRequestsPage() {
               <tbody className="divide-y divide-gray-100 text-xs">
                 {filteredRequests.map((req) => {
                   const isPending = req.status === "Menunggu Persetujuan";
-                  const canMutate = isGuru || isAdmin;
+                  const canMutate = canApproveLeave;
 
                   return (
                     <tr 

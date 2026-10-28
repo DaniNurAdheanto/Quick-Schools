@@ -279,9 +279,22 @@ export default function ReportCardsPage() {
   const [isSyncingSubjects, setIsSyncingSubjects] = useState(false);
 
   // Centralized useAuth
-  const { role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
+  const { 
+    role: authRole, 
+    rawRole: authRawRole, 
+    userData, 
+    isAuthLoading, 
+    isRoleReady, 
+    isSuperAdmin,
+    canApprove,
+    canExport,
+    canEdit
+  } = useAuth();
   const currentUserData = userData;
   const userRole = (authRawRole || authRole || "").toLowerCase();
+  const canApproveReport = isSuperAdmin || canApprove("report-cards");
+  const canExportReport = isSuperAdmin || canExport("report-cards");
+  const canEditReport = isSuperAdmin || canEdit("report-cards");
   const userEmail = userData?.email || auth.currentUser?.email || "";
   const [previewAsGuru, setPreviewAsGuru] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -337,7 +350,7 @@ export default function ReportCardsPage() {
   const isParent = isParentRole(userRole) || userRole === "orang-tua" || isParentRole(currentUserData?.role);
   const isStudentRole = userRole === "student" || userRole === "siswa" || isParent;
   const isGuru = (userRole === "guru" || userRole === "teacher") || previewAsGuru;
-  const canMutateGrades = !isKepalaSekolah || Boolean(rolePermissions?.grades?.write);
+  const canMutateGrades = isSuperAdmin || canEditReport || canApproveReport;
   const isReadOnly = isStudentRole || !canMutateGrades;
 
   // Determine homeroom class(es) for the logged-in Guru (Wali Kelas)
@@ -2103,14 +2116,16 @@ export default function ReportCardsPage() {
             </button>
           </div>
 
-          <button
-            onClick={() => setIsPrintModalOpen(true)}
-            disabled={!currentStudent}
-            className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#1A1A2E] hover:bg-black text-white px-4 py-2.5 rounded-xl text-xs font-extrabold shadow-sm transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Cetak Rapor (PDF)</span>
-          </button>
+          {canExportReport && (
+            <button
+              onClick={() => setIsPrintModalOpen(true)}
+              disabled={!currentStudent}
+              className="flex-1 lg:flex-none flex items-center justify-center gap-2 bg-[#1A1A2E] hover:bg-black text-white px-4 py-2.5 rounded-xl text-xs font-extrabold shadow-sm transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Cetak Rapor (PDF)</span>
+            </button>
+          )}
         </div>
       </div>
 

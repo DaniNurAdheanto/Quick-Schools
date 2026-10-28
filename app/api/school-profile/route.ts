@@ -1,29 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DEFAULT_SCHOOL_PROFILE } from "@/context/SchoolProfileContext";
-
-// Simple persistent store in memory / module state with defaults
-let currentSchoolProfile = { ...DEFAULT_SCHOOL_PROFILE };
+import { 
+  readStoredSchoolProfile, 
+  writeStoredSchoolProfile 
+} from "@/lib/school-profile-config";
 
 export async function GET() {
-  return NextResponse.json({
-    success: true,
-    profile: currentSchoolProfile,
-  });
+  try {
+    const profile = readStoredSchoolProfile();
+    return NextResponse.json({
+      success: true,
+      profile,
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    currentSchoolProfile = {
-      ...currentSchoolProfile,
-      ...body,
-      updatedAt: new Date().toISOString(),
-    };
+    const updated = writeStoredSchoolProfile(body);
     return NextResponse.json({
       success: true,
-      profile: currentSchoolProfile,
+      profile: updated,
     });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }

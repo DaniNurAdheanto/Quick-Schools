@@ -285,10 +285,24 @@ export default function AttendancePage() {
   const [activeTab, setActiveTab] = useState<"daily" | "biometric" | "monthly">("daily");
 
   // Centralized useAuth
-  const { user: authUser, role: authRole, rawRole: authRawRole, userData, isAuthLoading, isRoleReady, isKepalaSekolah, rolePermissions } = useAuth();
+  const { 
+    user: authUser, 
+    role: authRole, 
+    rawRole: authRawRole, 
+    userData, 
+    isAuthLoading, 
+    isRoleReady, 
+    isSuperAdmin,
+    canCreate,
+    canEdit,
+    canExport
+  } = useAuth();
   const rawRole = (authRawRole || authRole || "").toLowerCase();
   const userRole = (rawRole === "student" || rawRole === "siswa") ? "siswa" : rawRole;
-  const canMutateAttendance = !isKepalaSekolah || Boolean(rolePermissions?.attendance?.write);
+  const canCreateAttendance = isSuperAdmin || canCreate("attendance");
+  const canEditAttendance = isSuperAdmin || canEdit("attendance");
+  const canExportAttendance = isSuperAdmin || canExport("attendance");
+  const canMutateAttendance = isSuperAdmin || canCreateAttendance || canEditAttendance;
   const currentUser = authUser;
   const currentUserData = userData;
   const [dbStudentInfo, setDbStudentInfo] = useState<any>(null);
@@ -2011,32 +2025,38 @@ export default function AttendancePage() {
                   <span>Preview Siswa</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setShowScanModal(true)}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:shadow-md hover:shadow-emerald-500/25 active:scale-[0.98] transition-all text-xs font-extrabold shadow-xs cursor-pointer border border-white/20"
-                >
-                  <ScanFace className="w-3.5 h-3.5 text-white animate-pulse" />
-                  <span>Kamera & GPS Scan</span>
-                </button>
+                {canCreateAttendance && (
+                  <button
+                    type="button"
+                    onClick={() => setShowScanModal(true)}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:shadow-md hover:shadow-emerald-500/25 active:scale-[0.98] transition-all text-xs font-extrabold shadow-xs cursor-pointer border border-white/20"
+                  >
+                    <ScanFace className="w-3.5 h-3.5 text-white animate-pulse" />
+                    <span>Kamera & GPS Scan</span>
+                  </button>
+                )}
 
-                <button
-                  type="button"
-                  onClick={handleExportCSV}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-2xs cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Ekspor CSV</span>
-                </button>
+                {canExportAttendance && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleExportCSV}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-2xs cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5 text-gray-500" />
+                      <span>Ekspor CSV</span>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={handlePrint}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-2xs print:hidden cursor-pointer"
-                >
-                  <Printer className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Cetak Rekap</span>
-                </button>
+                    <button
+                      type="button"
+                      onClick={handlePrint}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 active:scale-[0.98] transition-all text-xs font-bold shadow-2xs print:hidden cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-gray-500" />
+                      <span>Cetak Rekap</span>
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>

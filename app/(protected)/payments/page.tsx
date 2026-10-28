@@ -109,7 +109,11 @@ export default function PaymentsPage() {
     isAdmin: isAuthAdmin,
     isSuperAdmin: isAuthSuperAdmin,
     isKepalaSekolah,
-    rolePermissions,
+    canCreate,
+    canEdit,
+    canDelete,
+    canApprove,
+    canExport,
   } = useAuth();
 
   const currentUser: any = userData || authUser;
@@ -119,10 +123,15 @@ export default function PaymentsPage() {
   const isGuru = isAuthGuru || isTeacherRole(userRole);
   const isSuperAdmin = isAuthSuperAdmin || isSuperAdminRole(userRole);
   const isKepSek = Boolean(isKepalaSekolah || isKepalaSekolahRole(userRole));
-  const canMutateFinance = !isKepSek || Boolean(rolePermissions?.finance?.write);
+  
+  // Granular RBAC Permissions for Payments
+  const canCreatePayment = isSuperAdmin || canCreate("payments");
+  const canApprovePayment = isSuperAdmin || canApprove("payments");
+  const canDeletePayment = isSuperAdmin || canDelete("payments");
+  const canExportPayment = isSuperAdmin || canExport("payments");
+  const canManagePayments = isSuperAdmin || canCreatePayment || canApprovePayment || canEdit("payments");
   const isAdmin = (isAuthAdmin || isSuperAdmin || userRole === "admin") && !isGuru && !isStudent && !isKepSek;
-  const isReadOnly = isGuru || isStudent || (isKepSek && !canMutateFinance);
-  const canManagePayments = (isAdmin || (isKepSek && canMutateFinance)) && !isReadOnly;
+  const isReadOnly = !canManagePayments;
 
   const [matchedStudent, setMatchedStudent] = useState<any | null>(null);
 
@@ -1106,8 +1115,8 @@ export default function PaymentsPage() {
   };
 
   const handleConfirmDelete = async () => {
-    if (isReadOnly) {
-      showError?.("Aksi ditolak: Hanya Admin yang berwenang menghapus tagihan.");
+    if (!canDeletePayment || isReadOnly) {
+      showError?.("Aksi ditolak: Hanya Admin/Super Admin yang berwenang menghapus tagihan.");
       return;
     }
     if (!deleteModalState.bill) return;
@@ -1135,6 +1144,10 @@ export default function PaymentsPage() {
 
   // Export to CSV
   const handleExportCSV = () => {
+    if (!canExportPayment) {
+      showError?.("Aksi ditolak: Anda tidak memiliki izin untuk mengekspor data tagihan.");
+      return;
+    }
     const headers = [
       "No",
       "No. Invoice",
@@ -1324,33 +1337,39 @@ export default function PaymentsPage() {
                   <span>Tarif SPP</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleExportCSV}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl shadow-2xs transition-all cursor-pointer"
-                  title="Ekspor data ke file CSV / Excel"
-                >
-                  <Download className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Ekspor CSV</span>
-                </button>
+                {canExportPayment && (
+                  <button
+                    type="button"
+                    onClick={handleExportCSV}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl shadow-2xs transition-all cursor-pointer"
+                    title="Ekspor data ke file CSV / Excel"
+                  >
+                    <Download className="w-3.5 h-3.5 text-gray-500" />
+                    <span>Ekspor CSV</span>
+                  </button>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => setIsPrintReportModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl shadow-2xs transition-all cursor-pointer"
-                >
-                  <Printer className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Cetak Rekap</span>
-                </button>
+                {canExportPayment && (
+                  <button
+                    type="button"
+                    onClick={() => setIsPrintReportModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl shadow-2xs transition-all cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-gray-500" />
+                    <span>Cetak Rekap</span>
+                  </button>
+                )}
 
-                <button
-                  type="button"
-                  onClick={handleOpenAddModal}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-white bg-gradient-to-r from-[#531FFF] to-[#7B42FF] hover:opacity-95 rounded-xl shadow-sm shadow-[#531FFF]/25 transition-all hover:scale-[1.01] active:scale-[0.98] cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Terbitkan Tagihan</span>
-                </button>
+                {canCreatePayment && (
+                  <button
+                    type="button"
+                    onClick={handleOpenAddModal}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-white bg-gradient-to-r from-[#531FFF] to-[#7B42FF] hover:opacity-95 rounded-xl shadow-sm shadow-[#531FFF]/25 transition-all hover:scale-[1.01] active:scale-[0.98] cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Terbitkan Tagihan</span>
+                  </button>
+                )}
               </>
             )}
 
@@ -2129,20 +2148,24 @@ export default function PaymentsPage() {
 
                         {canManagePayments && (
                           <>
-                            <button
-                              onClick={() => handleOpenEditModal(bill)}
-                              className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
-                              title="Edit"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleOpenDeleteModal(bill)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                              title="Hapus"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {(canEdit("payments") || isSuperAdmin) && (
+                              <button
+                                onClick={() => handleOpenEditModal(bill)}
+                                className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
+                                title="Edit"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {canDeletePayment && (
+                              <button
+                                onClick={() => handleOpenDeleteModal(bill)}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                title="Hapus"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
@@ -2361,20 +2384,24 @@ export default function PaymentsPage() {
                               {/* Admin edit & delete */}
                               {canManagePayments && (
                                 <>
-                                  <button
-                                    onClick={() => handleOpenEditModal(bill)}
-                                    className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
-                                    title="Edit Tagihan"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleOpenDeleteModal(bill)}
-                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                    title="Hapus Tagihan"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  {(canEdit("payments") || isSuperAdmin) && (
+                                    <button
+                                      onClick={() => handleOpenEditModal(bill)}
+                                      className="p-1.5 text-gray-400 hover:text-[#531FFF] hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
+                                      title="Edit Tagihan"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  {canDeletePayment && (
+                                    <button
+                                      onClick={() => handleOpenDeleteModal(bill)}
+                                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                      title="Hapus Tagihan"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                 </>
                               )}
                             </div>

@@ -1,0 +1,5798 @@
+{
+  "super-admin": {
+    "dashboard": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "calendar": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "schedule": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "announcements": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "students": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "parents": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "classes": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "teachers": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "homeroom": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "subjects": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "attendance": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "leave-requests": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "teacher-attendance": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "grades": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "report-cards": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "exams": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "academic-years": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "payments": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "financial-reports": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "accounts": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "settings": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "roles": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "users": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "academic": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "finance": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    }
+  },
+  "admin": {
+    "dashboard": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "calendar": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "schedule": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "announcements": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "students": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "parents": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "classes": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "teachers": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "homeroom": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "subjects": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "attendance": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "leave-requests": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "teacher-attendance": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "grades": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "report-cards": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "exams": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "academic-years": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "payments": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "financial-reports": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": true,
+      "create": false,
+      "edit": true,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "roles": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "users": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "academic": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "finance": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    }
+  },
+  "guru": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "students": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "parents": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "classes": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "teachers": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "homeroom": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "subjects": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "leave-requests": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teacher-attendance": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "grades": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "report-cards": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "exams": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "academic-years": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "financial-reports": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    }
+  },
+  "siswa": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "students": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "parents": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "classes": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "teachers": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "homeroom": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "subjects": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "leave-requests": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "teacher-attendance": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "financial-reports": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    }
+  },
+  "orang-tua": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "students": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "parents": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "classes": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "teachers": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "homeroom": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "subjects": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "leave-requests": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "teacher-attendance": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "financial-reports": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    }
+  },
+  "kepala-sekolah": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "students": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "parents": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "classes": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teachers": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "homeroom": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "subjects": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "leave-requests": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teacher-attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "financial-reports": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "roles": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "users": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    }
+  },
+  "parent": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "students": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "parents": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "classes": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "teachers": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "homeroom": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "subjects": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "leave-requests": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "teacher-attendance": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "financial-reports": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    }
+  },
+  "orangtua": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "students": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "parents": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "classes": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "teachers": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "homeroom": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "subjects": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "leave-requests": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "teacher-attendance": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "financial-reports": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    }
+  },
+  "orang-tua / wali": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "students": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "parents": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "classes": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "teachers": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "homeroom": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "subjects": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "leave-requests": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "teacher-attendance": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "financial-reports": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    }
+  },
+  "wali-murid": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "students": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "parents": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "classes": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "teachers": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "homeroom": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "subjects": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "leave-requests": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "teacher-attendance": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "financial-reports": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    }
+  },
+  "wali": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "students": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "parents": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "classes": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "teachers": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "homeroom": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "subjects": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "leave-requests": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "teacher-attendance": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "financial-reports": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    }
+  },
+  "teacher": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "students": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "parents": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "classes": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "teachers": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "homeroom": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "subjects": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "leave-requests": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teacher-attendance": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "grades": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "report-cards": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "exams": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "academic-years": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "payments": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "financial-reports": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    }
+  },
+  "guru pengajar": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "students": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "parents": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "classes": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "teachers": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "homeroom": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "subjects": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "leave-requests": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teacher-attendance": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "grades": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "report-cards": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "exams": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "academic-years": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "financial-reports": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    }
+  },
+  "pengajar": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "students": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "parents": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "classes": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "teachers": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "homeroom": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "subjects": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "leave-requests": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teacher-attendance": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "grades": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "report-cards": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "exams": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "academic-years": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "financial-reports": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    }
+  },
+  "student": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "students": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "parents": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "classes": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "teachers": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "homeroom": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "subjects": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "leave-requests": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "teacher-attendance": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "financial-reports": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    }
+  },
+  "murid": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "students": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "parents": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "classes": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "teachers": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "homeroom": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "subjects": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "leave-requests": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "teacher-attendance": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "financial-reports": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    }
+  },
+  "kepalasekolah": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "students": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "parents": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "classes": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teachers": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "homeroom": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "subjects": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "leave-requests": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teacher-attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "financial-reports": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "roles": {
+      "view": true,
+      "create": true,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": true
+    },
+    "users": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    }
+  },
+  "kelapasekolah": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "students": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "parents": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "classes": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teachers": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "homeroom": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "subjects": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "leave-requests": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teacher-attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "financial-reports": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    }
+  },
+  "kelapaseokolah": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "students": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "parents": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "classes": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teachers": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "homeroom": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "subjects": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "leave-requests": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teacher-attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "financial-reports": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    }
+  },
+  "kepalaseokolah": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "students": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "parents": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "classes": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teachers": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "homeroom": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "subjects": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "leave-requests": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teacher-attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "financial-reports": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    }
+  },
+  "kepsek": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "students": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "parents": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "classes": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teachers": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "homeroom": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "subjects": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "leave-requests": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teacher-attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "financial-reports": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    }
+  },
+  "principal": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "students": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "parents": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "classes": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teachers": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "homeroom": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "subjects": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "leave-requests": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teacher-attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "financial-reports": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    }
+  },
+  "headmaster": {
+    "dashboard": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "calendar": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "schedule": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "announcements": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": true
+    },
+    "students": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "parents": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "classes": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teachers": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "homeroom": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "subjects": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "leave-requests": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "teacher-attendance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "grades": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "report-cards": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "exams": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic-years": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "payments": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "financial-reports": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "accounts": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "settings": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": true,
+      "write": false
+    },
+    "roles": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": false,
+      "read": false,
+      "write": false
+    },
+    "users": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "academic": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": false,
+      "export": true,
+      "read": true,
+      "write": false
+    },
+    "finance": {
+      "view": true,
+      "create": false,
+      "edit": false,
+      "delete": false,
+      "approve": true,
+      "export": true,
+      "read": true,
+      "write": false
+    }
+  }
+}

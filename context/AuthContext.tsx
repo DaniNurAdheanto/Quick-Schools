@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react";
 import { User, onAuthStateChanged, signOut, deleteUser } from "firebase/auth";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { 
   DEFAULT_PERMISSIONS, 
@@ -12,8 +12,10 @@ import {
   isParentRole,
   isKepalaSekolahRole,
   canMutateModule,
+  canAccessMenu,
   normalizeRole,
-  ModulePermission
+  ModulePermission,
+  PermissionAction
 } from "@/lib/roles-config";
 
 export type UserRole = "super-admin" | "admin" | "guru" | "siswa" | "orang-tua" | "kepala-sekolah";
@@ -56,14 +58,21 @@ interface AuthContextType {
   isStudent: boolean;
   isParent: boolean;
   isKepalaSekolah: boolean;
+  hasPermission: (menuIdOrRoute: string, action: PermissionAction) => boolean;
+  canView: (menuIdOrRoute: string) => boolean;
+  canCreate: (menuIdOrRoute: string) => boolean;
+  canEdit: (menuIdOrRoute: string) => boolean;
+  canDelete: (menuIdOrRoute: string) => boolean;
+  canApprove: (menuIdOrRoute: string) => boolean;
+  canExport: (menuIdOrRoute: string) => boolean;
   canWrite: (module: string) => boolean;
-  canDelete: (module: string) => boolean;
   canRead: (module: string) => boolean;
   refreshUserData: () => Promise<void>;
   logout: (redirectTo?: string) => Promise<void>;
 }
 
 const AUTH_CACHE_KEY = "quick_schools_auth_session_v3";
+const ROLES_PERM_CACHE_KEY = "quick_schools_role_permissions_v2";
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -84,8 +93,14 @@ const AuthContext = createContext<AuthContextType>({
   isStudent: false,
   isParent: false,
   isKepalaSekolah: false,
-  canWrite: () => false,
+  hasPermission: () => false,
+  canView: () => false,
+  canCreate: () => false,
+  canEdit: () => false,
   canDelete: () => false,
+  canApprove: () => false,
+  canExport: () => false,
+  canWrite: () => false,
   canRead: () => false,
   refreshUserData: async () => {},
   logout: async () => {},
@@ -98,7 +113,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [rawRole, setRawRole] = useState<string>("");
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
   const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
-  const [rolePermissions, setRolePermissions] = useState<Record<string, ModulePermission>>({});
+  const [allRolePermissions, setAllRolePermissions] = useState<Record<string, Record<string, ModulePermission>>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem(ROLES_PERM_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && typeof parsed === "object") return parsed;
+        }
+      } catch (e) {}
+    }
+    return DEFAULT_PERMISSIONS;
+  });
+
+  const fetchRolePermissions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/roles");
+      const data = await res.json();
+      if (data.success && data.permissions) {
+        setAllRolePermissions(data.permissions);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem(ROLES_PERM_CACHE_KEY, JSON.stringify(data.permissions));
+          } catch (e) {}
+        }
+      }
+    } catch (e) {
+      console.warn("AuthContext: Could not fetch /api/roles:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRolePermissions();
+
+    const handleUpdate = () => {
+      // Instantly hydrate from localStorage if available to eliminate UI latency
+      if (typeof window !== "undefined") {
+        try {
+          const cached = localStorage.getItem(ROLES_PERM_CACHE_KEY);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && typeof parsed === "object") {
+              setAllRolePermissions(parsed);
+            }
+          }
+        } catch (e) {}
+      }
+      fetchRolePermissions();
+    };
+
+    window.addEventListener("roles-permissions-updated", handleUpdate);
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === ROLES_PERM_CACHE_KEY) {
+        handleUpdate();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("roles-permissions-updated", handleUpdate);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [fetchRolePermissions]);
 
   const fetchUserData = useCallback(async (firebaseUser: User) => {
     try {
@@ -130,7 +206,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserData(null);
         setRole(null);
         setRawRole("");
-        setRolePermissions({});
         try {
           localStorage.removeItem(AUTH_CACHE_KEY);
         } catch (e) {}
@@ -167,7 +242,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUserData(null);
           setRole(null);
           setRawRole("");
-          setRolePermissions({});
           try {
             localStorage.removeItem(AUTH_CACHE_KEY);
           } catch (e) {}
@@ -284,7 +358,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserData(null);
         setRole(null);
         setRawRole("");
-        setRolePermissions({});
         try {
           localStorage.removeItem(AUTH_CACHE_KEY);
         } catch (e) {}
@@ -302,7 +375,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserData(null);
         setRole(null);
         setRawRole("");
-        setRolePermissions({});
         try {
           localStorage.removeItem(AUTH_CACHE_KEY);
         } catch (e) {}
@@ -387,16 +459,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRawRole(uRawRole);
       setRole(normalized);
 
-      // Fetch custom role permissions from roles/{normalized} or fallback
-      let perms = DEFAULT_PERMISSIONS[normalized] || DEFAULT_PERMISSIONS["admin"] || {};
+      // Fetch custom role permissions from roles/{normalized} if available
       try {
         const roleDocRef = doc(db, "roles", normalized);
         const roleSnap = await getDoc(roleDocRef);
         if (roleSnap.exists() && roleSnap.data().modules) {
-          perms = roleSnap.data().modules;
+          const fsMods = roleSnap.data().modules;
+          setAllRolePermissions(prev => ({
+            ...prev,
+            [normalized]: {
+              ...(prev[normalized] || {}),
+              ...fsMods,
+            }
+          }));
         }
       } catch (err) {}
-      setRolePermissions(perms);
 
       // Update local cache
       try {
@@ -419,7 +496,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUserData(null);
       setRole(null);
       setRawRole("");
-      setRolePermissions({});
       try {
         localStorage.removeItem(AUTH_CACHE_KEY);
       } catch (e) {}
@@ -444,7 +520,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserData(pgUser);
         setRole(uRole);
         setRawRole(pgUser.role);
-        setRolePermissions(DEFAULT_PERMISSIONS[uRole] || DEFAULT_PERMISSIONS["admin"] || {});
         setIsAuthLoading(false);
         try {
           localStorage.setItem(
@@ -492,7 +567,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUserData(cached.userData);
             setRole(norm);
             setRawRole(cached.rawRole || norm);
-            setRolePermissions(DEFAULT_PERMISSIONS[norm] || {});
             setIsAuthLoading(false);
           }
         }
@@ -512,7 +586,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUserData(null);
             setRole(null);
             setRawRole("");
-            setRolePermissions({});
             setIsAuthLoading(false);
             try {
               localStorage.removeItem(AUTH_CACHE_KEY);
@@ -548,7 +621,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserData(data.user);
         setRole(uRole);
         setRawRole(data.user.role);
-        setRolePermissions(DEFAULT_PERMISSIONS[uRole] || DEFAULT_PERMISSIONS["admin"] || {});
       } else if (auth.currentUser) {
         await fetchUserData(auth.currentUser);
       }
@@ -588,7 +660,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUserData(null);
       setRole(null);
       setRawRole("");
-      setRolePermissions({});
 
       // Keep isLoggingOut true during transition and perform clean redirect
       if (typeof window !== "undefined") {
@@ -611,26 +682,80 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isKepalaSekolah = useMemo(() => Boolean(user) && (isKepalaSekolahRole(rawRole) || isKepalaSekolahRole(role) || role === "kepala-sekolah"), [user, rawRole, role]);
   const isAdmin = useMemo(() => Boolean(user) && (role === "admin" || (rawRole || "").toLowerCase() === "admin") && !isSuperAdmin && !isKepalaSekolah, [user, role, rawRole, isSuperAdmin, isKepalaSekolah]);
 
+  const activeRoleName = useMemo(() => {
+    return normalizeRole(rawRole || role || "");
+  }, [rawRole, role]);
+
+  // Derive active permissions for current user's role from authoritative system permissions
+  const activeRolePermissions = useMemo(() => {
+    if (!activeRoleName) return {};
+    return allRolePermissions[activeRoleName] || allRolePermissions[role || ""] || DEFAULT_PERMISSIONS[activeRoleName] || {};
+  }, [allRolePermissions, activeRoleName, role]);
+
+  // Real-time synchronization of role permissions when active role changes
+  useEffect(() => {
+    if (!activeRoleName) return;
+    try {
+      const unsub = onSnapshot(doc(db, "roles", activeRoleName), (docSnap) => {
+        if (docSnap.exists() && docSnap.data().modules) {
+          const fsMods = docSnap.data().modules;
+          setAllRolePermissions(prev => ({
+            ...prev,
+            [activeRoleName]: {
+              ...(prev[activeRoleName] || {}),
+              ...fsMods,
+            }
+          }));
+        }
+      }, () => {
+        // quiet fallback
+      });
+      return () => unsub();
+    } catch (e) {
+      console.warn("Could not attach role permissions snapshot listener:", e);
+    }
+  }, [activeRoleName]);
+
   const canWrite = useCallback((module: string): boolean => {
     if (!user) return false;
-    return canMutateModule(rawRole || role, rolePermissions, module, "write");
-  }, [user, rawRole, role, rolePermissions]);
+    return canMutateModule(rawRole || role, activeRolePermissions, module, "write");
+  }, [user, rawRole, role, activeRolePermissions]);
 
-  const canDelete = useCallback((module: string): boolean => {
+  // Comprehensive granular permission helpers
+  const hasPermission = useCallback((menuIdOrRoute: string, action: PermissionAction): boolean => {
     if (!user) return false;
-    return canMutateModule(rawRole || role, rolePermissions, module, "delete");
-  }, [user, rawRole, role, rolePermissions]);
+    const currentActiveRole = rawRole || role || "";
+    return canAccessMenu(currentActiveRole, activeRolePermissions, menuIdOrRoute, action);
+  }, [user, rawRole, role, activeRolePermissions]);
+
+  const canView = useCallback((menuIdOrRoute: string): boolean => {
+    return hasPermission(menuIdOrRoute, "view");
+  }, [hasPermission]);
+
+  const canCreate = useCallback((menuIdOrRoute: string): boolean => {
+    return hasPermission(menuIdOrRoute, "create");
+  }, [hasPermission]);
+
+  const canEdit = useCallback((menuIdOrRoute: string): boolean => {
+    return hasPermission(menuIdOrRoute, "edit");
+  }, [hasPermission]);
+
+  const canDeleteAction = useCallback((menuIdOrRoute: string): boolean => {
+    return hasPermission(menuIdOrRoute, "delete");
+  }, [hasPermission]);
+
+  const canApprove = useCallback((menuIdOrRoute: string): boolean => {
+    return hasPermission(menuIdOrRoute, "approve");
+  }, [hasPermission]);
+
+  const canExport = useCallback((menuIdOrRoute: string): boolean => {
+    return hasPermission(menuIdOrRoute, "export");
+  }, [hasPermission]);
 
   const canRead = useCallback((module: string): boolean => {
     if (!user) return false;
-    const activeR = rawRole || role;
-    if (isSuperAdminRole(activeR)) return true;
-    if (rolePermissions && rolePermissions[module]) {
-      return Boolean(rolePermissions[module].read);
-    }
-    const def = DEFAULT_PERMISSIONS[role || "admin"];
-    return def && def[module] ? Boolean(def[module].read) : false;
-  }, [user, rawRole, role, rolePermissions]);
+    return hasPermission(module, "view");
+  }, [user, hasPermission]);
 
   const userName = useMemo(() => {
     if (!user) return "";
@@ -667,15 +792,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isRoleReady,
       isLoggingOut,
       userRole,
-      rolePermissions,
+      rolePermissions: activeRolePermissions,
       isSuperAdmin,
       isAdmin,
       isGuru,
       isStudent,
       isParent,
       isKepalaSekolah,
+      hasPermission,
+      canView,
+      canCreate,
+      canEdit,
+      canDelete: canDeleteAction,
+      canApprove,
+      canExport,
       canWrite,
-      canDelete,
       canRead,
       refreshUserData,
       logout,
@@ -692,15 +823,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isRoleReady,
       isLoggingOut,
       userRole,
-      rolePermissions,
+      activeRolePermissions,
       isSuperAdmin,
       isAdmin,
       isGuru,
       isStudent,
       isParent,
       isKepalaSekolah,
+      hasPermission,
+      canView,
+      canCreate,
+      canEdit,
+      canDeleteAction,
+      canApprove,
+      canExport,
       canWrite,
-      canDelete,
       canRead,
       refreshUserData,
       logout,

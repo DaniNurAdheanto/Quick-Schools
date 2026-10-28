@@ -14,7 +14,7 @@ import { IdleTimeoutManager } from "@/components/auth/idle-timeout-manager";
 import { isUserOnboardingComplete } from "@/lib/auth-helpers";
 
 function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
-  const { user, userData, isAuthLoading, isLoggingOut, role, isSuperAdmin, isAdmin, isStudent, isParent } = useAuth();
+  const { user, userData, isAuthLoading, isLoggingOut, role, isSuperAdmin, canView } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -46,33 +46,8 @@ function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
     return <LogoutLoadingState />;
   }
 
-  // Route protection rules (URL without role prefixes)
+  // Route protection rules
   const isAccountsRoute = pathname === "/accounts" || pathname?.startsWith("/accounts/");
-  const isRolesRoute = pathname === "/roles" || pathname?.startsWith("/roles/");
-  const isTeachersRoute = pathname === "/teachers" || pathname?.startsWith("/teachers/");
-  const isStudentsManagementRoute = pathname === "/data-siswa" || pathname?.startsWith("/data-siswa/");
-  const isSettingsRoute = pathname === "/settings" || pathname?.startsWith("/settings/");
-  const isClassesRoute = pathname === "/classes" || pathname?.startsWith("/classes/");
-  const isHomeroomRoute = pathname === "/homeroom" || pathname?.startsWith("/homeroom/");
-  const isSubjectsRoute = pathname === "/subjects" || pathname?.startsWith("/subjects/");
-  const isTeacherAttendanceRoute = pathname === "/teacher-attendance" || pathname?.startsWith("/teacher-attendance/");
-  const isFinancialReportsRoute = pathname === "/financial-reports" || pathname?.startsWith("/financial-reports/");
-  const isAcademicYearsRoute = pathname === "/academic-years" || pathname?.startsWith("/academic-years/");
-  const isParentsRoute = pathname === "/parents" || pathname?.startsWith("/parents/");
-
-  const isSchoolAdminRoute = 
-    isAccountsRoute ||
-    isRolesRoute ||
-    isTeachersRoute ||
-    isStudentsManagementRoute ||
-    isSettingsRoute ||
-    isClassesRoute ||
-    isHomeroomRoute ||
-    isSubjectsRoute ||
-    isTeacherAttendanceRoute ||
-    isFinancialReportsRoute ||
-    isAcademicYearsRoute ||
-    isParentsRoute;
 
   // 1. Loading screen: NEVER render Super Admin layout while verifying
   if (isAuthLoading) {
@@ -117,6 +92,7 @@ function getPageTitleFromPath(pathname: string | null): string {
   if (pathname.includes("/schedule")) return "Jadwal Pelajaran";
   if (pathname.includes("/grades")) return "Penilaian & Nilai Siswa";
   if (pathname.includes("/teacher-attendance")) return "Presensi Guru";
+  if (pathname.includes("/leave-requests")) return "Izin & Sakit Siswa";
   if (pathname.includes("/attendance")) return "Presensi Siswa";
   if (pathname.includes("/exams")) return "Jadwal & Hasil Ujian";
   if (pathname.includes("/calendar")) return "Kalender Akademik";
@@ -224,82 +200,42 @@ function getPageTitleFromPath(pathname: string | null): string {
     );
   }
 
-  // 4. Strict Route Guard for Students accessing staff management and administration
-  if (isStudent && isSchoolAdminRoute) {
-    return (
-      <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center p-6 text-center">
-        <div className="bg-white p-8 rounded-xl border border-gray-100 shadow-xl max-w-md space-y-5">
-          <div className="w-16 h-16 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center mx-auto shadow-sm">
-            <Lock className="w-8 h-8" />
+  // 4. Dynamic Route Guard based on Configured Role Permissions
+  if (pathname && pathname !== "/profile" && pathname !== "/" && !isSuperAdmin) {
+    const isAllowed = canView(pathname);
+    if (!isAllowed) {
+      const pageTitle = getPageTitleFromPath(pathname);
+      return (
+        <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center p-6 text-center">
+          <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-xl max-w-md space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto shadow-sm border border-amber-100">
+              <Lock className="w-8 h-8" />
+            </div>
+            <div className="space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md bg-amber-100 text-amber-800">
+                Akses Dibatasi
+              </span>
+              <h3 className="text-lg font-extrabold text-gray-900 pt-1">
+                {pageTitle}
+              </h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Peran akun Anda saat ini (<span className="font-bold text-gray-800 uppercase">{role || "PENGGUNA"}</span>) belum memiliki hak akses (View) untuk membuka menu ini.
+              </p>
+              <p className="text-[11px] text-gray-400">
+                Hubungi Administrator atau Tata Usaha Sekolah jika Anda memerlukan hak akses untuk halaman ini.
+              </p>
+            </div>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Kembali ke Dashboard</span>
+            </Link>
           </div>
-          <div className="space-y-2">
-            <h3 className="text-lg font-extrabold text-gray-900">Halaman Tidak Tersedia</h3>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Halaman ini diperuntukkan bagi Guru dan Manajemen Sekolah. Anda dapat mengakses informasi Anda di Portal Siswa.
-            </p>
-          </div>
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white text-xs font-bold rounded-lg shadow-md transition-all active:scale-95 cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Kembali ke Dashboard Siswa</span>
-          </Link>
         </div>
-      </div>
-    );
-  }
-
-  // 5. Strict Route Guard for Parents accessing school administration & master data
-  if (isParent && isSchoolAdminRoute) {
-    return (
-      <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center p-6 text-center">
-        <div className="bg-white p-8 rounded-xl border border-gray-100 shadow-xl max-w-md space-y-5 animate-in fade-in zoom-in-95 duration-200">
-          <div className="w-16 h-16 rounded-lg bg-purple-50 text-[#531FFF] flex items-center justify-center mx-auto shadow-sm border border-purple-100">
-            <Lock className="w-8 h-8" />
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-lg font-extrabold text-gray-900">Akses Dibatasi: Khusus Manajemen Sekolah</h3>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Sebagai <strong>Orang Tua / Wali Murid</strong>, akun Anda hanya memiliki kewenangan memantau informasi perkembangan akademik putra/putri Anda. Menu administrasi dan master data sekolah tidak dapat diakses.
-            </p>
-          </div>
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-bold rounded-lg shadow-md transition-all active:scale-95 cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Kembali ke Dashboard Orang Tua</span>
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  // 5b. Strict Route Guard for Roles & System Settings: Admin & Super Admin only
-  if ((isRolesRoute || isSettingsRoute) && !isSuperAdmin && !isAdmin) {
-    return (
-      <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center p-6 text-center">
-        <div className="bg-white p-8 rounded-xl border border-gray-100 shadow-xl max-w-md space-y-5">
-          <div className="w-16 h-16 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center mx-auto shadow-sm">
-            <ShieldAlert className="w-8 h-8" />
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-lg font-extrabold text-gray-900">Akses Pengaturan Terbatas</h3>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Menu Konfigurasi & Role Sistem hanya dapat diakses oleh Administrator Sekolah.
-            </p>
-          </div>
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white text-xs font-bold rounded-lg shadow-md transition-all active:scale-95 cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Kembali ke Dashboard</span>
-          </Link>
-        </div>
-      </div>
-    );
+      );
+    }
   }
 
   // 6. Authorized state: Render full layout with isolated components
