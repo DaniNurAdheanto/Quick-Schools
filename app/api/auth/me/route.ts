@@ -14,6 +14,7 @@ export async function GET() {
 
     const roleMap: Record<string, string> = {
       SUPER_ADMIN: "super-admin",
+      SAAS_ADMIN: "saas-admin",
       ADMIN: "admin",
       KEPALA_SEKOLAH: "kepala-sekolah",
       GURU: "guru",

@@ -5,6 +5,7 @@ import { UserRole, AccountStatus } from "@prisma/client";
 
 const roleMappingToEnum: Record<string, UserRole> = {
   "super-admin": UserRole.SUPER_ADMIN,
+  "saas-admin": UserRole.SAAS_ADMIN,
   "admin": UserRole.ADMIN,
   "kepala-sekolah": UserRole.KEPALA_SEKOLAH,
   "guru": UserRole.GURU,
@@ -17,6 +18,7 @@ const roleMappingToEnum: Record<string, UserRole> = {
 
 const roleEnumToString: Record<UserRole, string> = {
   SUPER_ADMIN: "super-admin",
+  SAAS_ADMIN: "saas-admin",
   ADMIN: "admin",
   KEPALA_SEKOLAH: "kepala-sekolah",
   GURU: "guru",

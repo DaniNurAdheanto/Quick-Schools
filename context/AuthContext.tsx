@@ -7,6 +7,7 @@ import { auth, db } from "@/lib/firebase";
 import { 
   DEFAULT_PERMISSIONS, 
   isSuperAdminRole, 
+  isSaaSAdminRole,
   isStudentRole, 
   isTeacherRole,
   isParentRole,
@@ -18,7 +19,7 @@ import {
   PermissionAction
 } from "@/lib/roles-config";
 
-export type UserRole = "super-admin" | "admin" | "guru" | "siswa" | "orang-tua" | "kepala-sekolah";
+export type UserRole = "super-admin" | "saas-admin" | "admin" | "guru" | "siswa" | "orang-tua" | "kepala-sekolah";
 
 export interface UserProfileData {
   uid: string;
@@ -53,6 +54,7 @@ interface AuthContextType {
   userRole: string;
   rolePermissions: Record<string, ModulePermission>;
   isSuperAdmin: boolean;
+  isSaaSAdmin: boolean;
   isAdmin: boolean;
   isGuru: boolean;
   isStudent: boolean;
@@ -88,6 +90,7 @@ const AuthContext = createContext<AuthContextType>({
   userRole: "",
   rolePermissions: {},
   isSuperAdmin: false,
+  isSaaSAdmin: false,
   isAdmin: false,
   isGuru: false,
   isStudent: false,
@@ -676,11 +679,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Compute convenient role checks - strictly require verified active user
   const isSuperAdmin = useMemo(() => Boolean(user) && (isSuperAdminRole(rawRole) || isSuperAdminRole(role) || role === "super-admin"), [user, rawRole, role]);
+  const isSaaSAdmin = useMemo(() => Boolean(user) && (isSaaSAdminRole(rawRole) || isSaaSAdminRole(role) || role === "saas-admin"), [user, rawRole, role]);
   const isGuru = useMemo(() => Boolean(user) && (isTeacherRole(rawRole) || isTeacherRole(role) || role === "guru"), [user, rawRole, role]);
   const isStudent = useMemo(() => Boolean(user) && (isStudentRole(rawRole) || isStudentRole(role) || role === "siswa"), [user, rawRole, role]);
   const isParent = useMemo(() => Boolean(user) && (isParentRole(rawRole) || isParentRole(role) || role === "orang-tua"), [user, rawRole, role]);
   const isKepalaSekolah = useMemo(() => Boolean(user) && (isKepalaSekolahRole(rawRole) || isKepalaSekolahRole(role) || role === "kepala-sekolah"), [user, rawRole, role]);
-  const isAdmin = useMemo(() => Boolean(user) && (role === "admin" || (rawRole || "").toLowerCase() === "admin") && !isSuperAdmin && !isKepalaSekolah, [user, role, rawRole, isSuperAdmin, isKepalaSekolah]);
+  const isAdmin = useMemo(() => Boolean(user) && (role === "admin" || (rawRole || "").toLowerCase() === "admin") && !isSuperAdmin && !isSaaSAdmin && !isKepalaSekolah, [user, role, rawRole, isSuperAdmin, isSaaSAdmin, isKepalaSekolah]);
 
   const activeRoleName = useMemo(() => {
     return normalizeRole(rawRole || role || "");
@@ -794,6 +798,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userRole,
       rolePermissions: activeRolePermissions,
       isSuperAdmin,
+      isSaaSAdmin,
       isAdmin,
       isGuru,
       isStudent,
@@ -825,6 +830,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userRole,
       activeRolePermissions,
       isSuperAdmin,
+      isSaaSAdmin,
       isAdmin,
       isGuru,
       isStudent,

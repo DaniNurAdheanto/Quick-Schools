@@ -26,10 +26,15 @@ function getPageName(pathname: string | null): string {
   if (pathname.includes("/academic-years")) return "Tahun Ajaran";
   if (pathname.includes("/accounts")) return "Manajemen Akun";
   if (pathname.includes("/roles")) return "Role & Permission";
+  if (pathname.includes("/saas-dashboard")) return "Dashboard SaaS";
+  if (pathname.includes("/saas-customers")) return "Kelola Pelanggan";
+  if (pathname.includes("/saas-packages")) return "Paket Layanan SaaS";
+  if (pathname.includes("/saas-billing")) return "Tagihan & Pembayaran";
   if (pathname.includes("/settings")) return "Pengaturan Sekolah";
   if (pathname.includes("/profile")) return "Profil";
+  if (pathname.includes("/subscription-requests")) return "Permintaan Berlangganan";
   if (pathname.includes("/login")) return "Masuk Portal";
-  if (pathname.includes("/register-school")) return "Daftar Sekolah";
+  if (pathname.includes("/register-school") || pathname.includes("/request-subscription")) return "Permintaan Berlangganan";
   return "Smart School OS";
 }
 

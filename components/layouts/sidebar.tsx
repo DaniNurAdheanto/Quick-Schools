@@ -27,11 +27,17 @@ import {
   PenLine,
   UserCheck,
   ClipboardCheck,
+  Inbox,
+  Building2,
+  BarChart3,
+  Layers,
+  Receipt,
   Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
   isSuperAdminRole, 
+  isSaaSAdminRole,
   canAccessMenu,
   normalizeRole,
   MenuPermission
@@ -72,6 +78,14 @@ const KEUANGAN_NAV = [
   { href: "/financial-reports", label: "Laporan Keuangan", icon: FileText },
 ];
 
+const SAAS_NAV = [
+  { href: "/saas-dashboard", label: "Dashboard SaaS", icon: BarChart3 },
+  { href: "/saas-customers", label: "Kelola Pelanggan", icon: Building2 },
+  { href: "/subscription-requests", label: "Permintaan Berlangganan", icon: Inbox },
+  { href: "/saas-packages", label: "Paket Layanan SaaS", icon: Layers },
+  { href: "/saas-billing", label: "Tagihan & Pembayaran", icon: Receipt },
+];
+
 const SYSTEM_NAV = [
   { href: "/profile", label: "Profile", icon: User },
   { href: "/accounts", label: "Manajemen Akun System", icon: UserCheck },
@@ -104,6 +118,7 @@ function NavGroup({
   onItemClick?: (path: string) => void;
 }) {
   const isSuperAdmin = isSuperAdminRole(userRole);
+  const isSaaSAdmin = isSaaSAdminRole(userRole);
 
   // Filter items dynamically based on role permissions configured by Admin
   const visibleItems = items.filter(item => {
@@ -118,6 +133,23 @@ function NavGroup({
     // Role & Permission: Only accessible if permitted (defaults to Super Admin and Admin)
     if (item.href === "/roles") {
       return isSuperAdmin || canAccessMenu(userRole, userPermissions, "roles", "view");
+    }
+
+    // SaaS Management items: Accessible for SaaS Administrator and Super Admin
+    if (
+      item.href === "/saas-dashboard" || 
+      item.href === "/saas-customers" || 
+      item.href === "/subscription-requests" ||
+      item.href === "/saas-packages" ||
+      item.href === "/saas-billing"
+    ) {
+      if (isSaaSAdmin || isSuperAdmin) return true;
+      return canAccessMenu(userRole, userPermissions, item.href, "view");
+    }
+
+    // SaaS Admin is strictly dedicated to SaaS operations (isolated from school-internal academic data)
+    if (isSaaSAdmin) {
+      return false;
     }
 
     // Dynamically check if the user's role has "view" permission for this menu
@@ -427,6 +459,16 @@ export function Sidebar() {
             <NavGroup 
               title="KEUANGAN" 
               items={KEUANGAN_NAV} 
+              currentPath={pathname} 
+              isCollapsed={isCollapsed} 
+              userPermissions={rolePermissions} 
+              userRole={effectiveUserRole} 
+              getBadgeCount={getBadgeCount}
+              onItemClick={markAsRead}
+            />
+            <NavGroup 
+              title={isSaaSAdminRole(effectiveUserRole) ? "OPERASIONAL BISNIS SAAS" : "MANAJEMEN SAAS"} 
+              items={SAAS_NAV} 
               currentPath={pathname} 
               isCollapsed={isCollapsed} 
               userPermissions={rolePermissions} 

@@ -85,7 +85,16 @@ export function getPostLoginRedirect(userData: any, targetRedirect?: string | nu
 
   const role = (userData.role || "").toLowerCase().trim();
 
-  // 1. Super Admin, Admin, Teachers, Parents, and staff ALWAYS go directly to dashboard
+  // 1. SaaS Administrator goes directly to SaaS Dashboard by default
+  if (
+    role === "saas-admin" ||
+    role === "saasadmin" ||
+    role === "saas_admin"
+  ) {
+    return cleanTarget === "/dashboard" ? "/saas-dashboard" : cleanTarget;
+  }
+
+  // 2. Super Admin, Admin, Teachers, Parents, and staff ALWAYS go directly to dashboard
   if (
     role === "super-admin" ||
     role === "superadmin" ||

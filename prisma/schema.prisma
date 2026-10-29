@@ -15,6 +15,7 @@ datasource db {
 // -------------------------------------------------------------
 enum UserRole {
   SUPER_ADMIN
+  SAAS_ADMIN
   ADMIN
   KEPALA_SEKOLAH
   GURU
@@ -408,3 +409,189 @@ model Announcement {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// -------------------------------------------------------------
+// 7. SaaS School Subscription Requests
+// -------------------------------------------------------------
+enum SubscriptionRequestStatus {
+  PENDING
+  CONTACTED
+  OFFER_SENT
+  APPROVED
+  REJECTED
+}
+
+model SubscriptionRequest {
+  id              String                    @id @default(cuid())
+  requestNumber   String                    @unique // e.g. "REQ-SUB-2026-123456"
+  schoolName      String
+  npsn            String?
+  schoolLevel     String                    // "TK/PAUD", "SD/MI", "SMP/MTs", "SMA/MA", "SMK", "Pesantren/Yayasan"
+  schoolType      String?                   @default("Swasta") // "Swasta" | "Negeri"
+  province        String?
+  city            String?
+  address         String?
+  subdomain       String?
+
+  // Penanggung Jawab (PIC)
+  picName         String
+  picRole         String                    // "Kepala Sekolah", "Wakil Kepala Sekolah", "Ketua Yayasan", "Bendahara", "Koordinator IT", "Staf TU"
+  picEmail        String
+  picPhone        String                    // Nomor WhatsApp
+
+  // Skala & Layanan yang Diminati
+  studentCount    Int?                      // e.g. 450
+  studentEstimate String?                   // e.g. "300 - 600"
+  planInterest    String                    // "trial" | "standard" | "pro" | "enterprise"
+  selectedModules String[]                  // e.g. ["mod_presensi", "mod_keuangan", "mod_rapor"]
+  notes           String?
+  preferredTime   String?                   // e.g. "Pagi (09:00 - 12:00)", "Siang (13:00 - 16:00)", "WhatsApp Saja"
+
+  // Follow-Up & Tindak Lanjut Admin
+  status          SubscriptionRequestStatus @default(PENDING)
+  followUpNotes   String?
+  assignedTo      String?
+  quotedPrice     Float?
+  contactedAt     DateTime?
+
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  customer        SaaSCustomer?
+
+  @@index([status])
+  @@index([picEmail])
+  @@index([createdAt])
+}
+
+// -------------------------------------------------------------
+// 8. SaaS Customers (Pelanggan Sekolah Quick Schools)
+// -------------------------------------------------------------
+enum SaaSCustomerStatus {
+  AKTIF
+  TRIAL
+  SUSPENDED
+  NONAKTIF
+}
+
+model SaaSCustomer {
+  id                    String              @id @default(cuid())
+  customerCode          String              @unique // e.g. "CUST-2026-001"
+  schoolName            String
+  npsn                  String?
+  subdomain             String?             @unique
+  schoolLevel           String              // "TK/PAUD", "SD/MI", "SMP/MTs", "SMA/MA", "SMK", "Pesantren/Yayasan"
+  schoolType            String?             @default("Swasta") // "Swasta" | "Negeri"
+  address               String?
+  city                  String?
+  province              String?
+  logoUrl               String?
+
+  // Penanggung Jawab (PIC)
+  picName               String
+  picRole               String
+  picEmail              String
+  picPhone              String
+
+  // Layanan & Langganan
+  plan                  String              @default("pro") // "trial" | "standard" | "pro" | "enterprise"
+  status                SaaSCustomerStatus  @default(AKTIF)
+  billingCycle          String              @default("MONTHLY") // "MONTHLY" | "YEARLY"
+  priceAmount           Float               @default(199000)
+  maxStudents           Int                 @default(1000)
+  currentStudents       Int                 @default(0)
+  activeModules         String[]            @default([])
+  subscriptionStart     DateTime            @default(now())
+  subscriptionEnd       DateTime?
+
+  notes                 String?
+
+  // Relasi jika pelanggan berasal dari Permintaan Berlangganan
+  subscriptionRequestId String?             @unique
+  subscriptionRequest   SubscriptionRequest? @relation(fields: [subscriptionRequestId], references: [id], onDelete: SetNull)
+
+  invoices              SaaSInvoice[]
+
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([status])
+  @@index([plan])
+  @@index([picEmail])
+  @@index([schoolName])
+}
+
+// -------------------------------------------------------------
+// 9. SaaS Service Packages (Katalog Paket Layanan SaaS)
+// -------------------------------------------------------------
+model SaaSPackage {
+  id              String   @id @default(cuid())
+  code            String   @unique // "trial", "standard", "pro", "enterprise"
+  name            String   // "Sekolah Unggulan (Pro)"
+  tagline         String?  // "Otomasi lengkap untuk sekolah modern"
+  badge           String?  // "Paling Populer"
+  priceMonthly    Float    @default(0)
+  priceYearly     Float    @default(0)
+  maxStudents     Int      @default(500)
+  features        String[] @default([])
+  isActive        Boolean  @default(true)
+  isPopular       Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// -------------------------------------------------------------
+// 10. SaaS Invoices & Payments (Tagihan & Pembayaran Langganan)
+// -------------------------------------------------------------
+enum SaaSInvoiceStatus {
+  UNPAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model SaaSInvoice {
+  id            String            @id @default(cuid())
+  invoiceNumber String            @unique // e.g. "INV-SAAS-2026-001"
+  customerId    String
+  customer      SaaSCustomer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  schoolName    String
+  plan          String            // "standard" | "pro" | "enterprise"
+  amount        Float
+  billingCycle  String            @default("MONTHLY") // "MONTHLY" | "YEARLY"
+  status        SaaSInvoiceStatus @default(UNPAID)
+  dueDate       DateTime
+  paidAt        DateTime?
+  paymentMethod String?           // "TRANSFER_BANK", "VIRTUAL_ACCOUNT", "QRIS", "MANUAL"
+  paymentProof  String?
+  notes         String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([status])
+  @@index([customerId])
+  @@index([dueDate])
+}
+
+// -------------------------------------------------------------
+// 11. SaaS Operational Audit Log (Log Aktivitas Operasional SaaS)
+// -------------------------------------------------------------
+model SaaSOperationLog {
+  id          String   @id @default(cuid())
+  action      String   // "STATUS_CHANGE", "CUSTOMER_CREATED", "INVOICE_PAID", "REQUEST_FOLLOWUP"
+  entityType  String   // "CUSTOMER", "REQUEST", "INVOICE", "PACKAGE"
+  entityId    String?
+  entityName  String?
+  description String
+  performedBy String   // Name or email of SaaS Administrator
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([action])
+  @@index([entityType])
+  @@index([createdAt])
+}
+
+
+

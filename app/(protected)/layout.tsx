@@ -14,7 +14,7 @@ import { IdleTimeoutManager } from "@/components/auth/idle-timeout-manager";
 import { isUserOnboardingComplete } from "@/lib/auth-helpers";
 
 function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
-  const { user, userData, isAuthLoading, isLoggingOut, role, isSuperAdmin, canView } = useAuth();
+  const { user, userData, isAuthLoading, isLoggingOut, role, isSuperAdmin, isSaaSAdmin, canView } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -27,6 +27,13 @@ function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
       router.replace(redirectUrl);
     }
   }, [isAuthLoading, user, isLoggingOut, pathname, router]);
+
+  // Redirect SaaS Admin automatically to SaaS Dashboard if accessing standard school dashboard
+  useEffect(() => {
+    if (!isAuthLoading && user && isSaaSAdmin && pathname === "/dashboard") {
+      router.replace("/saas-dashboard");
+    }
+  }, [isAuthLoading, user, isSaaSAdmin, pathname, router]);
 
   // Check onboarding completion - ONLY for unboarded students
   const isStrictStudentPendingOnboarding = Boolean(
@@ -103,6 +110,11 @@ function getPageTitleFromPath(pathname: string | null): string {
   if (pathname.includes("/academic-years")) return "Tahun Ajaran";
   if (pathname.includes("/accounts")) return "Manajemen Akun System";
   if (pathname.includes("/roles")) return "Manajemen Role & Hak Akses";
+  if (pathname.includes("/saas-dashboard")) return "Dashboard SaaS Quick Schools";
+  if (pathname.includes("/saas-customers")) return "Kelola Pelanggan Sekolah";
+  if (pathname.includes("/subscription-requests")) return "Permintaan Berlangganan SaaS";
+  if (pathname.includes("/saas-packages")) return "Paket Layanan SaaS";
+  if (pathname.includes("/saas-billing")) return "Tagihan & Pembayaran SaaS";
   if (pathname.includes("/settings")) return "Pengaturan Sekolah";
   if (pathname.includes("/profile")) return "Profil Pengguna";
   if (pathname.includes("/dashboard") || pathname === "/") return "Dashboard Utama";
@@ -189,7 +201,7 @@ function getPageTitleFromPath(pathname: string | null): string {
             </p>
           </div>
           <Link
-            href="/dashboard"
+            href={isSaaSAdmin ? "/saas-dashboard" : "/dashboard"}
             className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#531FFF] hover:bg-[#531FFF]/90 text-white text-xs font-bold rounded-lg shadow-md transition-all active:scale-95 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -226,7 +238,7 @@ function getPageTitleFromPath(pathname: string | null): string {
               </p>
             </div>
             <Link
-              href="/dashboard"
+              href={isSaaSAdmin ? "/saas-dashboard" : "/dashboard"}
               className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />

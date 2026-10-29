@@ -29,11 +29,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Security restriction: SaaS Administrator and Super Admin CANNOT be created via public registration
+    const requestedRole = String(role || "").toLowerCase().trim();
+    if (
+      requestedRole.includes("saas") ||
+      requestedRole.includes("superadmin") ||
+      requestedRole === "super-admin" ||
+      requestedRole === "super_admin"
+    ) {
+      return NextResponse.json(
+        { error: "Pendaftaran akun Administrator Internal tidak diizinkan melalui registrasi publik." },
+        { status: 403 }
+      );
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
 
     // Map role string to enum
     const roleMapping: Record<string, UserRole> = {
-      "super-admin": UserRole.SUPER_ADMIN,
       "admin": UserRole.ADMIN,
       "kepala-sekolah": UserRole.KEPALA_SEKOLAH,
       "guru": UserRole.GURU,

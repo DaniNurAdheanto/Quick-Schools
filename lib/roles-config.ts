@@ -19,6 +19,10 @@ import {
   PenLine,
   UserCheck,
   ClipboardCheck,
+  Inbox,
+  Building2,
+  BarChart3,
+  Layers,
   type LucideIcon 
 } from "lucide-react";
 
@@ -105,12 +109,20 @@ export const ROLES: RoleDefinition[] = [
     description: "Hak akses pemantauan executive untuk memantau performa sekolah dan laporan komprehensif." 
   },
   { 
+    id: "saas-admin", 
+    name: "SaaS Administrator", 
+    icon: Building2, 
+    badge: "Operasional Bisnis SaaS",
+    journey: "Dashboard Bisnis SaaS → Kelola Pelanggan → Permintaan Berlangganan → Paket & Tagihan",
+    description: "Hak akses karyawan internal Quick Schools untuk mengelola operasional bisnis SaaS, pelanggan sekolah, paket layanan, tagihan langganan, dan permintaan onboarding." 
+  },
+  { 
     id: "super-admin", 
-    name: "Super Admin", 
+    name: "Super Admin (Administrator Utama)", 
     icon: ShieldAlert, 
     badge: "Akses Penuh Sistem",
-    journey: "Konfigurasi Sistem → Keamanan & Hak Akses",
-    description: "Hak akses tertinggi tanpa batasan untuk manajemen seluruh sistem sekolah." 
+    journey: "Manajemen Akun System → Role & Permission → Audit Keamanan → Konfigurasi Global",
+    description: "Hak akses tertinggi untuk administrasi teknis sistem, manajemen akun pengguna sistem, dan pengaturan izin global." 
   },
 ];
 
@@ -328,6 +340,51 @@ export const APP_MENUS: AppMenuDefinition[] = [
     icon: UserCog,
     legacyModule: "settings",
   },
+  {
+    id: "subscription-requests",
+    name: "Permintaan Berlangganan",
+    route: "/subscription-requests",
+    category: "Sistem",
+    description: "Pengelolaan dan tindak lanjut formulir permintaan berlangganan (Request Subscription) sekolah.",
+    icon: Inbox,
+    legacyModule: "settings",
+  },
+  {
+    id: "saas-dashboard",
+    name: "Dashboard Operasional SaaS",
+    route: "/saas-dashboard",
+    category: "Sistem",
+    description: "Pusat ringkasan eksekutif jumlah pelanggan, sekolah aktif, dan status permintaan berlangganan.",
+    icon: BarChart3,
+    legacyModule: "dashboard",
+  },
+  {
+    id: "saas-customers",
+    name: "Kelola Pelanggan Sekolah",
+    route: "/saas-customers",
+    category: "Sistem",
+    description: "Pengelolaan data pelanggan sekolah (tenants), paket langganan, kuota siswa, dan masa aktif.",
+    icon: Building2,
+    legacyModule: "settings",
+  },
+  {
+    id: "saas-packages",
+    name: "Paket Layanan SaaS",
+    route: "/saas-packages",
+    category: "Sistem",
+    description: "Katalog paket langganan SaaS, penetapan harga lisensi, dan kapasitas kuota siswa.",
+    icon: Layers,
+    legacyModule: "settings",
+  },
+  {
+    id: "saas-billing",
+    name: "Tagihan & Pembayaran SaaS",
+    route: "/saas-billing",
+    category: "Sistem",
+    description: "Data invoice penagihan langganan sekolah dan konfirmasi status pembayaran.",
+    icon: CreditCard,
+    legacyModule: "finance",
+  },
 ];
 
 // Alias for backwards compatibility
@@ -359,6 +416,11 @@ export const ROUTE_TO_MENU_ID: Record<string, string> = {
   "/accounts": "accounts",
   "/settings": "settings",
   "/roles": "roles",
+  "/subscription-requests": "subscription-requests",
+  "/saas-dashboard": "saas-dashboard",
+  "/saas-customers": "saas-customers",
+  "/saas-packages": "saas-packages",
+  "/saas-billing": "saas-billing",
 };
 
 /**
@@ -434,10 +496,46 @@ export const DEFAULT_PERMISSIONS: RolePermissions = {
     "accounts": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     "settings": resolveMenuPermission({ view: true, create: false, edit: true, delete: false, approve: false, export: true }),
     "roles": resolveMenuPermission({ view: true, create: true, edit: true, delete: false, approve: true, export: true }),
+    "subscription-requests": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
+    "saas-dashboard": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
+    "saas-customers": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
+    "saas-packages": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
+    "saas-billing": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     // Legacy module fallbacks
     "users": resolveMenuPermission({ view: true, create: true, edit: true, delete: true, approve: true, export: true }),
     "academic": resolveMenuPermission({ view: true, create: true, edit: true, delete: true, approve: true, export: true }),
     "finance": resolveMenuPermission({ view: true, create: true, edit: true, delete: false, approve: true, export: true }),
+  },
+  "saas-admin": {
+    "saas-dashboard": resolveMenuPermission({ view: true, create: true, edit: true, delete: false, approve: true, export: true }),
+    "saas-customers": resolveMenuPermission({ view: true, create: true, edit: true, delete: true, approve: true, export: true }),
+    "subscription-requests": resolveMenuPermission({ view: true, create: true, edit: true, delete: true, approve: true, export: true }),
+    "saas-packages": resolveMenuPermission({ view: true, create: true, edit: true, delete: false, approve: true, export: true }),
+    "saas-billing": resolveMenuPermission({ view: true, create: true, edit: true, delete: false, approve: true, export: true }),
+    "profile": resolveMenuPermission({ view: true, create: false, edit: true, delete: false, approve: false, export: false }),
+    // School internal academic & system root locked
+    "dashboard": resolveMenuPermission({ view: false }),
+    "calendar": resolveMenuPermission({ view: false }),
+    "schedule": resolveMenuPermission({ view: false }),
+    "announcements": resolveMenuPermission({ view: false }),
+    "students": resolveMenuPermission({ view: false }),
+    "parents": resolveMenuPermission({ view: false }),
+    "classes": resolveMenuPermission({ view: false }),
+    "teachers": resolveMenuPermission({ view: false }),
+    "homeroom": resolveMenuPermission({ view: false }),
+    "subjects": resolveMenuPermission({ view: false }),
+    "attendance": resolveMenuPermission({ view: false }),
+    "leave-requests": resolveMenuPermission({ view: false }),
+    "teacher-attendance": resolveMenuPermission({ view: false }),
+    "grades": resolveMenuPermission({ view: false }),
+    "report-cards": resolveMenuPermission({ view: false }),
+    "exams": resolveMenuPermission({ view: false }),
+    "academic-years": resolveMenuPermission({ view: false }),
+    "payments": resolveMenuPermission({ view: false }),
+    "financial-reports": resolveMenuPermission({ view: false }),
+    "accounts": resolveMenuPermission({ view: false }),
+    "settings": resolveMenuPermission({ view: false }),
+    "roles": resolveMenuPermission({ view: false }),
   },
   "guru": {
     "dashboard": resolveMenuPermission({ view: true, create: false, edit: false, delete: false, approve: false, export: true }),
@@ -462,6 +560,7 @@ export const DEFAULT_PERMISSIONS: RolePermissions = {
     "accounts": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     "settings": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     "roles": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
+    "subscription-requests": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     // Legacy module fallbacks
     "users": resolveMenuPermission({ view: true, create: false, edit: false, delete: false, approve: false, export: false }),
     "academic": resolveMenuPermission({ view: true, create: false, edit: false, delete: false, approve: false, export: false }),
@@ -490,6 +589,7 @@ export const DEFAULT_PERMISSIONS: RolePermissions = {
     "accounts": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     "settings": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     "roles": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
+    "subscription-requests": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     // Legacy module fallbacks
     "users": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     "academic": resolveMenuPermission({ view: true, create: false, edit: false, delete: false, approve: false, export: false }),
@@ -518,6 +618,7 @@ export const DEFAULT_PERMISSIONS: RolePermissions = {
     "accounts": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     "settings": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     "roles": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
+    "subscription-requests": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     // Legacy module fallbacks
     "users": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     "academic": resolveMenuPermission({ view: true, create: false, edit: false, delete: false, approve: false, export: false }),
@@ -546,6 +647,7 @@ export const DEFAULT_PERMISSIONS: RolePermissions = {
     "accounts": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     "settings": resolveMenuPermission({ view: true, create: false, edit: false, delete: false, approve: false, export: false }),
     "roles": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
+    "subscription-requests": resolveMenuPermission({ view: false, create: false, edit: false, delete: false, approve: false, export: false }),
     // Legacy module fallbacks
     "users": resolveMenuPermission({ view: true, create: false, edit: false, delete: false, approve: false, export: true }),
     "academic": resolveMenuPermission({ view: true, create: false, edit: false, delete: false, approve: false, export: true }),
@@ -591,6 +693,21 @@ export function isSuperAdminRole(role?: string | null): boolean {
     normalized === "owner" ||
     normalized === "developer" ||
     normalized === "root"
+  );
+}
+
+/**
+ * Normalizes and checks if a role string represents SaaS Administrator
+ */
+export function isSaaSAdminRole(role?: string | null): boolean {
+  if (!role) return false;
+  const raw = role.toLowerCase().trim();
+  const normalized = raw.replace(/[-_ /]/g, "");
+  return (
+    normalized.includes("saasadmin") ||
+    normalized.includes("saasadministrator") ||
+    normalized === "saas" ||
+    normalized === "saasoperations"
   );
 }
 
@@ -807,6 +924,10 @@ DEFAULT_PERMISSIONS["pengajar"] = DEFAULT_PERMISSIONS["guru"];
 DEFAULT_PERMISSIONS["student"] = DEFAULT_PERMISSIONS["siswa"];
 DEFAULT_PERMISSIONS["murid"] = DEFAULT_PERMISSIONS["siswa"];
 
+DEFAULT_PERMISSIONS["saasadmin"] = DEFAULT_PERMISSIONS["saas-admin"];
+DEFAULT_PERMISSIONS["saas_admin"] = DEFAULT_PERMISSIONS["saas-admin"];
+DEFAULT_PERMISSIONS["saas-operations"] = DEFAULT_PERMISSIONS["saas-admin"];
+
 DEFAULT_PERMISSIONS["kepalasekolah"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
 DEFAULT_PERMISSIONS["kelapasekolah"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
 DEFAULT_PERMISSIONS["kelapaseokolah"] = DEFAULT_PERMISSIONS["kepala-sekolah"];
@@ -823,6 +944,7 @@ export function normalizeRole(roleStr: string = ""): string {
   if (!r) return "admin";
 
   if (isSuperAdminRole(r)) return "super-admin";
+  if (isSaaSAdminRole(r)) return "saas-admin";
   if (isKepalaSekolahRole(r)) return "kepala-sekolah";
   if (isParentRole(r)) return "orang-tua";
   if (isTeacherRole(r)) return "guru";

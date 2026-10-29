@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import fs from "fs";
 import path from "path";
-import bcrypt from "bcryptjs";
 
 const DATA_DIR = path.join(process.cwd(), "data");
-const REG_FILE_PATH = path.join(DATA_DIR, "school-registrations.json");
+const REG_FILE_PATH = path.join(DATA_DIR, "subscription-requests.json");
 
 function ensureDirectoryAndFile() {
   if (!fs.existsSync(DATA_DIR)) {
@@ -35,7 +34,14 @@ function saveRegistration(entry: any) {
 
 export async function GET() {
   try {
-    const list = readRegistrations();
+    let list = [];
+    try {
+      list = await prisma.subscriptionRequest.findMany({
+        orderBy: { createdAt: "desc" },
+      });
+    } catch {
+      list = readRegistrations();
+    }
     return NextResponse.json({
       success: true,
       total: list.length,
@@ -52,101 +58,104 @@ export async function POST(req: NextRequest) {
     const {
       schoolName,
       npsn,
-      schoolLevel,
-      schoolType, // "Negeri" | "Swasta"
-      province,
-      city,
-      address,
-      subdomain,
+      schoolLevel = "SMA/MA",
+      schoolType = "Swasta",
+      province = "",
+      city = "",
+      address = "",
+      subdomain = "",
       picName,
-      picRole,
+      picRole = "Kepala Sekolah",
       picEmail,
       picPhone,
-      password,
-      plan = "trial", // "trial" | "standard" | "pro" | "enterprise"
+      plan = "pro",
+      planInterest,
+      studentCount,
       studentEstimate = "200 - 500",
       selectedModules = [],
       notes = "",
+      preferredTime = "WhatsApp Kapan Saja",
     } = body;
 
     if (!schoolName || !picName || !picEmail || !picPhone) {
       return NextResponse.json(
-        { success: false, error: "Mohon lengkapi data sekolah, nama PIC, email, dan nomor WhatsApp." },
+        { success: false, error: "Mohon lengkapi data sekolah, nama penanggung jawab, email, dan nomor WhatsApp." },
         { status: 400 }
       );
     }
 
     const cleanEmail = String(picEmail).trim().toLowerCase();
+    const cleanPhone = String(picPhone).trim();
     const cleanNpsn = String(npsn || "").trim();
     const cleanSubdomain = String(subdomain || schoolName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 20)).toLowerCase();
-    const regNumber = `REG-SCH-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+    const regNumber = `REQ-SUB-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    const registrationData = {
-      id: regNumber,
-      registrationNumber: regNumber,
-      schoolName: schoolName.trim(),
-      npsn: cleanNpsn,
-      schoolLevel: schoolLevel || "SMA",
-      schoolType: schoolType || "Swasta",
-      province: province || "",
-      city: city || "",
-      address: address || "",
-      subdomain: cleanSubdomain,
-      schoolUrl: `https://${cleanSubdomain}.quickschools.id`,
-      picName: picName.trim(),
-      picRole: picRole || "Kepala Sekolah / Admin",
-      picEmail: cleanEmail,
-      picPhone: picPhone.trim(),
-      plan,
-      studentEstimate,
-      selectedModules,
-      notes,
-      status: plan === "enterprise" ? "Menunggu Verifikasi Tim Solusi" : "Aktif (Masa Trial 14 Hari)",
-      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-      createdAt: new Date().toISOString(),
-    };
+    const targetPlan = planInterest || plan || "pro";
+    const numStudents = studentCount ? Number(studentCount) : null;
 
-    // 1. Save to JSON store
-    saveRegistration(registrationData);
-
-    // 2. Automatically create Super Admin user in PostgreSQL if password provided
-    let createdUserId = null;
-    if (password && password.length >= 6) {
-      try {
-        const existingUser = await prisma.user.findUnique({
-          where: { email: cleanEmail },
-        });
-
-        if (!existingUser) {
-          const hashedPassword = await bcrypt.hash(password, 10);
-          const newUser = await prisma.user.create({
-            data: {
-              name: picName.trim(),
-              email: cleanEmail,
-              passwordHash: hashedPassword,
-              role: "SUPER_ADMIN",
-              phone: picPhone.trim(),
-              status: "AKTIF",
-              onboardingCompleted: true,
-            },
-          });
-          createdUserId = newUser.id;
-        }
-      } catch (dbErr) {
-        console.warn("PostgreSQL user creation notice during school registration:", dbErr);
-      }
+    let createdRecord = null;
+    try {
+      createdRecord = await prisma.subscriptionRequest.create({
+        data: {
+          requestNumber: regNumber,
+          schoolName: schoolName.trim(),
+          npsn: cleanNpsn,
+          schoolLevel: schoolLevel || "SMA/MA",
+          schoolType: schoolType || "Swasta",
+          province,
+          city,
+          address,
+          subdomain: cleanSubdomain,
+          picName: picName.trim(),
+          picRole: picRole || "Kepala Sekolah",
+          picEmail: cleanEmail,
+          picPhone: cleanPhone,
+          studentCount: numStudents,
+          studentEstimate: studentEstimate || "200 - 500",
+          planInterest: targetPlan,
+          selectedModules: Array.isArray(selectedModules) ? selectedModules : [],
+          notes: notes || "",
+          preferredTime: preferredTime || "",
+          status: "PENDING",
+        },
+      });
+    } catch (e) {
+      console.warn("Prisma subscriptionRequest create notice:", e);
+      createdRecord = {
+        id: regNumber,
+        requestNumber: regNumber,
+        schoolName: schoolName.trim(),
+        npsn: cleanNpsn,
+        schoolLevel,
+        schoolType,
+        province,
+        city,
+        address,
+        subdomain: cleanSubdomain,
+        picName: picName.trim(),
+        picRole,
+        picEmail: cleanEmail,
+        picPhone: cleanPhone,
+        planInterest: targetPlan,
+        studentCount: numStudents,
+        studentEstimate,
+        selectedModules,
+        notes,
+        status: "PENDING",
+        createdAt: new Date().toISOString(),
+      };
     }
+
+    saveRegistration(createdRecord);
 
     return NextResponse.json({
       success: true,
-      message: `Pendaftaran sekolah ${schoolName} berhasil disimpan! Sistem siap digunakan.`,
-      registration: registrationData,
-      createdUserId,
-      redirectUrl: "/dashboard",
+      message: `Permintaan berlangganan untuk ${schoolName} berhasil dikirim! Tim Quick Schools akan segera menghubungi Anda untuk konsultasi & penawaran harga.`,
+      registration: createdRecord,
+      request: createdRecord,
     });
   } catch (error: any) {
     console.error("POST /api/school-registration error:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
-
