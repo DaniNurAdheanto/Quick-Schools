@@ -59,8 +59,8 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      roles: ROLES,
-      menus: APP_MENUS,
+      roles: ROLES.filter((r) => r.id !== "saas-admin"),
+      menus: APP_MENUS.filter((m) => !m.id.startsWith("saas-") && m.id !== "subscription-requests"),
       permissions: resultPermissions,
     });
   } catch (err: any) {
@@ -82,6 +82,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: "Role ID wajib disertakan." },
         { status: 400 }
+      );
+    }
+
+    if (roleId === "saas-admin") {
+      return NextResponse.json(
+        { success: false, error: "Role SaaS Administrator adalah role internal perusahaan dan tidak dapat dimodifikasi di menu sekolah." },
+        { status: 403 }
       );
     }
 

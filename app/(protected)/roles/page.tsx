@@ -47,6 +47,11 @@ const ACTION_COLUMNS: { key: PermissionAction; label: string; desc: string; colo
 export default function RolesAndPermissionsPage() {
   const toast = useToast();
   const { isSuperAdmin, isAdmin, userRole } = useAuth();
+  // Exclude internal company role 'saas-admin' from school Role & Permission management
+  const DISPLAY_ROLES = useMemo(() => {
+    return ROLES.filter((r) => r.id !== "saas-admin");
+  }, []);
+
   const [activeRole, setActiveRole] = useState(ROLES[0].id);
   const [permissions, setPermissions] = useState<Record<string, Record<string, MenuPermission>>>(DEFAULT_PERMISSIONS);
   const [isSaving, setIsSaving] = useState(false);
@@ -55,6 +60,13 @@ export default function RolesAndPermissionsPage() {
   const [categoryFilter, setCategoryFilter] = useState("Semua");
   const [usersList, setUsersList] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Prevent activeRole from ever selecting saas-admin
+  useEffect(() => {
+    if (activeRole === "saas-admin") {
+      setActiveRole("admin");
+    }
+  }, [activeRole]);
 
   // 1. Fetch stored permissions from backend API on mount
   useEffect(() => {
@@ -160,12 +172,20 @@ export default function RolesAndPermissionsPage() {
   }, [usersList]);
 
   const activeRoleData = useMemo(() => {
-    return ROLES.find(r => r.id === activeRole) || ROLES[0];
-  }, [activeRole]);
+    return DISPLAY_ROLES.find(r => r.id === activeRole) || DISPLAY_ROLES[0];
+  }, [activeRole, DISPLAY_ROLES]);
 
-  // Filter modules based on search and category
+  // Filter modules based on search and category (exclude platform-internal SaaS modules)
   const filteredModules = useMemo(() => {
     return APP_MENUS.filter(mod => {
+      const isSaaSModule = 
+        mod.id === "saas-dashboard" || 
+        mod.id === "saas-customers" || 
+        mod.id === "subscription-requests" || 
+        mod.id === "saas-packages" || 
+        mod.id === "saas-billing";
+      if (isSaaSModule) return false;
+
       const matchesSearch = 
         mod.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
         mod.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -591,7 +611,7 @@ export default function RolesAndPermissionsPage() {
       {/* 2. ROLE SELECTOR TABS                                         */}
       {/* ───────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {ROLES.map((r) => {
+        {DISPLAY_ROLES.map((r) => {
           const isActive = activeRole === r.id;
           const RoleIcon = r.icon;
           const count = roleUserMap[r.id]?.length || 0;

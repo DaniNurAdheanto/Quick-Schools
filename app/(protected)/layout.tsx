@@ -55,6 +55,13 @@ function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
 
   // Route protection rules
   const isAccountsRoute = pathname === "/accounts" || pathname?.startsWith("/accounts/");
+  const isSaaSRoute = Boolean(
+    pathname === "/saas-dashboard" || pathname?.startsWith("/saas-dashboard/") ||
+    pathname === "/saas-customers" || pathname?.startsWith("/saas-customers/") ||
+    pathname === "/subscription-requests" || pathname?.startsWith("/subscription-requests/") ||
+    pathname === "/saas-packages" || pathname?.startsWith("/saas-packages/") ||
+    pathname === "/saas-billing" || pathname?.startsWith("/saas-billing/")
+  );
 
   // 1. Loading screen: NEVER render Super Admin layout while verifying
   if (isAuthLoading) {
@@ -206,6 +213,37 @@ function getPageTitleFromPath(pathname: string | null): string {
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Kembali ke Dashboard Saya</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // 3b. Strict Route Guard: Menu Manajemen SaaS hanya untuk role SaaS Administrator (dibatasi untuk Super Admin & role lainnya)
+  if (isSaaSRoute && !isSaaSAdmin) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FC] flex items-center justify-center p-6 text-center">
+        <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-xl max-w-md space-y-5 animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto shadow-sm border border-amber-100">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md bg-amber-100 text-amber-800">
+              Akses Terbatas
+            </span>
+            <h3 className="text-lg font-extrabold text-gray-900 pt-1">
+              Khusus SaaS Administrator
+            </h3>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Modul <strong>Operasional Bisnis SaaS</strong> hanya dapat diakses oleh akun internal dengan role <strong>SaaS Administrator</strong>. Akun Anda saat ini terdaftar sebagai <span className="font-bold text-gray-800 uppercase">{role || "PENGGUNA"}</span>.
+            </p>
+          </div>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#531FFF] hover:bg-[#4314cc] text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Kembali ke Dashboard Utama</span>
           </Link>
         </div>
       </div>

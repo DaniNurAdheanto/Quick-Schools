@@ -824,10 +824,31 @@ export function canAccessMenu(
   action: PermissionAction = "view"
 ): boolean {
   if (!role) return false;
-  if (isSuperAdminRole(role)) return true;
 
   // Resolve menu ID if route or path was passed
   const menuId = resolveMenuId(menuIdOrRoute);
+
+  const isSaaSMenu = 
+    menuId === "saas-dashboard" ||
+    menuId === "saas-customers" ||
+    menuId === "subscription-requests" ||
+    menuId === "saas-packages" ||
+    menuId === "saas-billing";
+
+  // Strict isolation: SaaS management menus are EXCLUSIVELY for SaaS Administrator
+  // Hidden and blocked for Super Admin and all other roles
+  if (isSaaSMenu) {
+    return isSaaSAdminRole(role);
+  }
+
+  // Strict isolation: SaaS Administrator cannot access internal school academic or system admin modules
+  if (isSaaSAdminRole(role)) {
+    if (menuId === "profile" || menuId === "") return true;
+    return false;
+  }
+
+  // Super Admin has full technical & system management rights for non-SaaS menus
+  if (isSuperAdminRole(role)) return true;
 
   // 1. Strict lock: Manajemen Akun System is exclusively for Super Admin
   if (menuId === "accounts") {

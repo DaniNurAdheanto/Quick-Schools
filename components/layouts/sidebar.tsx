@@ -135,7 +135,7 @@ function NavGroup({
       return isSuperAdmin || canAccessMenu(userRole, userPermissions, "roles", "view");
     }
 
-    // SaaS Management items: Accessible for SaaS Administrator and Super Admin
+    // SaaS Management items: Exclusively for SaaS Administrator (hidden on Super Admin and all other roles)
     if (
       item.href === "/saas-dashboard" || 
       item.href === "/saas-customers" || 
@@ -143,8 +143,7 @@ function NavGroup({
       item.href === "/saas-packages" ||
       item.href === "/saas-billing"
     ) {
-      if (isSaaSAdmin || isSuperAdmin) return true;
-      return canAccessMenu(userRole, userPermissions, item.href, "view");
+      return isSaaSAdmin;
     }
 
     // SaaS Admin is strictly dedicated to SaaS operations (isolated from school-internal academic data)
@@ -466,16 +465,18 @@ export function Sidebar() {
               getBadgeCount={getBadgeCount}
               onItemClick={markAsRead}
             />
-            <NavGroup 
-              title={isSaaSAdminRole(effectiveUserRole) ? "OPERASIONAL BISNIS SAAS" : "MANAJEMEN SAAS"} 
-              items={SAAS_NAV} 
-              currentPath={pathname} 
-              isCollapsed={isCollapsed} 
-              userPermissions={rolePermissions} 
-              userRole={effectiveUserRole} 
-              getBadgeCount={getBadgeCount}
-              onItemClick={markAsRead}
-            />
+            {isSaaSAdminRole(effectiveUserRole) && (
+              <NavGroup 
+                title="OPERASIONAL BISNIS SAAS" 
+                items={SAAS_NAV} 
+                currentPath={pathname} 
+                isCollapsed={isCollapsed} 
+                userPermissions={rolePermissions} 
+                userRole={effectiveUserRole} 
+                getBadgeCount={getBadgeCount}
+                onItemClick={markAsRead}
+              />
+            )}
           </div>
 
           {/* Pinned Bottom Section: SYSTEM & SETTINGS */}
