@@ -21,7 +21,8 @@ import {
   Users,
   Eye,
   Check,
-  Loader2
+  Loader2,
+  RotateCcw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
@@ -112,7 +113,7 @@ const AVAILABLE_MODULES = [
 
 export default function SaaSCustomersPage() {
   const toast = useToast();
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, isSaaSAdmin } = useAuth();
 
   const [customers, setCustomers] = useState<SaaSCustomerItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -395,13 +396,13 @@ export default function SaaSCustomersPage() {
   };
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="p-4 sm:p-6 md:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       {/* HEADER SECTION */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2.5">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-purple-50 text-[#531FFF] border border-purple-200">
-              <ShieldCheck className="w-3.5 h-3.5" /> {isSuperAdmin ? "Super Admin (Akses Penuh)" : "Super Admin Portal"}
+              <ShieldCheck className="w-3.5 h-3.5" /> {isSaaSAdmin ? "SaaS Administrator" : isSuperAdmin ? "Super Admin" : "SaaS Management"}
             </span>
             <span className="text-xs font-bold text-gray-400">• Manajemen Tenant & Institusi</span>
           </div>
@@ -434,7 +435,7 @@ export default function SaaSCustomersPage() {
 
           <button
             onClick={openCreateModal}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#531FFF] to-[#4314cc] hover:from-[#4314cc] hover:to-[#380fa8] text-white text-xs sm:text-sm font-extrabold flex items-center gap-2 transition-all shadow-md shadow-[#531FFF]/20 cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#531FFF] to-[#4314cc] hover:from-[#4314cc] hover:to-[#380fa8] text-white text-xs sm:text-sm font-extrabold flex items-center gap-2 transition-all shadow-md shadow-[#531FFF]/20 cursor-pointer active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Tambah Pelanggan Baru</span>
@@ -444,39 +445,59 @@ export default function SaaSCustomersPage() {
 
       {/* KPI METRICS */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 sm:gap-4">
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-xs space-y-1">
-          <span className="text-gray-400 text-xs font-bold block">Total Pelanggan</span>
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">Total Pelanggan</span>
+            <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center">
+              <Building2 className="w-4 h-4" />
+            </div>
+          </div>
           <p className="text-2xl sm:text-3xl font-black text-gray-900">{stats?.total || customers.length}</p>
-          <span className="text-[11px] text-gray-400 font-medium">Institusi terdaftar</span>
+          <span className="text-[11px] text-gray-400 font-semibold block">Institusi sekolah terdaftar</span>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-xs space-y-1">
-          <span className="text-emerald-600 text-xs font-bold block">Sekolah Aktif</span>
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-emerald-700 text-xs font-bold uppercase tracking-wider">Sekolah Aktif</span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+          </div>
           <p className="text-2xl sm:text-3xl font-black text-emerald-700">
             {stats?.active || customers.filter((c) => c.status === "AKTIF").length}
           </p>
-          <span className="text-[11px] text-emerald-600 font-medium">Berlangganan penuh</span>
+          <span className="text-[11px] text-emerald-600 font-semibold block">Berlangganan penuh</span>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-xs space-y-1">
-          <span className="text-amber-600 text-xs font-bold block">Masa Uji Coba (Trial)</span>
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-amber-700 text-xs font-bold uppercase tracking-wider">Masa Uji Coba</span>
+            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
           <p className="text-2xl sm:text-3xl font-black text-amber-700">
             {stats?.trial || customers.filter((c) => c.status === "TRIAL").length}
           </p>
-          <span className="text-[11px] text-amber-600 font-medium">Uji coba 14-30 hari</span>
+          <span className="text-[11px] text-amber-600 font-semibold block">Trial aktif 14-30 hari</span>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-xs space-y-1">
-          <span className="text-purple-600 text-xs font-bold block">Total Siswa Terlayani</span>
-          <p className="text-2xl sm:text-3xl font-black text-purple-700">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-purple-700 text-xs font-bold uppercase tracking-wider">Total Siswa</span>
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl sm:text-3xl font-black text-gray-900">
             {stats?.totalStudents?.toLocaleString() || customers.reduce((a, b) => a + (b.currentStudents || 0), 0).toLocaleString()}
           </p>
-          <span className="text-[11px] text-purple-600 font-medium">Akun siswa aktif</span>
+          <span className="text-[11px] text-gray-500 font-semibold block">Akun siswa terlayani</span>
         </div>
       </div>
 
       {/* FILTERS & SEARCH BAR */}
-      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex flex-col md:flex-row items-center gap-3">
+      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs flex flex-col md:flex-row items-center justify-between gap-3">
         <div className="relative flex-1 w-full">
           <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
@@ -484,14 +505,14 @@ export default function SaaSCustomersPage() {
             placeholder="Cari nama sekolah, kode pelanggan, NPSN, PIC, atau kota..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-xs sm:text-sm font-semibold focus:outline-none focus:border-[#531FFF] focus:ring-1 focus:ring-[#531FFF]"
+            className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-gray-200 text-xs sm:text-sm font-semibold focus:outline-none focus:border-[#531FFF] focus:ring-1 focus:ring-[#531FFF] transition-all"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs font-bold"
             >
-              Hapus
+              <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
@@ -522,15 +543,31 @@ export default function SaaSCustomersPage() {
             <option value="pro">Sekolah Pro</option>
             <option value="enterprise">Enterprise Yayasan</option>
           </select>
+
+          {(searchQuery || statusFilter !== "ALL" || planFilter !== "ALL") && (
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                setStatusFilter("ALL");
+                setPlanFilter("ALL");
+              }}
+              className="py-2.5 px-3 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-500 hover:text-gray-700 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap"
+              title="Reset Filter"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* CUSTOMERS DATA TABLE */}
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs sm:text-sm">
             <thead className="bg-[#F8F9FC] border-b border-gray-100 text-[11px] font-extrabold uppercase text-gray-400 tracking-wider">
               <tr>
+                <th className="py-3.5 px-3 sm:px-4 text-center w-12">No.</th>
                 <th className="py-3.5 px-4 sm:px-6">Sekolah & Kode</th>
                 <th className="py-3.5 px-4">Penanggung Jawab (PIC)</th>
                 <th className="py-3.5 px-4">Paket & Billing</th>
@@ -543,46 +580,55 @@ export default function SaaSCustomersPage() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12">
+                  <td colSpan={8} className="text-center py-14">
                     <Loader2 className="w-7 h-7 text-[#531FFF] animate-spin mx-auto mb-2" />
                     <p className="text-xs text-gray-500 font-bold">Memuat data pelanggan SaaS...</p>
                   </td>
                 </tr>
               ) : customers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-14">
+                  <td colSpan={8} className="text-center py-14">
                     <Building2 className="w-10 h-10 text-gray-300 mx-auto mb-2" />
                     <p className="text-sm font-extrabold text-gray-700">Tidak ada data pelanggan yang cocok</p>
                     <p className="text-xs text-gray-400 mt-1">Coba ubah kata kunci pencarian atau filter status.</p>
                   </td>
                 </tr>
               ) : (
-                customers.map((cust) => {
+                customers.map((cust, idx) => {
                   const statusInfo = STATUS_CONFIG[cust.status] || STATUS_CONFIG.AKTIF;
                   const planInfo = PLAN_CONFIG[cust.plan] || PLAN_CONFIG.pro;
-                  const StatusIcon = statusInfo.icon;
                   const studentPct = cust.maxStudents > 0 ? Math.round((cust.currentStudents / cust.maxStudents) * 100) : 0;
 
                   return (
                     <tr key={cust.id} className="hover:bg-purple-50/20 transition-colors group">
+                      {/* Row Number */}
+                      <td className="py-4 px-3 sm:px-4 text-center font-mono text-xs font-bold text-gray-400">
+                        {idx + 1}
+                      </td>
+
                       {/* Sekolah & Kode */}
                       <td className="py-4 px-4 sm:px-6">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-[11px] font-bold text-gray-400">
-                              {cust.customerCode}
-                            </span>
-                            <span className="text-[10px] px-1.5 py-0.2 rounded font-bold uppercase bg-gray-100 text-gray-600">
-                              {cust.schoolLevel}
-                            </span>
+                        <div className="flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#531FFF] border border-purple-100 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">
+                            {cust.schoolName?.substring(0, 2).toUpperCase() || "QS"}
                           </div>
-                          <p className="font-extrabold text-gray-900 leading-tight">
-                            {cust.schoolName}
-                          </p>
-                          <p className="text-[11px] text-gray-400">
-                            {cust.city || "Kota belum diatur"} • {cust.schoolType || "Swasta"}
-                            {cust.npsn && ` • NPSN: ${cust.npsn}`}
-                          </p>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono text-[11px] font-bold text-gray-400">
+                                {cust.customerCode}
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.2 rounded font-bold uppercase bg-gray-100 text-gray-600">
+                                {cust.schoolLevel}
+                              </span>
+                            </div>
+                            <p className="font-extrabold text-gray-900 leading-tight">
+                              {cust.schoolName}
+                            </p>
+                            <p className="text-[11px] text-gray-400">
+                              {cust.city || "Kota belum diatur"} • {cust.schoolType || "Swasta"}
+                              {cust.npsn && ` • NPSN: ${cust.npsn}`}
+                            </p>
+                          </div>
                         </div>
                       </td>
 
@@ -596,7 +642,8 @@ export default function SaaSCustomersPage() {
                               href={`https://wa.me/${cust.picPhone.replace(/[^0-9]/g, "")}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100"
+                              className="inline-flex items-center gap-1.5 text-[11px] text-emerald-700 hover:text-emerald-800 font-bold bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-200/60 transition-all shadow-2xs"
+                              title="Hubungi PIC via WhatsApp"
                             >
                               <Phone className="w-3 h-3 text-emerald-600" />
                               <span>{cust.picPhone}</span>
@@ -620,7 +667,7 @@ export default function SaaSCustomersPage() {
 
                       {/* Kapasitas Siswa */}
                       <td className="py-4 px-4">
-                        <div className="space-y-1 w-32">
+                        <div className="space-y-1.5 w-32">
                           <div className="flex justify-between text-[11px] font-bold">
                             <span className="text-gray-900">{cust.currentStudents.toLocaleString()}</span>
                             <span className="text-gray-400">/ {cust.maxStudents.toLocaleString()}</span>
@@ -658,7 +705,12 @@ export default function SaaSCustomersPage() {
                             statusInfo.border
                           )}
                         >
-                          <StatusIcon className="w-3.5 h-3.5" />
+                          <span className={cn(
+                            "w-1.5 h-1.5 rounded-full shrink-0",
+                            cust.status === "AKTIF" ? "bg-emerald-500 animate-pulse" :
+                            cust.status === "TRIAL" ? "bg-amber-500" :
+                            cust.status === "SUSPENDED" ? "bg-rose-500" : "bg-gray-400"
+                          )} />
                           <span>{statusInfo.label}</span>
                         </span>
                       </td>
@@ -696,6 +748,28 @@ export default function SaaSCustomersPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Table Summary Footer */}
+        {!loading && customers.length > 0 && (
+          <div className="px-6 py-3.5 bg-gray-50/70 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 font-medium gap-2">
+            <div>
+              Menampilkan <span className="font-bold text-gray-800">{customers.length}</span> sekolah pelanggan
+            </div>
+            <div className="flex items-center gap-4 text-[11px]">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                Aktif: <strong className="text-gray-700">{customers.filter(c => c.status === "AKTIF").length}</strong>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                Trial: <strong className="text-gray-700">{customers.filter(c => c.status === "TRIAL").length}</strong>
+              </span>
+              <span className="text-gray-400 font-mono">
+                Total Siswa: {customers.reduce((acc, c) => acc + (c.currentStudents || 0), 0).toLocaleString()}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* CREATE & EDIT CUSTOMER MODAL */}

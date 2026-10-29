@@ -328,7 +328,7 @@ export default function SaaSBillingPage() {
   };
 
   return (
-    <div className="space-y-8 pb-16">
+    <div className="p-4 sm:p-6 md:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       {/* HEADER SECTION */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-xs">
         <div className="space-y-1.5">
@@ -493,6 +493,7 @@ export default function SaaSBillingPage() {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-gray-50/75 border-b border-gray-100 text-gray-400 font-extrabold uppercase tracking-wider text-[11px]">
+                  <th className="py-4 px-3 sm:px-4 text-center w-12">No.</th>
                   <th className="py-4 px-6">No. Invoice</th>
                   <th className="py-4 px-6">Sekolah Pelanggan</th>
                   <th className="py-4 px-6">Paket & Siklus</th>
@@ -503,12 +504,17 @@ export default function SaaSBillingPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-gray-700">
-                {invoices.map((inv) => {
+                {invoices.map((inv, idx) => {
                   const cfg = STATUS_CONFIG[inv.status] || STATUS_CONFIG.UNPAID;
                   const StatusIcon = cfg.icon;
 
                   return (
-                    <tr key={inv.id} className="hover:bg-gray-50/60 transition-colors">
+                    <tr key={inv.id} className="hover:bg-purple-50/20 transition-colors">
+                      {/* Row Number */}
+                      <td className="py-4 px-3 sm:px-4 text-center font-mono text-xs font-bold text-gray-400">
+                        {idx + 1}
+                      </td>
+
                       {/* Invoice Number */}
                       <td className="py-4 px-6 whitespace-nowrap">
                         <div className="flex items-center gap-2">
@@ -638,6 +644,29 @@ export default function SaaSBillingPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Table Summary Footer */}
+        {!loading && invoices.length > 0 && (
+          <div className="px-6 py-3.5 bg-gray-50/70 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 font-medium gap-2">
+            <div>
+              Menampilkan <span className="font-bold text-gray-800">{invoices.length}</span> tagihan SaaS
+            </div>
+            <div className="flex items-center gap-4 text-[11px]">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                Lunas: <strong className="text-gray-700">{stats?.countPaid || 0}</strong>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                Menunggu: <strong className="text-gray-700">{stats?.countUnpaid || 0}</strong>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-rose-500" />
+                Overdue: <strong className="text-gray-700">{stats?.countOverdue || 0}</strong>
+              </span>
+            </div>
           </div>
         )}
       </div>
