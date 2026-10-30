@@ -32,6 +32,7 @@ import {
   BarChart3,
   Layers,
   Receipt,
+  ShieldCheck,
   Loader2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -81,6 +82,7 @@ const KEUANGAN_NAV = [
 const SAAS_NAV = [
   { href: "/saas-dashboard", label: "Dashboard SaaS", icon: BarChart3 },
   { href: "/saas-customers", label: "Kelola Pelanggan", icon: Building2 },
+  { href: "/saas-school-admins", label: "Super Admin Sekolah", icon: ShieldCheck },
   { href: "/subscription-requests", label: "Permintaan Berlangganan", icon: Inbox },
   { href: "/saas-packages", label: "Paket Layanan SaaS", icon: Layers },
   { href: "/saas-billing", label: "Tagihan & Pembayaran", icon: Receipt },
@@ -139,6 +141,7 @@ function NavGroup({
     if (
       item.href === "/saas-dashboard" || 
       item.href === "/saas-customers" || 
+      item.href === "/saas-school-admins" ||
       item.href === "/subscription-requests" ||
       item.href === "/saas-packages" ||
       item.href === "/saas-billing"

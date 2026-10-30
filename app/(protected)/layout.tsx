@@ -58,6 +58,7 @@ function ProtectedContentGuard({ children }: { children: React.ReactNode }) {
   const isSaaSRoute = Boolean(
     pathname === "/saas-dashboard" || pathname?.startsWith("/saas-dashboard/") ||
     pathname === "/saas-customers" || pathname?.startsWith("/saas-customers/") ||
+    pathname === "/saas-school-admins" || pathname?.startsWith("/saas-school-admins/") ||
     pathname === "/subscription-requests" || pathname?.startsWith("/subscription-requests/") ||
     pathname === "/saas-packages" || pathname?.startsWith("/saas-packages/") ||
     pathname === "/saas-billing" || pathname?.startsWith("/saas-billing/")
@@ -119,6 +120,7 @@ function getPageTitleFromPath(pathname: string | null): string {
   if (pathname.includes("/roles")) return "Manajemen Role & Hak Akses";
   if (pathname.includes("/saas-dashboard")) return "Dashboard SaaS Quick Schools";
   if (pathname.includes("/saas-customers")) return "Kelola Pelanggan Sekolah";
+  if (pathname.includes("/saas-school-admins")) return "Super Admin Sekolah";
   if (pathname.includes("/subscription-requests")) return "Permintaan Berlangganan SaaS";
   if (pathname.includes("/saas-packages")) return "Paket Layanan SaaS";
   if (pathname.includes("/saas-billing")) return "Tagihan & Pembayaran SaaS";
@@ -252,7 +254,8 @@ function getPageTitleFromPath(pathname: string | null): string {
 
   // 4. Dynamic Route Guard based on Configured Role Permissions
   if (pathname && pathname !== "/profile" && pathname !== "/" && !isSuperAdmin) {
-    const isAllowed = canView(pathname);
+    // SaaS Administrator has full access to all SaaS operational routes
+    const isAllowed = (isSaaSRoute && isSaaSAdmin) || canView(pathname);
     if (!isAllowed) {
       const pageTitle = getPageTitleFromPath(pathname);
       return (

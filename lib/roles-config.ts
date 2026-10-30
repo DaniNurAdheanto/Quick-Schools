@@ -368,6 +368,15 @@ export const APP_MENUS: AppMenuDefinition[] = [
     legacyModule: "settings",
   },
   {
+    id: "saas-school-admins",
+    name: "Super Admin Sekolah",
+    route: "/saas-school-admins",
+    category: "Sistem",
+    description: "Direktori akun Administrator Utama (Super Admin) & PIC untuk setiap institusi sekolah mitra.",
+    icon: ShieldCheck,
+    legacyModule: "settings",
+  },
+  {
     id: "saas-packages",
     name: "Paket Layanan SaaS",
     route: "/saas-packages",
@@ -419,6 +428,7 @@ export const ROUTE_TO_MENU_ID: Record<string, string> = {
   "/subscription-requests": "subscription-requests",
   "/saas-dashboard": "saas-dashboard",
   "/saas-customers": "saas-customers",
+  "/saas-school-admins": "saas-school-admins",
   "/saas-packages": "saas-packages",
   "/saas-billing": "saas-billing",
 };
@@ -509,6 +519,7 @@ export const DEFAULT_PERMISSIONS: RolePermissions = {
   "saas-admin": {
     "saas-dashboard": resolveMenuPermission({ view: true, create: true, edit: true, delete: false, approve: true, export: true }),
     "saas-customers": resolveMenuPermission({ view: true, create: true, edit: true, delete: true, approve: true, export: true }),
+    "saas-school-admins": resolveMenuPermission({ view: true, create: true, edit: true, delete: true, approve: true, export: true }),
     "subscription-requests": resolveMenuPermission({ view: true, create: true, edit: true, delete: true, approve: true, export: true }),
     "saas-packages": resolveMenuPermission({ view: true, create: true, edit: true, delete: false, approve: true, export: true }),
     "saas-billing": resolveMenuPermission({ view: true, create: true, edit: true, delete: false, approve: true, export: true }),
@@ -831,6 +842,7 @@ export function canAccessMenu(
   const isSaaSMenu = 
     menuId === "saas-dashboard" ||
     menuId === "saas-customers" ||
+    menuId === "saas-school-admins" ||
     menuId === "subscription-requests" ||
     menuId === "saas-packages" ||
     menuId === "saas-billing";
