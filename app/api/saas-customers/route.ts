@@ -155,23 +155,49 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate unique customerCode: e.g. "CUST-2026-XXXX"
-    const year = new Date().getFullYear();
-    const count = await prisma.saaSCustomer.count();
-    const customerCode = `CUST-${year}-${String(count + 1).padStart(3, "0")}`;
+    // 1. If originated from subscription request, check if already converted
+    if (body.subscriptionRequestId) {
+      const existingCustomer = await prisma.saaSCustomer.findFirst({
+        where: { subscriptionRequestId: body.subscriptionRequestId },
+      });
+      if (existingCustomer) {
+        return NextResponse.json({
+          success: true,
+          customer: existingCustomer,
+          message: `Sekolah ini sudah terdaftar sebelumnya sebagai Pelanggan (${existingCustomer.customerCode}).`,
+          alreadyExists: true,
+        });
+      }
+    }
 
-    // Subdomain formatting
-    const rawSubdomain = (body.subdomain || body.schoolName)
+    // 2. Generate guaranteed collision-free customerCode: e.g. "CUST-2026-007"
+    const year = new Date().getFullYear();
+    let counter = (await prisma.saaSCustomer.count()) + 1;
+    let customerCode = `CUST-${year}-${String(counter).padStart(3, "0")}`;
+    while (await prisma.saaSCustomer.findUnique({ where: { customerCode } })) {
+      counter++;
+      customerCode = `CUST-${year}-${String(counter).padStart(3, "0")}`;
+    }
+
+    // 3. Subdomain formatting with guaranteed collision-free auto-suffix
+    const baseSubdomain = (body.subdomain || body.schoolName)
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "")
-      .slice(0, 20);
+      .slice(0, 18) || "sekolah";
+
+    let finalSubdomain = baseSubdomain;
+    let subCounter = 1;
+    while (await prisma.saaSCustomer.findUnique({ where: { subdomain: finalSubdomain } })) {
+      subCounter++;
+      finalSubdomain = `${baseSubdomain.slice(0, 15)}${subCounter}`;
+    }
 
     const newCustomer = await prisma.saaSCustomer.create({
       data: {
         customerCode,
         schoolName: body.schoolName.trim(),
         npsn: body.npsn?.trim() || null,
-        subdomain: rawSubdomain || customerCode.toLowerCase(),
+        subdomain: finalSubdomain,
         schoolLevel: body.schoolLevel || "SMA/MA",
         schoolType: body.schoolType || "Swasta",
         address: body.address?.trim() || null,
@@ -207,10 +233,22 @@ export async function POST(req: NextRequest) {
         where: { id: body.subscriptionRequestId },
         data: {
           status: "APPROVED",
-          followUpNotes: `Telah dikonversi menjadi Pelanggan Aktif (${customerCode})`,
+          followUpNotes: `Telah dikonversi menjadi Pelanggan Aktif (${customerCode}) dengan subdomain ${finalSubdomain}`,
         },
       }).catch((e) => console.warn("Could not sync subscriptionRequest status:", e));
     }
+
+    // Record in operational audit log
+    await prisma.saaSOperationLog.create({
+      data: {
+        action: "CUSTOMER_CREATED",
+        entityType: "CUSTOMER",
+        entityId: newCustomer.id,
+        entityName: newCustomer.schoolName,
+        description: `Pelanggan baru ${newCustomer.schoolName} (${customerCode}) resmi didaftarkan dengan subdomain ${finalSubdomain}.`,
+        performedBy: body.picName || "SaaS Administrator",
+      },
+    }).catch((e) => console.warn("Could not log customer creation:", e));
 
     return NextResponse.json({
       success: true,
@@ -219,6 +257,13 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: any) {
     console.error("POST /api/saas-customers error:", err);
+    if (err.code === "P2002") {
+      const target = err.meta?.target ? ` (${Array.isArray(err.meta.target) ? err.meta.target.join(", ") : err.meta.target})` : "";
+      return NextResponse.json(
+        { success: false, error: `Nilai unik${target} sudah digunakan oleh pelanggan lain. Silakan periksa kembali.` },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       { success: false, error: err.message || "Gagal membuat data pelanggan baru" },
       { status: 500 }

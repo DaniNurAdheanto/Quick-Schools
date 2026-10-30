@@ -1,0 +1,36 @@
+[
+  {
+    "id": "cmvudr31y0000o5hla10s1vcs",
+    "requestNumber": "REQ-SUB-2026-948715",
+    "schoolName": "SMA 3 Babelan",
+    "npsn": "09999898",
+    "schoolLevel": "SMA/MA",
+    "schoolType": "Negeri",
+    "province": "Jawa Barat",
+    "city": "Kabupaten Bekasi",
+    "address": "",
+    "subdomain": "sma3babelan",
+    "picName": "Joko Susilo M.PD",
+    "picRole": "Kepala Sekolah",
+    "picEmail": "infosma3@sma3babelan.ac.id",
+    "picPhone": "08787238723",
+    "studentCount": null,
+    "studentEstimate": "> 600 Siswa",
+    "planInterest": "pro",
+    "selectedModules": [
+      "mod_presensi",
+      "mod_rapor",
+      "mod_pengumuman",
+      "mod_ujian"
+    ],
+    "notes": "",
+    "preferredTime": "Demo Online Zoom",
+    "status": "APPROVED",
+    "followUpNotes": "Telah dikonversi menjadi Pelanggan Aktif (CUST-2026-006)",
+    "assignedTo": "SaaS Administrator Internal",
+    "quotedPrice": 2000000,
+    "contactedAt": "2026-10-30T03:08:42.088Z",
+    "createdAt": "2026-10-30T02:55:46.485Z",
+    "updatedAt": "2026-10-30T03:08:42.277Z"
+  }
+]

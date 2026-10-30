@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import Link from "next/link";
 import {
   Inbox,
   Search,
@@ -267,10 +268,17 @@ export default function SubscriptionRequestsPage() {
         throw new Error(data.error || "Gagal membuat data pelanggan baru");
       }
 
-      toast.showSuccess(
-        `Sekolah ${activeRequest.schoolName} resmi disetujui & terdaftar sebagai Pelanggan Aktif (${data.customer?.customerCode})!`,
-        "Pelanggan Baru Terdaftar"
-      );
+      if (data.alreadyExists) {
+        toast.showInfo(
+          `Sekolah ${activeRequest.schoolName} sudah terdaftar sebelumnya sebagai Pelanggan (${data.customer?.customerCode}).`,
+          "Sudah Terdaftar"
+        );
+      } else {
+        toast.showSuccess(
+          `Sekolah ${activeRequest.schoolName} resmi disetujui & terdaftar sebagai Pelanggan Aktif (${data.customer?.customerCode})!`,
+          "Pelanggan Baru Terdaftar"
+        );
+      }
 
       // Refresh list
       fetchRequests();
@@ -1259,17 +1267,27 @@ export default function SubscriptionRequestsPage() {
 
               <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
                 <div>
-                  {editStatus === "APPROVED" && (
-                    <button
-                      type="button"
-                      onClick={handleConvertToCustomer}
-                      disabled={isUpdating}
-                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-extrabold text-xs shadow-md shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
-                      title="Otomatis membuat entri di data Pelanggan SaaS Sekolah"
+                  {activeRequest?.status === "APPROVED" ? (
+                    <Link
+                      href="/saas-customers"
+                      className="px-4 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 font-extrabold text-xs flex items-center gap-1.5 transition-all"
                     >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Setujui & Buat Akun Pelanggan</span>
-                    </button>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Pelanggan Aktif (Buka Kelola Pelanggan &rarr;)</span>
+                    </Link>
+                  ) : (
+                    editStatus === "APPROVED" && (
+                      <button
+                        type="button"
+                        onClick={handleConvertToCustomer}
+                        disabled={isUpdating}
+                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-extrabold text-xs shadow-md shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                        title="Otomatis membuat entri di data Pelanggan SaaS Sekolah"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>{isUpdating ? "Memproses..." : "Setujui & Buat Akun Pelanggan"}</span>
+                      </button>
+                    )
                   )}
                 </div>
 
