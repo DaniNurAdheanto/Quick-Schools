@@ -46,21 +46,22 @@ const PLANS: PlanOption[] = [
   {
     id: "standard",
     name: "Sekolah Rintisan",
-    priceNote: "Mulai Rp 149rb / bln",
+    badge: "Hemat",
+    priceNote: "Mulai Rp 150.000 / bln",
     description: "Kapasitas s.d 450 siswa, presensi real-time & rapor",
   },
   {
     id: "pro",
     name: "Sekolah Unggulan (Pro)",
     badge: "Paling Populer",
-    priceNote: "Mulai Rp 199rb / bln",
+    priceNote: "Mulai Rp 200.000 / bln",
     description: "Face ID AI, SPP otomatis, E-Rapor, broadcast WA ortu",
   },
   {
     id: "enterprise",
     name: "Yayasan / Multi-Kampus",
     badge: "Enterprise",
-    priceNote: "Penawaran Kustom",
+    priceNote: "Hubungi Kami (Kustom)",
     description: "Siswa unlimited, konsolidasi multi-cabang, sinkron Dapodik",
   },
 ];
@@ -94,6 +95,7 @@ function SingleSubscriptionFormContent() {
   const [studentEstimate, setStudentEstimate] = useState<string>("300 - 600");
   const [studentCount, setStudentCount] = useState<string>("");
   const [selectedPlan, setSelectedPlan] = useState<"trial" | "standard" | "pro" | "enterprise">("pro");
+  const [plans, setPlans] = useState<PlanOption[]>(PLANS);
   const [selectedModules, setSelectedModules] = useState<string[]>([
     "mod_presensi",
     "mod_keuangan",
@@ -114,6 +116,39 @@ function SingleSubscriptionFormContent() {
       setSelectedPlan(qPlan as any);
     }
   }, [searchParams]);
+
+  // Sync real-time with SaaS Administrator "Paket Layanan SaaS" (/api/saas-packages)
+  useEffect(() => {
+    let isMounted = true;
+    fetch("/api/saas-packages?activeOnly=true")
+      .then((res) => res.json())
+      .then((json) => {
+        if (isMounted && json.success && Array.isArray(json.data) && json.data.length > 0) {
+          const dynamicPlans: PlanOption[] = json.data.map((pkg: any) => {
+            let priceNote = "Bebas Biaya";
+            if (pkg.priceMonthly === -1 || pkg.priceYearly === -1) {
+              priceNote = "Hubungi Kami (Kustom)";
+            } else if (pkg.priceMonthly > 0) {
+              priceNote = `Mulai Rp ${pkg.priceMonthly.toLocaleString("id-ID")} / bln`;
+            }
+            return {
+              id: pkg.code as any,
+              name: pkg.name,
+              badge: pkg.badge || (pkg.isPopular ? "Paling Populer" : undefined),
+              priceNote,
+              description: pkg.tagline || (pkg.maxStudents ? `Kapasitas s.d ${pkg.maxStudents} siswa` : ""),
+            };
+          });
+          setPlans(dynamicPlans);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not load dynamic packages for register page:", err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const toggleModule = (modId: string) => {
     setSelectedModules((prev) =>
@@ -206,7 +241,7 @@ function SingleSubscriptionFormContent() {
     }
   };
 
-  const currentPlanObj = PLANS.find((p) => p.id === selectedPlan) || PLANS[2];
+  const currentPlanObj = plans.find((p) => p.id === selectedPlan) || plans[2] || plans[0];
 
   // =============================================================
   // SUCCESS CONFIRMATION VIEW
@@ -568,7 +603,7 @@ function SingleSubscriptionFormContent() {
               <div className="space-y-2.5">
                 <label className="text-xs sm:text-sm font-bold text-gray-700 block">Pilihan Paket Langganan:</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                  {PLANS.map((plan) => {
+                  {plans.map((plan) => {
                     const isSelected = selectedPlan === plan.id;
                     return (
                       <div

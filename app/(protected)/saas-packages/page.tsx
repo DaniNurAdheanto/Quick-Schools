@@ -23,7 +23,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Table as TableIcon,
-  LayoutGrid
+  LayoutGrid,
+  PhoneCall
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/context/ToastContext";
@@ -81,6 +82,7 @@ export default function SaaSPackagesPage() {
     name: "",
     tagline: "",
     badge: "",
+    pricingModel: "fixed" as "fixed" | "free" | "contact",
     priceMonthly: 0,
     priceYearly: 0,
     maxStudents: 500,
@@ -119,6 +121,7 @@ export default function SaaSPackagesPage() {
       name: "",
       tagline: "",
       badge: "",
+      pricingModel: "fixed",
       priceMonthly: 0,
       priceYearly: 0,
       maxStudents: 500,
@@ -133,13 +136,22 @@ export default function SaaSPackagesPage() {
   // Open Edit Modal
   const handleOpenEdit = (pkg: SaaSPackageItem) => {
     setEditingPackage(pkg);
+    const isContact = pkg.priceMonthly === -1 || pkg.priceYearly === -1;
+    const isFree = pkg.priceMonthly === 0 && pkg.priceYearly === 0;
+    const pricingModel: "fixed" | "free" | "contact" = isContact
+      ? "contact"
+      : isFree
+      ? "free"
+      : "fixed";
+
     setFormData({
       code: pkg.code,
       name: pkg.name,
       tagline: pkg.tagline || "",
       badge: pkg.badge || "",
-      priceMonthly: pkg.priceMonthly,
-      priceYearly: pkg.priceYearly,
+      pricingModel,
+      priceMonthly: isContact ? 0 : pkg.priceMonthly,
+      priceYearly: isContact ? 0 : pkg.priceYearly,
       maxStudents: pkg.maxStudents,
       featuresText: (pkg.features || []).join("\n"),
       isActive: pkg.isActive,
@@ -164,13 +176,27 @@ export default function SaaSPackagesPage() {
         .map((f) => f.trim())
         .filter(Boolean);
 
+      const finalPriceMonthly =
+        formData.pricingModel === "contact"
+          ? -1
+          : formData.pricingModel === "free"
+          ? 0
+          : Number(formData.priceMonthly);
+
+      const finalPriceYearly =
+        formData.pricingModel === "contact"
+          ? -1
+          : formData.pricingModel === "free"
+          ? 0
+          : Number(formData.priceYearly);
+
       const payload = {
         code: formData.code.toLowerCase().trim(),
         name: formData.name.trim(),
         tagline: formData.tagline.trim(),
         badge: formData.badge.trim(),
-        priceMonthly: Number(formData.priceMonthly),
-        priceYearly: Number(formData.priceYearly),
+        priceMonthly: finalPriceMonthly,
+        priceYearly: finalPriceYearly,
         maxStudents: Number(formData.maxStudents),
         features: featuresArray,
         isActive: formData.isActive,
@@ -350,8 +376,9 @@ export default function SaaSPackagesPage() {
   const totalPackages = packages.length;
   const activePackages = packages.filter((p) => p.isActive).length;
   const popularPackage = packages.find((p) => p.isPopular)?.name || "Sekolah Pro";
-  const avgMonthlyPrice = totalPackages > 0
-    ? Math.round(packages.reduce((sum, p) => sum + p.priceMonthly, 0) / totalPackages)
+  const paidPackages = packages.filter((p) => p.priceMonthly > 0);
+  const avgMonthlyPrice = paidPackages.length > 0
+    ? Math.round(paidPackages.reduce((sum, p) => sum + p.priceMonthly, 0) / paidPackages.length)
     : 0;
 
   return (
@@ -677,28 +704,57 @@ export default function SaaSPackagesPage() {
 
                         {/* 3. Harga Bulanan */}
                         <td className="py-4 px-4 whitespace-nowrap">
-                          <div className="space-y-0.5">
-                            <span className="font-black text-gray-900 text-sm block">
-                              {pkg.priceMonthly === 0 ? "Gratis" : `Rp ${pkg.priceMonthly.toLocaleString("id-ID")}`}
-                            </span>
-                            <span className="text-[10px] text-gray-400 font-semibold block">
-                              per bulan / sekolah
-                            </span>
-                          </div>
+                          {pkg.priceMonthly === -1 ? (
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black bg-amber-50 text-amber-800 border border-amber-200">
+                                <PhoneCall className="w-3 h-3 text-amber-600" />
+                                Hubungi Kami
+                              </span>
+                              <span className="text-[10px] text-gray-400 font-semibold block">
+                                Penawaran Kustom
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="space-y-0.5">
+                              <span className={cn(
+                                "font-black text-sm block",
+                                pkg.priceMonthly === 0 ? "text-emerald-700" : "text-gray-900"
+                              )}>
+                                {pkg.priceMonthly === 0 ? "Gratis" : `Rp ${pkg.priceMonthly.toLocaleString("id-ID")}`}
+                              </span>
+                              <span className="text-[10px] text-gray-400 font-semibold block">
+                                per bulan / sekolah
+                              </span>
+                            </div>
+                          )}
                         </td>
 
                         {/* 4. Harga Tahunan */}
                         <td className="py-4 px-4 whitespace-nowrap">
-                          <div className="space-y-0.5">
-                            <span className="font-black text-[#531FFF] text-sm block">
-                              {pkg.priceYearly === 0 ? "Gratis" : `Rp ${pkg.priceYearly.toLocaleString("id-ID")}`}
-                            </span>
-                            {pkg.priceYearly > 0 && pkg.priceMonthly > 0 && (
-                              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-extrabold inline-block border border-emerald-200">
-                                Hemat 2 Bulan
+                          {pkg.priceYearly === -1 ? (
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black bg-purple-50 text-[#531FFF] border border-purple-200">
+                                Kustom / Negosiasi
                               </span>
-                            )}
-                          </div>
+                              <span className="text-[10px] text-gray-400 font-semibold block">
+                                Kontrak Fleksibel
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="space-y-0.5">
+                              <span className={cn(
+                                "font-black text-sm block",
+                                pkg.priceYearly === 0 ? "text-emerald-700" : "text-[#531FFF]"
+                              )}>
+                                {pkg.priceYearly === 0 ? "Gratis" : `Rp ${pkg.priceYearly.toLocaleString("id-ID")}`}
+                              </span>
+                              {pkg.priceYearly > 0 && pkg.priceMonthly > 0 && (
+                                <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-extrabold inline-block border border-emerald-200">
+                                  Hemat 2 Bulan
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
 
                         {/* 5. Kapasitas */}
@@ -1033,21 +1089,38 @@ export default function SaaSPackagesPage() {
                       </p>
 
                       {/* Pricing Display */}
-                      <div className="py-4 px-4 bg-gray-50/80 rounded-2xl border border-gray-100 mb-5">
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">
-                            {displayPrice === 0 ? "Gratis" : `Rp ${displayPrice.toLocaleString("id-ID")}`}
-                          </span>
-                          {displayPrice > 0 && (
-                            <span className="text-xs font-bold text-gray-400">{cycleSuffix}</span>
+                      {displayPrice === -1 ? (
+                        <div className="py-4 px-4 bg-amber-50/70 rounded-2xl border border-amber-200/80 mb-5">
+                          <div className="flex items-center gap-1.5 text-amber-900">
+                            <PhoneCall className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span className="text-xl sm:text-2xl font-black tracking-tight">
+                              Hubungi Kami
+                            </span>
+                          </div>
+                          <p className="text-[11px] font-semibold text-amber-700 mt-1">
+                            Penawaran khusus & kustomisasi fitur
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="py-4 px-4 bg-gray-50/80 rounded-2xl border border-gray-100 mb-5">
+                          <div className="flex items-baseline gap-1">
+                            <span className={cn(
+                              "text-2xl sm:text-3xl font-black tracking-tight",
+                              displayPrice === 0 ? "text-emerald-700" : "text-gray-900"
+                            )}>
+                              {displayPrice === 0 ? "Gratis" : `Rp ${displayPrice.toLocaleString("id-ID")}`}
+                            </span>
+                            {displayPrice > 0 && (
+                              <span className="text-xs font-bold text-gray-400">{cycleSuffix}</span>
+                            )}
+                          </div>
+                          {billingCycleView === "yearly" && displayPrice > 0 && (
+                            <p className="text-[11px] text-gray-400 mt-1">
+                              Setara Rp {Math.round(displayPrice / 12).toLocaleString("id-ID")}/bulan
+                            </p>
                           )}
                         </div>
-                        {billingCycleView === "yearly" && displayPrice > 0 && (
-                          <p className="text-[11px] text-gray-400 mt-1">
-                            Setara Rp {Math.round(displayPrice / 12).toLocaleString("id-ID")}/bulan
-                          </p>
-                        )}
-                      </div>
+                      )}
 
                       {/* Quota Info */}
                       <div className="flex items-center gap-2 text-xs font-bold text-gray-700 mb-4 pb-3 border-b border-gray-100">
@@ -1193,6 +1266,81 @@ export default function SaaSPackagesPage() {
                 </div>
               </div>
 
+              {/* Kategori Skema Harga */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-gray-700">
+                  Model & Skema Tarif <span className="text-rose-500">*</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-1.5 bg-gray-100/80 rounded-2xl border border-gray-200/80">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, pricingModel: "fixed" })}
+                    className={cn(
+                      "py-2 px-3 rounded-xl text-xs font-bold transition-all text-center flex flex-col items-center justify-center gap-0.5 cursor-pointer",
+                      formData.pricingModel === "fixed"
+                        ? "bg-white text-gray-900 shadow-xs border border-gray-200"
+                        : "text-gray-600 hover:text-gray-900"
+                    )}
+                  >
+                    <span>Nominal Tetap (Rp)</span>
+                    <span className="text-[10px] font-normal text-gray-400">Bulanan & Tahunan</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, pricingModel: "free" })}
+                    className={cn(
+                      "py-2 px-3 rounded-xl text-xs font-bold transition-all text-center flex flex-col items-center justify-center gap-0.5 cursor-pointer",
+                      formData.pricingModel === "free"
+                        ? "bg-white text-emerald-700 shadow-xs border border-emerald-200"
+                        : "text-gray-600 hover:text-gray-900"
+                    )}
+                  >
+                    <span>Gratis / Uji Coba</span>
+                    <span className="text-[10px] font-normal text-gray-400">Rp 0 (14 Hari)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, pricingModel: "contact" })}
+                    className={cn(
+                      "py-2 px-3 rounded-xl text-xs font-bold transition-all text-center flex flex-col items-center justify-center gap-0.5 cursor-pointer",
+                      formData.pricingModel === "contact"
+                        ? "bg-white text-amber-700 shadow-xs border border-amber-200"
+                        : "text-gray-600 hover:text-gray-900"
+                    )}
+                  >
+                    <span className="flex items-center gap-1">
+                      <PhoneCall className="w-3 h-3 text-amber-600" />
+                      Hubungi Kami
+                    </span>
+                    <span className="text-[10px] font-normal text-gray-400">Kustom / Negosiasi</span>
+                  </button>
+                </div>
+
+                {formData.pricingModel === "contact" && (
+                  <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-900 text-xs flex items-start gap-2.5">
+                    <PhoneCall className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">Kategori: Hubungi Kami (Kustom)</p>
+                      <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+                        Tarif bulanan dan tahunan akan otomatis diset sebagai penawaran kustom. Di halaman landing page dan formulir registrasi sekolah, harga ditampilkan sebagai <strong>&quot;Hubungi Kami&quot;</strong> dan tombol aksi mengarahkan ke <strong>&quot;Konsultasi &amp; Hubungi Kami&quot;</strong>.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {formData.pricingModel === "free" && (
+                  <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-900 text-xs flex items-start gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">Kategori: Gratis / Uji Coba 14 Hari</p>
+                      <p className="text-[11px] text-emerald-700 mt-0.5 leading-relaxed">
+                        Tarif bulanan dan tahunan diset ke Rp 0. Paket ini ideal untuk masa uji coba atau onboarding awal sekolah tanpa pungutan biaya.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5">
@@ -1201,9 +1349,10 @@ export default function SaaSPackagesPage() {
                   <input
                     type="number"
                     min="0"
-                    value={formData.priceMonthly}
+                    disabled={formData.pricingModel !== "fixed"}
+                    value={formData.pricingModel !== "fixed" ? 0 : formData.priceMonthly}
                     onChange={(e) => setFormData({ ...formData, priceMonthly: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-[#531FFF] focus:ring-1 focus:ring-[#531FFF]"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-[#531FFF] focus:ring-1 focus:ring-[#531FFF] disabled:bg-gray-100 disabled:text-gray-400"
                   />
                 </div>
 
@@ -1214,9 +1363,10 @@ export default function SaaSPackagesPage() {
                   <input
                     type="number"
                     min="0"
-                    value={formData.priceYearly}
+                    disabled={formData.pricingModel !== "fixed"}
+                    value={formData.pricingModel !== "fixed" ? 0 : formData.priceYearly}
                     onChange={(e) => setFormData({ ...formData, priceYearly: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-[#531FFF] focus:ring-1 focus:ring-[#531FFF]"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-xs text-gray-900 focus:outline-none focus:border-[#531FFF] focus:ring-1 focus:ring-[#531FFF] disabled:bg-gray-100 disabled:text-gray-400"
                   />
                 </div>
 

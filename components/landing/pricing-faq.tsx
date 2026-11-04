@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -9,6 +9,129 @@ import {
   GraduationCap, CheckCircle2, MessageCircle
 } from "lucide-react";
 
+export interface SaaSPackageItem {
+  id: string;
+  code: string;
+  name: string;
+  tagline?: string | null;
+  badge?: string | null;
+  priceMonthly: number;
+  priceYearly: number;
+  maxStudents: number;
+  features: string[];
+  isActive: boolean;
+  isPopular: boolean;
+  sortOrder: number;
+}
+
+const INITIAL_PACKAGES: SaaSPackageItem[] = [
+  {
+    id: "trial",
+    code: "trial",
+    name: "Uji Coba 14 Hari (Trial)",
+    tagline: "Coba seluruh fitur tanpa komitmen biaya",
+    badge: "Gratis",
+    priceMonthly: 0,
+    priceYearly: 0,
+    maxStudents: 150,
+    features: [
+      "Presensi Online GPS",
+      "Jadwal Pelajaran",
+      "Penilaian Siswa",
+      "Akses Uji Coba 14 Hari"
+    ],
+    isActive: true,
+    isPopular: false,
+    sortOrder: 1,
+  },
+  {
+    id: "standard",
+    code: "standard",
+    name: "Sekolah Rintisan (Standard)",
+    tagline: "Solusi terjangkau untuk sekolah bertumbuh",
+    badge: "Hemat",
+    priceMonthly: 150000,
+    priceYearly: 1500000,
+    maxStudents: 450,
+    features: [
+      "Kapasitas s.d 450 Siswa",
+      "Presensi Real-time + Rekap",
+      "Penilaian & E-Rapor Digital",
+      "Dukungan WhatsApp Jam Kerja"
+    ],
+    isActive: true,
+    isPopular: false,
+    sortOrder: 2,
+  },
+  {
+    id: "pro",
+    code: "pro",
+    name: "Sekolah Unggulan (Pro)",
+    tagline: "Otomasi lengkap berteknologi AI untuk sekolah modern",
+    badge: "Paling Populer",
+    priceMonthly: 200000,
+    priceYearly: 2000000,
+    maxStudents: 1200,
+    features: [
+      "Kapasitas s.d 1.200 Siswa",
+      "Face Recognition AI & Anti-Fake GPS",
+      "Otomatisasi Tagihan SPP & Kas",
+      "Broadcast WhatsApp Otomatis ke Ortu",
+      "Dukungan Prioritas 24/7"
+    ],
+    isActive: true,
+    isPopular: true,
+    sortOrder: 3,
+  },
+  {
+    id: "enterprise",
+    code: "enterprise",
+    name: "Yayasan / Multi-Kampus",
+    tagline: "Tata kelola sentral multi-cabang & kustomisasi domain",
+    badge: "Enterprise",
+    priceMonthly: -1,
+    priceYearly: -1,
+    maxStudents: 5000,
+    features: [
+      "Kapasitas Siswa Unlimited",
+      "Dashboard Konsolidasi Yayasan Multi-Sekolah",
+      "Kustomisasi Domain & Branding Sendiri",
+      "Dedicated Account Manager & SLA 99.9%",
+      "Integrasi & Sinkronisasi Dapodik"
+    ],
+    isActive: true,
+    isPopular: false,
+    sortOrder: 4,
+  },
+];
+
+const getPackageIcon = (code: string) => {
+  const c = (code || "").toLowerCase();
+  if (c.includes("trial") || c.includes("starter")) return GraduationCap;
+  if (c.includes("standard") || c.includes("rintisan")) return Sparkles;
+  if (c.includes("pro") || c.includes("unggulan")) return Zap;
+  if (c.includes("enterprise") || c.includes("yayasan")) return Building2;
+  return ShieldCheck;
+};
+
+const getButtonText = (pkg: SaaSPackageItem, lang: "id" | "en") => {
+  const isContact = pkg.priceMonthly === -1 || pkg.priceYearly === -1;
+  if (isContact) {
+    return lang === "id" ? "Konsultasi & Hubungi Kami" : "Contact Sales & Consult";
+  }
+  const c = pkg.code.toLowerCase();
+  if (pkg.priceMonthly === 0) {
+    return lang === "id" ? "Ajukan Uji Coba 14 Hari" : "Start 14-Day Free Trial";
+  }
+  if (c === "standard") {
+    return lang === "id" ? "Ajukan Paket Standard" : "Choose Standard Plan";
+  }
+  if (c === "pro") {
+    return lang === "id" ? "Ajukan Berlangganan Pro" : "Register Pro Plan";
+  }
+  return lang === "id" ? `Pilih Paket ${pkg.name}` : `Choose ${pkg.name}`;
+};
+
 interface PricingFaqProps {
   lang: "id" | "en";
 }
@@ -16,6 +139,25 @@ interface PricingFaqProps {
 export default function PricingFaq({ lang }: PricingFaqProps) {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("annual");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [packages, setPackages] = useState<SaaSPackageItem[]>(INITIAL_PACKAGES);
+
+  // Sync real-time with SaaS Administrator "Paket Layanan SaaS" (/api/saas-packages)
+  useEffect(() => {
+    let isMounted = true;
+    fetch("/api/saas-packages?activeOnly=true")
+      .then((res) => res.json())
+      .then((json) => {
+        if (isMounted && json.success && Array.isArray(json.data) && json.data.length > 0) {
+          setPackages(json.data);
+        }
+      })
+      .catch((err) => {
+        console.warn("PricingFaq: failed to fetch packages from API, using default fallback:", err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const t = {
     id: {
@@ -24,79 +166,8 @@ export default function PricingFaq({ lang }: PricingFaqProps) {
       desc: "Pilih paket investasi yang sesuai dengan skala sekolah Anda. Seluruh paket sudah termasuk bantuan migrasi data dan pendampingan implementasi gratis.",
       monthly: "Tagihan Bulanan",
       annual: "Tagihan Tahunan",
-      discountBadge: "Hemat 20%",
+      discountBadge: "Hemat Biaya",
       popularBadge: "Paling Banyak Dipilih",
-      plans: [
-        {
-          id: "starter",
-          name: "Perintis (Starter)",
-          target: "Sekolah Perintis / TK & SD Baru",
-          desc: "Solusi tepat bagi sekolah yang ingin memulai digitalisasi manajemen tanpa beban biaya.",
-          priceMonthly: "Gratis",
-          priceAnnual: "Gratis",
-          unit: "selamanya",
-          buttonText: "Ajukan Uji Coba 14 Hari",
-          buttonLink: "/register-school?plan=trial",
-          popular: false,
-          icon: GraduationCap,
-          highlight: false,
-          features: [
-            "Hingga 150 Siswa Aktif",
-            "Presensi GPS Standard Sekolah",
-            "Manajemen Data Siswa & Pengajar",
-            "Jadwal Pelajaran & Kalender Akademik",
-            "Laporan Kehadiran Bulanan Otomatis",
-            "Dukungan Komunitas & Email"
-          ]
-        },
-        {
-          id: "pro",
-          name: "Sekolah Unggulan (Pro)",
-          target: "SD, SMP, & SMA Unggulan",
-          desc: "Paket lengkap dengan otomasi menyeluruh untuk sekolah modern yang mengutamakan kecepatan & transparansi.",
-          priceMonthly: "Rp 249.000",
-          priceAnnual: "Rp 199.000",
-          unit: "/ bulan (dibayar tahunan)",
-          savings: "Hemat Rp 600.000/tahun",
-          buttonText: "Ajukan Berlangganan Pro",
-          buttonLink: "/register-school?plan=pro",
-          popular: true,
-          icon: Zap,
-          highlight: true,
-          features: [
-            "Hingga 1.200 Siswa Aktif",
-            "Presensi Geofence + Proteksi Anti-Fake GPS",
-            "Otomasi Rapor Kurikulum Merdeka (TP)",
-            "Penagihan SPP Otomatis + Virtual Account",
-            "Laporan Keuangan & Arus Kas Lengkap",
-            "Broadcast Pengumuman Multi-Target",
-            "Notifikasi Otomatis ke WhatsApp Orang Tua",
-            "Dukungan Prioritas WhatsApp 24/7"
-          ]
-        },
-        {
-          id: "enterprise",
-          name: "Yayasan / Multi-Kampus",
-          target: "Yayasan Pendidikan & Multi-Cabang",
-          desc: "Tata kelola terpusat lintas sekolah dengan keamanan korporasi dan pendampingan khusus.",
-          priceMonthly: "Kustom",
-          priceAnnual: "Kustom",
-          unit: "disesuaikan kebutuhan",
-          buttonText: "Konsultasi & Penawaran Enterprise",
-          buttonLink: "/register-school?plan=enterprise",
-          popular: false,
-          icon: Building2,
-          highlight: false,
-          features: [
-            "Kapasitas Siswa Tanpa Batas",
-            "Multi-Sekolah & Dashboard Konsolidasi Yayasan",
-            "Integrasi API & Sinkronisasi Dapodik Kustom",
-            "Dedicated Account Manager & Workshop Staf",
-            "Perjanjian Layanan (SLA 99.9% Uptime)",
-            "Migrasi Basis Data Berkelanjutan Didampingi Ahli"
-          ]
-        }
-      ],
       guarantees: [
         {
           icon: ShieldCheck,
@@ -153,79 +224,8 @@ export default function PricingFaq({ lang }: PricingFaqProps) {
       desc: "Select the optimal investment plan for your school's scale. Every package includes complimentary data migration and guided staff onboarding.",
       monthly: "Monthly Billing",
       annual: "Annual Billing",
-      discountBadge: "Save 20%",
+      discountBadge: "Cost Savings",
       popularBadge: "Most Popular",
-      plans: [
-        {
-          id: "starter",
-          name: "Starter School",
-          target: "Early Stage / Small Schools",
-          desc: "The ideal gateway for educational institutions starting their digital journey at zero cost.",
-          priceMonthly: "Free",
-          priceAnnual: "Free",
-          unit: "forever",
-          buttonText: "Start Free Today",
-          buttonLink: "/register-school?plan=trial",
-          popular: false,
-          icon: GraduationCap,
-          highlight: false,
-          features: [
-            "Up to 150 Active Students",
-            "Standard GPS Campus Attendance",
-            "Student & Faculty Directory",
-            "Class Schedules & Academic Calendar",
-            "Automated Monthly Attendance Reports",
-            "Community & Email Support"
-          ]
-        },
-        {
-          id: "pro",
-          name: "Excellence (Pro)",
-          target: "Top Primary & Secondary Schools",
-          desc: "Complete end-to-end automation suite for modern institutions that prioritize speed & transparency.",
-          priceMonthly: "Rp 249,000",
-          priceAnnual: "Rp 199,000",
-          unit: "/ month (billed annually)",
-          savings: "Save Rp 600,000/year",
-          buttonText: "Register Pro Plan",
-          buttonLink: "/register-school?plan=pro",
-          popular: true,
-          icon: Zap,
-          highlight: true,
-          features: [
-            "Up to 1,200 Active Students",
-            "Geofence GPS + Anti-Spoof Protection",
-            "Merdeka Curriculum Automated Report Cards",
-            "Automated Tuition Billing + Virtual Accounts",
-            "Full Accounting & Cashflow Ledgers",
-            "Segmented Multi-Target Broadcasts",
-            "Automated WhatsApp Alerts to Parents",
-            "24/7 Dedicated Priority Support"
-          ]
-        },
-        {
-          id: "enterprise",
-          name: "Foundation / Multi-Campus",
-          target: "Multi-Campus Educational Trusts",
-          desc: "Centralized governance across campus branches with enterprise-grade security and tailored onboarding.",
-          priceMonthly: "Custom",
-          priceAnnual: "Custom",
-          unit: "tailored scope",
-          buttonText: "Register / Consult Enterprise",
-          buttonLink: "/register-school?plan=enterprise",
-          popular: false,
-          icon: Building2,
-          highlight: false,
-          features: [
-            "Unlimited Student Capacity",
-            "Multi-Campus Centralized Foundation Dashboard",
-            "Custom API Integrations & Dapodik Sync",
-            "Dedicated Account Manager & Staff Workshops",
-            "99.9% Uptime Service Level Agreement (SLA)",
-            "Guided High-Volume Historical Data Migration"
-          ]
-        }
-      ],
       guarantees: [
         {
           icon: ShieldCheck,
@@ -351,19 +351,74 @@ export default function PricingFaq({ lang }: PricingFaqProps) {
           </div>
         </div>
 
-        {/* ── Pricing Cards Grid ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch max-w-6xl mx-auto mb-16">
-          {t.plans.map((plan) => {
-            const isPopular = plan.popular;
-            const price = billingCycle === "annual" ? plan.priceAnnual : plan.priceMonthly;
-            const PlanIcon = plan.icon;
+        {/* ── Pricing Cards Grid (Integrated Dynamically with SaaS Packages) ── */}
+        <div
+          className={`grid gap-6 items-stretch mx-auto mb-16 ${
+            packages.length <= 2
+              ? "grid-cols-1 md:grid-cols-2 max-w-4xl"
+              : packages.length === 3
+              ? "grid-cols-1 lg:grid-cols-3 max-w-6xl"
+              : "grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl"
+          }`}
+        >
+          {packages.map((pkg) => {
+            const isPopular = pkg.isPopular;
+            const PlanIcon = getPackageIcon(pkg.code);
+
+            // Format Prices dynamically from SaaS Administrator DB
+            const isContact = pkg.priceMonthly === -1 || pkg.priceYearly === -1;
+            const isFree = !isContact && pkg.priceMonthly === 0 && pkg.priceYearly === 0;
+            let displayPrice = "";
+            let unitText = "";
+            let savingsText: string | null = null;
+            let monthlyEquivalentText: string | null = null;
+
+            if (isContact) {
+              displayPrice = lang === "id" ? "Hubungi Kami" : "Contact Us";
+              unitText = lang === "id" ? "penawaran kustom" : "tailored scope";
+            } else if (isFree) {
+              displayPrice = lang === "id" ? "Gratis" : "Free";
+              unitText = lang === "id" ? "14 hari trial" : "14-day trial";
+            } else if (billingCycle === "annual") {
+              if (pkg.priceYearly > 0) {
+                displayPrice = `Rp ${pkg.priceYearly.toLocaleString("id-ID")}`;
+                unitText = lang === "id" ? "/ tahun" : "/ year";
+                monthlyEquivalentText = `~Rp ${Math.round(pkg.priceYearly / 12).toLocaleString("id-ID")}/bln`;
+
+                if (pkg.priceMonthly > 0 && pkg.priceMonthly * 12 > pkg.priceYearly) {
+                  const diff = pkg.priceMonthly * 12 - pkg.priceYearly;
+                  savingsText =
+                    lang === "id"
+                      ? `Hemat Rp ${diff.toLocaleString("id-ID")}/tahun`
+                      : `Save Rp ${diff.toLocaleString("id-ID")}/year`;
+                }
+              } else {
+                displayPrice = `Rp ${pkg.priceMonthly.toLocaleString("id-ID")}`;
+                unitText = lang === "id" ? "/ bulan" : "/ month";
+              }
+            } else {
+              displayPrice = `Rp ${pkg.priceMonthly.toLocaleString("id-ID")}`;
+              unitText = lang === "id" ? "/ bulan" : "/ month";
+            }
+
+            const buttonLink = `/register-school?plan=${encodeURIComponent(pkg.code)}`;
+            const buttonText = getButtonText(pkg, lang);
+            const targetBadge =
+              pkg.badge ||
+              (pkg.maxStudents >= 2500
+                ? lang === "id"
+                  ? "Siswa Unlimited"
+                  : "Unlimited Students"
+                : lang === "id"
+                ? `Hingga ${pkg.maxStudents.toLocaleString("id-ID")} Siswa`
+                : `Up to ${pkg.maxStudents.toLocaleString("id-ID")} Students`);
 
             return (
               <motion.div
-                key={plan.id}
+                key={pkg.id || pkg.code}
                 whileHover={{ y: -4 }}
                 transition={{ duration: 0.25 }}
-                className={`rounded-3xl p-8 flex flex-col justify-between transition-all duration-300 relative bg-white ${
+                className={`rounded-3xl p-6 sm:p-7 flex flex-col justify-between transition-all duration-300 relative bg-white ${
                   isPopular
                     ? "border-2 border-[#531FFF] shadow-2xl shadow-[#531FFF]/12 lg:-translate-y-2 ring-4 ring-[#531FFF]/10"
                     : "border border-slate-200/90 hover:border-slate-300 shadow-sm hover:shadow-lg"
@@ -371,7 +426,7 @@ export default function PricingFaq({ lang }: PricingFaqProps) {
               >
                 {/* Popular Highlight Tag */}
                 {isPopular && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#531FFF] to-[#7B4DFF] text-white text-[11px] font-extrabold uppercase tracking-wider px-4 py-1 rounded-full shadow-md shadow-[#531FFF]/30 flex items-center gap-1.5">
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#531FFF] to-[#7B4DFF] text-white text-[11px] font-extrabold uppercase tracking-wider px-4 py-1 rounded-full shadow-md shadow-[#531FFF]/30 flex items-center gap-1.5 whitespace-nowrap">
                     <Sparkles className="w-3 h-3" />
                     <span>{t.popularBadge}</span>
                   </div>
@@ -379,17 +434,17 @@ export default function PricingFaq({ lang }: PricingFaqProps) {
 
                 <div>
                   {/* Card Header & Tier Badge */}
-                  <div className="flex items-start justify-between gap-4 mb-5">
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-extrabold tracking-wider uppercase px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 inline-block">
-                        {plan.target}
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <div className="space-y-1 min-w-0">
+                      <span className="text-[10px] font-extrabold tracking-wider uppercase px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 inline-block truncate max-w-full">
+                        {targetBadge}
                       </span>
-                      <h3 className="text-2xl font-black tracking-tight text-slate-900 pt-1">
-                        {plan.name}
+                      <h3 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 pt-1">
+                        {pkg.name}
                       </h3>
                     </div>
                     <div
-                      className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                      className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
                         isPopular
                           ? "bg-[#531FFF]/10 text-[#531FFF]"
                           : "bg-slate-100 text-slate-700"
@@ -399,26 +454,36 @@ export default function PricingFaq({ lang }: PricingFaqProps) {
                     </div>
                   </div>
 
-                  <p className="text-xs sm:text-sm text-slate-500 leading-relaxed font-normal min-h-[38px] mb-6">
-                    {plan.desc}
+                  <p className="text-xs sm:text-sm text-slate-500 leading-relaxed font-normal min-h-[38px] mb-5">
+                    {pkg.tagline ||
+                      (lang === "id"
+                        ? `Paket lengkap dengan kapasitas hingga ${pkg.maxStudents} siswa.`
+                        : `Full package with capacity up to ${pkg.maxStudents} students.`)}
                   </p>
 
                   {/* Price Block */}
-                  <div className="mb-7 pb-6 border-b border-slate-100">
+                  <div className="mb-6 pb-5 border-b border-slate-100">
                     <div className="flex items-baseline gap-1.5 flex-wrap">
                       <span className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
-                        {price}
+                        {displayPrice}
                       </span>
                       <span className="text-xs font-semibold text-slate-400">
-                        {plan.unit}
+                        {unitText}
                       </span>
                     </div>
 
-                    {isPopular && billingCycle === "annual" && plan.savings && (
-                      <p className="text-[11px] font-bold text-emerald-600 mt-2 flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span>{plan.savings}</span>
-                      </p>
+                    {billingCycle === "annual" && monthlyEquivalentText && (
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <span className="text-[11px] font-semibold text-slate-400">
+                          {monthlyEquivalentText}
+                        </span>
+                        {savingsText && (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>{savingsText}</span>
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -427,8 +492,8 @@ export default function PricingFaq({ lang }: PricingFaqProps) {
                     <p className="text-[11px] font-extrabold tracking-wider text-slate-400 uppercase">
                       {lang === "id" ? "Fitur Termasuk:" : "Included Features:"}
                     </p>
-                    <ul className="space-y-3">
-                      {plan.features.map((feat, fIdx) => (
+                    <ul className="space-y-2.5">
+                      {(pkg.features || []).map((feat, fIdx) => (
                         <li key={fIdx} className="flex items-start gap-2.5">
                           <div
                             className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
@@ -450,14 +515,14 @@ export default function PricingFaq({ lang }: PricingFaqProps) {
 
                 {/* CTA Action Button */}
                 <Link
-                  href={plan.buttonLink}
-                  className={`w-full py-3.5 px-6 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-98 ${
+                  href={buttonLink}
+                  className={`w-full py-3 px-5 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-98 ${
                     isPopular
                       ? "bg-[#531FFF] text-white hover:bg-[#4314cc] shadow-md shadow-[#531FFF]/25 hover:shadow-lg hover:shadow-[#531FFF]/30"
                       : "bg-slate-900 text-white hover:bg-slate-800 shadow-xs"
                   }`}
                 >
-                  <span>{plan.buttonText}</span>
+                  <span>{buttonText}</span>
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </motion.div>
