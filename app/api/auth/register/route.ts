@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import * as bcrypt from "bcryptjs";
 import { UserRole, AccountStatus } from "@prisma/client";
+import { signSessionToken } from "@/lib/jwt";
+import { SESSION_COOKIE_NAME } from "@/lib/server-auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -131,16 +133,51 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `Akun ${name} berhasil didaftarkan ke database PostgreSQL.`,
-      user: {
-        id: newUser.id,
-        email: newUser.email,
-        name: newUser.name,
-        role: targetRole,
+    const roleMap: Record<string, string> = {
+      ADMIN: "admin",
+      KEPALA_SEKOLAH: "kepala-sekolah",
+      GURU: "guru",
+      SISWA: "siswa",
+      ORANG_TUA: "orang-tua",
+    };
+    const normalizedRole = roleMap[targetRole] || "siswa";
+    const statusLabel = targetStatus === AccountStatus.AKTIF ? "Aktif" : "Belum Onboarding";
+
+    const sessionPayload = {
+      id: newUser.id,
+      email: newUser.email,
+      name: newUser.name,
+      role: normalizedRole,
+      status: statusLabel,
+      onboardingCompleted: newUser.onboardingCompleted,
+      phone: newUser.phone || "-",
+      nip: nip ? String(nip).trim() : null,
+      nisn: nisn ? String(nisn).trim() : null,
+    };
+
+    const token = await signSessionToken(sessionPayload);
+
+    const response = NextResponse.json(
+      {
+        success: true,
+        message: `Akun ${name} berhasil didaftarkan ke database PostgreSQL.`,
+        token,
+        user: sessionPayload,
       },
+      { status: 201 }
+    );
+
+    response.cookies.set({
+      name: SESSION_COOKIE_NAME,
+      value: token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
     });
+
+    return response;
   } catch (err: any) {
     console.error("Register API error:", err);
     return NextResponse.json(

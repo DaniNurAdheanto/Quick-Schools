@@ -829,12 +829,12 @@ export function TeacherDashboardView({
   };
 
   return (
-    <div className="p-6 md:p-8 pb-16 max-w-[1600px] mx-auto w-full space-y-7 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       
       {/* ============================================================ */}
       {/* 1. TOP HERO BANNER: PERSONALIZED GURU SUMMARY */}
       {/* ============================================================ */}
-      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-[#4318FF] via-[#531FFF] to-[#7042FF] text-white p-7 md:p-8 shadow-xl shadow-[#531FFF]/15 border border-[#6F42FF]/30">
+      <div className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-[#4318FF] via-[#531FFF] to-[#7042FF] text-white p-5 sm:p-7 md:p-8 shadow-xl shadow-[#531FFF]/15 border border-[#6F42FF]/30">
         <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
         <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-indigo-300/10 rounded-full blur-2xl pointer-events-none" />
 
@@ -997,12 +997,12 @@ export function TeacherDashboardView({
       {/* ============================================================ */}
       {/* 2. FIVE KEY PERFORMANCE METRICS CARDS */}
       {/* ============================================================ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
         {/* Metric 1: Jadwal Hari Ini */}
-        <div className="bg-white rounded-lg p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Jadwal Hari Ini</span>
-            <div className="w-10 h-10 rounded-lg bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center">
               <CalendarCheck className="w-5 h-5" />
             </div>
           </div>
@@ -1017,10 +1017,10 @@ export function TeacherDashboardView({
         </div>
 
         {/* Metric 2: Total Siswa Diampu */}
-        <div className="bg-white rounded-lg p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Siswa Diampu</span>
-            <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <Users className="w-5 h-5" />
             </div>
           </div>
@@ -1035,10 +1035,10 @@ export function TeacherDashboardView({
         </div>
 
         {/* Metric 3: Kehadiran Siswa Hari Ini */}
-        <div className="bg-white rounded-lg p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Presensi Siswa</span>
-            <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <UserCheck className="w-5 h-5" />
             </div>
           </div>
@@ -1053,10 +1053,10 @@ export function TeacherDashboardView({
         </div>
 
         {/* Metric 4: Progres Input Nilai */}
-        <div className="bg-white rounded-lg p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Input Penilaian</span>
-            <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
               <PenLine className="w-5 h-5" />
             </div>
           </div>
@@ -1077,7 +1077,7 @@ export function TeacherDashboardView({
         </div>
 
         {/* Metric 5: Wali Kelas / Jam Mengajar */}
-        <div className="bg-white rounded-lg p-5 border border-gray-100 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-all flex flex-col justify-between">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-xs hover:shadow-md transition-all flex flex-col justify-between col-span-2 md:col-span-2 lg:col-span-1">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
               {resolvedHomeroomClass ? "Kelas Perwalian" : "Beban Mengajar"}
@@ -1150,8 +1150,8 @@ export function TeacherDashboardView({
           </div>
 
           {/* Homeroom Attendance Pills & Alerts */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-            <div className="bg-white rounded-lg p-3.5 border border-purple-100 flex items-center justify-between">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="bg-white rounded-xl p-3.5 border border-purple-100 flex items-center justify-between shadow-2xs">
               <div>
                 <span className="text-[11px] font-bold text-gray-400 uppercase">Total Siswa</span>
                 <p className="text-lg font-black text-gray-900">{homeroomAttendance?.totalStudents ?? 0}</p>
@@ -1159,7 +1159,7 @@ export function TeacherDashboardView({
               <Users className="w-5 h-5 text-gray-400" />
             </div>
 
-            <div className="bg-white rounded-lg p-3.5 border border-emerald-100 flex items-center justify-between">
+            <div className="bg-white rounded-xl p-3.5 border border-emerald-100 flex items-center justify-between shadow-2xs">
               <div>
                 <span className="text-[11px] font-bold text-emerald-600 uppercase">Hadir Hari Ini</span>
                 <p className="text-lg font-black text-emerald-600">{homeroomAttendance?.hadir ?? 0}</p>
@@ -1167,7 +1167,7 @@ export function TeacherDashboardView({
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
             </div>
 
-            <div className="bg-white rounded-lg p-3.5 border border-amber-100 flex items-center justify-between">
+            <div className="bg-white rounded-xl p-3.5 border border-amber-100 flex items-center justify-between shadow-2xs">
               <div>
                 <span className="text-[11px] font-bold text-amber-600 uppercase">Sakit / Izin</span>
                 <p className="text-lg font-black text-amber-600">
@@ -1177,7 +1177,7 @@ export function TeacherDashboardView({
               <Clock className="w-5 h-5 text-amber-500" />
             </div>
 
-            <div className="bg-white rounded-lg p-3.5 border border-rose-100 flex items-center justify-between">
+            <div className="bg-white rounded-xl p-3.5 border border-rose-100 flex items-center justify-between shadow-2xs">
               <div>
                 <span className="text-[11px] font-bold text-rose-600 uppercase">Alpa (Tanpa Ket.)</span>
                 <p className="text-lg font-black text-rose-600">{homeroomAttendance?.alpa || 0}</p>
@@ -1185,7 +1185,7 @@ export function TeacherDashboardView({
               <AlertTriangle className="w-5 h-5 text-rose-500" />
             </div>
 
-            <div className="col-span-2 sm:col-span-4 lg:col-span-1 bg-white rounded-lg p-3.5 border border-purple-100 flex items-center justify-between">
+            <div className="col-span-2 sm:col-span-2 lg:col-span-1 bg-white rounded-xl p-3.5 border border-purple-100 flex items-center justify-between shadow-2xs">
               <div>
                 <span className="text-[11px] font-bold text-purple-600 uppercase">Aksi Presensi</span>
                 <p className="text-xs font-bold text-gray-800 mt-0.5">Input Hari Ini</p>
@@ -1466,7 +1466,7 @@ export function TeacherDashboardView({
               Aktivitas Utama Guru
             </h3>
 
-            <div className="grid grid-cols-1 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2.5">
               {/* Presensi Guru Mandiri Quick Action */}
               {todayTeacherRecord?.clockIn ? (
                 <div

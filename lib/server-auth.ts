@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifySessionToken, SessionPayload } from "@/lib/jwt";
 
@@ -6,7 +6,14 @@ export const SESSION_COOKIE_NAME = "qs_session_token";
 
 export async function getServerSession(): Promise<SessionPayload | null> {
   const cookieStore = cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  let token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+
+  if (!token) {
+    const authHeader = headers().get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.slice(7).trim();
+    }
+  }
 
   if (!token) return null;
 

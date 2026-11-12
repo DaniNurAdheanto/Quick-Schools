@@ -1173,7 +1173,7 @@ export function AdminDashboardView({
   }, [schedules, currentDay]);
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1700px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       
       {/* ═══════════════════════════════════════════════════════════════════
           EXECUTIVE BANNER REDESIGN (Super Admin Command Center)
@@ -1185,7 +1185,7 @@ export function AdminDashboardView({
         <div className="absolute -bottom-10 -left-10 w-80 h-80 bg-blue-500/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute inset-0 bg-[radial-gradient(#ffffff0a_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
 
-        <div className="relative z-10 p-6 sm:p-8 lg:p-9 space-y-6">
+        <div className="relative z-10 p-5 sm:p-7 md:p-8 lg:p-9 space-y-6">
           
           {/* Top Row: School Branding & Status Indicators */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-5">
@@ -1281,20 +1281,20 @@ export function AdminDashboardView({
             </div>
 
             {/* Quick Action Navigation Pills */}
-            <div className="flex flex-wrap items-center gap-2.5 lg:justify-end">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2.5 w-full lg:w-auto lg:justify-end">
               <Link
                 href="/attendance"
-                className="flex items-center gap-2 bg-white text-indigo-900 hover:bg-indigo-50 px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer"
+                className="flex items-center justify-center gap-2 bg-white text-indigo-900 hover:bg-indigo-50 px-4 py-2.5 rounded-xl text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer text-center"
               >
-                <CalendarCheck className="w-4 h-4 text-indigo-600" />
+                <CalendarCheck className="w-4 h-4 text-indigo-600 shrink-0" />
                 <span>Presensi Siswa</span>
               </Link>
 
               <Link
                 href="/leave-requests"
-                className="flex items-center gap-2 bg-indigo-500/40 hover:bg-indigo-500/60 text-white border border-indigo-300/30 px-4 py-2.5 rounded-xl text-xs font-black transition-all backdrop-blur-md shadow-md active:scale-95 relative cursor-pointer"
+                className="flex items-center justify-center gap-2 bg-indigo-500/40 hover:bg-indigo-500/60 text-white border border-indigo-300/30 px-4 py-2.5 rounded-xl text-xs font-black transition-all backdrop-blur-md shadow-md active:scale-95 relative cursor-pointer text-center"
               >
-                <ClipboardCheck className="w-4 h-4 text-indigo-200" />
+                <ClipboardCheck className="w-4 h-4 text-indigo-200 shrink-0" />
                 <span>Izin & Sakit</span>
                 {leaveStats.pendingCount > 0 && (
                   <span className="ml-1 px-1.5 py-0.5 bg-rose-500 text-white text-[10px] font-black rounded-full animate-bounce">
@@ -1305,25 +1305,25 @@ export function AdminDashboardView({
 
               <Link
                 href="/teacher-attendance"
-                className="flex items-center gap-2 bg-indigo-500/40 hover:bg-indigo-500/60 text-white border border-indigo-300/30 px-4 py-2.5 rounded-xl text-xs font-black transition-all backdrop-blur-md shadow-md active:scale-95 cursor-pointer"
+                className="flex items-center justify-center gap-2 bg-indigo-500/40 hover:bg-indigo-500/60 text-white border border-indigo-300/30 px-4 py-2.5 rounded-xl text-xs font-black transition-all backdrop-blur-md shadow-md active:scale-95 cursor-pointer text-center"
               >
-                <ScanFace className="w-4 h-4 text-indigo-200" />
+                <ScanFace className="w-4 h-4 text-indigo-200 shrink-0" />
                 <span>Absensi Guru</span>
               </Link>
 
               <Link
                 href="/financial-reports"
-                className="flex items-center gap-2 bg-indigo-500/40 hover:bg-indigo-500/60 text-white border border-indigo-300/30 px-4 py-2.5 rounded-xl text-xs font-black transition-all backdrop-blur-md shadow-md active:scale-95 cursor-pointer"
+                className="flex items-center justify-center gap-2 bg-indigo-500/40 hover:bg-indigo-500/60 text-white border border-indigo-300/30 px-4 py-2.5 rounded-xl text-xs font-black transition-all backdrop-blur-md shadow-md active:scale-95 cursor-pointer text-center"
               >
-                <Wallet className="w-4 h-4 text-indigo-200" />
+                <Wallet className="w-4 h-4 text-indigo-200 shrink-0" />
                 <span>Keuangan SPP</span>
               </Link>
             </div>
           </div>
 
           {/* Bottom Row: Quick Glance Vitals Bar inside Banner */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-white/10 text-xs">
-            <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 pt-2 border-t border-white/10 text-xs">
+            <div className="flex items-center gap-3 p-2.5 sm:p-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/10">
               <div className="w-9 h-9 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
                 <Calendar className="w-4 h-4 text-indigo-200" />
               </div>
@@ -1333,7 +1333,7 @@ export function AdminDashboardView({
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/10">
+            <div className="flex items-center gap-3 p-2.5 sm:p-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/10">
               <div className="w-9 h-9 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
                 <Users className="w-4 h-4 text-indigo-200" />
               </div>
@@ -1343,7 +1343,7 @@ export function AdminDashboardView({
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/10">
+            <div className="flex items-center gap-3 p-2.5 sm:p-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/10">
               <div className="w-9 h-9 rounded-lg bg-emerald-400/20 flex items-center justify-center shrink-0">
                 <Clock3 className="w-4 h-4 text-emerald-300" />
               </div>
@@ -1358,7 +1358,7 @@ export function AdminDashboardView({
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/10">
+            <div className="flex items-center gap-3 p-2.5 sm:p-3 rounded-xl bg-white/10 backdrop-blur-md border border-white/10">
               <div className="w-9 h-9 rounded-lg bg-amber-400/20 flex items-center justify-center shrink-0">
                 <ClipboardCheck className="w-4 h-4 text-amber-300" />
               </div>
@@ -1377,7 +1377,7 @@ export function AdminDashboardView({
       {/* ═══════════════════════════════════════════════════════════════════
           6 PILAR UTAMA EKOSISTEM SEKOLAH (Super Admin Master Overview)
       ═══════════════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4">
         
         {/* 1. Total Siswa */}
         <Link
@@ -2030,7 +2030,7 @@ export function AdminDashboardView({
               </div>
 
               {/* Card 5: Alpa / Tanpa Keterangan */}
-              <div className="p-3.5 sm:p-4 rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50/60 via-white to-white shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-1">
+              <div className="p-3.5 sm:p-4 rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50/60 via-white to-white shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-2 lg:col-span-1">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Alpa / Tanpa Ket.</span>
                   <div className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">

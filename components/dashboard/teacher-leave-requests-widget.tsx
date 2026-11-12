@@ -223,7 +223,7 @@ export function TeacherLeaveRequestsWidget({
         {/* Filter Pills & Class Selector */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           {/* Status Tabs */}
-          <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-lg overflow-x-auto text-xs font-bold">
+          <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-lg overflow-x-auto no-scrollbar max-w-full text-xs font-bold">
             <button
               type="button"
               onClick={() => setActiveFilter("pending")}

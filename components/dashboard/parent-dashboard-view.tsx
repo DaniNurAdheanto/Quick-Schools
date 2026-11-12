@@ -938,10 +938,10 @@ export function ParentDashboardView({
   }, [announcementsList]);
 
   return (
-    <div className="p-4 md:p-8 max-w-[1600px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       
       {/* ── Top Bar: Child Info & Verification Chip (Otomatis berdasarkan relasi resmi) ─────────────────────── */}
-      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         
         {/* Child Identity Info */}
         <div className="flex items-center gap-3">
@@ -1039,7 +1039,7 @@ export function ParentDashboardView({
       )}
 
       {/* ── Hero Welcome Section ─────────────────────────────────────────────── */}
-      <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-[#3B0DBE] via-[#531FFF] to-[#7942FF] p-6 md:p-8 text-white shadow-xl flex flex-col lg:flex-row justify-between lg:items-center gap-6 border border-white/15">
+      <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-[#3B0DBE] via-[#531FFF] to-[#7942FF] p-5 sm:p-7 md:p-8 text-white shadow-xl flex flex-col lg:flex-row justify-between lg:items-center gap-6 border border-white/15">
         
         {/* Ambient background glows */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
@@ -1092,7 +1092,7 @@ export function ParentDashboardView({
         </div>
 
         {/* Right Quick Summary Card */}
-        <div className="z-10 relative bg-white/15 backdrop-blur-md border border-white/25 p-5 rounded-xl shrink-0 lg:w-[320px] flex flex-col justify-between space-y-3 shadow-lg">
+        <div className="z-10 relative bg-white/15 backdrop-blur-md border border-white/25 p-5 rounded-2xl shrink-0 w-full lg:w-[320px] flex flex-col justify-between space-y-3 shadow-lg">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-white/80">Capaian Akademik Anak</span>
             <div className="w-8 h-8 rounded-lg bg-amber-400/20 flex items-center justify-center text-amber-300">
@@ -1116,10 +1116,10 @@ export function ParentDashboardView({
       </div>
 
       {/* ── 4 Main KPI Cards ────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 md:gap-5">
         
         {/* KPI 1: Kehadiran Hari Ini */}
-        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Presensi Hari Ini</span>
             <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
@@ -1156,7 +1156,7 @@ export function ParentDashboardView({
         </div>
 
         {/* KPI 2: Rata-Rata Nilai */}
-        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Rata-Rata Nilai</span>
             <div className="w-10 h-10 rounded-xl bg-[#531FFF]/10 text-[#531FFF] flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
@@ -1174,7 +1174,7 @@ export function ParentDashboardView({
         </div>
 
         {/* KPI 3: Status Tagihan & Tunggakan SPP */}
-        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Status Pembayaran SPP</span>
             <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
@@ -1202,7 +1202,7 @@ export function ParentDashboardView({
         </div>
 
         {/* KPI 4: Ujian Semester Terdekat (UTS/UAS) */}
-        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Ujian Semester (UTS/UAS)</span>
             <div className="w-10 h-10 rounded-xl bg-purple-50 text-[#531FFF] flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
@@ -1230,7 +1230,7 @@ export function ParentDashboardView({
         <div className="lg:col-span-2 space-y-6">
           
           {/* 1. Jadwal Pelajaran Kelas Anak Hari Ini */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-xs overflow-hidden">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
             <div className="p-5 md:p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <div>
                 <h2 className="text-base font-extrabold text-gray-900 flex items-center gap-2">
@@ -1464,7 +1464,7 @@ export function ParentDashboardView({
             </div>
 
             {/* Attendance Counters Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
               <div className="p-3 bg-purple-50 border border-purple-100 rounded-xl text-center">
                 <span className="text-[10px] font-bold text-[#531FFF] uppercase">Hadir</span>
                 <p className="text-xl font-black text-gray-900 mt-0.5">{childAttendance.hadir}</p>
@@ -1485,7 +1485,7 @@ export function ParentDashboardView({
                 <p className="text-xl font-black text-gray-900 mt-0.5">{childAttendance.sakit}</p>
                 <span className="text-[10px] text-gray-500 font-medium">Hari</span>
               </div>
-              <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-center col-span-2 sm:col-span-1">
+              <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-center col-span-2 sm:col-span-2 lg:col-span-1">
                 <span className="text-[10px] font-bold text-rose-700 uppercase">Alpa</span>
                 <p className="text-xl font-black text-gray-900 mt-0.5">{childAttendance.alpa}</p>
                 <span className="text-[10px] text-gray-500 font-medium">Hari</span>

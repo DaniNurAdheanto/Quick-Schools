@@ -976,7 +976,7 @@ export function StudentDashboardView({
   }, [attendanceData.todayRecord, attendanceData.isAttendanceLocked, showError]);
 
   return (
-    <div className="p-4 md:p-8 max-w-[1600px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       
       {/* ── TOP BAR: Student Profile Header ───────────────────────────────────── */}
       <div className="bg-white p-4 md:p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -1012,12 +1012,12 @@ export function StudentDashboardView({
         </div>
 
         {/* Quick Top Actions */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto">
           <button
             onClick={handleOpenAttendance}
             id="btn-top-attendance"
             className={cn(
-              "inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer",
+              "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer w-full sm:w-auto",
               !attendanceData.todayRecord
                 ? "bg-gradient-to-r from-[#531FFF] to-[#6d35ff] hover:from-[#4314cc] hover:to-[#5a2ad6] text-white shadow-purple-500/25 active:scale-95 ring-2 ring-purple-300/40"
                 : attendanceData.todayRecord.status === "Izin"
@@ -1063,21 +1063,23 @@ export function StudentDashboardView({
             )}
           </button>
 
-          <Link
-            href="/payments"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold border border-gray-200 transition-colors"
-          >
-            <CreditCard className="w-4 h-4 text-gray-500" />
-            <span>Tagihan SPP</span>
-          </Link>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Link
+              href="/payments"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold border border-gray-200 transition-colors flex-1 sm:flex-initial"
+            >
+              <CreditCard className="w-4 h-4 text-gray-500" />
+              <span>Tagihan SPP</span>
+            </Link>
 
-          <Link
-            href="/leave-requests"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-purple-50 hover:bg-purple-100 text-[#531FFF] rounded-xl text-xs font-bold border border-purple-200 transition-colors"
-          >
-            <ClipboardCheck className="w-4 h-4 text-[#531FFF]" />
-            <span>Izin & Sakit</span>
-          </Link>
+            <Link
+              href="/leave-requests"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-purple-50 hover:bg-purple-100 text-[#531FFF] rounded-xl text-xs font-bold border border-purple-200 transition-colors flex-1 sm:flex-initial"
+            >
+              <ClipboardCheck className="w-4 h-4 text-[#531FFF]" />
+              <span>Izin & Sakit</span>
+            </Link>
+          </div>
         </div>
 
       </div>
@@ -1826,25 +1828,25 @@ export function StudentDashboardView({
             </div>
 
             {/* Attendance breakdown pills (Hadir, Terlambat, Izin, Sakit, Alpa) */}
-            <div className="grid grid-cols-5 gap-1.5 text-center pt-1">
-              <div className="p-2 rounded-xl bg-purple-50/70 border border-purple-100">
-                <div className="text-xs font-black text-[#531FFF]">{attendanceData.hadirTepatWaktu}</div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-1.5 text-center pt-1">
+              <div className="p-2 sm:p-2.5 rounded-xl bg-purple-50/70 border border-purple-100">
+                <div className="text-xs sm:text-sm font-black text-[#531FFF]">{attendanceData.hadirTepatWaktu}</div>
                 <div className="text-[10px] font-semibold text-gray-500">Hadir</div>
               </div>
-              <div className="p-2 rounded-xl bg-indigo-50/70 border border-indigo-100">
-                <div className="text-xs font-black text-indigo-700">{attendanceData.terlambat}</div>
+              <div className="p-2 sm:p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-100">
+                <div className="text-xs sm:text-sm font-black text-indigo-700">{attendanceData.terlambat}</div>
                 <div className="text-[10px] font-semibold text-gray-500">Terlambat</div>
               </div>
-              <div className="p-2 rounded-xl bg-amber-50/70 border border-amber-100">
-                <div className="text-xs font-black text-amber-700">{attendanceData.izin}</div>
+              <div className="p-2 sm:p-2.5 rounded-xl bg-amber-50/70 border border-amber-100">
+                <div className="text-xs sm:text-sm font-black text-amber-700">{attendanceData.izin}</div>
                 <div className="text-[10px] font-semibold text-gray-500">Izin</div>
               </div>
-              <div className="p-2 rounded-xl bg-blue-50/70 border border-blue-100">
-                <div className="text-xs font-black text-blue-700">{attendanceData.sakit}</div>
+              <div className="p-2 sm:p-2.5 rounded-xl bg-blue-50/70 border border-blue-100">
+                <div className="text-xs sm:text-sm font-black text-blue-700">{attendanceData.sakit}</div>
                 <div className="text-[10px] font-semibold text-gray-500">Sakit</div>
               </div>
-              <div className="p-2 rounded-xl bg-rose-50/70 border border-rose-100">
-                <div className="text-xs font-black text-rose-700">{attendanceData.alpa}</div>
+              <div className="p-2 sm:p-2.5 rounded-xl bg-rose-50/70 border border-rose-100 col-span-2 sm:col-span-1">
+                <div className="text-xs sm:text-sm font-black text-rose-700">{attendanceData.alpa}</div>
                 <div className="text-[10px] font-semibold text-gray-500">Alpa</div>
               </div>
             </div>

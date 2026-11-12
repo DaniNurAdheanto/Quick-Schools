@@ -991,7 +991,7 @@ export function PrincipalDashboardView({
   return (
     <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1700px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       {/* ─── A. Header & Executive Greeting Banner ─────────────────────────── */}
-      <div className="bg-gradient-to-r from-[#531FFF] via-[#6329ff] to-[#7944ff] rounded-2xl p-6 sm:p-7 text-white shadow-xl shadow-[#531FFF]/15 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-[#531FFF] via-[#6329ff] to-[#7944ff] rounded-2xl p-5 sm:p-7 md:p-8 text-white shadow-xl shadow-[#531FFF]/15 relative overflow-hidden">
         {/* Subtle decorative circles */}
         <div className="absolute -right-10 -bottom-10 w-64 h-64 rounded-full bg-white/5 pointer-events-none blur-xl" />
         <div className="absolute right-40 -top-10 w-48 h-48 rounded-full bg-white/5 pointer-events-none blur-lg" />
@@ -1054,14 +1054,14 @@ export function PrincipalDashboardView({
             <span>Filter Analitik & Laporan:</span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2.5 w-full md:w-auto">
             {/* Filter Tahun Ajaran */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 w-full sm:w-auto">
               <label className="text-[11px] font-bold text-gray-500 hidden sm:inline">Tahun Ajaran:</label>
               <select
                 value={filterAcademicYear}
                 onChange={(e) => setFilterAcademicYear(e.target.value)}
-                className="px-3 py-1.5 text-xs font-bold text-gray-800 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-2xs"
+                className="w-full sm:w-auto px-3 py-1.5 text-xs font-bold text-gray-800 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-2xs"
               >
                 {availableAcademicYears.map(yr => (
                   <option key={yr} value={yr}>
@@ -1072,12 +1072,12 @@ export function PrincipalDashboardView({
             </div>
 
             {/* Filter Semester */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 w-full sm:w-auto">
               <label className="text-[11px] font-bold text-gray-500 hidden sm:inline">Semester:</label>
               <select
                 value={filterSemester}
                 onChange={(e) => setFilterSemester(e.target.value)}
-                className="px-3 py-1.5 text-xs font-bold text-gray-800 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-2xs"
+                className="w-full sm:w-auto px-3 py-1.5 text-xs font-bold text-gray-800 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-2xs"
               >
                 <option value="Semua">Semua Semester</option>
                 <option value="Ganjil">Semester Ganjil</option>
@@ -1086,12 +1086,12 @@ export function PrincipalDashboardView({
             </div>
 
             {/* Filter Periode */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 w-full sm:w-auto">
               <label className="text-[11px] font-bold text-gray-500 hidden sm:inline">Periode:</label>
               <select
                 value={filterPeriod}
                 onChange={(e) => setFilterPeriod(e.target.value as any)}
-                className="px-3 py-1.5 text-xs font-bold text-gray-800 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-2xs"
+                className="w-full sm:w-auto px-3 py-1.5 text-xs font-bold text-gray-800 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-2xs"
               >
                 <option value="today">Hari Ini</option>
                 <option value="7days">7 Hari Terakhir</option>
@@ -1101,12 +1101,12 @@ export function PrincipalDashboardView({
             </div>
 
             {/* Filter Kelas */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 w-full sm:w-auto">
               <label className="text-[11px] font-bold text-gray-500 hidden sm:inline">Kelas:</label>
               <select
                 value={filterClass}
                 onChange={(e) => setFilterClass(e.target.value)}
-                className="px-3 py-1.5 text-xs font-bold text-gray-800 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-2xs"
+                className="w-full sm:w-auto px-3 py-1.5 text-xs font-bold text-gray-800 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#531FFF]/20 focus:border-[#531FFF] transition-all cursor-pointer shadow-2xs"
               >
                 {availableClasses.map(cls => (
                   <option key={cls} value={cls}>{cls}</option>
@@ -1592,7 +1592,7 @@ export function PrincipalDashboardView({
               </div>
 
               {/* Card 5: Alpa / Tanpa Keterangan */}
-              <div className="p-3.5 sm:p-4 rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50/60 via-white to-white shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-1">
+              <div className="p-3.5 sm:p-4 rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50/60 via-white to-white shadow-2xs flex flex-col justify-between col-span-2 sm:col-span-2 lg:col-span-1">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Alpa / Tanpa Ket.</span>
                   <div className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">

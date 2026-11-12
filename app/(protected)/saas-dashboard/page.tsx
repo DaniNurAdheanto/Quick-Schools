@@ -225,11 +225,11 @@ export default function SaaSDashboardPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 1. EXECUTIVE HEADER SECTION                                    */}
       {/* ───────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-xs">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 sm:p-7 md:p-8 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-xs">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2.5">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-gradient-to-r from-[#531FFF]/10 to-purple-100 text-[#531FFF] border border-[#531FFF]/20">
@@ -246,9 +246,9 @@ export default function SaaSDashboardPage() {
         </div>
 
         {/* Filter Periode Waktu & Tombol Aksi */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap w-full lg:w-auto justify-between sm:justify-start">
           {/* Period Filter Dropdown */}
-          <div className="flex items-center bg-gray-100 p-1 rounded-xl">
+          <div className="flex items-center bg-gray-100 p-1 rounded-xl overflow-x-auto no-scrollbar max-w-full">
             {[
               { id: "all", label: "Semua Waktu" },
               { id: "30d", label: "30 Hari" },
@@ -259,7 +259,7 @@ export default function SaaSDashboardPage() {
                 key={p.id}
                 onClick={() => setSelectedPeriod(p.id as any)}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
                   selectedPeriod === p.id
                     ? "bg-white text-[#531FFF] shadow-2xs font-black"
                     : "text-gray-500 hover:text-gray-900"
@@ -273,7 +273,7 @@ export default function SaaSDashboardPage() {
           <button
             onClick={() => fetchStats(selectedPeriod)}
             disabled={loading}
-            className="p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+            className="p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0"
             title="Segarkan Data Real-Time"
           >
             <RefreshCw className={cn("w-4 h-4 text-gray-500", loading && "animate-spin text-[#531FFF]")} />
@@ -285,7 +285,7 @@ export default function SaaSDashboardPage() {
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 2. RINGKASAN 6 KPI UTAMA (EXECUTIVE BUSINESS METRICS)         */}
       {/* ───────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3.5 sm:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         {/* KPI 1: Total Sekolah Terdaftar */}
         <Link
           href="/saas-customers"
@@ -708,13 +708,13 @@ export default function SaaSDashboardPage() {
                 </div>
               ) : (
                 recentRequests.map((req, idx) => (
-                  <div key={req.id} className="py-3.5 flex items-center justify-between gap-3 group">
+                  <div key={req.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group">
                     <div className="flex items-start gap-3 min-w-0">
                       <span className="w-6 h-6 rounded-lg bg-gray-100 text-gray-500 font-mono text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
                         {idx + 1}
                       </span>
                       <div className="min-w-0 space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono text-xs font-black text-[#531FFF]">
                             {req.requestNumber}
                           </span>
@@ -729,7 +729,7 @@ export default function SaaSDashboardPage() {
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1.5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
                       <span
                         className={cn(
                           "px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider",

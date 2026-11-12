@@ -128,10 +128,11 @@ export async function POST(req: NextRequest) {
 
     const token = await signSessionToken(sessionPayload);
 
-    // 5. Response with HTTP-only cookie (full avatar in JSON body for client)
+    // 5. Response with HTTP-only cookie + token for mobile clients
     const response = NextResponse.json({
       success: true,
       message: `Selamat datang kembali, ${user.name}!`,
+      token,
       user: {
         ...sessionPayload,
         avatarUrl: user.avatarUrl || null,
