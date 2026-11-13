@@ -241,9 +241,15 @@ export default function LandingNavbar({ lang, onChangeLang }: NavbarProps) {
           {/* Mobile hamburger */}
           <button
             onClick={() => setMobileOpen(v => !v)}
-            className="lg:hidden w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"
+            aria-label={mobileOpen ? "Tutup menu" : "Buka menu"}
+            aria-expanded={mobileOpen}
+            className={`lg:hidden w-11 h-11 flex items-center justify-center rounded-xl border transition-all active:scale-95 cursor-pointer ${
+              mobileOpen
+                ? "bg-[#531FFF]/10 border-[#531FFF]/30 text-[#531FFF] shadow-xs"
+                : "bg-slate-100/90 hover:bg-[#531FFF]/10 border-slate-200/80 text-slate-700 hover:text-[#531FFF] shadow-2xs"
+            }`}
           >
-            {mobileOpen ? <X className="w-5 h-5 text-gray-700" /> : <Menu className="w-5 h-5 text-gray-700" />}
+            {mobileOpen ? <X className="w-5 h-5 text-[#531FFF]" /> : <Menu className="w-5 h-5 text-slate-700" />}
           </button>
         </div>
       </div>

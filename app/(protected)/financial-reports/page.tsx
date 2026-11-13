@@ -68,11 +68,11 @@ import { useSchoolProfile } from "@/context/SchoolProfileContext";
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; icon: any }> = {
-  Paid:      { label: "Lunas",       color: "text-emerald-700", bg: "bg-emerald-50",  border: "border-emerald-200", icon: CheckCircle2 },
-  Partial:   { label: "Sebagian",    color: "text-amber-700",   bg: "bg-amber-50",    border: "border-amber-200",   icon: Clock },
-  Unpaid:    { label: "Belum Bayar", color: "text-slate-600",   bg: "bg-slate-50",    border: "border-slate-200",   icon: CreditCard },
-  Overdue:   { label: "Terlambat",   color: "text-rose-700",    bg: "bg-rose-50",     border: "border-rose-200",    icon: AlertTriangle },
-  Cancelled: { label: "Dibatalkan",  color: "text-gray-500",    bg: "bg-gray-50",     border: "border-gray-200",    icon: Ban },
+  Paid: { label: "Lunas", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", icon: CheckCircle2 },
+  Partial: { label: "Sebagian", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", icon: Clock },
+  Unpaid: { label: "Belum Bayar", color: "text-slate-600", bg: "bg-slate-50", border: "border-slate-200", icon: CreditCard },
+  Overdue: { label: "Terlambat", color: "text-rose-700", bg: "bg-rose-50", border: "border-rose-200", icon: AlertTriangle },
+  Cancelled: { label: "Dibatalkan", color: "text-gray-500", bg: "bg-gray-50", border: "border-gray-200", icon: Ban },
 };
 
 type MainTab = "ringkasan" | "dana_masuk" | "transaksi" | "tagihan" | "tunggakan" | "kelas";
@@ -1695,12 +1695,12 @@ export default function FinancialReportsPage() {
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 rounded-xl bg-gray-900 text-white flex items-center justify-center font-black text-2xl overflow-hidden relative p-1 border border-gray-200 shrink-0">
                     {schoolProfile?.logoUrl ? (
-                      <Image 
-                        src={schoolProfile.logoUrl} 
-                        alt="Logo" 
-                        fill 
-                        className="object-contain p-1" 
-                        unoptimized 
+                      <Image
+                        src={schoolProfile.logoUrl}
+                        alt="Logo"
+                        fill
+                        className="object-contain p-1"
+                        unoptimized
                       />
                     ) : (
                       <span>QS</span>
@@ -1734,12 +1734,12 @@ export default function FinancialReportsPage() {
                   {mainTab === "transaksi"
                     ? "BUKU JURNAL PENERIMAAN KAS & TRANSAKSI PEMBAYARAN"
                     : mainTab === "tunggakan"
-                    ? "DAFTAR REKAPITULASI PIUTANG & TUNGGAKAN SISWA"
-                    : mainTab === "kelas"
-                    ? "REKAPITULASI REALISASI PEMBAYARAN SPP PER KELAS"
-                    : mainTab === "dana_masuk"
-                    ? "BUKU KAS PENERIMAAN DANA MASUK OPERASIONAL (NON-SPP)"
-                    : "LAPORAN KEUANGAN DAN REKAPITULASI TAGIHAN SPP SEKOLAH"}
+                      ? "DAFTAR REKAPITULASI PIUTANG & TUNGGAKAN SISWA"
+                      : mainTab === "kelas"
+                        ? "REKAPITULASI REALISASI PEMBAYARAN SPP PER KELAS"
+                        : mainTab === "dana_masuk"
+                          ? "BUKU KAS PENERIMAAN DANA MASUK OPERASIONAL (NON-SPP)"
+                          : "LAPORAN KEUANGAN DAN REKAPITULASI TAGIHAN SPP SEKOLAH"}
                 </h3>
                 <p className="text-xs text-gray-600 mt-1">
                   Tahun Ajaran: <span className="font-bold text-gray-900">{activeAcademicYear || "2026/2027"} ({activeSemester || "Ganjil"})</span> | Periode Bulan: <span className="font-bold text-gray-900">{selectedMonth}</span> | Kelas: <span className="font-bold text-gray-900">{selectedClass}</span>
@@ -1990,12 +1990,11 @@ export default function FinancialReportsPage() {
                           <td className="border border-gray-300 p-2 text-right font-bold text-emerald-700">{formatRupiah(b.paidAmount)}</td>
                           <td className="border border-gray-300 p-2 text-right font-bold text-rose-700">{formatRupiah(b.remainingAmount)}</td>
                           <td className="border border-gray-300 p-2 text-center">
-                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                              b.status === "Paid" ? "bg-emerald-100 text-emerald-800" :
+                            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${b.status === "Paid" ? "bg-emerald-100 text-emerald-800" :
                               b.status === "Partial" ? "bg-amber-100 text-amber-800" :
-                              b.status === "Overdue" ? "bg-rose-100 text-rose-800" :
-                              "bg-gray-100 text-gray-700"
-                            }`}>
+                                b.status === "Overdue" ? "bg-rose-100 text-rose-800" :
+                                  "bg-gray-100 text-gray-700"
+                              }`}>
                               {STATUS_CONFIG[b.status]?.label || b.status}
                             </span>
                           </td>

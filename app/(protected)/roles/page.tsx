@@ -2,16 +2,16 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { 
-  Save, 
-  Check, 
-  Search, 
-  RotateCcw, 
+import {
+  Save,
+  Check,
+  Search,
+  RotateCcw,
   RefreshCw,
-  Lock, 
-  Eye, 
+  Lock,
+  Eye,
   Plus,
-  Edit3, 
+  Edit3,
   Trash2,
   CheckCircle,
   Download,
@@ -25,14 +25,14 @@ import { doc, setDoc, onSnapshot, collection } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
-import { 
-  ROLES, 
-  APP_MENUS, 
-  DEFAULT_PERMISSIONS, 
-  normalizeRole, 
-  MenuPermission, 
+import {
+  ROLES,
+  APP_MENUS,
+  DEFAULT_PERMISSIONS,
+  normalizeRole,
+  MenuPermission,
   resolveMenuPermission,
-  PermissionAction 
+  PermissionAction
 } from "@/lib/roles-config";
 
 const ACTION_COLUMNS: { key: PermissionAction; label: string; desc: string; color: string; icon: any }[] = [
@@ -178,16 +178,16 @@ export default function RolesAndPermissionsPage() {
   // Filter modules based on search and category (exclude platform-internal SaaS modules)
   const filteredModules = useMemo(() => {
     return APP_MENUS.filter(mod => {
-      const isSaaSModule = 
-        mod.id === "saas-dashboard" || 
-        mod.id === "saas-customers" || 
-        mod.id === "subscription-requests" || 
-        mod.id === "saas-packages" || 
+      const isSaaSModule =
+        mod.id === "saas-dashboard" ||
+        mod.id === "saas-customers" ||
+        mod.id === "subscription-requests" ||
+        mod.id === "saas-packages" ||
         mod.id === "saas-billing";
       if (isSaaSModule) return false;
 
-      const matchesSearch = 
-        mod.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      const matchesSearch =
+        mod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         mod.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         mod.route.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = categoryFilter === "Semua" || mod.category === categoryFilter;
@@ -416,7 +416,7 @@ export default function RolesAndPermissionsPage() {
 
           localStorage.setItem("quick_schools_role_permissions_v2", JSON.stringify(currentCache));
           window.dispatchEvent(new CustomEvent("roles-permissions-updated"));
-        } catch (e) {}
+        } catch (e) { }
       }
 
       // 3. Sync to Firestore collection "roles" for live multi-device updates
@@ -502,7 +502,7 @@ export default function RolesAndPermissionsPage() {
             currentCache[activeRole] = resData.permissions;
             localStorage.setItem("quick_schools_role_permissions_v2", JSON.stringify(currentCache));
             window.dispatchEvent(new CustomEvent("roles-permissions-updated"));
-          } catch (e) {}
+          } catch (e) { }
         }
 
         toast.showSuccess(`Role ${activeRoleData.name} berhasil direset ke standar sekolah.`, "Reset Berhasil");
@@ -976,14 +976,14 @@ export default function RolesAndPermissionsPage() {
               const extraInfo = acc.role === "guru"
                 ? (acc.nip ? `NIP: ${acc.nip}` : acc.subject || "Guru Mata Pelajaran")
                 : acc.role === "siswa"
-                ? (acc.className ? `${acc.className}${acc.nisn ? ` • NISN: ${acc.nisn}` : ""}` : (acc.nisn ? `NISN: ${acc.nisn}` : "Siswa"))
-                : acc.role === "orang-tua"
-                ? (acc.studentName ? `Wali dari: ${acc.studentName}` : "Wali Murid")
-                : acc.role === "kepala-sekolah"
-                ? "Kepala Sekolah Quick Schools"
-                : acc.role === "super-admin"
-                ? "Super Administrator"
-                : "Staff Administrasi";
+                  ? (acc.className ? `${acc.className}${acc.nisn ? ` • NISN: ${acc.nisn}` : ""}` : (acc.nisn ? `NISN: ${acc.nisn}` : "Siswa"))
+                  : acc.role === "orang-tua"
+                    ? (acc.studentName ? `Wali dari: ${acc.studentName}` : "Wali Murid")
+                    : acc.role === "kepala-sekolah"
+                      ? "Kepala Sekolah Quick Schools"
+                      : acc.role === "super-admin"
+                        ? "Super Administrator"
+                        : "Staff Administrasi";
 
               return (
                 <div
@@ -1008,8 +1008,8 @@ export default function RolesAndPermissionsPage() {
                     acc.status === "Aktif"
                       ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                       : acc.status === "Belum Onboarding"
-                      ? "bg-amber-50 text-amber-700 border-amber-200"
-                      : "bg-gray-100 text-gray-600 border-gray-200"
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : "bg-gray-100 text-gray-600 border-gray-200"
                   )}>
                     {acc.status || "Aktif"}
                   </span>

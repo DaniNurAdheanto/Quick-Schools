@@ -4,6 +4,7 @@ import React, { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layouts/sidebar";
 import { Header } from "@/components/layouts/header";
+import { MobileBottomNav } from "@/components/layouts/mobile-bottom-nav";
 import { AcademicYearProvider } from "@/context/AcademicYearContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { NotificationBadgeProvider } from "@/context/NotificationBadgeContext";
@@ -307,6 +308,7 @@ function getPageTitleFromPath(pathname: string | null): string {
             <p className="text-gray-400">Versi 1.0.0</p>
           </footer>
         </div>
+        <MobileBottomNav />
       </main>
     </div>
   );
