@@ -925,7 +925,7 @@ export default function ParentsManagementPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full h-full space-y-6 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       {/* ========================================================================= */}
       {/* 1. HEADER SECTION                                                         */}
       {/* ========================================================================= */}
@@ -991,7 +991,7 @@ export default function ParentsManagementPage() {
           {/* Action Button: Ke Manajemen Akun (Khusus Non-Guru) */}
           {!isGuru && (
             <Link
-              href="/admin/accounts"
+              href="/accounts"
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#531FFF] hover:bg-[#4215cb] text-white text-xs sm:text-sm font-bold rounded-xl shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer"
             >
               <UserCheck className="w-4 h-4" />

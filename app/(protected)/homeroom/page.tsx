@@ -410,7 +410,7 @@ export default function HomeroomPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full h-full space-y-6 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       
       {/* PAGE HEADER */}
       <div className="bg-white rounded-xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden">
@@ -439,12 +439,12 @@ export default function HomeroomPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 relative z-10">
+        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap w-full md:w-auto relative z-10">
           {!isReadOnly && (
             <button 
               onClick={handleReconcileDatabase}
               disabled={isReconciling || loading}
-              className="flex items-center justify-center gap-2 bg-[#531FFF]/10 hover:bg-[#531FFF]/20 text-[#531FFF] px-4 py-2.5 rounded-lg text-sm font-bold border border-[#531FFF]/20 shadow-xs transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#531FFF]/10 hover:bg-[#531FFF]/20 text-[#531FFF] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold border border-[#531FFF]/20 shadow-xs transition-all disabled:opacity-50 cursor-pointer active:scale-95"
               title="Periksa dan selaraskan relasi data kelas dan guru di seluruh database"
             >
               <RefreshCw className={cn("w-4 h-4", isReconciling && "animate-spin")} />
@@ -455,10 +455,10 @@ export default function HomeroomPage() {
           <button 
             onClick={handleExportCSV}
             disabled={filteredClasses.length === 0}
-            className="flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-bold border border-gray-200 shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold border border-gray-200 shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
           >
             <Download className="w-4 h-4 text-[#531FFF]" />
-            <span className="hidden sm:inline">Export Rekap CSV</span>
+            <span>Export Rekap CSV</span>
           </button>
         </div>
       </div>

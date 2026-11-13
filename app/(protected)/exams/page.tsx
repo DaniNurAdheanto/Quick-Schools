@@ -835,7 +835,7 @@ export default function ExamSchedulePage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-full mx-auto w-full flex-1 flex flex-col min-h-screen bg-gray-50/50 animate-in fade-in duration-300 relative">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full flex-1 flex flex-col min-h-screen bg-gray-50/50 animate-in fade-in duration-300 relative space-y-6 sm:space-y-8">
       
       {/* FLOATING TOAST ALERT NOTIFICATION BOX */}
       {alertState && (

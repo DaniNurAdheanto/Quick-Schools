@@ -387,7 +387,7 @@ export default function SaaSSchoolAdminsPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 1. HEADER SECTION & EXECUTIVE ACTIONS                         */}
       {/* ───────────────────────────────────────────────────────────── */}
@@ -410,7 +410,7 @@ export default function SaaSSchoolAdminsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap w-full sm:w-auto justify-end">
           <button
             onClick={fetchAdmins}
             disabled={loading}

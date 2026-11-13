@@ -373,7 +373,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-[1500px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
       
       {/* Top Header Card */}
       <div className="bg-white rounded-xl p-6 sm:p-7 border border-gray-100 shadow-[0_4px_25px_-5px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-5 relative overflow-hidden">
@@ -401,14 +401,14 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 relative z-10">
+        <div className="flex items-center gap-3 relative z-10 w-full sm:w-auto">
           {!isEditing ? (
             <button
               onClick={() => {
                 setFormData(profileData);
                 setIsEditing(true);
               }}
-              className="flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#4314cc] text-white px-5 py-2.5 rounded-lg text-xs sm:text-sm font-extrabold shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer active:scale-95"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#531FFF] hover:bg-[#4314cc] text-white px-5 py-2.5 rounded-lg text-xs sm:text-sm font-extrabold shadow-md shadow-[#531FFF]/20 transition-all cursor-pointer active:scale-95"
             >
               <Edit3 className="w-4 h-4" />
               <span>Edit Profil</span>
@@ -419,7 +419,7 @@ export default function ProfilePage() {
                 setIsEditing(false);
                 setFormData(profileData);
               }}
-              className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-colors cursor-pointer"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-lg text-xs sm:text-sm font-bold transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
               <span>Batal</span>

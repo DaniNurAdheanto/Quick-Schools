@@ -7,6 +7,7 @@ import { Header } from "@/components/layouts/header";
 import { AcademicYearProvider } from "@/context/AcademicYearContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { NotificationBadgeProvider } from "@/context/NotificationBadgeContext";
+import { SidebarProvider } from "@/context/SidebarContext";
 import { ShieldAlert, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { LogoutLoadingState } from "@/components/ui/logout-loading-state";
@@ -301,9 +302,9 @@ function getPageTitleFromPath(pathname: string | null): string {
           <div className="flex-1 flex flex-col w-full h-full">
             {children}
           </div>
-          <footer className="w-full px-8 py-6 flex items-center justify-between text-[11px] text-gray-400 font-medium">
-            <p>© 2025 Smart School Operating System. All rights reserved.</p>
-            <p>Versi 1.0.0</p>
+          <footer className="w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-gray-400 font-medium text-center sm:text-left">
+            <p>© 2026 Quick Schools Operating System. All rights reserved.</p>
+            <p className="text-gray-400">Versi 1.0.0</p>
           </footer>
         </div>
       </main>
@@ -316,8 +317,10 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
     <AuthProvider>
       <AcademicYearProvider>
         <NotificationBadgeProvider>
-          <IdleTimeoutManager />
-          <ProtectedContentGuard>{children}</ProtectedContentGuard>
+          <SidebarProvider>
+            <IdleTimeoutManager />
+            <ProtectedContentGuard>{children}</ProtectedContentGuard>
+          </SidebarProvider>
         </NotificationBadgeProvider>
       </AcademicYearProvider>
     </AuthProvider>

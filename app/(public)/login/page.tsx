@@ -122,7 +122,7 @@ function LoginFormContent() {
   return (
     <main className="min-h-screen bg-white flex flex-col lg:flex-row font-sans selection:bg-[#531FFF]/20">
       {/* Left Column - Branding & Features */}
-      <div className="w-full lg:w-[45%] xl:w-[40%] bg-[#F8F9FE] p-10 lg:p-16 flex flex-col relative min-h-screen justify-center overflow-hidden border-r border-gray-100">
+      <div className="w-full lg:w-[45%] xl:w-[40%] bg-[#F8F9FE] p-6 sm:p-10 lg:p-16 flex flex-col relative justify-center overflow-hidden border-r border-gray-100 lg:min-h-screen">
           {/* Logo */}
           <div className="flex items-center gap-3 mb-10">
             <div 
@@ -197,7 +197,7 @@ function LoginFormContent() {
           </div>
 
           {/* Bottom Illustration Placeholder using pure CSS shapes */}
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[350px] h-[200px] flex items-end justify-center pointer-events-none opacity-90 overflow-hidden">
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[350px] h-[200px] hidden lg:flex items-end justify-center pointer-events-none opacity-90 overflow-hidden">
             {/* Base platform */}
             <div className="absolute bottom-4 w-64 h-16 bg-[#531FFF]/5 rounded-[100%] blur-md"></div>
             {/* Building elements */}
@@ -232,7 +232,7 @@ function LoginFormContent() {
         </div>
 
         {/* Right Column - Form */}
-        <div className="w-full lg:flex-1 flex flex-col justify-center px-10 lg:px-24 xl:px-32 py-12 relative bg-white min-h-screen border-l border-gray-100/50">
+        <div className="w-full lg:flex-1 flex flex-col justify-center px-6 sm:px-10 lg:px-24 xl:px-32 py-8 lg:py-12 relative bg-white lg:min-h-screen border-l border-gray-100/50">
           <div className="w-full max-w-[420px] mx-auto">
             
             <h2 className="text-[1.75rem] font-bold tracking-tight text-gray-900 mb-1 flex items-center gap-2">

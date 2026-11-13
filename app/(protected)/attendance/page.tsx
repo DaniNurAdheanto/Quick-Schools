@@ -1802,7 +1802,7 @@ export default function AttendancePage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full space-y-3.5 sm:space-y-4 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-4 sm:space-y-6 animate-in fade-in duration-300">
 
       {/* Quick Attendance Scan Camera Modal */}
       <QuickAttendanceModal

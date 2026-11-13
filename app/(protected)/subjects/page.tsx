@@ -1130,7 +1130,7 @@ export default function SubjectsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-8 pb-16 max-w-[1600px] mx-auto w-full flex flex-col space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full flex flex-col space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       
       {/* ================= SUBJECT MODAL (CREATE / EDIT / VIEW) ================= */}
       <SubjectModal
@@ -1213,7 +1213,7 @@ export default function SubjectsPage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-end md:self-auto">
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap w-full md:w-auto">
             {!isReadOnly && (
               <>
                 {activeTab === "subjects" ? (

@@ -542,7 +542,7 @@ export default function RolesAndPermissionsPage() {
   const rolePermsForActive = permissions[activeRole] || DEFAULT_PERMISSIONS[activeRole] || {};
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 space-y-6 max-w-[1600px] mx-auto">
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 1. HEADER SECTION                                             */}
       {/* ───────────────────────────────────────────────────────────── */}
@@ -564,7 +564,7 @@ export default function RolesAndPermissionsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap w-full sm:w-auto justify-end">
           <button
             type="button"
             onClick={handleResetToDefault}

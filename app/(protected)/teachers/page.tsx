@@ -559,7 +559,7 @@ export default function TeachersPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full h-full space-y-6 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       <CrudSheet 
         open={crudState.open} 
         onOpenChange={(open) => setCrudState(s => ({ ...s, open }))}
@@ -625,11 +625,11 @@ export default function TeachersPage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-end md:self-auto">
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap w-full sm:w-auto">
             <button 
               onClick={handleExportCSV}
               disabled={filteredTeachers.length === 0}
-              className="px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+              className="flex-1 sm:flex-none justify-center px-3.5 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5 text-[#531FFF]" />
               <span>Export CSV</span>
@@ -638,7 +638,7 @@ export default function TeachersPage() {
             {!isReadOnly && (
               <button 
                 onClick={() => openTeacherCrud("create")}
-                className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25"
+                className="flex-1 sm:flex-none justify-center px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25"
               >
                 <Plus className="w-3.5 h-3.5 text-white" />
                 <span>Tambah Guru</span>

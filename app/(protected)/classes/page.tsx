@@ -1477,7 +1477,7 @@ export default function ClassesPage() {
   }
 
   return (
-    <div className="p-4 sm:p-8 pb-16 max-w-[1600px] mx-auto w-full flex flex-col space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full flex flex-col space-y-6 sm:space-y-8 animate-in fade-in duration-300">
       
       {/* ================= CRUD DRAWER / SHEET ================= */}
       <CrudSheet 
@@ -1545,7 +1545,7 @@ export default function ClassesPage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap shrink-0 self-end md:self-auto">
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap w-full sm:w-auto">
             {!isReadOnly && (
               <button 
                 type="button"
@@ -1560,7 +1560,7 @@ export default function ClassesPage() {
                     status: "Aktif"
                   }
                 })}
-                className="px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25"
+                className="w-full sm:w-auto justify-center px-4 py-2 bg-gradient-to-r from-[#531FFF] to-[#7B42FF] text-white hover:shadow-lg hover:shadow-[#531FFF]/25 active:scale-[0.98] text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-md shadow-[#531FFF]/25"
               >
                 <Plus className="w-3.5 h-3.5 text-white" />
                 <span>Tambah Kelas Baru</span>

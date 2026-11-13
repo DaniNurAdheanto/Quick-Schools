@@ -1213,7 +1213,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-[1600px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
       
       {!canWriteSettings && (
         <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs font-medium shadow-xs">
@@ -1243,7 +1243,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Global Action Header Buttons */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap w-full sm:w-auto justify-end">
           {canWriteSettings && (
             <button
               onClick={() => {
@@ -1281,7 +1281,7 @@ export default function SettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* Left Side Settings Navigation (4 Columns) */}
-        <div className="lg:col-span-4 bg-white p-5 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5 sticky top-6">
+        <div className="lg:col-span-4 bg-white p-5 rounded-xl border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] space-y-5 lg:sticky lg:top-6">
           
           {/* Search Settings Input */}
           <div className="relative">

@@ -1744,7 +1744,7 @@ export default function GradesPage() {
     }
 
     return (
-      <div className="p-4 sm:p-8 pb-16 max-w-[1600px] mx-auto w-full flex flex-col space-y-6 animate-in fade-in duration-200 printable-area">
+      <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full flex flex-col space-y-6 sm:space-y-8 animate-in fade-in duration-200 printable-area">
 
         {/* ================= HEADER PORTAL SISWA ================= */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-purple-50/70 via-white to-indigo-50/40 p-6 rounded-xl border border-purple-100/60 shadow-2xs">
@@ -2479,7 +2479,7 @@ export default function GradesPage() {
   // VIEW UNTUK GURU / ADMIN / SUPERADMIN (FULL MATRIX & CRUD)
   // =========================================================================
   return (
-    <div className="p-4 sm:p-8 pb-16 max-w-[1600px] mx-auto w-full flex flex-col space-y-6 animate-in fade-in duration-200">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full flex flex-col space-y-6 sm:space-y-8 animate-in fade-in duration-200">
 
       {/* ================= CRUD DRAWER / SHEET ================= */}
       <CrudSheet

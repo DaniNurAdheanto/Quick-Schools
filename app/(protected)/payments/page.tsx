@@ -1266,7 +1266,7 @@ export default function PaymentsPage() {
   }, [activeBill]);
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full space-y-6 pb-24 animate-in fade-in duration-200">
+    <div className="p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-200">
       {/* ========================================================================= */}
       {/* 1. TOP MAIN HEADER CARD                                                   */}
       {/* ========================================================================= */}
@@ -1338,7 +1338,7 @@ export default function PaymentsPage() {
             {canManagePayments && (
               <>
                 <Link
-                  href="/admin/settings?tab=spp_config"
+                  href="/settings?tab=spp_config"
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-purple-50 hover:border-[#531FFF]/40 hover:text-[#531FFF] rounded-xl shadow-2xs transition-all cursor-pointer"
                   title="Kelola seluruh konfigurasi pembayaran SPP di Pengaturan Sekolah"
                 >

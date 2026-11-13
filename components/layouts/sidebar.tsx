@@ -33,7 +33,8 @@ import {
   Layers,
   Receipt,
   ShieldCheck,
-  Loader2
+  Loader2,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
@@ -45,6 +46,7 @@ import {
 } from "@/lib/roles-config";
 import { useAuth } from "@/context/AuthContext";
 import { useNotificationBadges } from "@/context/NotificationBadgeContext";
+import { useSidebar } from "@/context/SidebarContext";
 import { SidebarSkeleton } from "@/components/ui/role-loading-skeleton";
 
 
@@ -306,9 +308,14 @@ export function Sidebar() {
   const { profile } = useSchoolProfile();
   const { role, rawRole, rolePermissions, isAuthLoading, isRoleReady, logout } = useAuth();
   const { getBadgeCount, markAsRead } = useNotificationBadges();
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const { isMobileOpen, closeMobile, isCollapsed, setIsCollapsed } = useSidebar();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleItemClick = (path: string) => {
+    markAsRead(path);
+    closeMobile();
+  };
 
   const handleSidebarLogout = async () => {
     try {
@@ -337,54 +344,79 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside className={cn(
-      "bg-[#F9FAFB] border-r border-gray-100 flex flex-col h-screen shrink-0 sticky top-0 z-30 transition-all duration-300 ease-in-out",
-      isCollapsed ? "w-[82px] overflow-visible" : "w-[290px] overflow-hidden"
-    )}>
-      
-      {/* Header */}
-      <div className={cn(
-         "h-[88px] flex items-center shrink-0 transition-all",
-         isCollapsed ? "justify-center px-2" : "justify-between px-6"
+    <>
+      {/* Mobile Drawer Overlay Backdrop (< lg) */}
+      {isMobileOpen && (
+        <div
+          onClick={closeMobile}
+          className="fixed inset-0 bg-black/50 z-40 backdrop-blur-xs transition-opacity lg:hidden animate-in fade-in duration-200"
+          aria-hidden="true"
+        />
+      )}
+
+      <aside className={cn(
+        "bg-[#F9FAFB] border-r border-gray-100 flex flex-col h-screen shrink-0 z-50 transition-all duration-300 ease-in-out",
+        // Mobile Drawer mode (< lg): Fixed off-canvas drawer
+        "fixed inset-y-0 left-0 w-[290px] shadow-2xl lg:shadow-none",
+        isMobileOpen ? "translate-x-0" : "-translate-x-full",
+        // Desktop In-flow Sticky mode (>= lg)
+        "lg:translate-x-0 lg:sticky lg:top-0 lg:z-30",
+        isCollapsed ? "lg:w-[82px] lg:overflow-visible" : "lg:w-[290px] lg:overflow-hidden"
       )}>
-        {!isCollapsed ? (
-          <>
-            <div className="flex items-center gap-3 min-w-0 pr-2">
-              <div className="w-[42px] h-[42px] rounded-2xl bg-white border border-gray-100 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] flex items-center justify-center shrink-0 overflow-hidden relative p-1.5">
-                {profile.logoUrl ? (
-                  <Image 
-                    src={profile.logoUrl} 
-                    alt={profile.schoolName || "Logo Sekolah"} 
-                    fill 
-                    className="object-contain p-1" 
-                    unoptimized 
-                  />
-                ) : (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M14 6C17.3137 6 20 8.68629 20 12C20 15.3137 17.3137 18 14 18C10.6863 18 8 15.3137 8 12C8 8.68629 10.6863 6 14 6Z" stroke="#531FFF" strokeWidth="4"/>
-                    <circle cx="14" cy="12" r="2" fill="#531FFF"/>
-                  </svg>
-                )}
+        
+        {/* Header */}
+        <div className={cn(
+           "h-[88px] flex items-center shrink-0 transition-all",
+           isCollapsed ? "justify-center px-2" : "justify-between px-6"
+        )}>
+          {!isCollapsed ? (
+            <>
+              <div className="flex items-center gap-3 min-w-0 pr-2">
+                <div className="w-[42px] h-[42px] rounded-2xl bg-white border border-gray-100 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] flex items-center justify-center shrink-0 overflow-hidden relative p-1.5">
+                  {profile.logoUrl ? (
+                    <Image 
+                      src={profile.logoUrl} 
+                      alt={profile.schoolName || "Logo Sekolah"} 
+                      fill 
+                      className="object-contain p-1" 
+                      unoptimized 
+                    />
+                  ) : (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M14 6C17.3137 6 20 8.68629 20 12C20 15.3137 17.3137 18 14 18C10.6863 18 8 15.3137 8 12C8 8.68629 10.6863 6 14 6Z" stroke="#531FFF" strokeWidth="4"/>
+                      <circle cx="14" cy="12" r="2" fill="#531FFF"/>
+                    </svg>
+                  )}
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-bold text-[15px] text-gray-900 tracking-tight truncate leading-tight" title={profile.schoolName}>
+                    {profile.schoolName || "Quick Schools"}
+                  </span>
+                  <span className="text-[11px] text-gray-400 font-medium truncate mt-0.5">
+                    {profile.schoolType || "Smart School OS"}
+                  </span>
+                </div>
               </div>
-              <div className="flex flex-col min-w-0">
-                <span className="font-bold text-[15px] text-gray-900 tracking-tight truncate leading-tight" title={profile.schoolName}>
-                  {profile.schoolName || "Quick Schools"}
-                </span>
-                <span className="text-[11px] text-gray-400 font-medium truncate mt-0.5">
-                  {profile.schoolType || "Smart School OS"}
-                </span>
-              </div>
-            </div>
-            
-            <button 
-              onClick={() => setIsCollapsed(true)}
-              className="text-gray-400 hover:text-gray-700 transition-colors bg-white border border-gray-100 hover:border-gray-200 shadow-xs rounded-xl p-2 cursor-pointer hover:bg-gray-50 active:scale-95 shrink-0"
-              title="Sembunyikan Menu (⌘B)"
-            >
-              <PanelLeftClose className="w-4 h-4" />
-            </button>
-          </>
-        ) : (
+              
+              {/* Desktop Collapse Button */}
+              <button 
+                onClick={() => setIsCollapsed(true)}
+                className="hidden lg:flex text-gray-400 hover:text-gray-700 transition-colors bg-white border border-gray-100 hover:border-gray-200 shadow-xs rounded-xl p-2 cursor-pointer hover:bg-gray-50 active:scale-95 shrink-0"
+                title="Sembunyikan Menu (⌘B)"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+              {/* Mobile Close Button */}
+              <button 
+                type="button"
+                onClick={closeMobile}
+                className="lg:hidden text-gray-400 hover:text-gray-700 transition-colors bg-white border border-gray-100 hover:border-gray-200 shadow-xs rounded-xl p-2 cursor-pointer hover:bg-gray-50 active:scale-95 shrink-0"
+                title="Tutup Menu"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </>
+          ) : (
           /* Collapsed Header Brand Icon */
           <div className="relative flex justify-center group my-1">
             <button
@@ -436,7 +468,7 @@ export function Sidebar() {
               userPermissions={rolePermissions} 
               userRole={effectiveUserRole} 
               getBadgeCount={getBadgeCount}
-              onItemClick={markAsRead}
+              onItemClick={handleItemClick}
             />
             <NavGroup 
               title="MASTER DATA" 
@@ -446,7 +478,7 @@ export function Sidebar() {
               userPermissions={rolePermissions} 
               userRole={effectiveUserRole} 
               getBadgeCount={getBadgeCount}
-              onItemClick={markAsRead}
+              onItemClick={handleItemClick}
             />
             <NavGroup 
               title="AKADEMIK" 
@@ -456,7 +488,7 @@ export function Sidebar() {
               userPermissions={rolePermissions} 
               userRole={effectiveUserRole} 
               getBadgeCount={getBadgeCount}
-              onItemClick={markAsRead}
+              onItemClick={handleItemClick}
             />
             <NavGroup 
               title="KEUANGAN" 
@@ -466,7 +498,7 @@ export function Sidebar() {
               userPermissions={rolePermissions} 
               userRole={effectiveUserRole} 
               getBadgeCount={getBadgeCount}
-              onItemClick={markAsRead}
+              onItemClick={handleItemClick}
             />
             {isSaaSAdminRole(effectiveUserRole) && (
               <NavGroup 
@@ -477,7 +509,7 @@ export function Sidebar() {
                 userPermissions={rolePermissions} 
                 userRole={effectiveUserRole} 
                 getBadgeCount={getBadgeCount}
-                onItemClick={markAsRead}
+                onItemClick={handleItemClick}
               />
             )}
           </div>
@@ -494,15 +526,15 @@ export function Sidebar() {
               isFooter={true} 
               onLogoutClick={() => setShowLogoutConfirm(true)}
               getBadgeCount={getBadgeCount}
-              onItemClick={markAsRead}
+              onItemClick={handleItemClick}
             />
           </div>
         </>
       )}
 
-        {/* Expand & Collapse Control Bar */}
+        {/* Expand & Collapse Control Bar (Desktop only) */}
         <div className={cn(
-          "pt-2 mt-1.5 border-t border-gray-100/70 transition-all",
+          "hidden lg:block pt-2 mt-1.5 border-t border-gray-100/70 transition-all",
           isCollapsed ? "px-2 flex justify-center" : "px-4"
         )}>
           {isCollapsed ? (
@@ -576,5 +608,6 @@ export function Sidebar() {
       )}
 
     </aside>
+    </>
   );
 }

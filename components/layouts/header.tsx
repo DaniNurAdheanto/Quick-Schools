@@ -1,10 +1,11 @@
 "use client";
 
-import { Bell, ChevronDown, ChevronRight, Home, Calendar, User, LogOut, Loader2, RotateCcw } from "lucide-react";
+import { Bell, ChevronDown, ChevronRight, Home, Calendar, User, LogOut, Loader2, RotateCcw, Menu } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import React, { useEffect, useState, useRef } from 'react';
 import { useAcademicYear } from "@/context/AcademicYearContext";
+import { useSidebar } from "@/context/SidebarContext";
 import { cn } from "@/lib/utils";
 import { ProfileAvatar } from "@/components/ui/profile-avatar";
 import { useAuth } from "@/context/AuthContext";
@@ -103,25 +104,41 @@ export function Header() {
   const breadcrumbs = generateBreadcrumbs();
 
   const isStudentUnboarded = onboardingCompleted === false && (userRole === "siswa" || userRole === "student" || userRole === "");
+  const { toggleMobile } = useSidebar();
 
   return (
-    <div className="flex flex-col w-full sticky top-0 z-50 shrink-0 mb-2">
-      <header className="h-[72px] bg-[#F8F9FC] flex items-center px-8 shrink-0 w-full border-b border-gray-100">
-        {/* Left - Breadcrumbs */}
-        <div className="flex-1 min-w-0 flex justify-start items-center">
+    <div className="flex flex-col w-full sticky top-0 z-40 shrink-0 mb-2">
+      <header className="h-[70px] bg-[#F8F9FC] flex items-center px-4 sm:px-6 lg:px-8 shrink-0 w-full border-b border-gray-100">
+        {/* Left - Hamburger & Breadcrumbs */}
+        <div className="flex-1 min-w-0 flex justify-start items-center gap-2">
+          {/* Mobile drawer toggle (< lg) */}
+          <button
+            type="button"
+            onClick={toggleMobile}
+            className="lg:hidden p-2 -ml-1 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer shrink-0"
+            title="Buka Menu"
+            aria-label="Buka Menu"
+          >
+            <Menu className="w-5 h-5 text-gray-700" />
+          </button>
+
           <nav aria-label="Breadcrumb" className="max-w-full overflow-hidden">
-            <ol className="flex items-center gap-2 text-sm font-medium truncate">
+            <ol className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium truncate">
               {breadcrumbs.map((crumb, index) => {
                 const isLast = index === breadcrumbs.length - 1;
+                const isFirst = index === 0;
                 return (
-                  <li key={`${crumb.href}-${index}`} className="flex items-center gap-2">
-                    {index > 0 && <ChevronRight className="w-3.5 h-3.5 text-gray-300" />}
+                  <li 
+                    key={`${crumb.href}-${index}`} 
+                    className={cn("flex items-center gap-1.5 sm:gap-2", !isLast && !isFirst && "hidden md:flex")}
+                  >
+                    {index > 0 && <ChevronRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />}
                     {isLast ? (
-                      <span className="text-[#531FFF] font-semibold">{crumb.label}</span>
+                      <span className="text-[#531FFF] font-semibold truncate max-w-[120px] sm:max-w-none">{crumb.label}</span>
                     ) : (
-                      <Link href={crumb.href} className="text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1.5">
+                      <Link href={crumb.href} className="text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1 shrink-0">
                         {index === 0 && <Home className="w-3.5 h-3.5" />}
-                        {crumb.label}
+                        <span className="hidden sm:inline">{crumb.label}</span>
                       </Link>
                     )}
                   </li>
@@ -132,10 +149,10 @@ export function Header() {
         </div>
 
         {/* Center - Academic Year Switcher */}
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-center shrink-0 mx-1 sm:mx-3">
           {/* Global Academic Year Selector */}
           <div className={cn(
-            "flex items-center gap-2 bg-white border px-3.5 py-1.5 rounded-lg shadow-2xs transition-all",
+            "flex items-center gap-1.5 sm:gap-2 bg-white border px-2.5 sm:px-3.5 py-1.5 rounded-lg shadow-2xs transition-all",
             isArchiveMode 
               ? "border-amber-300 ring-2 ring-amber-100 bg-amber-50/20" 
               : "border-gray-200/80 hover:border-[#531FFF]/40"
@@ -144,7 +161,7 @@ export function Header() {
             <select
               value={activeAcademicYear}
               onChange={(e) => setActiveAcademicYear(e.target.value)}
-              className="bg-transparent text-xs font-extrabold text-gray-900 focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs font-extrabold text-gray-900 focus:outline-none cursor-pointer max-w-[110px] sm:max-w-none"
               title="Pilih Tahun Ajaran Aktif / Arsip"
             >
               {availableYears.map((y) => {
@@ -152,17 +169,17 @@ export function Header() {
                 const isDefault = y.name === schoolDefaultYear || y.isDefault;
                 return (
                   <option key={y.id || yName} value={yName}>
-                    T.A. {yName} {isDefault ? "(Aktif)" : "(Arsip)"}
+                    {yName} {isDefault ? "(Aktif)" : "(Arsip)"}
                   </option>
                 );
               })}
             </select>
-            <span className="text-gray-300 font-normal">|</span>
+            <span className="text-gray-300 font-normal hidden sm:inline">|</span>
             <select
               value={activeSemester}
               onChange={(e) => setActiveSemester(e.target.value as "Ganjil" | "Genap")}
               className={cn(
-                "bg-transparent text-xs font-extrabold focus:outline-none cursor-pointer",
+                "hidden sm:inline-block bg-transparent text-xs font-extrabold focus:outline-none cursor-pointer",
                 isArchiveMode ? "text-amber-700" : "text-[#531FFF]"
               )}
               title="Pilih Semester"
@@ -186,7 +203,7 @@ export function Header() {
         </div>
 
         {/* Right - Actions */}
-        <div className="flex-1 min-w-0 flex items-center justify-end gap-3 sm:gap-5 relative">
+        <div className="flex-1 min-w-0 flex items-center justify-end gap-2 sm:gap-4 relative">
           <div className="relative">
             <button 
               onClick={() => setShowNotifDropdown(prev => !prev)}

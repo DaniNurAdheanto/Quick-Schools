@@ -510,7 +510,7 @@ export default function FinancialReportsPage() {
   // ─── Main Render ─────────────────────────────────────────────────────────
 
   return (
-    <div ref={printRef} className="financial-reports-print p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto w-full space-y-6 animate-in fade-in duration-300">
+    <div ref={printRef} className="financial-reports-print p-4 sm:p-6 lg:p-8 pb-20 max-w-[1600px] mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in duration-300">
 
       {/* ═══════════════════════ PAGE HEADER ═══════════════════════ */}
       <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-xs">
@@ -545,17 +545,17 @@ export default function FinancialReportsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 print:hidden">
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap w-full md:w-auto print:hidden">
             <button
               onClick={handleExportCSV}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors cursor-pointer"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors cursor-pointer"
             >
               <Download className="w-4 h-4" />
               Export Excel
             </button>
             <button
               onClick={handlePrintPDF}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20 hover:bg-[#531FFF]/15 transition-colors cursor-pointer"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#531FFF]/10 text-[#531FFF] border border-[#531FFF]/20 hover:bg-[#531FFF]/15 transition-colors cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               Cetak PDF
